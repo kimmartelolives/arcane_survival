@@ -69,9 +69,27 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        // Guests consume strict coordinate updates for both players
+        // Sync target nodes
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
+
+        // FIXED: Explicitly sync positions and metadata down to guest engine states
+        if (payload.p1 && eng.p) {
+          eng.p.x = payload.p1.x;
+          eng.p.y = payload.p1.y;
+          eng.p.hp = payload.p1.hp;
+          eng.p.maxHp = payload.p1.maxHp;
+          eng.p.dead = payload.p1.dead;
+        }
+
+        if (payload.p2 && eng.p2) {
+          eng.p2.hp = payload.p2.hp;
+          eng.p2.maxHp = payload.p2.maxHp;
+          eng.p2.dead = payload.p2.dead;
+          eng.p2.level = payload.p2_level || eng.p2.level;
+          eng.p2.xp = payload.p2_xp || eng.p2.xp;
+          eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
+        }
       }
       
       if (event === 'guest_input' && net.isHost) {
@@ -100,7 +118,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      // Standardize data roles across all windows: P1 is always left/violet, P2 is always right/orange
+      // Standard data roles: P1 is always Left/Violet, P2 is always Right/Orange
       eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p2 = netRef.current.channel ? { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false } : null;
 
@@ -179,7 +197,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        // Apply input vectors based on whether the window is the Host or Guest
+        // Process physics inputs properly based on client role mapping
         if (isHost) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
@@ -192,16 +210,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // Guests directly manipulate their local player object (P2) and interpolate P1
+          // Guests process their local input vectors directly into P2
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
+          // Smooth render node calculations
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
-          if (eng.p) { eng.p.x = eng.p1Render.x; eng.p.y = eng.p1Render.y; eng.p.dead = eng.p1Target.dead; }
-
           eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
           eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
@@ -227,7 +244,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Automatic shooting target loops
+        // Combat routines
         if (eng.enemies.length > 0) {
           if (eng.p && !eng.p.dead) {
             eng.p.shootCd -= dt;
@@ -270,7 +287,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Host server simulation engine
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -369,13 +385,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Update active viewport references
         const localTarget = isHost ? eng.p : eng.p2;
         if (localTarget) {
           hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: isHost ? eng.p2 : eng.p };
         }
 
-        // Render UI directly via DOM nodes
+        // DOM UI updates
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
         if (waveValueRef.current) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
@@ -433,7 +448,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // Standardize Drawing Layers: P1 is ALWAYS violet, P2 is ALWAYS orange
+      // Drawing bounds configurations
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
@@ -490,12 +505,24 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [screen]);
 
+  window.runUpgrade = (choice) => {
+    const eng = engineRef.current;
+    if (!eng || !eng.p) return;
+    const target = netRef.current.isHost ? eng.p : eng.p2;
+    if (!target) return;
+    
+    if (choice === '+25 Max HP') { target.maxHp += 25; target.hp = target.maxHp; }
+    else if (choice === 'Increase Damage') { eng.boltDmg += 14; }
+    else if (choice === 'Fire Rate Up') { target.shootRate = Math.max(0.15, target.shootRate - 0.1); }
+    else if (choice === 'Gain Multi-Shot') { target.multiShot += 1; }
+  };
+
   return (
     <div id="wrap">
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* HUD Layer Layout Overlay */}
+        {/* HUD Overlay Layer */}
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
             <div className="hud-pause-hint">[ESC] PAUSE</div>
