@@ -18,7 +18,7 @@ export default function Overlays({
   const [loadingLb, setLoadingLb] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('');
 
-  // Auto-fetch or reset state messages across screen shifts
+  // Auto-fetch leaderboard records or reset parameters safely across view layers
   useEffect(() => {
     if (screen === 'leaderboard') {
       setLoadingLb(true);
@@ -32,13 +32,12 @@ export default function Overlays({
         });
     }
     
-    // Clear submission feedback when navigating away from gameover screen
     if (screen !== 'gameover') {
       setSubmitStatus('');
     }
   }, [screen]);
 
-  // Keyboard Hotkeys [1, 2, 3] listener to pick level-up upgrades
+  // Keyboard Hotkeys listener to immediately capture character modification selections
   useEffect(() => {
     if (screen !== 'levelup') return;
     
@@ -47,6 +46,7 @@ export default function Overlays({
         const index = parseInt(e.key, 10) - 1;
         const choices = levelUpOptions || [];
         if (choices[index]) {
+          // Fire raw un-mutated token name directly to trigger upstream dispatchers
           onSelectUpgrade(choices[index]);
         }
       }
@@ -69,25 +69,25 @@ export default function Overlays({
     setSubmitStatus(ok ? '✦ Score submitted!' : 'Failed submission.');
   };
 
-  // Helper to convert core raw upgrade names into structured card configurations
+  // FIXED: Pinatibay ang parsing strings evaluation filter engine
   const getUpgradeMeta = (rawString) => {
-    const normalize = (rawString || '').toLowerCase();
-    if (normalize.includes('rate') || normalize.includes('rapid')) {
-      return { icon: '⚡', title: 'RAPID FIRE', desc: 'FIRE RATE +30%' };
+    const normalize = String(rawString || '').toLowerCase().trim();
+    
+    if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
+      return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s' };
     }
-    if (normalize.includes('damage') || normalize.includes('might')) {
-      return { icon: '🔮', title: 'ARCANE MIGHT', desc: 'BOLT DAMAGE +40%' };
+    if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
+      return { icon: '🔮', title: 'ARCANE MIGHT', desc: 'BOLT DAMAGE +14 POINTS' };
     }
-    if (normalize.includes('hp') || normalize.includes('vitality')) {
-      return { icon: '💛', title: 'VITALITY', desc: 'MAX HP +50 & HEALED' };
+    if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
+      return { icon: '💛', title: 'VITALITY', desc: 'MAX HP +25 & FULL HEAL' };
     }
-    if (normalize.includes('multi') || normalize.includes('shot')) {
-      return { icon: '✨', title: 'SPLIT BOLT', desc: 'FIRE EXTRA PROJECTILES' };
+    if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
+      return { icon: '🏹', title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE' };
     }
     return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
   };
 
-  // Suppress overlays completely while the gameplay view is active
   if (screen === 'playing') return null;
 
   const medals = ['🥇', '🥈', '🥉'];
@@ -214,7 +214,7 @@ export default function Overlays({
         </div>
       )}
 
-      {/* ✨ PREMIUM LEVEL UP MODAL */}
+      {/* LEVEL UP MODAL PANEL LAYER */}
       {screen === 'levelup' && (
         <div className="overlay active" style={{ background: 'rgba(3, 1, 17, 0.45)', backdropFilter: 'blur(1px)' }}>
           <div className="lu-wrapper">
