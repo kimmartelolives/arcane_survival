@@ -92,6 +92,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (event === 'guest_input' && net.isHost) {
         eng.p2Input = payload || { x: 0, y: 0 };
       }
+
+      // Sinasalo ng Host ang upgrade response ni Guest para ilapat sa data tree nito
+      if (event === 'guest_levelup_choice' && net.isHost) {
+        if (window.runUpgrade) {
+          window.runUpgrade(payload.choice);
+        }
+      }
       
       if (event === 'offer_levelup' && !net.isHost) {
         onLevelUpOffer(payload.ups);
@@ -194,7 +201,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        // Process physics position arrays cleanly across client instances
         if (isHost) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
@@ -207,12 +213,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // Guests move locally via P2 structures
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
-          // Compute geometric interpolations vectors smoothly
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
@@ -220,7 +224,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
 
-        // Network frame sync trigger
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
@@ -241,7 +244,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Combat auto shooting sequence mapping
         if (eng.enemies.length > 0) {
           if (eng.p && !eng.p.dead) {
             eng.p.shootCd -= dt;
@@ -284,7 +286,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Host authoritative simulation layers
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -359,13 +360,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 eng.p2.xp += g.xp;
                 if (eng.p2.xp >= eng.p2.xpNext) {
                   eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                  netRef.current.channel.send('offer_levelup', { ups: ['+25 Max HP', 'Increase Damage', 'Fire Rate Up', 'Gain Multi-Shot'] });
+                  // FIXED: Ensured deterministic parameter lists matching lowercase fuzzy token constraints
+                  netRef.current.channel.send('offer_levelup', { ups: ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'] });
                 }
               } else if (eng.p) {
                 eng.p.xp += g.xp;
                 if (eng.p.xp >= eng.p.xpNext) {
                   eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                  onLevelUpOffer(['+25 Max HP', 'Increase Damage', 'Fire Rate Up', 'Gain Multi-Shot']);
+                  // FIXED: Enforce clear, prioritized strings to bypass initialization overrides in App.jsx
+                  onLevelUpOffer(['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot']); 
                   setScreen('levelup');
                 }
               }
@@ -388,7 +391,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: isHost ? eng.p2 : eng.p };
         }
 
-        // Render direct high performance UI nodes
+        // Render UI metrics via template tags
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
         if (waveValueRef.current) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
@@ -449,13 +452,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
-      // FIXED DRAWING phase: Gamitin ang dynamic interpolation vectors (p1Render at p2Render) kapag Guest
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
       const p2X = isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
       const p2Y = isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
 
-      // Draw Player 1 (Violet Wizard)
+      // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
@@ -471,7 +473,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // Draw Player 2 (Orange Wizard)
+      // Draw Player 2 (Orange)
       if (eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
@@ -511,7 +513,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   window.runUpgrade = (choice) => {
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
-    
     const target = netRef.current.isHost ? eng.p : eng.p2;
     if (!target) return;
     
