@@ -22,7 +22,6 @@ export default function App() {
     onCanvasMsg: null 
   });
 
-  // Low frequency sync fallback for underlying overlay layers
   useEffect(() => {
     const timer = setInterval(() => {
       if (screen === 'playing') {
@@ -42,12 +41,18 @@ export default function App() {
 
   const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
 
+  // FIXED: Ang function na ito ngayon ay nagpapadala ng choice sa Host kung Guest ang pumili
   const handleSelectUpgrade = (choice) => {
-    if (window.runUpgrade) window.runUpgrade(choice);
+    if (!netRef.current.isHost && netRef.current.channel) {
+      // Ipaalam sa Host ang napiling upgrade card
+      netRef.current.channel.send('guest_levelup_choice', { choice });
+    } else if (window.runUpgrade) {
+      // Kung Host, direktang ilapat local engine side
+      window.runUpgrade(choice);
+    }
     setScreen('playing');
   };
 
-  // Centralized Master Network Router (Completely Decoupled from React State updates)
   const routeNetworkMessage = (event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
@@ -64,7 +69,6 @@ export default function App() {
       setScreen('playing');
     }
 
-    // Forward gameplay loop frames immediately to the Canvas ref listener without re-rendering App.jsx
     if (netRef.current.onCanvasMsg) {
       netRef.current.onCanvasMsg(event, payload);
     }
