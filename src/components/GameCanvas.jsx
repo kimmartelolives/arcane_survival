@@ -241,9 +241,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
               // Gently reconcile the render position toward the authoritative target when it arrives
               if (eng.p2Target) {
-                const reconcileFactor = 0.06; // small, to avoid snapping
-                eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * reconcileFactor;
-                eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * reconcileFactor;
+                const reconcileFactor = 0.03; // smaller smoothing to reduce oscillation
+                const dx = eng.p2Target.x - eng.p2Render.x;
+                const dy = eng.p2Target.y - eng.p2Render.y;
+                const dist = Math.hypot(dx, dy);
+                // If the correction is large, snap to authoritative to avoid prolonged visible drift
+                if (dist > 40) {
+                  eng.p2Render.x = eng.p2Target.x;
+                  eng.p2Render.y = eng.p2Target.y;
+                } else {
+                  eng.p2Render.x += dx * reconcileFactor;
+                  eng.p2Render.y += dy * reconcileFactor;
+                }
               }
             }
 
@@ -265,8 +274,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                p1: eng.p ? { x: Math.round(eng.p.x), y: Math.round(eng.p.y), hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
-                p2: eng.p2 ? { x: Math.round(eng.p2.x), y: Math.round(eng.p2.y), hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
+                // Send precise player positions (floats) to avoid quantization jitter on clients
+                p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
+                p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
                 p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80
               });
             }
