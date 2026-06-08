@@ -45,7 +45,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 📡 Central Canvas Interceptor - Absolute Data Synchronization Pipeline
+  // 📡 Central Canvas Interceptor Pipeline
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -69,7 +69,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        // I-sync ang target nodes mula sa Host payload frames
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
 
@@ -93,10 +92,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.p2Input = payload || { x: 0, y: 0 };
       }
 
-      // Sinasalo ng Host ang upgrade response ni Guest para ilapat sa data tree nito
+      // FIXED: Sabihin sa window.runUpgrade na ilapat ang buff partikular kay Player 2 ('p2')
       if (event === 'guest_levelup_choice' && net.isHost) {
         if (window.runUpgrade) {
-          window.runUpgrade(payload.choice);
+          window.runUpgrade(payload.choice, 'p2');
         }
       }
       
@@ -122,7 +121,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      // Standard structure allocation: P1 is Left, P2 is Right
       eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
 
@@ -360,14 +358,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 eng.p2.xp += g.xp;
                 if (eng.p2.xp >= eng.p2.xpNext) {
                   eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                  // FIXED: Ensured deterministic parameter lists matching lowercase fuzzy token constraints
                   netRef.current.channel.send('offer_levelup', { ups: ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'] });
                 }
               } else if (eng.p) {
                 eng.p.xp += g.xp;
                 if (eng.p.xp >= eng.p.xpNext) {
                   eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                  // FIXED: Enforce clear, prioritized strings to bypass initialization overrides in App.jsx
                   onLevelUpOffer(['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot']); 
                   setScreen('levelup');
                 }
@@ -391,7 +387,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: isHost ? eng.p2 : eng.p };
         }
 
-        // Render UI metrics via template tags
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
         if (waveValueRef.current) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
@@ -510,14 +505,20 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [screen]);
 
-  window.runUpgrade = (choice) => {
+  // FIXED: Pinahintulutan ang Host na tumanggap ng manual overriding parameter name ('p2') kung Guest ang pumili ng upgrade card
+  window.runUpgrade = (choice, forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
-    const target = netRef.current.isHost ? eng.p : eng.p2;
+    
+    // Alamin kung kanino ilalapat: gamitin ang forcedTarget kung mayroon, kung wala ay mag-default sa window nature
+    let target = netRef.current.isHost ? eng.p : eng.p2;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    
     if (!target) return;
     
     const token = String(choice || '').toLowerCase().trim();
-    console.log("🔮 Applying Arcane Upgrade Upgrade:", token);
+    console.log(`🔮 Applying Arcane Upgrade [Target: ${forcedTarget || 'Local'}]:`, token);
     
     if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
       target.maxHp += 25; 
