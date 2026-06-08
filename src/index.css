@@ -169,7 +169,6 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
 /* ⌨️ PAUSE BUTTON HINT ACCENT */
 .hud-pause-hint {
   position: absolute;
-  bottom: 50px;    /* Inilagay sa ibaba katabi ng general control hints */
   right: 15px;     /* Aligned parallel sa Score layout grid sa kanan */
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.8rem;
