@@ -28,6 +28,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p1Render: { x: 300, y: 280 },
     p2Render: { x: 600, y: 280 },
+    hostStarted: false,
     p2History: []
   });
 
@@ -62,6 +63,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (!eng.p2) {
           eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
         }
+        eng.hostStarted = true;
 
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
@@ -181,6 +183,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
     };
 
+    let fallbackTimer = null;
+    const scheduleFallback = () => {
+      if (document.visibilityState === 'hidden') {
+        if (fallbackTimer === null) {
+          fallbackTimer = window.setInterval(() => loop(performance.now()), 1000);
+        }
+      } else if (fallbackTimer !== null) {
+        clearInterval(fallbackTimer);
+        fallbackTimer = null;
+      }
+    };
+
     const loop = (ts) => {
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
@@ -237,46 +251,45 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // GUEST SIDE LOGIC: Client-side prediction for P2 + smooth reconcile
-            if (eng.p2 && !eng.p2.dead) {
-              // Predict immediate movement locally
-              eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
-              eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
+          // GUEST SIDE LOGIC: wait until the host has started the game
+          if (eng.p2 && !eng.p2.dead && eng.hostStarted) {
+            // Predict immediate movement locally
+            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
+            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
 
-              // Simpler approach: fast-follow prediction and gentle reconcile to authoritative state
-              const predFactor = Math.min(1, dt * 18);
-              eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
-              eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
+            // Simpler approach: fast-follow prediction and gentle reconcile to authoritative state
+            const predFactor = Math.min(1, dt * 18);
+            eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
+            eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
 
-              if (eng.p2Target) {
-                const reconcileFactor = 0.06; // gentle corrections
-                const dx = eng.p2Target.x - eng.p2Render.x;
-                const dy = eng.p2Target.y - eng.p2Render.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist > 60) {
-                  // snap on large divergence to avoid long visible drift
-                  eng.p2Render.x = eng.p2Target.x;
-                  eng.p2Render.y = eng.p2Target.y;
-                } else {
-                  eng.p2Render.x += dx * reconcileFactor;
-                  eng.p2Render.y += dy * reconcileFactor;
-                }
+            if (eng.p2Target) {
+              const reconcileFactor = 0.06; // gentle corrections
+              const dx = eng.p2Target.x - eng.p2Render.x;
+              const dy = eng.p2Target.y - eng.p2Render.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist > 60) {
+                eng.p2Render.x = eng.p2Target.x;
+                eng.p2Render.y = eng.p2Target.y;
+              } else {
+                eng.p2Render.x += dx * reconcileFactor;
+                eng.p2Render.y += dy * reconcileFactor;
               }
             }
+          }
 
-            // Keep Player1 render interpolation as before
-            const f = Math.min(1, dt * 14);
-            eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
-            eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
+          // Keep Player1 render interpolation as before
+          const f = Math.min(1, dt * 14);
+          eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
+          eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
         }
 
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
             syncTimer = 0.033; // INCREASED: Sends updates roughly 30 times a second
-            if (!isHost) {
+            if (!isHost && eng.hostStarted) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
-            } else {
+            } else if (isHost) {
               netRef.current.channel.send('state_sync', {
                 enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
@@ -538,6 +551,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
       animId = requestAnimationFrame(loop);
     };
+    document.addEventListener('visibilitychange', scheduleFallback);
+    scheduleFallback();
     animId = requestAnimationFrame(loop);
 
     const down = (e) => { 
@@ -552,6 +567,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     return () => {
       cancelAnimationFrame(animId);
+      if (fallbackTimer !== null) {
+        clearInterval(fallbackTimer);
+        fallbackTimer = null;
+      }
+      document.removeEventListener('visibilitychange', scheduleFallback);
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
@@ -586,6 +606,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   };
 
+  const net = netRef.current || {};
+  const isCoop = Boolean(net.channel);
+  const isHost = Boolean(net.isHost) || !isCoop;
+  const hostStarted = engineRef.current.hostStarted;
+
   return (
     <div id="wrap">
       <div style={{ position: 'relative', display: 'inline-block' }}>
@@ -617,6 +642,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             <div className="hud-controls-hint">
               WASD/Arrows to move &nbsp;&middot;&nbsp; Auto-attacks nearest target &nbsp;&middot;&nbsp; Collect green gems for XP
             </div>
+            {isCoop && !isHost && !hostStarted && (
+              <div className="hud-waiting-message">
+                Waiting for the host to start the game. Only the host can move first.
+              </div>
+            )}
           </div>
         )}
       </div>
