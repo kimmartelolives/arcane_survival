@@ -508,16 +508,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [screen]);
 
+// FIXED: Case-insensitive fuzzy matching to prevent capitalization or spacing typos from breaking the upgrade system
   window.runUpgrade = (choice) => {
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
+    
     const target = netRef.current.isHost ? eng.p : eng.p2;
     if (!target) return;
     
-    if (choice === '+25 Max HP') { target.maxHp += 25; target.hp = target.maxHp; }
-    else if (choice === 'Increase Damage') { eng.boltDmg += 14; }
-    else if (choice === 'Fire Rate Up') { target.shootRate = Math.max(0.15, target.shootRate - 0.1); }
-    else if (choice === 'Gain Multi-Shot') { target.multiShot += 1; }
+    const token = String(choice || '').toLowerCase().trim();
+    console.log("🔮 Applying Arcane Upgrade Upgrade:", token);
+    
+    if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
+      target.maxHp += 25; 
+      target.hp = target.maxHp; 
+    }
+    else if (token.includes('damage') || token.includes('might') || token.includes('increase')) {
+      eng.boltDmg += 14; 
+    }
+    else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
+      target.shootRate = Math.max(0.15, target.shootRate - 0.1); 
+    }
+    else if (token.includes('multi') || token.includes('shot') || token.includes('split')) {
+      target.multiShot += 1; 
+    }
   };
 
   return (
