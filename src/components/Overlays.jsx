@@ -177,9 +177,6 @@ export default function Overlays({
             <div className="section-title">🌐 Waiting for Player 2</div>
             <div className="room-code-display">{roomCode}</div>
             <div style={{ fontSize: '.75rem', color: '#a78bfa' }}>{p2Status || 'Waiting for an ally to connect...'}</div>
-            <div style={{ marginTop: '12px', fontSize: '.78rem', color: '#f8fafc' }}>
-              Host starts the game. Guests cannot move until the host begins gameplay.
-            </div>
             <button className="btn danger sm" style={{ marginTop: '20px' }} onClick={() => onAction('cancel-lobby')}>✕ Cancel</button>
           </div>
         </div>
