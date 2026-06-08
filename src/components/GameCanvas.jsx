@@ -53,7 +53,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
-        // Reconstruct Host elements down to local canvas safely
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
           dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0
@@ -68,13 +67,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        // FIXED: Baligtarin ang control points para sa Guest POV upang hindi ma-stuck sa gitna
         if (payload.p1 && eng.p2) {
-          // Ang P1 mula sa Host ay ang Companion (P2) sa screen ng Guest
           eng.p2Target = payload.p1; 
         }
         if (payload.p2 && eng.p) {
-          // Ang P2 mula sa Host ay ang Local Character (P) ng Guest
           eng.p.hp = payload.p2.hp;
           eng.p.maxHp = payload.p2.maxHp;
           eng.p.dead = payload.p2.dead;
@@ -100,7 +96,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
-  // Handle spawn allocation variables across roles cleanly
   useEffect(() => {
     if (screen === 'menu' || screen === 'lobby') {
       const eng = engineRef.current;
@@ -109,7 +104,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      // FIXED: Italaga ang tamang spawning coordinates batay sa tungkulin (Host vs Guest)
       if (netRef.current.channel) {
         eng.p = { x: isHost ? W / 3 : W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
         eng.p2 = { x: isHost ? W * 2 / 3 : W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
@@ -152,12 +146,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
+      // FIXED: Defined isHost at the top level of loop block so render functions can access it safely
+      const isHost = netRef.current.isHost;
+      const isCoop = Boolean(netRef.current.channel);
+
       if (screen === 'playing' || screen === 'levelup') {
         eng.waveT += dt;
         eng.spawnT += dt;
-
-        const isHost = netRef.current.isHost;
-        const isCoop = Boolean(netRef.current.channel);
 
         if (!isCoop || isHost) {
           if (eng.spawnT >= eng.spawnRate) {
@@ -190,14 +185,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        // Local Player Movement Logic (Parehas tumatakbo sa Host at Guest)
         if (eng.p && !eng.p.dead) {
           eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
           eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * eng.p.speed * dt));
           if (eng.p.inv > 0) eng.p.inv -= dt;
         }
 
-        // Companion Player Mirror Interpolation Loop
         if (isCoop && eng.p2) {
           if (isHost && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * eng.p2.speed * dt));
@@ -215,7 +208,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Network synchronization broadcast loop
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
@@ -235,7 +227,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // FIXED: Pinahintulutan ang Guest na magproseso ng pagbaril independently para hindi tumigil kapag namatay ang Host
         if (eng.enemies.length > 0) {
           if (eng.p && !eng.p.dead) {
             eng.p.shootCd -= dt;
@@ -278,7 +269,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Host handles master physics authority calculations
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -362,7 +352,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Guest client-side prediction update to smooth things out
         if (!isHost && isCoop) {
           for (const b of eng.bullets) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; }
         }
@@ -426,7 +415,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // FIXED RENDER ROUTINE: Siguraduhing tama ang kulay ng avatar batay sa kung sino ang Host/Guest
       const hostColor = '#8b5cf6'; // Violet
       const guestColor = '#f97316'; // Orange
 
