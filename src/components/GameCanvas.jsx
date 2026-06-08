@@ -43,23 +43,31 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Hook into the App's stabilized message pipe
+  // 📡 High-Stability Client Message Receiver Pipe
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
 
     net.onCanvasMsg = (event, payload) => {
       const eng = engineRef.current;
+      if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
-        eng.enemies = payload.enemies || [];
-        eng.gems = payload.gems || [];
-        eng.bullets = payload.bullets || [];
+        // Explicit reconstruction mapping to clear serialization issues
+        eng.enemies = (payload.enemies || []).map(e => ({
+          x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
+          dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0
+        }));
+
+        eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
+        eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2 }));
+        
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
         eng.waveT = payload.waveT ?? eng.waveT;
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
+
         if (payload.p1) eng.p2Target = payload.p1;
         if (payload.p2 && eng.p) {
           eng.p.hp = payload.p2.hp;
@@ -67,13 +75,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p.dead = payload.p2.dead;
         }
       }
+      
       if (event === 'guest_input' && net.isHost) {
-        eng.p2Input = payload;
+        eng.p2Input = payload || { x: 0, y: 0 };
       }
+      
       if (event === 'offer_levelup' && !net.isHost) {
         onLevelUpOffer(payload.ups);
         setScreen('levelup');
       }
+      
       if (event === 'game_over') {
         setScreen('gameover');
       }
@@ -90,16 +101,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.p = { x: netRef.current.channel ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      if (netRef.current.channel) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      } else {
-        eng.p2 = null;
-      }
+      eng.p2 = netRef.current.channel ? { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false } : null;
     }
   }, [screen]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     canvas.width = W; canvas.height = H;
     const eng = engineRef.current;
@@ -164,7 +172,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        if (!eng.p.dead) {
+        if (eng.p && !eng.p.dead) {
           eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
           eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * eng.p.speed * dt));
           if (eng.p.inv > 0) eng.p.inv -= dt;
@@ -176,7 +184,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * eng.p2.speed * dt));
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           } else if (!isHost) {
-            const f = Math.min(1, dt * 16);
+            // Apply crisp frame-based linear interpolation to remove freezing artifacts
+            const f = Math.min(1, dt * 14);
             eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
             eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
             eng.p2Render.hp += (eng.p2Target.hp - eng.p2Render.hp) * f;
@@ -187,45 +196,51 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        if (isCoop) {
+        // ⏱ Data Down-Sampling Throttle Loop
+        if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.04;
+            syncTimer = 0.05; // 20Hz pipeline throttle to prevent packet flooding
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
               netRef.current.channel.send('state_sync', {
-                enemies: eng.enemies, gems: eng.gems, bullets: eng.bullets,
+                enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
+                gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
+                bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                p1: { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead },
+                p1: { x: Math.round(eng.p.x), y: Math.round(eng.p.y), hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead },
                 p2: { hp: eng.p2.hp, maxHp: eng.p2.maxHp, dead: eng.p2.dead }
               });
             }
           }
         }
 
-        if (!eng.p.dead && (!isCoop || isHost)) {
-          eng.p.shootCd -= dt;
-          if (eng.p.shootCd <= 0 && eng.enemies.length > 0) {
-            let near = null, nd = Infinity;
-            for (const e of eng.enemies) {
-              const d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
-              if (d < nd) { nd = d; near = e; }
-            }
-            if (near) {
-              eng.p.shootCd = eng.p.shootRate;
-              const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
-              const sp = (eng.p.multiShot - 1) * 0.18;
-              for (let i = 0; i < eng.p.multiShot; i++) {
-                const a = ba + (i - (eng.p.multiShot - 1) / 2) * sp;
-                eng.bullets.push({ x: eng.p.x, y: eng.p.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: false });
+        // FIXED: Both Host and Guest process standard fire combat loop structures
+        if (eng.enemies.length > 0) {
+          if (eng.p && !eng.p.dead) {
+            eng.p.shootCd -= dt;
+            if (eng.p.shootCd <= 0) {
+              let near = null, nd = Infinity;
+              for (const e of eng.enemies) {
+                const d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
+                if (d < nd) { nd = d; near = e; }
+              }
+              if (near) {
+                eng.p.shootCd = eng.p.shootRate;
+                const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
+                const sp = (eng.p.multiShot - 1) * 0.18;
+                for (let i = 0; i < eng.p.multiShot; i++) {
+                  const a = ba + (i - (eng.p.multiShot - 1) / 2) * sp;
+                  eng.bullets.push({ x: eng.p.x, y: eng.p.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: false });
+                }
               }
             }
           }
 
           if (isCoop && eng.p2 && !eng.p2.dead) {
             eng.p2.shootCd -= dt;
-            if (eng.p2.shootCd <= 0 && eng.enemies.length > 0) {
+            if (eng.p2.shootCd <= 0) {
               let near = null, nd = Infinity;
               for (const e of eng.enemies) {
                 const d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
@@ -244,6 +259,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
+        // Server authoritative simulation blocks
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -268,9 +284,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
             if (hit) continue;
           }
-        }
 
-        if (!isCoop || isHost) {
           for (const e of eng.enemies) {
             let tx = eng.p.dead ? null : eng.p;
             if (isCoop && eng.p2 && !eng.p2.dead) {
@@ -285,16 +299,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             if (!eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
               eng.p.hp -= e.dmg; eng.p.inv = 0.7;
-              if (eng.p.hp <= 0) { eng.p.dead = true; if(!isCoop || !eng.p2 || eng.p2.dead) { if(isCoop)netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
+              if (eng.p.hp <= 0) { eng.p.dead = true; if(!isCoop || !eng.p2 || eng.p2.dead) { if(isCoop) netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
             }
             if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
               eng.p2.hp -= e.dmg; eng.p2.inv = 0.7;
               if (eng.p2.hp <= 0) { eng.p2.dead = true; if(eng.p.dead) { netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
             }
           }
-        }
 
-        if (!isCoop || isHost) {
           for (let i = eng.gems.length - 1; i >= 0; i--) {
             const g = eng.gems[i]; g.life -= dt;
             if (g.life <= 0) { eng.gems.splice(i, 1); continue; }
@@ -327,6 +339,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               eng.gems.splice(i, 1);
             }
           }
+        }
+
+        // Guest local bullet prediction block so projectiles don't jitter
+        if (!isHost && isCoop) {
+          for (const b of eng.bullets) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; }
         }
 
         hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: eng.p, p2: eng.p2 };
@@ -388,67 +405,35 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // 🔮 GEOMETRIC WIZARD - PLAYER 2
+      // 🔮 PLAYER 2 RENDER PANEL
       if (eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
         const px = eng.p2.x; const py = eng.p2.y; const pr = eng.p2.r;
-
-        ctx.shadowColor = fl ? '#ef4444' : '#f97316';
-        ctx.shadowBlur = 22;
-
+        ctx.shadowColor = fl ? '#ef4444' : '#f97316'; ctx.shadowBlur = 22;
         ctx.fillStyle = fl ? '#ef4444' : '#f97316';
-        ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-
+        ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         ctx.fillStyle = fl ? '#b91c1c' : '#c2410c';
-        ctx.beginPath();
-        ctx.moveTo(px, py - pr * 1.8);
-        ctx.lineTo(px + pr * 0.9, py - pr * 0.2);
-        ctx.lineTo(px - pr * 0.9, py - pr * 0.2);
-        ctx.closePath(); ctx.fill();
-
+        ctx.beginPath(); ctx.moveTo(px, py - pr * 1.8); ctx.lineTo(px + pr * 0.9, py - pr * 0.2); ctx.lineTo(px - pr * 0.9, py - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#ffedd5';
         ctx.beginPath(); ctx.ellipse(px, py - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-
-        ctx.fillStyle = '#030111';
-        ctx.beginPath();
-        ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2);
-        ctx.arc(px + pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(px + pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
 
-      // 🔮 GEOMETRIC WIZARD - PLAYER 1
-      if (!eng.p.dead) {
+      // 🔮 PLAYER 1 RENDER PANEL
+      if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
         const px = eng.p.x; const py = eng.p.y; const pr = eng.p.r;
-
-        ctx.shadowColor = fl ? '#ef4444' : '#8b5cf6';
-        ctx.shadowBlur = 22;
-
+        ctx.shadowColor = fl ? '#ef4444' : '#8b5cf6'; ctx.shadowBlur = 22;
         ctx.fillStyle = fl ? '#ef4444' : '#8b5cf6';
-        ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0;
-
+        ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         ctx.fillStyle = fl ? '#b91c1c' : '#5b21b6';
-        ctx.beginPath();
-        ctx.moveTo(px, py - pr * 1.8);
-        ctx.lineTo(px + pr * 0.9, py - pr * 0.2);
-        ctx.lineTo(px - pr * 0.9, py - pr * 0.2);
-        ctx.closePath(); ctx.fill();
-
+        ctx.beginPath(); ctx.moveTo(px, py - pr * 1.8); ctx.lineTo(px + pr * 0.9, py - pr * 0.2); ctx.lineTo(px - pr * 0.9, py - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#c4b5fd';
         ctx.beginPath(); ctx.ellipse(px, py - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-
-        ctx.fillStyle = '#030111';
-        ctx.beginPath();
-        ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2);
-        ctx.arc(px + pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(px + pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
 
@@ -475,7 +460,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
   window.runUpgrade = (choice) => {
     const eng = engineRef.current;
-    if (!eng.p) return;
+    if (!eng || !eng.p) return;
     if (choice === '+25 Max HP') { eng.p.maxHp += 25; eng.p.hp = eng.p.maxHp; }
     else if (choice === 'Increase Damage') { eng.boltDmg += 14; }
     else if (choice === 'Fire Rate Up') { eng.p.shootRate = Math.max(0.15, eng.p.shootRate - 0.1); }
@@ -487,7 +472,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* Arcade HUD Overlay Layer */}
+        {/* HUD Overlay */}
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
             <div className="hud-pause-hint">[ESC] PAUSE</div>
