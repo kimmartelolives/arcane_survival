@@ -182,7 +182,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
 
     const loop = (ts) => {
-      const dt = Math.min((ts - lastTime) / 1000, 0.05);
+      try {
+        const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
       // Determine host/co-op state robustly: if there's no network channel treat as host (solo)
@@ -209,10 +210,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
           if (eng.waveT >= eng.waveLen) {
             eng.waveT = 0; eng.wave++;
+            console.log('Wave started', eng.wave, 'enemies', eng.enemies.length);
             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
             if (eng.wave % 3 === 0) {
               const t = ET[3];
               eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0 });
+              console.log('Boss spawned for wave', eng.wave);
             }
           }
         }
@@ -536,9 +539,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      animId = requestAnimationFrame(loop);
+      } catch (err) {
+        // Log and continue the loop so a single error doesn't freeze the game
+        try { console.error('Game loop error:', err); } catch (e) {}
+      } finally {
+        animId = requestAnimationFrame(loop);
+      }
     };
-    animId = requestAnimationFrame(loop);
 
     const down = (e) => { 
       eng.keys[e.key] = true; 
