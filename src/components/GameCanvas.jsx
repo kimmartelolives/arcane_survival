@@ -10,7 +10,7 @@ const ET = [
   { r: 27, speed: 50,  hp: 260, dmg: 30, xp: 100, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
-// --- ADDITIONAL CSS FOR FOCUS MITIGATION OVERLAYS & HUD ---
+// --- CSS FOR FOCUS MITIGATION OVERLAYS & HUD ---
 const focusStyles = `
   #wrap {
     position: relative;
@@ -28,7 +28,7 @@ const focusStyles = `
     border-radius: 4px;
     overflow: hidden;
   }
-  .hud-focus-overlay, .hud-start-overlay {
+  .hud-start-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -41,30 +41,22 @@ const focusStyles = `
     z-index: 100;
     font-family: monospace;
   }
-  .hud-focus-modal, .hud-start-modal {
+  .hud-start-modal {
     background: #0b0826;
-    border: 2px solid #ef4444;
+    border: 2px solid #8b5cf6;
     padding: 2rem;
     border-radius: 8px;
     text-align: center;
     color: #fff;
     max-width: 420px;
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
-  }
-  .hud-start-modal {
-    border-color: #8b5cf6;
     box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
   }
-  .hud-focus-modal.guest-variant {
-    border-color: #f97316;
-    box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
-  }
-  .hud-focus-modal h2, .hud-start-modal h2 {
+  .hud-start-modal h2 {
     margin: 0 0 0.75rem 0;
     font-size: 1.5rem;
     letter-spacing: 1px;
   }
-  .hud-focus-modal p, .hud-start-modal p {
+  .hud-start-modal p {
     font-size: 0.9rem;
     color: #d1d5db;
     line-height: 1.4;
@@ -138,10 +130,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const xpTextRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  // --- FOCUS DETECTION & TIMING MITIGATION STATES ---
+  // --- STATES ---
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
-  const [hostTabbedOut, setHostTabbedOut] = useState(false);
 
   const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
@@ -171,15 +162,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // --- BACKGROUND WEB AUDIO ESCAPE LOOP HACK ---
-  // Locks the background scheduling priority by anchoring an oscillator node thread via user event gesture.
+  // Locks background scheduling priority by anchoring an oscillator node thread via user event gesture.
   const activateAudioKeepAlive = () => {
     if (audioCtxRef.current) return;
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioContext();
       const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, ctx.currentTime); // Structural muting pattern
+      gainNode.gain.setValueAtTime(0, ctx.currentTime); 
       
       const osc = ctx.createOscillator();
       osc.connect(gainNode);
@@ -199,7 +189,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       setIsWindowBlurred(true);
       const net = netRef.current;
       if (net && net.channel && net.isHost) {
-        // Intercept host frame droppage immediately to notify peers across channel pipelines
         net.channel.send('host_focus_changed', { isTabbedOut: true });
       }
     };
@@ -228,11 +217,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     net.onCanvasMsg = (event, payload) => {
       const eng = engineRef.current;
       if (!eng) return;
-      
-      // Handle visibility changes across network nodes
-      if (event === 'host_focus_changed' && !net.isHost) {
-        setHostTabbedOut(payload.isTabbedOut);
-      }
 
       if (event === 'state_sync' && !net.isHost) {
         if (payload.gameStarted !== undefined) {
@@ -320,7 +304,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.gameStarted = false; 
       setHasStarted(false);     
-      setHostTabbedOut(false);
       
       eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
@@ -384,7 +367,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     const worker = new Worker(workerURL);
     workerRef.current = worker;
 
-    // Background Thread Tick Handler (Runs flawlessly even if host tabs out)
     worker.onmessage = () => {
       const ts = performance.now();
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
@@ -854,16 +836,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   ? "Press WASD or Arrow Keys to begin battle." 
                   : "The arena will initialize once the match host begins moving."}
               </p>
-            </div>
-          </div>
-        )}
-
-        {/* INTERCEPTED HOST WARNING DISPLAY FOR GUEST PERFORMANCE */}
-        {screen === 'playing' && !isHostInstance && hostTabbedOut && (
-          <div className="hud-focus-overlay">
-            <div className="hud-focus-modal guest-variant">
-              <h2>HOST TABBED OUT</h2>
-              <p>The host has minimized or unfocused their browser window. Background Web Worker sync is active.</p>
             </div>
           </div>
         )}
