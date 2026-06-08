@@ -45,7 +45,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 📡 Central Canvas Interceptor Pipeline
+  // 📡 Network Stream Receiver - Optimized Routing to Eliminate Rubberbanding
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -55,6 +55,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
+        // Direct object reconstruction mapping to clear serialization issues
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
           dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0
@@ -69,9 +70,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
+        // Feed position targets safely for linear interpolation frames
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
 
+        // FIXED: Sync metrics and metadata structures ONLY. Do not forcibly override active player input axis coordinates.
         if (payload.p1 && eng.p) {
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
@@ -92,7 +95,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.p2Input = payload || { x: 0, y: 0 };
       }
 
-      // FIXED: Sabihin sa window.runUpgrade na ilapat ang buff partikular kay Player 2 ('p2')
       if (event === 'guest_levelup_choice' && net.isHost) {
         if (window.runUpgrade) {
           window.runUpgrade(payload.choice, 'p2');
@@ -121,6 +123,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
+      // Fixed structural placement layout maps
       eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
 
@@ -199,6 +202,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
+        // FIXED: Client-side Prediction Rules. Allow instant movement rendering loop execution profiles.
         if (isHost) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
@@ -211,10 +215,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
+          // Player 2 controls their vector independently without waiting for host network updates
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
+          // Compute smooth linear interpolation for the companion node (Host)
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
@@ -222,6 +228,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
 
+        // Optimized network telemetry frames (15Hz downsampled buffer stream limit)
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
@@ -444,13 +451,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
+      // Drawing bounds configurations
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
+      // FIXED RENDERING LOGIC: Render using local positional updates for local entities, and render companion smooth vectors
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
-      const p2X = isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
-      const p2Y = isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
+      const p2X = !isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
+      const p2Y = !isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
 
       // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
@@ -505,12 +514,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [screen]);
 
-  // FIXED: Pinahintulutan ang Host na tumanggap ng manual overriding parameter name ('p2') kung Guest ang pumili ng upgrade card
   window.runUpgrade = (choice, forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
     
-    // Alamin kung kanino ilalapat: gamitin ang forcedTarget kung mayroon, kung wala ay mag-default sa window nature
     let target = netRef.current.isHost ? eng.p : eng.p2;
     if (forcedTarget === 'p2') target = eng.p2;
     if (forcedTarget === 'p1') target = eng.p;
