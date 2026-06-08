@@ -69,14 +69,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        // Sync target nodes
+        // I-sync ang target nodes mula sa Host payload frames
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
 
-        // FIXED: Explicitly sync positions and metadata down to guest engine states
         if (payload.p1 && eng.p) {
-          eng.p.x = payload.p1.x;
-          eng.p.y = payload.p1.y;
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
           eng.p.dead = payload.p1.dead;
@@ -118,15 +115,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      // Standard data roles: P1 is always Left/Violet, P2 is always Right/Orange
+      // Standard structure allocation: P1 is Left, P2 is Right
       eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      eng.p2 = netRef.current.channel ? { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false } : null;
+      eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
 
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
-      eng.p2Target = { x: eng.p2 ? eng.p2.x : 600, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
+      eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
       
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
-      eng.p2Render = { x: eng.p2 ? eng.p2.x : 600, y: H / 2 };
+      eng.p2Render = { x: eng.p2.x, y: H / 2 };
     }
   }, [screen]);
 
@@ -197,7 +194,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        // Process physics inputs properly based on client role mapping
+        // Process physics position arrays cleanly across client instances
         if (isHost) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
@@ -210,12 +207,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // Guests process their local input vectors directly into P2
+          // Guests move locally via P2 structures
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
-          // Smooth render node calculations
+          // Compute geometric interpolations vectors smoothly
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
@@ -223,7 +220,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
 
-        // Network synchronization pipeline
+        // Network frame sync trigger
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
@@ -244,7 +241,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Combat routines
+        // Combat auto shooting sequence mapping
         if (eng.enemies.length > 0) {
           if (eng.p && !eng.p.dead) {
             eng.p.shootCd -= dt;
@@ -287,6 +284,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
+        // Host authoritative simulation layers
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -390,7 +388,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: isHost ? eng.p2 : eng.p };
         }
 
-        // DOM UI updates
+        // Render direct high performance UI nodes
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
         if (waveValueRef.current) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
@@ -448,39 +446,44 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // Drawing bounds configurations
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
-      // Draw Player 1 (Violet)
+      // FIXED DRAWING phase: Gamitin ang dynamic interpolation vectors (p1Render at p2Render) kapag Guest
+      const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
+      const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
+      const p2X = isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
+      const p2Y = isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
+
+      // Draw Player 1 (Violet Wizard)
       if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
-        const px = eng.p.x; const py = eng.p.y; const pr = eng.p.r;
+        const pr = eng.p.r;
         const c = fl ? '#ef4444' : p1Color;
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
-        ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.arc(p1X, p1Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         ctx.fillStyle = fl ? '#b91c1c' : '#5b21b6';
-        ctx.beginPath(); ctx.moveTo(px, py - pr * 1.8); ctx.lineTo(px + pr * 0.9, py - pr * 0.2); ctx.lineTo(px - pr * 0.9, py - pr * 0.2); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(p1X, p1Y - pr * 1.8); ctx.lineTo(p1X + pr * 0.9, p1Y - pr * 0.2); ctx.lineTo(p1X - pr * 0.9, p1Y - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#c4b5fd';
-        ctx.beginPath(); ctx.ellipse(px, py - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(px + pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(p1X, p1Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p1X - pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p1X + pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
 
-      // Draw Player 2 (Orange)
+      // Draw Player 2 (Orange Wizard)
       if (eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
-        const px = eng.p2.x; const py = eng.p2.y; const pr = eng.p2.r;
+        const pr = eng.p2.r;
         const c = fl ? '#ef4444' : p2Color;
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
-        ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.arc(p2X, p2Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         ctx.fillStyle = fl ? '#b91c1c' : '#c2410c';
-        ctx.beginPath(); ctx.moveTo(px, py - pr * 1.8); ctx.lineTo(px + pr * 0.9, py - pr * 0.2); ctx.lineTo(px - pr * 0.9, py - pr * 0.2); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(p2X, p2Y - pr * 1.8); ctx.lineTo(p2X + pr * 0.9, p2Y - pr * 0.2); ctx.lineTo(p2X - pr * 0.9, p2Y - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#ffedd5';
-        ctx.beginPath(); ctx.ellipse(px, py - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(px + pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(p2X, p2Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p2X - pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p2X + pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
       }
 
