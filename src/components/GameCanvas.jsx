@@ -69,7 +69,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }));
 
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
-        eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2 }));
+        eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2, 
+        justSynced: true 
+        }));
         
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
@@ -87,12 +89,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
 
         if (payload.p2 && eng.p2) {
-          eng.p2.hp = payload.p2.hp;
+          eng.p2.hp    = payload.p2.hp;
           eng.p2.maxHp = payload.p2.maxHp;
-          eng.p2.dead = payload.p2.dead;
-          eng.p2.level = payload.p2_level || eng.p2.level;
-          eng.p2.xp = payload.p2_xp || eng.p2.xp;
-          eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
+          eng.p2.dead  = payload.p2.dead;
+          // Only correct position if host disagrees by more than 8px (latency drift)
+          const dx = payload.p2.x - eng.p2.x;
+          const dy = payload.p2.y - eng.p2.y;
+          if (Math.hypot(dx, dy) > 8) {
+            eng.p2.x += dx * 0.25;  // blend 25% toward host each sync
+            eng.p2.y += dy * 0.25;
+          }
         }
       }
       
@@ -231,17 +237,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
-          const f = Math.min(1, dt * 14);
+          const f = Math.min(1, dt * 10); 
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
-          eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
-          eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
+          // eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
+          // eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
 
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.065; 
+            syncTimer = 0.04;
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
@@ -391,7 +397,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         if (!isHost && isCoop) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
-            const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+            const b = eng.bullets[i];
+            if (b.justSynced) { b.justSynced = false; continue; }  // ← skip this frame
+            b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
             if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
               eng.bullets.splice(i, 1);
             }
@@ -466,8 +474,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
 
-      const p2X = isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
-      const p2Y = isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
+      const p2X = (eng.p2 ? eng.p2.x : W*2/3);
+      const p2Y = (eng.p2 ? eng.p2.y : H/2);
 
       // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
