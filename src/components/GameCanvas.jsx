@@ -10,9 +10,25 @@ const ET = [
   { r: 27, speed: 50,  hp: 260, dmg: 30, xp: 100, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
-// --- ADDITIONAL CSS FOR FOCUS MITIGATION OVERLAYS ---
+// --- ADDITIONAL CSS FOR FOCUS MITIGATION OVERLAYS & HUD ---
 const focusStyles = `
-  .hud-focus-overlay {
+  #wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #030111;
+    overflow: hidden;
+  }
+  .game-container {
+    position: relative;
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .hud-focus-overlay, .hud-start-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -25,7 +41,7 @@ const focusStyles = `
     z-index: 100;
     font-family: monospace;
   }
-  .hud-focus-modal {
+  .hud-focus-modal, .hud-start-modal {
     background: #0b0826;
     border: 2px solid #ef4444;
     padding: 2rem;
@@ -35,25 +51,84 @@ const focusStyles = `
     max-width: 420px;
     box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
   }
+  .hud-start-modal {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  }
   .hud-focus-modal.guest-variant {
     border-color: #f97316;
     box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
   }
-  .hud-focus-modal h2 {
+  .hud-focus-modal h2, .hud-start-modal h2 {
     margin: 0 0 0.75rem 0;
     font-size: 1.5rem;
     letter-spacing: 1px;
   }
-  .hud-focus-modal p {
+  .hud-focus-modal p, .hud-start-modal p {
     font-size: 0.9rem;
     color: #d1d5db;
     line-height: 1.4;
     margin: 0;
   }
+  /* Core gameplay top/bottom modular HUD bars */
+  .game-hud-top {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    justify-content: space-between;
+    font-family: monospace;
+    font-size: 1.1rem;
+    color: #fff;
+    text-shadow: 0 0 6px rgba(255,255,255,0.6);
+    pointer-events: none;
+    z-index: 10;
+  }
+  .game-hud-bottom {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: monospace;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .hud-bar-container {
+    width: 260px;
+    background: rgba(15, 11, 42, 0.75);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    position: relative;
+    height: 18px;
+    overflow: hidden;
+  }
+  .hud-bar-fill {
+    height: 100%;
+    width: 100%;
+    transition: width 0.1s linear;
+  }
+  .hud-bar-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    text-align: center;
+    font-size: 0.75rem;
+    line-height: 18px;
+    color: #fff;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer }) {
   const canvasRef = useRef(null);
+  const workerRef = useRef(null);
   
   const scoreValueRef = useRef(null);
   const waveValueRef = useRef(null);
@@ -261,6 +336,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   }, [screen, netRef]);
 
+  // Main background simulation lifecycle configuration
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -283,7 +359,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }));
 
     let lastTime = performance.now();
-    let animId;
+    let renderAnimId;
     let syncTimer = 0;
 
     const rollUpgradeOptions = () => {
@@ -291,7 +367,26 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
     };
 
-    const loop = (ts) => {
+    // --- SETUP UNTHROTTLED INLINE BACKGROUND WEB WORKER ---
+    const workerBlob = new Blob([`
+      let timer = null;
+      self.onmessage = function(e) {
+        if (e.data === 'start') {
+          if (timer) clearInterval(timer);
+          timer = setInterval(() => { self.postMessage('tick'); }, 1000 / 60);
+        } else if (e.data === 'stop') {
+          if (timer) clearInterval(timer);
+        }
+      };
+    `], { type: 'application/javascript' });
+    
+    const workerURL = URL.createObjectURL(workerBlob);
+    const worker = new Worker(workerURL);
+    workerRef.current = worker;
+
+    // Background Thread Tick Handler (Runs flawlessly even if host tabs out)
+    worker.onmessage = () => {
+      const ts = performance.now();
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
@@ -312,7 +407,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (isHost && (mx !== 0 || my !== 0)) {
             eng.gameStarted = true;
             setHasStarted(true);
-            activateAudioKeepAlive(); // Trigger context allocation safely inside keyboard interaction bounds
+            activateAudioKeepAlive(); 
           } else if (!isHost) {
             mx = 0; 
             my = 0;
@@ -573,7 +668,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      // Handle cosmic environment / background particle movements continuously
+      // Physics logic for environmental animations
       for (let i = eng.particles.length - 1; i >= 0; i--) {
         const p = eng.particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt;
         if (p.life <= 0) eng.particles.splice(i, 1);
@@ -582,7 +677,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         a.x += a.vx * dt; a.y += a.vy * dt; a.t -= dt * 0.22;
         if (a.t <= 0 || a.y < -10) { a.x = Math.random() * W; a.y = H + 10; a.t = 1; }
       }
+    };
 
+    worker.postMessage('start');
+
+    // --- RENDER VISUAL LOOP ---
+    const renderLoop = () => {
       ctx.fillStyle = '#030111'; ctx.fillRect(0, 0, W, H);
       if (eng.floorPat) { ctx.fillStyle = eng.floorPat; ctx.fillRect(0, 0, W, H); }
 
@@ -617,6 +717,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
+
+      const net = netRef.current || {};
+      const isCoop = Boolean(net.channel);
+      const isHost = Boolean(net.isHost) || !isCoop;
 
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
@@ -654,9 +758,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      animId = requestAnimationFrame(loop);
+      renderAnimId = requestAnimationFrame(renderLoop);
     };
-    animId = requestAnimationFrame(loop);
+    renderAnimId = requestAnimationFrame(renderLoop);
 
     const down = (e) => { 
       eng.keys[e.key] = true; 
@@ -669,7 +773,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     window.addEventListener('keyup', up);
 
     return () => {
-      cancelAnimationFrame(animId);
+      worker.postMessage('stop');
+      worker.terminate();
+      URL.revokeObjectURL(workerURL);
+      cancelAnimationFrame(renderAnimId);
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
@@ -710,10 +817,34 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   return (
     <div id="wrap">
       <style>{focusStyles}</style>
-      <div style={{ position: 'relative', display: 'inline-block' }}>
+      <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* MOVE/START INITIALIZATION OVERLAY */}
+        {/* TOP STATUS HUD */}
+        {screen === 'playing' && (
+          <div className="game-hud-top">
+            <div>SCORE: <span ref={scoreValueRef}>0</span></div>
+            <div ref={waveValueRef}>WAVE 1 | 30s</div>
+          </div>
+        )}
+
+        {/* BOTTOM VITAL STATUS HUDS */}
+        {screen === 'playing' && (
+          <div className="game-hud-bottom">
+            {/* HP Vital Bar */}
+            <div className="hud-bar-container">
+              <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
+              <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
+            </div>
+            {/* Experience Arc Bar */}
+            <div className="hud-bar-container">
+              <div ref={xpFillRef} className="hud-bar-fill" style={{ background: '#3b82f6', width: '0%' }}></div>
+              <div ref={xpTextRef} className="hud-bar-text">LV1 XP 0/80</div>
+            </div>
+          </div>
+        )}
+
+        {/* INITIALIZATION OVERLAY SCREEN */}
         {screen === 'playing' && !hasStarted && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal">
@@ -721,62 +852,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               <p>
                 {isHostInstance 
                   ? "Press WASD or Arrow Keys to begin battle." 
-                  : "The arena will initialize once the host makes their first move."}
+                  : "The arena will initialize once the match host begins moving."}
               </p>
             </div>
           </div>
         )}
 
-        {/* TAB COHERENCY MANAGEMENT OVERLAYS */}
-        {screen === 'playing' && (
-          <>
-            {/* HOST WARNING PANEL: Triggers when the host has died, but switching tabs breaks the guest simulation */}
-            {isHostInstance && engineRef.current?.p?.dead && isWindowBlurred && (
-              <div className="hud-focus-overlay">
-                <div className="hud-focus-modal">
-                  <h2>⚠️ TAB UNRESOLVED / UNFOCUSED</h2>
-                  <p>Your teammate is still battling! Refocus this browser tab instantly to preserve network synchronization updates for them.</p>
-                </div>
-              </div>
-            )}
-
-            {/* GUEST WARNING PANEL: Triggers when the host breaks tab compliance rules */}
-            {!isHostInstance && hostTabbedOut && (
-              <div className="hud-focus-overlay">
-                <div className="hud-focus-modal guest-variant">
-                  <h2>⚠️ PEER TABBED AWAY</h2>
-                  <p>The match coordinator has unfocused their master window. Minor lag and delivery throttling across peer links may occur momentarily.</p>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {(screen === 'playing' || screen === 'levelup') && (
-          <div className="hud-layer">
-            <div id="ping-display" className="hud-ping-overlay">PING: --ms</div>
-            
-            <div className="hud-pause-hint">[ESC] PAUSE</div>
-
-            <div className="hud-score-module">
-              <div className="hud-label">Score</div>
-              <div ref={scoreValueRef} className="hud-score-value">0</div>
-              <div ref={waveValueRef} className="hud-wave-value">WAVE 1 | 30s</div>
-            </div>
-
-            <div className="hud-status-bars">
-              <div className="hud-bar-wrapper hp-bar">
-                <div ref={hpFillRef} className="hud-bar-fill" style={{ width: '100%' }}></div>
-                <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
-              </div>
-              <div className="hud-bar-wrapper xp-bar">
-                <div ref={xpFillRef} className="hud-bar-fill" style={{ width: '0%' }}></div>
-                <div ref={xpTextRef} className="hud-bar-text">LV1 XP 0/80</div>
-              </div>
-            </div>
-
-            <div className="hud-controls-hint">
-              WASD/Arrows to move &nbsp;&middot;&nbsp; Auto-attacks nearest target &nbsp;&middot;&nbsp; Collect green gems for XP
+        {/* INTERCEPTED HOST WARNING DISPLAY FOR GUEST PERFORMANCE */}
+        {screen === 'playing' && !isHostInstance && hostTabbedOut && (
+          <div className="hud-focus-overlay">
+            <div className="hud-focus-modal guest-variant">
+              <h2>HOST TABBED OUT</h2>
+              <p>The host has minimized or unfocused their browser window. Background Web Worker sync is active.</p>
             </div>
           </div>
         )}
