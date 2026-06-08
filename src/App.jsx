@@ -71,6 +71,11 @@ export default function App() {
     if (netRef.current.onCanvasMsg) {
       netRef.current.onCanvasMsg(event, payload);
     }
+
+    // 3. FIXED: Forward message packets to PartyChat observer hooks explicitly
+    if (netRef.current.channel && netRef.current.channel.onChatMsg) {
+      netRef.current.channel.onChatMsg(event, payload);
+    }
   };
 
   const handleAction = (action, data) => {
@@ -163,6 +168,7 @@ export default function App() {
       />
 
       <PartyChat enabled={coop.isEnabled} channel={netRef.current.channel} localName={wizardName} />
+      <Toast message={toast.message} isError={toast.isError} onClose={() => setToast({ message: '', isError: false })} />
     </div>
   );
 }
