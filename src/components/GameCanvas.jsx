@@ -240,8 +240,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           const f = Math.min(1, dt * 10); 
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
-          // eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
-          // eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
+          eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
+          eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
 
         if (isCoop && netRef.current.channel) {
