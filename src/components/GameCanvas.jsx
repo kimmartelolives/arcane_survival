@@ -27,7 +27,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p1Render: { x: 300, y: 280 },
-    p2Render: { x: 600, y: 280 }
+    p2Render: { x: 600, y: 280 },
+    p2History: []
   });
 
   useEffect(() => {
@@ -92,6 +93,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2.level = payload.p2_level || eng.p2.level;
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
+          // Push authoritative update into history for interpolation on guest
+          const hts = payload.ts || Date.now();
+          eng.p2History.push({ t: hts, x: payload.p2.x, y: payload.p2.y });
+          // keep history short and recent
+          const now = Date.now();
+          while (eng.p2History.length > 20) eng.p2History.shift();
+          // also drop very old entries
+          eng.p2History = eng.p2History.filter(s => (now - s.t) < 2000);
         }
       }
       
@@ -235,24 +244,45 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
 
               // Update the render-snapshot (`p2Render`) to follow the predicted position quickly
-              const predFactor = Math.min(1, dt * 18);
+              const predFactor = Math.min(1, dt * 22);
               eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
               eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
 
-              // Gently reconcile the render position toward the authoritative target when it arrives
-              if (eng.p2Target) {
-                const reconcileFactor = 0.03; // smaller smoothing to reduce oscillation
-                const dx = eng.p2Target.x - eng.p2Render.x;
-                const dy = eng.p2Target.y - eng.p2Render.y;
-                const dist = Math.hypot(dx, dy);
-                // If the correction is large, snap to authoritative to avoid prolonged visible drift
-                if (dist > 40) {
-                  eng.p2Render.x = eng.p2Target.x;
-                  eng.p2Render.y = eng.p2Target.y;
-                } else {
-                  eng.p2Render.x += dx * reconcileFactor;
-                  eng.p2Render.y += dy * reconcileFactor;
+              // Compute an interpolated authoritative position from history (target time = now - delay)
+              let interpX = eng.p2.x, interpY = eng.p2.y;
+              if (eng.p2History && eng.p2History.length >= 2) {
+                const delayMs = 80; // interpolation delay to smooth over jitter
+                const targetT = Date.now() - delayMs;
+                // find two samples around targetT
+                let a = null, b = null;
+                for (let i = 0; i < eng.p2History.length - 1; i++) {
+                  const s0 = eng.p2History[i];
+                  const s1 = eng.p2History[i+1];
+                  if (s0.t <= targetT && targetT <= s1.t) { a = s0; b = s1; break; }
                 }
+                if (a && b) {
+                  const tt = (targetT - a.t) / (b.t - a.t || 1);
+                  interpX = a.x + (b.x - a.x) * tt;
+                  interpY = a.y + (b.y - a.y) * tt;
+                } else {
+                  // fallback to the newest sample or nearest
+                  const last = eng.p2History[eng.p2History.length - 1];
+                  interpX = last.x; interpY = last.y;
+                }
+              }
+
+              // Blend a small amount toward interpolated authoritative position to reduce oscillation
+              const interpBlend = 0.04;
+              const dxi = interpX - eng.p2Render.x;
+              const dyi = interpY - eng.p2Render.y;
+              const disti = Math.hypot(dxi, dyi);
+              if (disti > 120) {
+                // large divergence -> snap to authoritative to avoid long drift
+                eng.p2Render.x = interpX;
+                eng.p2Render.y = interpY;
+              } else {
+                eng.p2Render.x += dxi * interpBlend;
+                eng.p2Render.y += dyi * interpBlend;
               }
             }
 
@@ -277,6 +307,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 // Send precise player positions (floats) to avoid quantization jitter on clients
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
+                ts: Date.now(),
                 p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80
               });
             }
