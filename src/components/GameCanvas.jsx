@@ -176,8 +176,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
-      const isHost = netRef.current.isHost;
-      const isCoop = Boolean(netRef.current.channel);
+      // Determine host/co-op state robustly: if there's no network channel treat as host (solo)
+      const net = netRef.current || {};
+      const isCoop = Boolean(net.channel);
+      const isHost = Boolean(net.isHost) || !isCoop;
 
       if (screen === 'playing' || screen === 'levelup') {
         eng.waveT += dt;
