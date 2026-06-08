@@ -32,36 +32,62 @@ export async function sbPost(path, body) {
   }
 }
 
-export function sbRealtime(channel, onMsg) {
+export function sbRealtime(channel, onMsg, onReady) {
   if (!hasSupabase) return { send: () => {}, close: () => {} };
-  
+
   const wsUrl = SUPABASE_URL.replace('https://', 'wss://').replace('http://', 'ws://') + 
                 '/realtime/v1/websocket?apikey=' + SUPABASE_ANON + '&vsn=1.0.0';
   const ws = new WebSocket(wsUrl);
+  let pingInterval;
 
   ws.onopen = () => {
+    // 1. Join the channel
     ws.send(JSON.stringify({
       topic: `realtime:${channel}`,
       event: 'phx_join',
       payload: { config: { broadcast: { self: false }, presence: { key: '' } } },
       ref: '1'
     }));
+
+    // 2. Start heartbeat to track latency
+    pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        window.pingStart = performance.now();
+        ws.send(JSON.stringify({
+          topic: 'phoenix',
+          event: 'heartbeat',
+          payload: {},
+          ref: 'heartbeat'
+        }));
+      }
+    }, 3000);
   };
 
   ws.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      if (data.event === 'broadcast' && data.payload?.event) {
-        onMsg(data.payload.event, data.payload.payload);
-      }
-    } catch (err) {
-      console.error("Realtime network sync parsing error:", err);
+    const data = JSON.parse(e.data);
+
+    // FIX: Listen for join confirmation (phx_reply)
+    if (data.event === 'phx_reply' && data.ref === '1') {
+      console.log("Connected to room:", channel);
+      if (onReady) onReady(); 
+    }
+
+    // FIX: Calculate Ping from heartbeat reply
+    if (data.event === 'phx_reply' && data.topic === 'phoenix' && window.pingStart) {
+      const ping = Math.round(performance.now() - window.pingStart);
+      const pingEl = document.getElementById('ping-display'); // Ensure this ID exists in your DOM
+      if (pingEl) pingEl.textContent = `PING: ${ping}ms`;
+    }
+
+    // Existing broadcast handler
+    if (data.event === 'broadcast' && data.payload?.event) {
+      onMsg(data.payload.event, data.payload.payload);
     }
   };
 
   return {
     send: (event, payload) => {
-      if (ws.readyState === 1) {
+      if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           topic: `realtime:${channel}`,
           event: 'broadcast',
@@ -70,6 +96,9 @@ export function sbRealtime(channel, onMsg) {
         }));
       }
     },
-    close: () => ws.close()
+    close: () => {
+      clearInterval(pingInterval);
+      ws.close();
+    }
   };
 }
