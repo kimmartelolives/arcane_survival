@@ -226,23 +226,29 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // GUEST SIDE LOGIC: Implement Client-Side Prediction for P2
-          if (eng.p2 && !eng.p2.dead) {
-            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
-            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
-            
-            // Soft-reconcile with Host's authoritative state to prevent gradual drift
-            if (eng.p2Target) {
-              eng.p2.x += (eng.p2Target.x - eng.p2.x) * 0.15;
-              eng.p2.y += (eng.p2Target.y - eng.p2.y) * 0.15;
+          // GUEST SIDE LOGIC: Client-side prediction for P2 + smooth reconcile
+            if (eng.p2 && !eng.p2.dead) {
+              // Predict immediate movement locally
+              eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
+              eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
+
+              // Update the render-snapshot (`p2Render`) to follow the predicted position quickly
+              const predFactor = Math.min(1, dt * 18);
+              eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
+              eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
+
+              // Gently reconcile the render position toward the authoritative target when it arrives
+              if (eng.p2Target) {
+                const reconcileFactor = 0.06; // small, to avoid snapping
+                eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * reconcileFactor;
+                eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * reconcileFactor;
+              }
             }
-          }
-          
-          const f = Math.min(1, dt * 14);
-          eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
-          eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
-          eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
-          eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
+
+            // Keep Player1 render interpolation as before
+            const f = Math.min(1, dt * 14);
+            eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
+            eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
         }
 
         if (isCoop && netRef.current.channel) {
@@ -473,9 +479,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
 
-      // FIX: Ensure Guest's local P2 render relies instantly on their predicted position, eliminating input lag
-      const p2X = eng.p2 ? eng.p2.x : W*2/3;
-      const p2Y = eng.p2 ? eng.p2.y : H/2;
+      // FIX: Ensure Guest's local P2 render relies on the fast-predicted `p2Render` to eliminate input lag
+      const p2X = (isCoop && !isHost && eng.p2Render) ? eng.p2Render.x : (eng.p2 ? eng.p2.x : W*2/3);
+      const p2Y = (isCoop && !isHost && eng.p2Render) ? eng.p2Render.y : (eng.p2 ? eng.p2.y : H/2);
 
       // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
