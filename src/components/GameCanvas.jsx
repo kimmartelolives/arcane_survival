@@ -43,14 +43,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // FIXED: Track channel changes via the 'screen' status change rather than an unreactive ref property
+  // Hook into the App's stabilized message pipe
   useEffect(() => {
     const net = netRef.current;
-    if (!net || !net.channel) return;
+    if (!net) return;
 
-    const originalAppHandler = net.channel.onMsg;
-
-    net.channel.onMsg = (event, payload) => {
+    net.onCanvasMsg = (event, payload) => {
       const eng = engineRef.current;
       
       if (event === 'state_sync' && !net.isHost) {
@@ -79,16 +77,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (event === 'game_over') {
         setScreen('gameover');
       }
-
-      // Safe bubble fallback routing
-      if (originalAppHandler) originalAppHandler(event, payload);
-      if (net.channel.onChatMsg) net.channel.onChatMsg(event, payload);
     };
 
     return () => {
-      if (net.channel) net.channel.onMsg = originalAppHandler;
+      net.onCanvasMsg = null;
     };
-  }, [screen, onLevelUpOffer, setScreen]); // Removed netRef.current.channel from here to preserve tracking closure
+  }, [onLevelUpOffer, setScreen, netRef]);
 
   useEffect(() => {
     if (screen === 'menu' || screen === 'lobby') {
@@ -394,7 +388,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // 🔮 GEOMETRIC WIZARD - PLAYER 2 (Co-op Companion)
+      // 🔮 GEOMETRIC WIZARD - PLAYER 2
       if (eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
@@ -426,7 +420,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // 🔮 GEOMETRIC WIZARD - PLAYER 1 (Main Character)
+      // 🔮 GEOMETRIC WIZARD - PLAYER 1
       if (!eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
@@ -493,7 +487,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* 🎮 Arcade HUD Overlay Layer */}
+        {/* Arcade HUD Overlay Layer */}
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
             <div className="hud-pause-hint">[ESC] PAUSE</div>
