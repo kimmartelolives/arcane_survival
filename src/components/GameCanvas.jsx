@@ -43,7 +43,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 📡 Central Interceptor - Dynamic Mirror Sync Pipeline
+  // 📡 Network Stream Listener Pipeline
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -67,12 +67,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        // Siguraduhing may laging paglalagyan ng data ang tracking vectors
         if (payload.p1) eng.p2Target = payload.p1;
         if (payload.p2 && eng.p) {
           eng.p.hp = payload.p2.hp;
           eng.p.maxHp = payload.p2.maxHp;
           eng.p.dead = payload.p2.dead;
+          eng.p.level = payload.p2_level || eng.p.level;
         }
       }
       
@@ -103,7 +103,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      // I-initialize ang parehong player structures anuman ang role upang maiwasan ang null reference breaks
       eng.p = { x: isHost ? W / 3 : W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p2 = { x: isHost ? W * 2 / 3 : W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
 
@@ -202,10 +201,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
+        // ⏱ Optimization Pass: Network Downsampling (16Hz instead of 25Hz to resolve buffer lag)
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.05; 
+            syncTimer = 0.06; 
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
@@ -215,12 +215,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 p1: { x: Math.round(eng.p.x), y: Math.round(eng.p.y), hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead },
-                p2: { hp: eng.p2.hp, maxHp: eng.p2.maxHp, dead: eng.p2.dead }
+                p2: { hp: eng.p2.hp, maxHp: eng.p2.maxHp, dead: eng.p2.dead },
+                p2_level: eng.p2.level // Forwarded level configuration parameters
               });
             }
           }
         }
 
+        // Independent Local Shooting Controllers
         if (eng.enemies.length > 0) {
           if (eng.p && !eng.p.dead) {
             eng.p.shootCd -= dt;
@@ -263,10 +265,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
+        // Bullet garbage collection array clean pass to resolve freeze issues
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-            if (b.life <= 0) { eng.bullets.splice(i, 1); continue; }
+            if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) { 
+              eng.bullets.splice(i, 1); 
+              continue; 
+            }
             let hit = false;
             for (let j = eng.enemies.length - 1; j >= 0; j--) {
               const e = eng.enemies[j];
@@ -352,8 +358,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
+        // Guest update prediction execution loops
         if (!isHost && isCoop) {
-          for (const b of eng.bullets) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; }
+          for (let i = eng.bullets.length - 1; i >= 0; i--) {
+            const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+            if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
+              eng.bullets.splice(i, 1);
+            }
+          }
         }
 
         hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: eng.p, p2: eng.p2 };
@@ -415,10 +427,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      const hostColor = '#8b5cf6'; // Violet
-      const guestColor = '#f97316'; // Orange
+      const hostColor = '#8b5cf6'; 
+      const guestColor = '#f97316'; 
 
-      // FIXED DRAWING CONDITION: Palaging i-render ang Companion Player (P2) basta may hawak itong valid numbers
+      // Draw Companion Avatar (P2)
       if (eng.p2 && (isHost || eng.p2Target)) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;

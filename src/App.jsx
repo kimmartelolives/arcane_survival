@@ -16,11 +16,10 @@ export default function App() {
 
   const hudRef = useRef({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
   
-  // High-stability network reference object
   const netRef = useRef({ 
     channel: null, 
     isHost: false,
-    onCanvasMsg: null // Canvas will attach its gameplay listener here
+    onCanvasMsg: null 
   });
 
   useEffect(() => {
@@ -28,7 +27,7 @@ export default function App() {
       if (screen === 'playing') {
         setHud({ ...hudRef.current });
       }
-    }, 1200);
+    }, 1000);
     return () => clearInterval(timer);
   }, [screen]);
 
@@ -49,8 +48,6 @@ export default function App() {
 
   // Centralized Master Network Router
   const routeNetworkMessage = (event, payload) => {
-    console.log(`📡 Inbound Event [${event}]:`, payload);
-
     // 1. Handle Core Lobby Lifecycle Events
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
@@ -67,12 +64,23 @@ export default function App() {
       setScreen('playing');
     }
 
+    // FIXED: I-sync ang React HUD states ni Player 2 tuwing dumarating ang state packet mula sa Host
+    if (event === 'state_sync' && !netRef.current.isHost) {
+      setHud({
+        score: payload.score ?? 0,
+        wave: payload.wave ?? 1,
+        waveT: payload.waveT ?? 0,
+        waveLen: payload.waveLen ?? 30,
+        p: payload.p2 ? { hp: payload.p2.hp, maxHp: payload.p2.maxHp, level: payload.p2_level || 1 } : null
+      });
+    }
+
     // 2. Forward gameplay loop frames directly to the Canvas engine safely
     if (netRef.current.onCanvasMsg) {
       netRef.current.onCanvasMsg(event, payload);
     }
 
-    // 3. FIXED: Forward message packets to PartyChat observer hooks explicitly
+    // 3. Forward message packets to PartyChat observer hooks explicitly
     if (netRef.current.channel && netRef.current.channel.onChatMsg) {
       netRef.current.channel.onChatMsg(event, payload);
     }
@@ -92,7 +100,7 @@ export default function App() {
       
       netRef.current.isHost = true;
       netRef.current.channel = sbRealtime(`coop-${code}`, routeNetworkMessage, () => {
-        console.log("Room successfully created on host server cluster:", code);
+        console.log("Room successfully created:", code);
       });
 
       setCoop({ isEnabled: true, isHost: true, channel: netRef.current.channel, roomCode: code, p2Name: 'Player 2', status: '' });
@@ -108,12 +116,11 @@ export default function App() {
       
       netRef.current.channel = sbRealtime(`coop-${targetCode}`, routeNetworkMessage, () => {
         showToast(`Connected to room ${targetCode}! Welcoming host...`);
-        // The socket layer is certified open; fire handshake payload safely
         setTimeout(() => {
           if (netRef.current.channel) {
             netRef.current.channel.send('guest_joined', { name });
           }
-        }, 100);
+        }, 150);
       });
 
       setCoop({ isEnabled: true, isHost: false, channel: netRef.current.channel, roomCode: targetCode, p2Name: 'Host', status: '' });
@@ -139,11 +146,9 @@ export default function App() {
           {coop.isEnabled && <div id="coop-hud" className="active">⚔ {wizardName} & {coop.p2Name}</div>}
           
           <div style={{ position: 'absolute', bottom: '15px', left: '15px', zIndex: 10 }}>
-            {hud.p && (
-              <div style={{ color: '#ef4444', fontFamily: 'Share Tech Mono', fontSize: '15px', textShadow: '0 2px 4px #000' }}>
-                HP: {Math.ceil(hud.p.hp)}/{hud.p.maxHp} | LVL: {hud.p.level}
-              </div>
-            )}
+            <div style={{ color: '#ef4444', fontFamily: 'Share Tech Mono', fontSize: '15px', textShadow: '0 2px 4px #000' }}>
+              HP: {screen === 'playing' && hud.p ? Math.ceil(hud.p.hp) : 100}/{hud.p ? hud.p.maxHp : 100} | LVL: {hud.p ? hud.p.level : 1}
+            </div>
             <div style={{ color: '#a78bfa', fontSize: '18px', fontFamily: 'Cinzel', textShadow: '0 2px 4px #000' }}>
               WAVE: {hud.wave} ({Math.max(0, Math.ceil(hud.waveLen - hud.waveT))}s)
             </div>
@@ -168,7 +173,6 @@ export default function App() {
       />
 
       <PartyChat enabled={coop.isEnabled} channel={netRef.current.channel} localName={wizardName} />
-      <Toast message={toast.message} isError={toast.isError} onClose={() => setToast({ message: '', isError: false })} />
     </div>
   );
 }
