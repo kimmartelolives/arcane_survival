@@ -10,6 +10,48 @@ const ET = [
   { r: 27, speed: 50,  hp: 260, dmg: 30, xp: 100, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
+// --- ADDITIONAL CSS FOR FOCUS MITIGATION OVERLAYS ---
+const focusStyles = `
+  .hud-focus-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(3, 1, 17, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    font-family: monospace;
+  }
+  .hud-focus-modal {
+    background: #0b0826;
+    border: 2px solid #ef4444;
+    padding: 2rem;
+    border-radius: 8px;
+    text-align: center;
+    color: #fff;
+    max-width: 420px;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+  }
+  .hud-focus-modal.guest-variant {
+    border-color: #f97316;
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+  }
+  .hud-focus-modal h2 {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+  }
+  .hud-focus-modal p {
+    font-size: 0.9rem;
+    color: #d1d5db;
+    line-height: 1.4;
+    margin: 0;
+  }
+`;
+
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer }) {
   const canvasRef = useRef(null);
   
@@ -19,13 +61,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const hpTextRef = useRef(null);
   const xpFillRef = useRef(null);
   const xpTextRef = useRef(null);
+  const audioCtxRef = useRef(null);
 
-  // Added React State to handle UI visibility cleanly without overloading the frame loop
+  // --- FOCUS DETECTION & TIMING MITIGATION STATES ---
   const [hasStarted, setHasStarted] = useState(false);
+  const [isWindowBlurred, setIsWindowBlurred] = useState(false);
+  const [hostTabbedOut, setHostTabbedOut] = useState(false);
 
   const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
-    gameStarted: false, // 🚀 Added to track game activation status
+    gameStarted: false, 
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
@@ -35,6 +80,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p2History: []
   });
 
+  // Handle scaling configurations on window change updates
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
@@ -50,6 +96,55 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // --- BACKGROUND WEB AUDIO ESCAPE LOOP HACK ---
+  // Locks the background scheduling priority by anchoring an oscillator node thread via user event gesture.
+  const activateAudioKeepAlive = () => {
+    if (audioCtxRef.current) return;
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioContext();
+      const gainNode = ctx.createGain();
+      gainNode.gain.setValueAtTime(0, ctx.currentTime); // Structural muting pattern
+      
+      const osc = ctx.createOscillator();
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.start();
+      
+      audioCtxRef.current = ctx;
+      console.log("🔊 Background execution engine shielded via local AudioContext hook.");
+    } catch (e) {
+      console.warn("Audio Keep-Alive pipeline initialization bypassed:", e);
+    }
+  };
+
+  // --- WINDOW FOCUS/BLUR LIFECYCLE LISTENERS ---
+  useEffect(() => {
+    const handleBlur = () => {
+      setIsWindowBlurred(true);
+      const net = netRef.current;
+      if (net && net.channel && net.isHost) {
+        // Intercept host frame droppage immediately to notify peers across channel pipelines
+        net.channel.send('host_focus_changed', { isTabbedOut: true });
+      }
+    };
+
+    const handleFocus = () => {
+      setIsWindowBlurred(false);
+      const net = netRef.current;
+      if (net && net.channel && net.isHost) {
+        net.channel.send('host_focus_changed', { isTabbedOut: false });
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [netRef]);
+
   // 📡 Central Canvas Interceptor Pipeline
   useEffect(() => {
     const net = netRef.current;
@@ -59,8 +154,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const eng = engineRef.current;
       if (!eng) return;
       
+      // Handle visibility changes across network nodes
+      if (event === 'host_focus_changed' && !net.isHost) {
+        setHostTabbedOut(payload.isTabbedOut);
+      }
+
       if (event === 'state_sync' && !net.isHost) {
-        // 🚀 Sync start state from host to guest
         if (payload.gameStarted !== undefined) {
           eng.gameStarted = payload.gameStarted;
           setHasStarted(payload.gameStarted);
@@ -144,8 +243,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
-      eng.gameStarted = false; // Reset status flag
-      setHasStarted(false);     // Reset status state
+      eng.gameStarted = false; 
+      setHasStarted(false);     
+      setHostTabbedOut(false);
       
       eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
@@ -208,18 +308,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        // 🚀 Intercept unstarted loops to check for host activation and lock down guest movement vectors
         if (!eng.gameStarted) {
           if (isHost && (mx !== 0 || my !== 0)) {
             eng.gameStarted = true;
             setHasStarted(true);
+            activateAudioKeepAlive(); // Trigger context allocation safely inside keyboard interaction bounds
           } else if (!isHost) {
-            mx = 0; // Clear inputs so guests cannot move ahead
+            mx = 0; 
             my = 0;
           }
         }
 
-        // 🚀 Run game state ticks exclusively when started
         if (eng.gameStarted) {
           eng.waveT += dt;
           eng.spawnT += dt;
@@ -297,7 +396,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
               netRef.current.channel.send('state_sync', {
-                gameStarted: eng.gameStarted, // 🚀 Include active baseline data to sync client
+                gameStarted: eng.gameStarted, 
                 enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
@@ -311,7 +410,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // 🚀 Freeze automatic firing and update systems if game hasn't started yet
         if (eng.gameStarted) {
           if (eng.enemies.length > 0) {
             if (eng.p && !eng.p.dead) {
@@ -606,16 +704,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   };
 
-  // Determine local client role info safely outside frame execution
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
 
   return (
     <div id="wrap">
+      <style>{focusStyles}</style>
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* 🚀 New UI Overlay Message Block */}
+        {/* MOVE/START INITIALIZATION OVERLAY */}
         {screen === 'playing' && !hasStarted && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal">
@@ -627,6 +725,31 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               </p>
             </div>
           </div>
+        )}
+
+        {/* TAB COHERENCY MANAGEMENT OVERLAYS */}
+        {screen === 'playing' && (
+          <>
+            {/* HOST WARNING PANEL: Triggers when the host has died, but switching tabs breaks the guest simulation */}
+            {isHostInstance && engineRef.current?.p?.dead && isWindowBlurred && (
+              <div className="hud-focus-overlay">
+                <div className="hud-focus-modal">
+                  <h2>⚠️ TAB UNRESOLVED / UNFOCUSED</h2>
+                  <p>Your teammate is still battling! Refocus this browser tab instantly to preserve network synchronization updates for them.</p>
+                </div>
+              </div>
+            )}
+
+            {/* GUEST WARNING PANEL: Triggers when the host breaks tab compliance rules */}
+            {!isHostInstance && hostTabbedOut && (
+              <div className="hud-focus-overlay">
+                <div className="hud-focus-modal guest-variant">
+                  <h2>⚠️ PEER TABBED AWAY</h2>
+                  <p>The match coordinator has unfocused their master window. Minor lag and delivery throttling across peer links may occur momentarily.</p>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {(screen === 'playing' || screen === 'levelup') && (
