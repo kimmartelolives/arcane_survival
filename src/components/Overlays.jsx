@@ -92,6 +92,7 @@ export default function Overlays({
 
   const medals = ['🥇', '🥈', '🥉'];
   const displayedChoices = (levelUpOptions || []).slice(0, 3);
+  const restartVotes = isCoop ? [hudData?.coopVotes?.p1, hudData?.coopVotes?.p2].filter(Boolean).length : 0;
 
   return (
     <div id="overlays">
@@ -250,7 +251,11 @@ export default function Overlays({
             <div style={{ fontSize: '.85rem', color: '#a78bfa', marginBottom: '14px' }}>
               Survived to Wave {hudData?.wave || 1}
             </div>
-            
+            {isCoop && (
+              <div style={{ fontSize: '.85rem', color: '#f8fafc', marginBottom: '10px' }}>
+                {restartVotes} / 2 voted to restart the game
+              </div>
+            )}
             {hasSupabase && (
               <div id="go-submit" style={{ marginBottom: '14px' }}>
                 <div className="field-row">
@@ -267,7 +272,9 @@ export default function Overlays({
                 <div style={{ fontSize: '.7rem', color: '#a78bfa', marginTop: '4px', minHeight: '1em' }}>{submitStatus}</div>
               </div>
             )}
-            <button className="btn" onClick={() => onAction('start-solo')}>🔄 Play Again</button>
+            <button className="btn" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo')}>
+              🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
+            </button>
             <button className="btn" onClick={() => setScreen('menu')}>🏠 Main Menu</button>
           </div>
         </div>

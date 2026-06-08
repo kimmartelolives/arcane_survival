@@ -207,6 +207,24 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [netRef]);
 
+  // --- EXPOSE CO-OP VOTES TO GLOBAL WINDOW AND HUD REF FOR PARENT SCREEN LAYERS ---
+  useEffect(() => {
+    window.p1VotedRestart = p1VotedRestart;
+    window.p2VotedRestart = p2VotedRestart;
+    window.coopVotes = { p1: p1VotedRestart, p2: p2VotedRestart };
+
+    if (hudRef && hudRef.current) {
+      hudRef.current.p1VotedRestart = p1VotedRestart;
+      hudRef.current.p2VotedRestart = p2VotedRestart;
+      hudRef.current.coopVotes = { p1: p1VotedRestart, p2: p2VotedRestart };
+    }
+
+    // Dispatch global event so parent components can listen and trigger immediate DOM updates
+    window.dispatchEvent(new CustomEvent('coop_votes_changed', {
+      detail: { p1: p1VotedRestart, p2: p2VotedRestart }
+    }));
+  }, [p1VotedRestart, p2VotedRestart, hudRef]);
+
   // 📡 Network Interceptor Update
   useEffect(() => {
     const net = netRef.current;
@@ -256,6 +274,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2.hp = payload.p2.hp;
           eng.p2.maxHp = payload.p2.maxHp;
           eng.p2.dead = payload.p2.dead;
+          eng.p2.inv = payload.p2.inv ?? eng.p2.inv;
           eng.p2.level = payload.p2_level || eng.p2.level;
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
@@ -297,8 +316,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      if (event === 'restart_game' && !net.isHost) {
-        setScreen('playing');
+      if (event === 'restart_game') {
+        setScreen('playing'); // Ensure both sides transition
+        setP1VotedRestart(false); // Reset votes
+        setP2VotedRestart(false);
       }
     };
 
@@ -311,8 +332,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   useEffect(() => {
     const net = netRef.current;
     if (net && net.channel && net.isHost) {
-      // If both players have opted in, execution loop launches the reset pipeline
       if (p1VotedRestart && p2VotedRestart) {
+        net.channel.send('restart_game', {}); // Broadcast to guest
         setScreen('playing');
       }
     }
@@ -498,6 +519,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
+            if (eng.p2.inv > 0) eng.p2.inv -= dt;
 
             const predFactor = Math.min(1, dt * 18);
             eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
@@ -688,7 +710,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         const localTarget = (isCoop && !isHost) ? eng.p2 : eng.p;
         if (localTarget) {
-          hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: (isCoop && isHost) ? eng.p2 : eng.p };
+          hudRef.current = { 
+            score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, 
+            p: localTarget, p2: (isCoop && isHost) ? eng.p2 : eng.p,
+            p1VotedRestart, p2VotedRestart
+          };
         }
 
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
@@ -888,6 +914,28 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 {isHostInstance 
                   ? "Press WASD or Arrow Keys to begin battle." 
                   : "The arena will initialize once the match host begins moving."}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* CO-OP RESTART VOTING OVERLAY STATUS FALLBACK */}
+        {screen === 'gameover' && isNetworked && (
+          <div className="hud-start-overlay">
+            <div className="hud-start-modal" style={{ borderColor: '#fbbf24' }}>
+              <h2>RESTART MATCH VOTING</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', margin: '1.5rem 0', fontSize: '1.1rem', textAlign: 'left', alignItems: 'center' }}>
+                <div style={{ color: p1VotedRestart ? '#34d399' : '#f87171', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>Player 1 (Host):</span>
+                  <span>{p1VotedRestart ? "READY ✓" : "WAITING ⋯"}</span>
+                </div>
+                <div style={{ color: p2VotedRestart ? '#34d399' : '#f87171', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>Player 2 (Guest):</span>
+                  <span>{p2VotedRestart ? "READY ✓" : "WAITING ⋯"}</span>
+                </div>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: '#9ca3af', lineHeight: '1.4' }}>
+                Click your 'Play Again' button to cast or change your vote. Both players must agree to restart!
               </p>
             </div>
           </div>

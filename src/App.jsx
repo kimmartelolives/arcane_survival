@@ -24,10 +24,10 @@ export default function App() {
 
   useEffect(() => {
     const timer = setInterval(() => {
-      if (screen === 'playing') {
+      if (screen === 'playing' || screen === 'gameover') {
         setHud({ ...hudRef.current });
       }
-    }, 1200);
+    }, 600);
     return () => clearInterval(timer);
   }, [screen]);
 
@@ -114,6 +114,11 @@ const handleSelectUpgrade = (choice) => {
 
       setCoop({ isEnabled: true, isHost: true, channel: netRef.current.channel, roomCode: code, p2Name: 'Player 2', status: '' });
       setScreen('lobby');
+    }
+    else if (action === 'restart-coop') {
+      if (window.triggerRestartVote) {
+        window.triggerRestartVote();
+      }
     }
     else if (action === 'join-game') {
       const name = data.name.trim() || 'Guest Wizard';
