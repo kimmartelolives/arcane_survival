@@ -114,22 +114,28 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   }, [onLevelUpOffer, setScreen, netRef]);
 
   useEffect(() => {
-    if (screen === 'menu' || screen === 'lobby') {
+    if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
       const eng = engineRef.current;
+      const isCoop = Boolean(netRef.current && netRef.current.channel);
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-
+      // Spawn Player 1 centered if solo, otherwise left side
+      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
-      eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
-      
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
-      eng.p2Render = { x: eng.p2.x, y: H / 2 };
+
+      // FIX: Only initialize Player 2 data structures if we are actively in a Co-op session
+      if (isCoop) {
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+        eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
+        eng.p2Render = { x: eng.p2.x, y: H / 2 };
+      } else {
+        eng.p2 = null;
+      }
     }
-  }, [screen]);
+  }, [screen, netRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -156,7 +162,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     let animId;
     let syncTimer = 0;
 
-    // Helper utility inside rendering tree to generate clean randomized card offerings pools
     const rollUpgradeOptions = () => {
       const fullPool = ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
       return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
@@ -204,13 +209,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        if (isHost) {
+        if (isHost || !isCoop) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
             eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * eng.p.speed * dt));
             if (eng.p.inv > 0) eng.p.inv -= dt;
           }
-          if (eng.p2 && !eng.p2.dead) {
+          if (isCoop && eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * eng.p2.speed * dt));
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
@@ -268,7 +273,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          if (eng.p2 && !eng.p2.dead) {
+          if (isCoop && eng.p2 && !eng.p2.dead) {
             eng.p2.shootCd -= dt;
             if (eng.p2.shootCd <= 0) {
               let near = null, nd = Infinity;
@@ -363,14 +368,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 eng.p2.xp += g.xp;
                 if (eng.p2.xp >= eng.p2.xpNext) {
                   eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                  // FIXED: Fired dynamic randomized array layout maps to client
                   netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
                 }
               } else if (eng.p) {
                 eng.p.xp += g.xp;
                 if (eng.p.xp >= eng.p.xpNext) {
                   eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                  // FIXED: Triggers dynamically randomized options instead of hardcoded slices
                   onLevelUpOffer(rollUpgradeOptions()); 
                   setScreen('levelup');
                 }
@@ -389,9 +392,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        const localTarget = isHost ? eng.p : eng.p2;
+        const localTarget = (isCoop && !isHost) ? eng.p2 : eng.p;
         if (localTarget) {
-          hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: isHost ? eng.p2 : eng.p };
+          hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: localTarget, p2: (isCoop && isHost) ? eng.p2 : eng.p };
         }
 
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
@@ -454,10 +457,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
-      const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
-      const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
-      const p2X = !isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
-      const p2Y = !isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
+      // FIX: Ensure rendering pulls straight from raw properties if looking at local authority
+      const p1X = (!isCoop || isHost) ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
+      const p1Y = (!isCoop || isHost) ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
+      
+      // FIX: Host directly tracks raw eng.p2 positional coordinates, Guest uses interpolated values
+      const p2X = (isCoop && isHost) ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
+      const p2Y = (isCoop && isHost) ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
 
       // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
@@ -475,8 +481,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // Draw Player 2 (Orange)
-      if (eng.p2 && !eng.p2.dead) {
+      // Draw Player 2 (Orange) - FIX: Added explicit guard check for isCoop
+      if (isCoop && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
         const pr = eng.p2.r;
@@ -516,7 +522,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
     
-    let target = netRef.current.isHost ? eng.p : eng.p2;
+    const isCoop = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
     if (forcedTarget === 'p2') target = eng.p2;
     if (forcedTarget === 'p1') target = eng.p;
     
@@ -545,7 +552,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* HUD Overlay Layer */}
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
             <div id="ping-display" className="hud-ping-overlay">PING: --ms</div>
