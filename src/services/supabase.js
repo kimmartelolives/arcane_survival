@@ -41,7 +41,7 @@ export function sbRealtime(channel, onMsg, onReady) {
   let pingInterval;
 
   ws.onopen = () => {
-    // 1. Join the channel
+    // 1. Join the channel room
     ws.send(JSON.stringify({
       topic: `realtime:${channel}`,
       event: 'phx_join',
@@ -49,7 +49,7 @@ export function sbRealtime(channel, onMsg, onReady) {
       ref: '1'
     }));
 
-    // 2. Start heartbeat to track latency
+    // 2. Start heartbeat to track latency and keep connection alive
     pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         window.pingStart = performance.now();
@@ -66,22 +66,26 @@ export function sbRealtime(channel, onMsg, onReady) {
   ws.onmessage = (e) => {
     const data = JSON.parse(e.data);
 
-    // FIX: Listen for join confirmation (phx_reply)
+    // Listen for join confirmation (phx_reply) from server
     if (data.event === 'phx_reply' && data.ref === '1') {
-      console.log("Connected to room:", channel);
-      if (onReady) onReady(); 
+      if (data.payload?.status === 'ok') {
+        console.log("Connected to room:", channel);
+        if (onReady) onReady(); 
+      } else {
+        console.error("Supabase Realtime room join rejected:", data.payload);
+      }
     }
 
-    // FIX: Calculate Ping from heartbeat reply
+    // Calculate Ping from heartbeat reply
     if (data.event === 'phx_reply' && data.topic === 'phoenix' && window.pingStart) {
       const ping = Math.round(performance.now() - window.pingStart);
-      const pingEl = document.getElementById('ping-display'); // Ensure this ID exists in your DOM
+      const pingEl = document.getElementById('ping-display');
       if (pingEl) pingEl.textContent = `PING: ${ping}ms`;
     }
 
-    // Existing broadcast handler
+    // Handle inbound real-time broadcasts
     if (data.event === 'broadcast' && data.payload?.event) {
-      onMsg(data.payload.event, data.payload.payload);
+      if (onMsg) onMsg(data.payload.event, data.payload.payload);
     }
   };
 
@@ -91,7 +95,11 @@ export function sbRealtime(channel, onMsg, onReady) {
         ws.send(JSON.stringify({
           topic: `realtime:${channel}`,
           event: 'broadcast',
-          payload: { event, payload },
+          payload: { 
+            type: 'broadcast', // Required parameter configuration for Phoenix Server pipelines
+            event, 
+            payload 
+          },
           ref: String(Date.now())
         }));
       }

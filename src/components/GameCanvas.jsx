@@ -13,7 +13,6 @@ const ET = [
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer }) {
   const canvasRef = useRef(null);
   
-  // Element references to manipulate the DOM HUD elements directly from the loop without causing full React triggers
   const scoreValueRef = useRef(null);
   const waveValueRef = useRef(null);
   const hpFillRef = useRef(null);
@@ -44,41 +43,46 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Hook into the App's stabilized message pipe
   useEffect(() => {
     const net = netRef.current;
-    if (net.channel) {
-      net.channel.onMsg = (event, payload) => {
-        const eng = engineRef.current;
-        if (event === 'state_sync' && !net.isHost) {
-          eng.enemies = payload.enemies || [];
-          eng.gems = payload.gems || [];
-          eng.bullets = payload.bullets || [];
-          eng.score = payload.score ?? eng.score;
-          eng.wave = payload.wave ?? eng.wave;
-          eng.waveT = payload.waveT ?? eng.waveT;
-          eng.waveLen = payload.waveLen ?? eng.waveLen;
-          eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
-          if (payload.p1) eng.p2Target = payload.p1;
-          if (payload.p2 && eng.p) {
-            eng.p.hp = payload.p2.hp;
-            eng.p.maxHp = payload.p2.maxHp;
-            eng.p.dead = payload.p2.dead;
-          }
+    if (!net) return;
+
+    net.onCanvasMsg = (event, payload) => {
+      const eng = engineRef.current;
+      
+      if (event === 'state_sync' && !net.isHost) {
+        eng.enemies = payload.enemies || [];
+        eng.gems = payload.gems || [];
+        eng.bullets = payload.bullets || [];
+        eng.score = payload.score ?? eng.score;
+        eng.wave = payload.wave ?? eng.wave;
+        eng.waveT = payload.waveT ?? eng.waveT;
+        eng.waveLen = payload.waveLen ?? eng.waveLen;
+        eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
+        if (payload.p1) eng.p2Target = payload.p1;
+        if (payload.p2 && eng.p) {
+          eng.p.hp = payload.p2.hp;
+          eng.p.maxHp = payload.p2.maxHp;
+          eng.p.dead = payload.p2.dead;
         }
-        if (event === 'guest_input' && net.isHost) {
-          eng.p2Input = payload;
-        }
-        if (event === 'offer_levelup' && !net.isHost) {
-          onLevelUpOffer(payload.ups);
-          setScreen('levelup');
-        }
-        if (event === 'game_over') {
-          setScreen('gameover');
-        }
-        if (net.channel.onChatMsg) net.channel.onChatMsg(event, payload);
-      };
-    }
-  }, [screen, netRef.current.channel]);
+      }
+      if (event === 'guest_input' && net.isHost) {
+        eng.p2Input = payload;
+      }
+      if (event === 'offer_levelup' && !net.isHost) {
+        onLevelUpOffer(payload.ups);
+        setScreen('levelup');
+      }
+      if (event === 'game_over') {
+        setScreen('gameover');
+      }
+    };
+
+    return () => {
+      net.onCanvasMsg = null;
+    };
+  }, [onLevelUpOffer, setScreen, netRef]);
 
   useEffect(() => {
     if (screen === 'menu' || screen === 'lobby') {
@@ -384,22 +388,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // 🔮 GEOMETRIC WIZARD - PLAYER 2 (Co-op Companion)
+      // 🔮 GEOMETRIC WIZARD - PLAYER 2
       if (eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
         const px = eng.p2.x; const py = eng.p2.y; const pr = eng.p2.r;
 
-        // Glowing backdrop shadow
         ctx.shadowColor = fl ? '#ef4444' : '#f97316';
         ctx.shadowBlur = 22;
 
-        // Base circular body
         ctx.fillStyle = fl ? '#ef4444' : '#f97316';
         ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0; // Turn blur off for crisp decorative cuts
+        ctx.shadowBlur = 0;
 
-        // Wizard Hat Peak/Cone (Darker structural contrasting shade)
         ctx.fillStyle = fl ? '#b91c1c' : '#c2410c';
         ctx.beginPath();
         ctx.moveTo(px, py - pr * 1.8);
@@ -407,11 +408,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.lineTo(px - pr * 0.9, py - pr * 0.2);
         ctx.closePath(); ctx.fill();
 
-        // Wizard Hat Brim Accent
         ctx.fillStyle = fl ? '#fca5a5' : '#ffedd5';
         ctx.beginPath(); ctx.ellipse(px, py - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
 
-        // Bead Eyes
         ctx.fillStyle = '#030111';
         ctx.beginPath();
         ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2);
@@ -421,22 +420,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // 🔮 GEOMETRIC WIZARD - PLAYER 1 (Main Character)
+      // 🔮 GEOMETRIC WIZARD - PLAYER 1
       if (!eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
         const px = eng.p.x; const py = eng.p.y; const pr = eng.p.r;
 
-        // Glowing backdrop shadow
         ctx.shadowColor = fl ? '#ef4444' : '#8b5cf6';
         ctx.shadowBlur = 22;
 
-        // Base circular body
         ctx.fillStyle = fl ? '#ef4444' : '#8b5cf6';
         ctx.beginPath(); ctx.arc(px, py + 3, pr, 0, Math.PI * 2); ctx.fill();
-        ctx.shadowBlur = 0; // Clear blur for fine pathing boundaries
+        ctx.shadowBlur = 0;
 
-        // Wizard Hat Peak/Cone
         ctx.fillStyle = fl ? '#b91c1c' : '#5b21b6';
         ctx.beginPath();
         ctx.moveTo(px, py - pr * 1.8);
@@ -444,11 +440,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.lineTo(px - pr * 0.9, py - pr * 0.2);
         ctx.closePath(); ctx.fill();
 
-        // Wizard Hat Brim Accent
         ctx.fillStyle = fl ? '#fca5a5' : '#c4b5fd';
         ctx.beginPath(); ctx.ellipse(px, py - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
 
-        // Bead Eyes
         ctx.fillStyle = '#030111';
         ctx.beginPath();
         ctx.arc(px - pr * 0.32, py + 2, pr * 0.18, 0, Math.PI * 2);
@@ -493,7 +487,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* 🎮 Arcade HUD Overlay Layer */}
+        {/* Arcade HUD Overlay Layer */}
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
             <div className="hud-pause-hint">[ESC] PAUSE</div>
