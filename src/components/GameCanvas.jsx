@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const W = 900;
 const H = 560;
@@ -20,8 +20,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const xpFillRef = useRef(null);
   const xpTextRef = useRef(null);
 
+  // Added React State to handle UI visibility cleanly without overloading the frame loop
+  const [hasStarted, setHasStarted] = useState(false);
+
   const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
+    gameStarted: false, // 🚀 Added to track game activation status
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
@@ -56,6 +60,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
+        // 🚀 Sync start state from host to guest
+        if (payload.gameStarted !== undefined) {
+          eng.gameStarted = payload.gameStarted;
+          setHasStarted(payload.gameStarted);
+        }
+
         if (!eng.p) {
           eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
         }
@@ -93,13 +103,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2.level = payload.p2_level || eng.p2.level;
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
-          // Push authoritative update into history for interpolation on guest
           const hts = payload.ts || Date.now();
           eng.p2History.push({ t: hts, x: payload.p2.x, y: payload.p2.y });
-          // keep history short and recent
           const now = Date.now();
           while (eng.p2History.length > 20) eng.p2History.shift();
-          // also drop very old entries
           eng.p2History = eng.p2History.filter(s => (now - s.t) < 2000);
         }
       }
@@ -129,6 +136,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
+  // Reset parameters when moving back to screens
   useEffect(() => {
     if (screen === 'menu' || screen === 'lobby') {
       const eng = engineRef.current;
@@ -136,6 +144,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
+      eng.gameStarted = false; // Reset status flag
+      setHasStarted(false);     // Reset status state
       
       eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
@@ -185,38 +195,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
-      // Determine host/co-op state robustly: if there's no network channel treat as host (solo)
       const net = netRef.current || {};
       const isCoop = Boolean(net.channel);
       const isHost = Boolean(net.isHost) || !isCoop;
 
       if (screen === 'playing' || screen === 'levelup') {
-        eng.waveT += dt;
-        eng.spawnT += dt;
-
-        if (!isCoop || isHost) {
-          if (eng.spawnT >= eng.spawnRate) {
-            eng.spawnT = 0;
-            eng.spawnRate = Math.max(0.35, 2 - eng.wave * 0.12);
-            const pool = eng.wave < 2 ? [0] : eng.wave < 4 ? [0, 1] : [0, 1, 2];
-            const ti = pool[Math.floor(Math.random() * pool.length)];
-            const t = ET[ti]; const side = Math.floor(Math.random() * 4); let ex, ey;
-            if (side === 0) { ex = Math.random() * W; ey = -30; }
-            else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
-            else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
-            else { ex = -30; ey = Math.random() * H; }
-            eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0 });
-          }
-          if (eng.waveT >= eng.waveLen) {
-            eng.waveT = 0; eng.wave++;
-            eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
-            if (eng.wave % 3 === 0) {
-              const t = ET[3];
-              eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0 });
-            }
-          }
-        }
-
         let mx = 0, my = 0;
         if (eng.keys['ArrowLeft'] || eng.keys['a'] || eng.keys['A']) mx -= 1;
         if (eng.keys['ArrowRight'] || eng.keys['d'] || eng.keys['D']) mx += 1;
@@ -225,64 +208,100 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
+        // 🚀 Intercept unstarted loops to check for host activation and lock down guest movement vectors
+        if (!eng.gameStarted) {
+          if (isHost && (mx !== 0 || my !== 0)) {
+            eng.gameStarted = true;
+            setHasStarted(true);
+          } else if (!isHost) {
+            mx = 0; // Clear inputs so guests cannot move ahead
+            my = 0;
+          }
+        }
+
+        // 🚀 Run game state ticks exclusively when started
+        if (eng.gameStarted) {
+          eng.waveT += dt;
+          eng.spawnT += dt;
+
+          if (!isCoop || isHost) {
+            if (eng.spawnT >= eng.spawnRate) {
+              eng.spawnT = 0;
+              eng.spawnRate = Math.max(0.35, 2 - eng.wave * 0.12);
+              const pool = eng.wave < 2 ? [0] : eng.wave < 4 ? [0, 1] : [0, 1, 2];
+              const ti = pool[Math.floor(Math.random() * pool.length)];
+              const t = ET[ti]; const side = Math.floor(Math.random() * 4); let ex, ey;
+              if (side === 0) { ex = Math.random() * W; ey = -30; }
+              else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
+              else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
+              else { ex = -30; ey = Math.random() * H; }
+              eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0 });
+            }
+            if (eng.waveT >= eng.waveLen) {
+              eng.waveT = 0; eng.wave++;
+              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
+              if (eng.wave % 3 === 0) {
+                const t = ET[3];
+                eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0 });
+              }
+            }
+          }
+        }
+
+        // Apply spatial movement equations
         if (isHost || !isCoop) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
             eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * eng.p.speed * dt));
             if (eng.p.inv > 0) eng.p.inv -= dt;
           }
-          if (isCoop && eng.p2 && !eng.p2.dead) {
+          if (isCoop && eng.p2 && !eng.p2.dead && eng.gameStarted) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * eng.p2.speed * dt));
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // GUEST SIDE LOGIC: Client-side prediction for P2 + smooth reconcile
-            if (eng.p2 && !eng.p2.dead) {
-              // Predict immediate movement locally
-              eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
-              eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
+          if (eng.p2 && !eng.p2.dead) {
+            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
+            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
 
-              // Simpler approach: fast-follow prediction and gentle reconcile to authoritative state
-              const predFactor = Math.min(1, dt * 18);
-              eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
-              eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
+            const predFactor = Math.min(1, dt * 18);
+            eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
+            eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
 
-              if (eng.p2Target) {
-                const reconcileFactor = 0.06; // gentle corrections
-                const dx = eng.p2Target.x - eng.p2Render.x;
-                const dy = eng.p2Target.y - eng.p2Render.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist > 60) {
-                  // snap on large divergence to avoid long visible drift
-                  eng.p2Render.x = eng.p2Target.x;
-                  eng.p2Render.y = eng.p2Target.y;
-                } else {
-                  eng.p2Render.x += dx * reconcileFactor;
-                  eng.p2Render.y += dy * reconcileFactor;
-                }
+            if (eng.p2Target) {
+              const reconcileFactor = 0.06;
+              const dx = eng.p2Target.x - eng.p2Render.x;
+              const dy = eng.p2Target.y - eng.p2Render.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist > 60) {
+                eng.p2Render.x = eng.p2Target.x;
+                eng.p2Render.y = eng.p2Target.y;
+              } else {
+                eng.p2Render.x += dx * reconcileFactor;
+                eng.p2Render.y += dy * reconcileFactor;
               }
             }
-
-            // Keep Player1 render interpolation as before
-            const f = Math.min(1, dt * 14);
-            eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
-            eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
+          }
+          const f = Math.min(1, dt * 14);
+          eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
+          eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
         }
 
+        // WebRTC Sync updates
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.033; // INCREASED: Sends updates roughly 30 times a second
+            syncTimer = 0.033;
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
               netRef.current.channel.send('state_sync', {
+                gameStarted: eng.gameStarted, // 🚀 Include active baseline data to sync client
                 enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                // Send precise player positions (floats) to avoid quantization jitter on clients
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
                 ts: Date.now(),
@@ -292,142 +311,145 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        if (eng.enemies.length > 0) {
-          if (eng.p && !eng.p.dead) {
-            eng.p.shootCd -= dt;
-            if (eng.p.shootCd <= 0) {
-              let near = null, nd = Infinity;
-              for (const e of eng.enemies) {
-                const d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
-                if (d < nd) { nd = d; near = e; }
-              }
-              if (near) {
-                eng.p.shootCd = eng.p.shootRate;
-                const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
-                const sp = (eng.p.multiShot - 1) * 0.18;
-                for (let i = 0; i < eng.p.multiShot; i++) {
-                  const a = ba + (i - (eng.p.multiShot - 1) / 2) * sp;
-                  eng.bullets.push({ x: eng.p.x, y: eng.p.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: false });
+        // 🚀 Freeze automatic firing and update systems if game hasn't started yet
+        if (eng.gameStarted) {
+          if (eng.enemies.length > 0) {
+            if (eng.p && !eng.p.dead) {
+              eng.p.shootCd -= dt;
+              if (eng.p.shootCd <= 0) {
+                let near = null, nd = Infinity;
+                for (const e of eng.enemies) {
+                  const d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
+                  if (d < nd) { nd = d; near = e; }
+                }
+                if (near) {
+                  eng.p.shootCd = eng.p.shootRate;
+                  const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
+                  const sp = (eng.p.multiShot - 1) * 0.18;
+                  for (let i = 0; i < eng.p.multiShot; i++) {
+                    const a = ba + (i - (eng.p.multiShot - 1) / 2) * sp;
+                    eng.bullets.push({ x: eng.p.x, y: eng.p.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: false });
+                  }
                 }
               }
             }
-          }
 
-          if (isCoop && eng.p2 && !eng.p2.dead) {
-            eng.p2.shootCd -= dt;
-            if (eng.p2.shootCd <= 0) {
-              let near = null, nd = Infinity;
-              for (const e of eng.enemies) {
-                const d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
-                if (d < nd) { nd = d; near = e; }
-              }
-              if (near) {
-                eng.p2.shootCd = eng.p2.shootRate;
-                const ba = Math.atan2(near.y - eng.p2.y, near.x - eng.p2.x);
-                const sp = (eng.p2.multiShot - 1) * 0.18;
-                for (let i = 0; i < eng.p2.multiShot; i++) {
-                  const a = ba + (i - (eng.p2.multiShot - 1) / 2) * sp;
-                  eng.bullets.push({ x: eng.p2.x, y: eng.p2.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: true });
-                }
-              }
-            }
-          }
-        }
-
-        if (!isCoop || isHost) {
-          for (let i = eng.bullets.length - 1; i >= 0; i--) {
-            const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-            if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) { 
-              eng.bullets.splice(i, 1); 
-              continue; 
-            }
-            let hit = false;
-            for (let j = eng.enemies.length - 1; j >= 0; j--) {
-              const e = eng.enemies[j];
-              if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
-                e.hp -= eng.boltDmg; e.flash = 0.1;
-                for(let k=0; k<5; k++) {
-                  const pa = Math.random()*Math.PI*2; const ps = Math.random()*80+40;
-                  eng.particles.push({ x: b.x, y: b.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: e.color, life: 0.3, ml: 0.3, r: 2 });
-                }
-                eng.bullets.splice(i, 1); hit = true;
-                if (e.hp <= 0) {
-                  eng.score += e.boss ? 1500 : 100;
-                  eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
-                  eng.enemies.splice(j, 1);
-                }
-                break;
-              }
-            }
-            if (hit) continue;
-          }
-
-          for (const e of eng.enemies) {
-            let tx = (eng.p && !eng.p.dead) ? eng.p : null;
             if (isCoop && eng.p2 && !eng.p2.dead) {
-              const d1 = (!eng.p || eng.p.dead) ? Infinity : Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
-              const d2 = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
-              if (d2 < d1) tx = eng.p2;
-            }
-            if (!tx) continue;
-            const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
-            e.x += Math.cos(ea) * e.speed * dt; e.y += Math.sin(ea) * e.speed * dt;
-            if (e.flash > 0) e.flash -= dt;
-
-            if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
-              eng.p.hp -= e.dmg; eng.p.inv = 0.7;
-              if (eng.p.hp <= 0) { eng.p.dead = true; if(!isCoop || !eng.p2 || eng.p2.dead) { if(isCoop) netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
-            }
-            if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
-              eng.p2.hp -= e.dmg; eng.p2.inv = 0.7;
-              if (eng.p2.hp <= 0) {
-                eng.p2.dead = true; 
-                if(!eng.p || eng.p.dead) { netRef.current.channel.send('game_over',{}); setScreen('gameover'); } 
+              eng.p2.shootCd -= dt;
+              if (eng.p2.shootCd <= 0) {
+                let near = null, nd = Infinity;
+                for (const e of eng.enemies) {
+                  const d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
+                  if (d < nd) { nd = d; near = e; }
+                }
+                if (near) {
+                  eng.p2.shootCd = eng.p2.shootRate;
+                  const ba = Math.atan2(near.y - eng.p2.y, near.x - eng.p2.x);
+                  const sp = (eng.p2.multiShot - 1) * 0.18;
+                  for (let i = 0; i < eng.p2.multiShot; i++) {
+                    const a = ba + (i - (eng.p2.multiShot - 1) / 2) * sp;
+                    eng.bullets.push({ x: eng.p2.x, y: eng.p2.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: true });
+                  }
+                }
               }
             }
           }
 
-          for (let i = eng.gems.length - 1; i >= 0; i--) {
-            const g = eng.gems[i]; g.life -= dt;
-            if (g.life <= 0) { eng.gems.splice(i, 1); continue; }
-            let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
-            if (isCoop && eng.p2 && !eng.p2.dead) {
-              const dP1 = eng.p ? Math.hypot(eng.p.x - g.x, eng.p.y - g.y) : Infinity;
-              if (Math.hypot(eng.p2.x - g.x, eng.p2.y - g.y) < dP1) {
-                tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
+          if (!isCoop || isHost) {
+            for (let i = eng.bullets.length - 1; i >= 0; i--) {
+              const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+              if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) { 
+                eng.bullets.splice(i, 1); 
+                continue; 
               }
-            }
-            if (!targetPlayer) continue;
-            const gd = Math.hypot(tx - g.x, ty - g.y);
-            if (gd < 110) {
-              const ga = Math.atan2(ty - g.y, tx - g.x);
-              g.x += Math.cos(ga) * 260 * dt; g.y += Math.sin(ga) * 260 * dt;
-            }
-            if (!targetPlayer.dead && Math.hypot(targetPlayer.x - g.x, targetPlayer.y - g.y) < targetPlayer.r + g.r) {
-              if (isCoop && targetPlayer === eng.p2) {
-                eng.p2.xp += g.xp;
-                if (eng.p2.xp >= eng.p2.xpNext) {
-                  eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                  netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
-                }
-              } else if (eng.p) {
-                eng.p.xp += g.xp;
-                if (eng.p.xp >= eng.p.xpNext) {
-                  eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                  onLevelUpOffer(rollUpgradeOptions()); 
-                  setScreen('levelup');
+              let hit = false;
+              for (let j = eng.enemies.length - 1; j >= 0; j--) {
+                const e = eng.enemies[j];
+                if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
+                  e.hp -= eng.boltDmg; e.flash = 0.1;
+                  for(let k=0; k<5; k++) {
+                    const pa = Math.random()*Math.PI*2; const ps = Math.random()*80+40;
+                    eng.particles.push({ x: b.x, y: b.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: e.color, life: 0.3, ml: 0.3, r: 2 });
+                  }
+                  eng.bullets.splice(i, 1); hit = true;
+                  if (e.hp <= 0) {
+                    eng.score += e.boss ? 1500 : 100;
+                    eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
+                    eng.enemies.splice(j, 1);
+                  }
+                  break;
                 }
               }
-              eng.gems.splice(i, 1);
+              if (hit) continue;
+            }
+
+            for (const e of eng.enemies) {
+              let tx = (eng.p && !eng.p.dead) ? eng.p : null;
+              if (isCoop && eng.p2 && !eng.p2.dead) {
+                const d1 = (!eng.p || eng.p.dead) ? Infinity : Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
+                const d2 = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
+                if (d2 < d1) tx = eng.p2;
+              }
+              if (!tx) continue;
+              const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
+              e.x += Math.cos(ea) * e.speed * dt; e.y += Math.sin(ea) * e.speed * dt;
+              if (e.flash > 0) e.flash -= dt;
+
+              if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
+                eng.p.hp -= e.dmg; eng.p.inv = 0.7;
+                if (eng.p.hp <= 0) { eng.p.dead = true; if(!isCoop || !eng.p2 || eng.p2.dead) { if(isCoop) netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
+              }
+              if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
+                eng.p2.hp -= e.dmg; eng.p2.inv = 0.7;
+                if (eng.p2.hp <= 0) {
+                  eng.p2.dead = true; 
+                  if(!eng.p || eng.p.dead) { netRef.current.channel.send('game_over',{}); setScreen('gameover'); } 
+                }
+              }
+            }
+
+            for (let i = eng.gems.length - 1; i >= 0; i--) {
+              const g = eng.gems[i]; g.life -= dt;
+              if (g.life <= 0) { eng.gems.splice(i, 1); continue; }
+              let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
+              if (isCoop && eng.p2 && !eng.p2.dead) {
+                const dP1 = eng.p ? Math.hypot(eng.p.x - g.x, eng.p.y - g.y) : Infinity;
+                if (Math.hypot(eng.p2.x - g.x, eng.p2.y - g.y) < dP1) {
+                  tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
+                }
+              }
+              if (!targetPlayer) continue;
+              const gd = Math.hypot(tx - g.x, ty - g.y);
+              if (gd < 110) {
+                const ga = Math.atan2(ty - g.y, tx - g.x);
+                g.x += Math.cos(ga) * 260 * dt; g.y += Math.sin(ga) * 260 * dt;
+              }
+              if (!targetPlayer.dead && Math.hypot(targetPlayer.x - g.x, targetPlayer.y - g.y) < targetPlayer.r + g.r) {
+                if (isCoop && targetPlayer === eng.p2) {
+                  eng.p2.xp += g.xp;
+                  if (eng.p2.xp >= eng.p2.xpNext) {
+                    eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
+                    netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
+                  }
+                } else if (eng.p) {
+                  eng.p.xp += g.xp;
+                  if (eng.p.xp >= eng.p.xpNext) {
+                    eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
+                    onLevelUpOffer(rollUpgradeOptions()); 
+                    setScreen('levelup');
+                  }
+                }
+                eng.gems.splice(i, 1);
+              }
             }
           }
-        }
 
-        if (!isHost && isCoop) {
-          for (let i = eng.bullets.length - 1; i >= 0; i--) {
-            const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
-            if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
-              eng.bullets.splice(i, 1);
+          if (!isHost && isCoop) {
+            for (let i = eng.bullets.length - 1; i >= 0; i--) {
+              const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+              if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
+                eng.bullets.splice(i, 1);
+              }
             }
           }
         }
@@ -453,6 +475,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
+      // Handle cosmic environment / background particle movements continuously
       for (let i = eng.particles.length - 1; i >= 0; i--) {
         const p = eng.particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt;
         if (p.life <= 0) eng.particles.splice(i, 1);
@@ -500,11 +523,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
 
-      // FIX: Ensure Guest's local P2 render relies on the fast-predicted `p2Render` to eliminate input lag
       const p2X = (isCoop && !isHost && eng.p2Render) ? eng.p2Render.x : (eng.p2 ? eng.p2.x : W*2/3);
       const p2Y = (isCoop && !isHost && eng.p2Render) ? eng.p2Render.y : (eng.p2 ? eng.p2.y : H/2);
 
-      // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
@@ -520,7 +541,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // Draw Player 2 (Orange)
       if (isCoop && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
@@ -569,7 +589,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     if (!target) return;
     
     const token = String(choice || '').toLowerCase().trim();
-    console.log(`🔮 Applying Arcane Upgrade [Target: ${forcedTarget || 'Local'}]:`, token);
+    console.log(`🔮 Applying Arcane Upgrade:`, token);
     
     if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
       target.maxHp += 25; 
@@ -586,10 +606,28 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   };
 
+  // Determine local client role info safely outside frame execution
+  const isNetworked = Boolean(netRef.current && netRef.current.channel);
+  const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
+
   return (
     <div id="wrap">
       <div style={{ position: 'relative', display: 'inline-block' }}>
         <canvas ref={canvasRef} id="gameCanvas" />
+
+        {/* 🚀 New UI Overlay Message Block */}
+        {screen === 'playing' && !hasStarted && (
+          <div className="hud-start-overlay">
+            <div className="hud-start-modal">
+              <h2>{isHostInstance ? "MOVE TO START GAME" : "WAITING FOR HOST"}</h2>
+              <p>
+                {isHostInstance 
+                  ? "Press WASD or Arrow Keys to begin battle." 
+                  : "The arena will initialize once the host makes their first move."}
+              </p>
+            </div>
+          </div>
+        )}
 
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
