@@ -9,14 +9,12 @@ export default function PartyChat({ enabled, channel, localName }) {
   useEffect(() => {
     if (!channel || !enabled) return;
 
-    const handleMsg = (event, payload) => {
+    channel.onChatMsg = (event, payload) => {
       if (event === 'chat') {
         setMessages(prev => [...prev, { sender: payload.name, msg: payload.msg, type: 'theirs' }]);
       }
     };
-
-    // Append to runtime listeners array directly
-    channel.onMsg = handleMsg;
+    return () => { channel.onChatMsg = null; };
   }, [channel, enabled]);
 
   useEffect(() => {

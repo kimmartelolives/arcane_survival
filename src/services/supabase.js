@@ -55,7 +55,7 @@ export function sbRealtime(channel, onMsg) {
         onMsg(data.payload.event, data.payload.payload);
       }
     } catch (err) {
-      console.error("Realtime parsing error:", err);
+      console.error("Realtime network sync parsing error:", err);
     }
   };
 

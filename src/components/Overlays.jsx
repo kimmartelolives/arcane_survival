@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { sbGet, sbPost, hasSupabase } from '../services/supabase';
 
 export default function Overlays({ 
-  gameState, 
-  score, 
-  wave, 
-  level, 
-  isCoop, 
+  screen, 
+  setScreen, 
+  hudData, 
   roomCode, 
   p2Status, 
+  isCoop, 
+  levelUpOptions, 
+  onSelectUpgrade, 
   onAction 
 }) {
   const [wizardName, setWizardName] = useState('');
@@ -17,28 +18,99 @@ export default function Overlays({
   const [loadingLb, setLoadingLb] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('');
 
+  // Auto-fetch or reset state messages across screen shifts
   useEffect(() => {
-    if (gameState === 'leaderboard') {
+    if (screen === 'leaderboard') {
       setLoadingLb(true);
       sbGet('/rest/v1/leaderboard?select=name,score,wave,level,mode&order=score.desc&limit=10')
-        .then(data => { setLeaderboard(data || []); setLoadingLb(false); });
+        .then(data => { 
+          setLeaderboard(data || []); 
+          setLoadingLb(false); 
+        })
+        .catch(() => {
+          setLoadingLb(false);
+        });
     }
-  }, [gameState]);
+    
+    // Clear submission feedback when navigating away from gameover screen
+    if (screen !== 'gameover') {
+      setSubmitStatus('');
+    }
+  }, [screen]);
+
+  // Keyboard Hotkeys [1, 2, 3] listener to pick level-up upgrades
+  useEffect(() => {
+    if (screen !== 'levelup') return;
+    
+    const handleHotkey = (e) => {
+      if (['1', '2', '3'].includes(e.key)) {
+        const index = parseInt(e.key, 10) - 1;
+        const choices = levelUpOptions || [];
+        if (choices[index]) {
+          onSelectUpgrade(choices[index]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleHotkey);
+    return () => window.removeEventListener('keydown', handleHotkey);
+  }, [screen, levelUpOptions, onSelectUpgrade]);
 
   const handleSubmitScore = async () => {
     if (!wizardName.trim()) return alert('Enter name first');
     setSubmitStatus('Submitting…');
     const ok = await sbPost('/rest/v1/leaderboard', {
-      name: wizardName, score, wave, level, mode: isCoop ? 'coop' : 'solo'
+      name: wizardName.trim(), 
+      score: hudData?.score || 0, 
+      wave: hudData?.wave || 1, 
+      level: hudData?.p?.level || 1, 
+      mode: isCoop ? 'coop' : 'solo'
     });
     setSubmitStatus(ok ? '✦ Score submitted!' : 'Failed submission.');
   };
 
-  if (gameState === 'playing') return null;
+  // Helper to convert core raw upgrade names into structured card configurations
+  const getUpgradeMeta = (rawString) => {
+    const normalize = (rawString || '').toLowerCase();
+    if (normalize.includes('rate') || normalize.includes('rapid')) {
+      return { icon: '⚡', title: 'RAPID FIRE', desc: 'FIRE RATE +30%' };
+    }
+    if (normalize.includes('damage') || normalize.includes('might')) {
+      return { icon: '🔮', title: 'ARCANE MIGHT', desc: 'BOLT DAMAGE +40%' };
+    }
+    if (normalize.includes('hp') || normalize.includes('vitality')) {
+      return { icon: '💛', title: 'VITALITY', desc: 'MAX HP +50 & HEALED' };
+    }
+    if (normalize.includes('multi') || normalize.includes('shot')) {
+      return { icon: '✨', title: 'SPLIT BOLT', desc: 'FIRE EXTRA PROJECTILES' };
+    }
+    return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
+  };
+
+  // Suppress overlays completely while the gameplay view is active
+  if (screen === 'playing') return null;
+
+  const medals = ['🥇', '🥈', '🥉'];
+  const displayedChoices = (levelUpOptions || []).slice(0, 3);
 
   return (
     <div id="overlays">
-      {gameState === 'menu' && (
+      <style>{`
+        .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; }
+        .lu-title { font-size: 2.35rem; font-weight: 800; color: #fef08a; text-shadow: 0 0 20px rgba(251,240,138,0.3); margin-bottom: 8px; letter-spacing: 0.05em; font-family: Georgia, serif; text-transform: uppercase; }
+        .lu-subtitle { font-size: 0.85rem; color: #cbd5e1; letter-spacing: 0.08em; margin-bottom: 4px; opacity: 0.9; text-transform: uppercase; font-family: Georgia, serif; }
+        .lu-warning { font-size: 0.72rem; color: #eab308; opacity: 0.85; margin-bottom: 28px; font-family: monospace; letter-spacing: 0.05em; font-weight: bold; }
+        .lu-cards-row { display: flex; justify-content: center; gap: 24px; width: 100%; flex-wrap: wrap; }
+        .lu-card { background: linear-gradient(135deg, #3b117b 0%, #1e0a45 100%); border: 2px solid #7c3aed; border-radius: 16px; width: 230px; padding: 32px 16px; cursor: pointer; transition: all 0.22s ease-in-out; box-shadow: 0 0 20px rgba(124, 58, 237, 0.25); display: flex; flex-direction: column; align-items: center; position: relative; }
+        .lu-card:hover { transform: translateY(-6px); border-color: #a78bfa; box-shadow: 0 0 32px rgba(167, 139, 250, 0.65); background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); }
+        .lu-icon { font-size: 2.2rem; margin-bottom: 16px; filter: drop-shadow(0 0 8px rgba(255,255,255,0.2)); }
+        .lu-card-title { font-size: 1.15rem; font-weight: 700; color: #ffffff; margin-bottom: 8px; letter-spacing: 0.03em; text-transform: uppercase; font-family: Georgia, serif; }
+        .lu-card-desc { font-size: 0.78rem; color: #94a3b8; font-family: monospace; margin-bottom: 24px; min-height: 2em; line-height: 1.3; }
+        .lu-hotkey { font-size: 0.95rem; color: #fde047; font-weight: bold; font-family: monospace; opacity: 0.85; }
+      `}</style>
+
+      {/* MAIN MENU SCREEN */}
+      {screen === 'menu' && (
         <div className="overlay active">
           <div className="panel">
             <div className="panel-shine" />
@@ -48,37 +120,58 @@ export default function Overlays({
             <button className="btn" onClick={() => onAction('start-solo')}>
               <span className="btn-icon">🧙</span><span className="btn-label">Solo Play</span>
             </button>
-            <button className="btn gold" onClick={() => onAction('open-coop')}>
+            <button className="btn gold" onClick={() => setScreen('coop-menu')}>
               <span className="btn-icon">⚔️</span><span className="btn-label">Co-op Play</span>
             </button>
-            <button className="btn" onClick={() => onAction('open-lb')}>
+            <button className="btn" onClick={() => setScreen('leaderboard')}>
               <span className="btn-icon">🏆</span><span className="btn-label">Leaderboard</span>
             </button>
           </div>
         </div>
       )}
 
-      {gameState === 'coop-menu' && (
+      {/* CO-OP CONFIGURATION MENU */}
+      {screen === 'coop-menu' && (
         <div className="overlay active">
           <div className="panel">
             <div className="section-title">⚔️ Co-op Play</div>
             <div className="field-group">
               <label className="field-label">Your Wizard Name</label>
-              <input className="field-input" type="text" value={wizardName} onChange={e => setWizardName(e.target.value)} placeholder="e.g. Eldrin" maxLength={16} />
+              <input 
+                className="field-input" 
+                type="text" 
+                value={wizardName} 
+                onChange={e => setWizardName(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && onAction('host-game', { name: wizardName })}
+                placeholder="e.g. Eldrin" 
+                maxLength={16} 
+              />
             </div>
             <button className="btn gold" onClick={() => onAction('host-game', { name: wizardName })}>Host Room</button>
+            
             <div style={{ margin: '12px 0', fontSize: '.65rem', color: 'rgba(167,139,250,.4)' }}>— OR —</div>
+            
             <div className="field-group">
               <label className="field-label">Room Code</label>
-              <input className="field-input" type="text" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="6-LETTER CODE" maxLength={6} style={{ textAlign: 'center', letterSpacing: '.2em' }} />
+              <input 
+                className="field-input" 
+                type="text" 
+                value={joinCode} 
+                onChange={e => setJoinCode(e.target.value.toUpperCase())} 
+                onKeyDown={e => e.key === 'Enter' && onAction('join-game', { name: wizardName, code: joinCode })}
+                placeholder="6-LETTER CODE" 
+                maxLength={6} 
+                style={{ textAlign: 'center', letterSpacing: '.2em' }} 
+              />
             </div>
             <button className="btn" onClick={() => onAction('join-game', { name: wizardName, code: joinCode })}>Join Game</button>
-            <button className="btn danger sm" style={{ marginTop: '14px' }} onClick={() => onAction('to-menu')}>← Back</button>
+            <button className="btn danger sm" style={{ marginTop: '14px' }} onClick={() => setScreen('menu')}>← Back</button>
           </div>
         </div>
       )}
 
-      {gameState === 'lobby' && (
+      {/* MULTIPLAYER LOBBY SCREEN */}
+      {screen === 'lobby' && (
         <div className="overlay active">
           <div className="panel">
             <div className="section-title">🌐 Waiting for Player 2</div>
@@ -89,7 +182,8 @@ export default function Overlays({
         </div>
       )}
 
-      {gameState === 'leaderboard' && (
+      {/* HALL OF LEGENDS LEADERBOARD */}
+      {screen === 'leaderboard' && (
         <div className="overlay active">
           <div className="panel" style={{ width: 'min(600px, 96vw)' }}>
             <div className="section-title">🏆 Hall of Legends</div>
@@ -98,52 +192,94 @@ export default function Overlays({
                 <table className="lb-table">
                   <thead><tr><th>#</th><th>Wizard</th><th>Mode</th><th>Wave</th><th>Score</th></tr></thead>
                   <tbody>
-                    {leaderboard.map((row, idx) => (
-                      <tr key={idx}>
-                        <td>{idx + 1}</td>
-                        <td>{row.name}</td>
-                        <td>{row.mode}</td>
-                        <td>{row.wave}</td>
-                        <td className="lb-score">{row.score.toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {leaderboard.length === 0 ? (
+                      <tr><td colSpan="5" style={{ textAlign: 'center', color: 'rgba(167,139,250,0.5)' }}>No records yet. Be the first legend!</td></tr>
+                    ) : (
+                      leaderboard.map((row, idx) => (
+                        <tr key={idx}>
+                          <td style={{ fontWeight: 'bold' }}>{medals[idx] || `#${idx + 1}`}</td>
+                          <td>{row.name || 'Anonymous'}</td>
+                          <td style={{ textTransform: 'uppercase', fontSize: '0.7rem', color: '#a78bfa' }}>{row.mode || 'solo'}</td>
+                          <td>{row.wave || 1}</td>
+                          <td className="lb-score">{(row.score || 0).toLocaleString()}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               )}
             </div>
-            <button className="btn danger sm" style={{ marginTop: '14px' }} onClick={() => onAction('to-menu')}>← Back</button>
+            <button className="btn danger sm" style={{ marginTop: '14px' }} onClick={() => setScreen('menu')}>← Back</button>
           </div>
         </div>
       )}
 
-      {gameState === 'gameover' && (
+      {/* ✨ PREMIUM LEVEL UP MODAL */}
+      {screen === 'levelup' && (
+        <div className="overlay active" style={{ background: 'rgba(3, 1, 17, 0.45)', backdropFilter: 'blur(1px)' }}>
+          <div className="lu-wrapper">
+            <div className="lu-title">LEVEL UP — WAVE {hudData?.wave || 1}</div>
+            <div className="lu-subtitle">Choose an Upgrade (Press 1, 2, 3 or Click)</div>
+            <div className="lu-warning">⚠️ Game continues – enemies are still moving!</div>
+            
+            <div className="lu-cards-row">
+              {displayedChoices.map((opt, i) => {
+                const card = getUpgradeMeta(opt);
+                return (
+                  <div key={i} className="lu-card" onClick={() => onSelectUpgrade(opt)}>
+                    <div className="lu-icon">{card.icon}</div>
+                    <div className="lu-card-title">{card.title}</div>
+                    <div className="lu-card-desc">{card.desc}</div>
+                    <div className="lu-hotkey">[{i + 1}]</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GAME OVER SUMMARY SCREEN */}
+      {screen === 'gameover' && (
         <div className="overlay active">
           <div className="panel">
             <div className="menu-title" style={{ color: '#ef4444' }}>YOU PERISHED</div>
-            <div id="go-score" style={{ fontSize: '1.45rem', margin: '12px 0' }}>Final Score: {score.toLocaleString()}</div>
-            <div style={{ fontSize: '.85rem', color: '#a78bfa', marginBottom: '14px' }}>Wave {wave} · Level {level}</div>
+            <div id="go-score" style={{ fontSize: '1.45rem', margin: '12px 0' }}>
+              Final Score: {(hudData?.score || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: '.85rem', color: '#a78bfa', marginBottom: '14px' }}>
+              Survived to Wave {hudData?.wave || 1}
+            </div>
             
             {hasSupabase && (
               <div id="go-submit" style={{ marginBottom: '14px' }}>
                 <div className="field-row">
-                  <input className="field-input" type="text" value={wizardName} onChange={e => setWizardName(e.target.value)} placeholder="Wizard name" />
+                  <input 
+                    className="field-input" 
+                    type="text" 
+                    value={wizardName} 
+                    onChange={e => setWizardName(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSubmitScore()}
+                    placeholder="Wizard name" 
+                  />
                   <button className="btn gold" onClick={handleSubmitScore} style={{ margin: 0 }}>Submit</button>
                 </div>
-                <div style={{ fontSize: '.7rem', color: '#a78bfa', mt: '4px' }}>{submitStatus}</div>
+                <div style={{ fontSize: '.7rem', color: '#a78bfa', marginTop: '4px', minHeight: '1em' }}>{submitStatus}</div>
               </div>
             )}
             <button className="btn" onClick={() => onAction('start-solo')}>🔄 Play Again</button>
-            <button className="btn" onClick={() => onAction('to-menu')}>🏠 Main Menu</button>
+            <button className="btn" onClick={() => setScreen('menu')}>🏠 Main Menu</button>
           </div>
         </div>
       )}
 
-      {gameState === 'paused' && (
+      {/* MATCH PAUSE OVERLAY */}
+      {screen === 'pause' && (
         <div className="overlay active">
           <div className="panel" style={{ width: '320px' }}>
             <div className="section-title">⏸ Paused</div>
-            <button className="btn" onClick={() => onAction('resume')}>Resume</button>
-            <button className="btn danger" onClick={() => onAction('to-menu')}>Exit Match</button>
+            <button className="btn" onClick={() => setScreen('playing')}>Resume</button>
+            <button className="btn danger" onClick={() => setScreen('menu')}>Exit Match</button>
           </div>
         </div>
       )}
