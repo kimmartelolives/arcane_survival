@@ -182,8 +182,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
 
     const loop = (ts) => {
-      try {
-        const dt = Math.min((ts - lastTime) / 1000, 0.05);
+      const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
       // Determine host/co-op state robustly: if there's no network channel treat as host (solo)
@@ -210,12 +209,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
           if (eng.waveT >= eng.waveLen) {
             eng.waveT = 0; eng.wave++;
-            console.log('Wave started', eng.wave, 'enemies', eng.enemies.length);
             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
             if (eng.wave % 3 === 0) {
               const t = ET[3];
               eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0 });
-              console.log('Boss spawned for wave', eng.wave);
             }
           }
         }
@@ -246,24 +243,46 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
               eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
 
-              // Simpler approach: fast-follow prediction and gentle reconcile to authoritative state
-              const predFactor = Math.min(1, dt * 18);
+              // Update the render-snapshot (`p2Render`) to follow the predicted position quickly
+              const predFactor = Math.min(1, dt * 22);
               eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
               eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
 
-              if (eng.p2Target) {
-                const reconcileFactor = 0.06; // gentle corrections
-                const dx = eng.p2Target.x - eng.p2Render.x;
-                const dy = eng.p2Target.y - eng.p2Render.y;
-                const dist = Math.hypot(dx, dy);
-                if (dist > 60) {
-                  // snap on large divergence to avoid long visible drift
-                  eng.p2Render.x = eng.p2Target.x;
-                  eng.p2Render.y = eng.p2Target.y;
-                } else {
-                  eng.p2Render.x += dx * reconcileFactor;
-                  eng.p2Render.y += dy * reconcileFactor;
+              // Compute an interpolated authoritative position from history (target time = now - delay)
+              let interpX = eng.p2.x, interpY = eng.p2.y;
+              if (eng.p2History && eng.p2History.length >= 2) {
+                const delayMs = 80; // interpolation delay to smooth over jitter
+                const targetT = Date.now() - delayMs;
+                // find two samples around targetT
+                let a = null, b = null;
+                for (let i = 0; i < eng.p2History.length - 1; i++) {
+                  const s0 = eng.p2History[i];
+                  const s1 = eng.p2History[i+1];
+                  if (s0.t <= targetT && targetT <= s1.t) { a = s0; b = s1; break; }
                 }
+                if (a && b) {
+                  const tt = (targetT - a.t) / (b.t - a.t || 1);
+                  interpX = a.x + (b.x - a.x) * tt;
+                  interpY = a.y + (b.y - a.y) * tt;
+                } else {
+                  // fallback to the newest sample or nearest
+                  const last = eng.p2History[eng.p2History.length - 1];
+                  interpX = last.x; interpY = last.y;
+                }
+              }
+
+              // Blend a small amount toward interpolated authoritative position to reduce oscillation
+              const interpBlend = 0.04;
+              const dxi = interpX - eng.p2Render.x;
+              const dyi = interpY - eng.p2Render.y;
+              const disti = Math.hypot(dxi, dyi);
+              if (disti > 120) {
+                // large divergence -> snap to authoritative to avoid long drift
+                eng.p2Render.x = interpX;
+                eng.p2Render.y = interpY;
+              } else {
+                eng.p2Render.x += dxi * interpBlend;
+                eng.p2Render.y += dyi * interpBlend;
               }
             }
 
@@ -539,13 +558,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      } catch (err) {
-        // Log and continue the loop so a single error doesn't freeze the game
-        try { console.error('Game loop error:', err); } catch (e) {}
-      } finally {
-        animId = requestAnimationFrame(loop);
-      }
+      animId = requestAnimationFrame(loop);
     };
+    animId = requestAnimationFrame(loop);
 
     const down = (e) => { 
       eng.keys[e.key] = true; 
