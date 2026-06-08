@@ -113,29 +113,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
-  useEffect(() => {
-    if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
-      const eng = engineRef.current;
-      const isCoop = Boolean(netRef.current && netRef.current.channel);
-      
-      eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
-      eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
-      
-      // Spawn Player 1 centered if solo, otherwise left side
-      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
-      eng.p1Render = { x: eng.p.x, y: eng.p.y };
+useEffect(() => {
+  // 🏁 Remove || screen === 'playing' here so transitions into gameplay aren't wiped out!
+  if (screen === 'menu' || screen === 'lobby') {
+    const eng = engineRef.current;
+    const isCoop = Boolean(netRef.current && netRef.current.channel);
+    
+    eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
+    eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
+    
+    // Spawn Player 1 centered if solo, otherwise left side
+    eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+    eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
+    eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
-      // FIX: Only initialize Player 2 data structures if we are actively in a Co-op session
-      if (isCoop) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-        eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
-        eng.p2Render = { x: eng.p2.x, y: H / 2 };
-      } else {
-        eng.p2 = null;
-      }
+    // Only initialize Player 2 data structures if we are actively in a Co-op session
+    if (isCoop) {
+      eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+      eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
+      eng.p2Render = { x: eng.p2.x, y: H / 2 };
+    } else {
+      eng.p2 = null;
     }
-  }, [screen, netRef]);
+  }
+}, [screen, netRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
