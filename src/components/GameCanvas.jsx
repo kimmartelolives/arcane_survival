@@ -55,6 +55,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
+        // Safe fallbacks to guarantee player tracking data shapes are instantiated on Guest
+        if (!eng.p) {
+          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+        }
+        if (!eng.p2) {
+          eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+        }
+
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
           dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0
@@ -113,30 +121,27 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
-useEffect(() => {
-  // 🏁 Remove || screen === 'playing' here so transitions into gameplay aren't wiped out!
-  if (screen === 'menu' || screen === 'lobby') {
-    const eng = engineRef.current;
-    const isCoop = Boolean(netRef.current && netRef.current.channel);
-    
-    eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
-    eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
-    
-    // Spawn Player 1 centered if solo, otherwise left side
-    eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-    eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
-    eng.p1Render = { x: eng.p.x, y: eng.p.y };
+  useEffect(() => {
+    if (screen === 'menu' || screen === 'lobby') {
+      const eng = engineRef.current;
+      const isCoop = Boolean(netRef.current && netRef.current.channel);
+      
+      eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
+      eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
+      
+      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+      eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
+      eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
-    // Only initialize Player 2 data structures if we are actively in a Co-op session
-    if (isCoop) {
-      eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
-      eng.p2Render = { x: eng.p2.x, y: H / 2 };
-    } else {
-      eng.p2 = null;
+      if (isCoop) {
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+        eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
+        eng.p2Render = { x: eng.p2.x, y: H / 2 };
+      } else {
+        eng.p2 = null;
+      }
     }
-  }
-}, [screen, netRef]);
+  }, [screen, netRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -245,9 +250,9 @@ useEffect(() => {
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                p1: { x: Math.round(eng.p.x), y: Math.round(eng.p.y), hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead },
-                p2: { x: Math.round(eng.p2.x), y: Math.round(eng.p2.y), hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead },
-                p2_level: eng.p2.level, p2_xp: eng.p2.xp, p2_xpNext: eng.p2.xpNext
+                p1: eng.p ? { x: Math.round(eng.p.x), y: Math.round(eng.p.y), hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
+                p2: eng.p2 ? { x: Math.round(eng.p2.x), y: Math.round(eng.p2.y), hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
+                p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80
               });
             }
           }
@@ -458,10 +463,8 @@ useEffect(() => {
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
-      
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
-
 
       const p2X = isCoop ? ( !isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x ) : (W*2/3);
       const p2Y = isCoop ? ( !isHost ? (eng.p2 ? eng.p2.y : H/2)   : eng.p2Render.y ) : (H/2);
@@ -482,7 +485,7 @@ useEffect(() => {
         ctx.restore();
       }
 
-      // Draw Player 2 (Orange) - FIX: Added explicit guard check for isCoop
+      // Draw Player 2 (Orange) - FIXED: Safe-check presence of structural engine definitions rather than local setup flags
       if (isCoop && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
