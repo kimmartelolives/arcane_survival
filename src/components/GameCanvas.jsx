@@ -43,7 +43,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 📡 Network Stream Listener Pipeline
+  // 📡 Central Canvas Interceptor - High Performance Ref Sync Mapping
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -73,6 +73,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p.maxHp = payload.p2.maxHp;
           eng.p.dead = payload.p2.dead;
           eng.p.level = payload.p2_level || eng.p.level;
+          eng.p.xp = payload.p2_xp || eng.p.xp;
+          eng.p.xpNext = payload.p2_xpNext || eng.p.xpNext;
         }
       }
       
@@ -201,11 +203,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // ⏱ Optimization Pass: Network Downsampling (16Hz instead of 25Hz to resolve buffer lag)
+        // ⏱ Optimized Multi-channel broadcast throttle (15Hz frequency bounds)
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.06; 
+            syncTimer = 0.065; 
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
@@ -216,13 +218,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 p1: { x: Math.round(eng.p.x), y: Math.round(eng.p.y), hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead },
                 p2: { hp: eng.p2.hp, maxHp: eng.p2.maxHp, dead: eng.p2.dead },
-                p2_level: eng.p2.level // Forwarded level configuration parameters
+                p2_level: eng.p2.level,
+                p2_xp: eng.p2.xp,
+                p2_xpNext: eng.p2.xpNext
               });
             }
           }
         }
 
-        // Independent Local Shooting Controllers
+        // Automatic Attack Target Calculations
         if (eng.enemies.length > 0) {
           if (eng.p && !eng.p.dead) {
             eng.p.shootCd -= dt;
@@ -265,7 +269,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Bullet garbage collection array clean pass to resolve freeze issues
+        // Host authoritative simulation engine loops
         if (!isCoop || isHost) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -358,7 +362,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Guest update prediction execution loops
+        // Guest bullet projection step vector mapping rules
         if (!isHost && isCoop) {
           for (let i = eng.bullets.length - 1; i >= 0; i--) {
             const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -370,6 +374,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         hudRef.current = { score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, p: eng.p, p2: eng.p2 };
 
+        // 🔥 HIGH-PERFORMANCE DOM MANIPULATION (Zero React Re-renders!)
         if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
         if (waveValueRef.current) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
