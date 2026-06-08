@@ -55,7 +55,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
-        // Safe fallbacks to guarantee player tracking data shapes are instantiated on Guest
         if (!eng.p) {
           eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
         }
@@ -227,10 +226,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
+          // GUEST SIDE LOGIC: Implement Client-Side Prediction for P2
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
+            
+            // Soft-reconcile with Host's authoritative state to prevent gradual drift
+            if (eng.p2Target) {
+              eng.p2.x += (eng.p2Target.x - eng.p2.x) * 0.15;
+              eng.p2.y += (eng.p2Target.y - eng.p2.y) * 0.15;
+            }
           }
+          
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
@@ -241,7 +248,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.065; 
+            syncTimer = 0.033; // INCREASED: Sends updates roughly 30 times a second
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
@@ -466,8 +473,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
 
-      const p2X = isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
-      const p2Y = isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
+      // FIX: Ensure Guest's local P2 render relies instantly on their predicted position, eliminating input lag
+      const p2X = eng.p2 ? eng.p2.x : W*2/3;
+      const p2Y = eng.p2 ? eng.p2.y : H/2;
 
       // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
@@ -485,7 +493,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // Draw Player 2 (Orange) - FIXED: Safe-check presence of structural engine definitions rather than local setup flags
+      // Draw Player 2 (Orange)
       if (isCoop && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
