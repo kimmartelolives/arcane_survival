@@ -62,7 +62,6 @@ const focusStyles = `
     line-height: 1.4;
     margin: 0;
   }
-  /* Core gameplay top/bottom modular HUD bars */
   .game-hud-top {
     position: absolute;
     top: 12px;
@@ -130,7 +129,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const xpTextRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  // --- STATES ---
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
 
@@ -146,7 +144,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p2History: []
   });
 
-  // Handle scaling configurations on window change updates
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
@@ -162,7 +159,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Locks background scheduling priority by anchoring an oscillator node thread via user event gesture.
   const activateAudioKeepAlive = () => {
     if (audioCtxRef.current) return;
     try {
@@ -177,13 +173,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       osc.start();
       
       audioCtxRef.current = ctx;
-      console.log("🔊 Background execution engine shielded via local AudioContext hook.");
     } catch (e) {
       console.warn("Audio Keep-Alive pipeline initialization bypassed:", e);
     }
   };
 
-  // --- WINDOW FOCUS/BLUR LIFECYCLE LISTENERS ---
   useEffect(() => {
     const handleBlur = () => {
       setIsWindowBlurred(true);
@@ -209,7 +203,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [netRef]);
 
-  // 📡 Central Canvas Interceptor Pipeline
+  // 📡 Network Interceptor Update
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -287,6 +281,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (event === 'game_over') {
         setScreen('gameover');
       }
+
+      // Guest automatically syncs their UI screen whenever the host hits play again
+      if (event === 'restart_game' && !net.isHost) {
+        setScreen('playing');
+      }
     };
 
     return () => {
@@ -294,12 +293,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
-  // Reset parameters when moving back to screens
+  // 🛠️ CRITICAL FIX: Enhanced screen parameters reset condition tracking
   useEffect(() => {
-    if (screen === 'menu' || screen === 'lobby') {
-      const eng = engineRef.current;
+    const eng = engineRef.current;
+    if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
+      
+      // Safety guard: If changing to 'playing' from a levelup choose event, DO NOT reset the ongoing map
+      if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
+        return;
+      }
+
       const isCoop = Boolean(netRef.current && netRef.current.channel);
       
+      // Wipe structural records clean for the fresh run
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.gameStarted = false; 
@@ -313,13 +319,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
+
+        // Host instructs Player 2 to clear their local layout and jump into the map
+        if (screen === 'playing' && netRef.current.isHost) {
+          netRef.current.channel.send('restart_game', {});
+        }
       } else {
         eng.p2 = null;
       }
     }
   }, [screen, netRef]);
 
-  // Main background simulation lifecycle configuration
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -350,7 +360,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
     };
 
-    // --- SETUP UNTHROTTLED INLINE BACKGROUND WEB WORKER ---
     const workerBlob = new Blob([`
       let timer = null;
       self.onmessage = function(e) {
@@ -424,7 +433,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Apply spatial movement equations
         if (isHost || !isCoop) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
@@ -464,7 +472,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
         }
 
-        // WebRTC Sync updates
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
@@ -650,7 +657,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      // Physics logic for environmental animations
       for (let i = eng.particles.length - 1; i >= 0; i--) {
         const p = eng.particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt;
         if (p.life <= 0) eng.particles.splice(i, 1);
@@ -663,7 +669,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     worker.postMessage('start');
 
-    // --- RENDER VISUAL LOOP ---
     const renderLoop = () => {
       ctx.fillStyle = '#030111'; ctx.fillRect(0, 0, W, H);
       if (eng.floorPat) { ctx.fillStyle = eng.floorPat; ctx.fillRect(0, 0, W, H); }
@@ -813,12 +818,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         {/* BOTTOM VITAL STATUS HUDS */}
         {screen === 'playing' && (
           <div className="game-hud-bottom">
-            {/* HP Vital Bar */}
             <div className="hud-bar-container">
               <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
               <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
             </div>
-            {/* Experience Arc Bar */}
             <div className="hud-bar-container">
               <div ref={xpFillRef} className="hud-bar-fill" style={{ background: '#3b82f6', width: '0%' }}></div>
               <div ref={xpTextRef} className="hud-bar-text">LV1 XP 0/80</div>
