@@ -132,6 +132,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
 
+  // --- CO-OP VOTING TRACKER STATE ---
+  const [p1VotedRestart, setP1VotedRestart] = useState(false);
+  const [p2VotedRestart, setP2VotedRestart] = useState(false);
+
   const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
     gameStarted: false, 
@@ -282,7 +286,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         setScreen('gameover');
       }
 
-      // Guest automatically syncs their UI screen whenever the host hits play again
+      // --- NEW CO-OP RESTART VOTING INTERCEPTORS ---
+      if (event === 'player_voted_restart') {
+        if (net.isHost) {
+          // Host receives Guest's (Player 2) vote
+          setP2VotedRestart(payload.voted);
+        } else {
+          // Guest receives Host's (Player 1) vote
+          setP1VotedRestart(payload.voted);
+        }
+      }
+
       if (event === 'restart_game' && !net.isHost) {
         setScreen('playing');
       }
@@ -293,19 +307,32 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
-  // 🛠️ CRITICAL FIX: Enhanced screen parameters reset condition tracking
+  // --- VOTE MATCH WATCHER LOBBY TRIGGER ---
+  useEffect(() => {
+    const net = netRef.current;
+    if (net && net.channel && net.isHost) {
+      // If both players have opted in, execution loop launches the reset pipeline
+      if (p1VotedRestart && p2VotedRestart) {
+        setScreen('playing');
+      }
+    }
+  }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
+
+  // 🛠️ Enhanced screen parameters reset condition tracking
   useEffect(() => {
     const eng = engineRef.current;
     if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
       
-      // Safety guard: If changing to 'playing' from a levelup choose event, DO NOT reset the ongoing map
+      // Clear out the voting records safely whenever entering a match setup or returning to menu
+      setP1VotedRestart(false);
+      setP2VotedRestart(false);
+
       if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
         return;
       }
 
       const isCoop = Boolean(netRef.current && netRef.current.channel);
       
-      // Wipe structural records clean for the fresh run
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.gameStarted = false; 
@@ -320,7 +347,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
 
-        // Host instructs Player 2 to clear their local layout and jump into the map
         if (screen === 'playing' && netRef.current.isHost) {
           netRef.current.channel.send('restart_game', {});
         }
@@ -329,6 +355,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
     }
   }, [screen, netRef]);
+
+  // --- GLOBAL EXPOSED SYSTEM CALL TO MANAGE REPLAYS FROM PARENT SCREEN LAYERS ---
+  useEffect(() => {
+    window.triggerRestartVote = () => {
+      const net = netRef.current;
+      const isCoop = Boolean(net && net.channel);
+
+      if (!isCoop) {
+        // Single player bypasses the checks entirely
+        setScreen('playing');
+        return;
+      }
+
+      if (net.isHost) {
+        const nextVoteState = !p1VotedRestart;
+        setP1VotedRestart(nextVoteState);
+        net.channel.send('player_voted_restart', { voted: nextVoteState });
+      } else {
+        const nextVoteState = !p2VotedRestart;
+        setP2VotedRestart(nextVoteState);
+        net.channel.send('player_voted_restart', { voted: nextVoteState });
+      }
+    };
+  }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
