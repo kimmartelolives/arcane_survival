@@ -12,7 +12,7 @@ export default function App() {
   const [coop, setCoop] = useState({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
   const [wizardName, setWizardName] = useState('Wizard');
   const [toast, setToast] = useState({ message: '', isError: false });
-  const [levelUpOptions, setLevelUpOptions] = useState([]);
+  const [levelUpOptions, setLevelUpOptions] = useState(['Vitality', 'Arcane Might', 'Rapid Fire']); // Default pool array
 
   const hudRef = useRef({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
   
@@ -41,18 +41,17 @@ export default function App() {
 
   const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
 
-  // FIXED: Ang function na ito ngayon ay nagpapadala ng choice sa Host kung Guest ang pumili
   const handleSelectUpgrade = (choice) => {
+    console.log("👆 Selecting Upgrade Card Option:", choice);
     if (!netRef.current.isHost && netRef.current.channel) {
-      // Ipaalam sa Host ang napiling upgrade card
       netRef.current.channel.send('guest_levelup_choice', { choice });
     } else if (window.runUpgrade) {
-      // Kung Host, direktang ilapat local engine side
       window.runUpgrade(choice);
     }
     setScreen('playing');
   };
 
+  // Centralized Master Network Router - Handles instant option switches
   const routeNetworkMessage = (event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
@@ -69,6 +68,12 @@ export default function App() {
       setScreen('playing');
     }
 
+    // FIXED: Pwersahing i-update ang top-level React hook state array kapag inutusan ng Host server node
+    if (event === 'offer_levelup' && !netRef.current.isHost) {
+      setLevelUpOptions(payload.ups || ['Vitality', 'Arcane Might', 'Gain Multi-Shot']);
+      setScreen('levelup');
+    }
+
     if (netRef.current.onCanvasMsg) {
       netRef.current.onCanvasMsg(event, payload);
     }
@@ -83,6 +88,12 @@ export default function App() {
       if (netRef.current.channel) netRef.current.channel.close();
       netRef.current.channel = null;
       setCoop({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
+      
+      // SOLO RANDOMIZER POOL SEED
+      const pool = ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+      const shuffle = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
+      setLevelUpOptions(shuffle);
+      
       setScreen('playing');
     }
     else if (action === 'host-game') {
@@ -92,7 +103,7 @@ export default function App() {
       
       netRef.current.isHost = true;
       netRef.current.channel = sbRealtime(`coop-${code}`, routeNetworkMessage, () => {
-        console.log("Room successfully created:", code);
+        console.log("Room successfully created on network bridge cluster:", code);
       });
 
       setCoop({ isEnabled: true, isHost: true, channel: netRef.current.channel, roomCode: code, p2Name: 'Player 2', status: '' });
@@ -129,7 +140,13 @@ export default function App() {
         setScreen={setScreen}
         hudRef={hudRef}
         netRef={netRef}
-        onLevelUpOffer={(options) => { setLevelUpOptions(options); setScreen('levelup'); }}
+        onLevelUpOffer={(options) => { 
+          // FIXED: Pinatibay ang randomization generator array mapping bago ibukas ang viewport overlay panel
+          const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+          const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
+          setLevelUpOptions(uniqueChoices); 
+          setScreen('levelup'); 
+        }}
       />
 
       {screen === 'playing' && (
@@ -146,7 +163,7 @@ export default function App() {
         roomCode={coop.roomCode}
         p2Status={coop.status}
         isCoop={coop.isEnabled}
-        levelUpOptions={levelUpOptions}
+        levelUpOptions={levelUpOptions} // Guaranteed reactive parameter data values
         onSelectUpgrade={handleSelectUpgrade}
         onAction={handleAction}
       />
