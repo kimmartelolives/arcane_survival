@@ -508,7 +508,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [screen]);
 
-// FIXED: Case-insensitive fuzzy matching to prevent capitalization or spacing typos from breaking the upgrade system
   window.runUpgrade = (choice) => {
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
