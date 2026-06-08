@@ -231,7 +231,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
-          const f = Math.min(1, dt * 14);
+          const f = Math.min(1, dt * 10);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
           eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * f;
@@ -241,12 +241,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.065; 
+            syncTimer = 0.04; 
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
               netRef.current.channel.send('state_sync', {
-                enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
+                enemies: eng.enemies.map(e => ({ x: Math.round(e. x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
