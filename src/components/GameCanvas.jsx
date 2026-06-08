@@ -67,9 +67,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        if (payload.p1 && eng.p2) {
-          eng.p2Target = payload.p1; 
-        }
+        // Siguraduhing may laging paglalagyan ng data ang tracking vectors
+        if (payload.p1) eng.p2Target = payload.p1;
         if (payload.p2 && eng.p) {
           eng.p.hp = payload.p2.hp;
           eng.p.maxHp = payload.p2.maxHp;
@@ -104,16 +103,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      if (netRef.current.channel) {
-        eng.p = { x: isHost ? W / 3 : W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-        eng.p2 = { x: isHost ? W * 2 / 3 : W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-      } else {
-        eng.p = { x: W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
-        eng.p2 = null;
-      }
+      // I-initialize ang parehong player structures anuman ang role upang maiwasan ang null reference breaks
+      eng.p = { x: isHost ? W / 3 : W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+      eng.p2 = { x: isHost ? W * 2 / 3 : W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
 
-      eng.p2Target = { x: eng.p2 ? eng.p2.x : 600, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
-      eng.p2Render = { x: eng.p2 ? eng.p2.x : 600, y: H / 2, hp: 100, maxHp: 100, inv: 0 };
+      eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
+      eng.p2Render = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0 };
     }
   }, [screen]);
 
@@ -146,7 +141,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
 
-      // FIXED: Defined isHost at the top level of loop block so render functions can access it safely
       const isHost = netRef.current.isHost;
       const isCoop = Boolean(netRef.current.channel);
 
@@ -312,7 +306,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
             if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
               eng.p2.hp -= e.dmg; eng.p2.inv = 0.7;
-              if (eng.p2.hp <= 0) { eng.p2.dead = true; if(!eng.p || eng.p.dead) { netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
+              if (eng.p2.hp <= 0) {
+                eng.p2.dead = true; 
+                if(!eng.p || eng.p.dead) { 
+                  netRef.current.channel.send('game_over',{}); 
+                  setScreen('gameover'); 
+                } 
+              }
             }
           }
 
@@ -418,8 +418,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const hostColor = '#8b5cf6'; // Violet
       const guestColor = '#f97316'; // Orange
 
-      // Draw Companion Avatar (P2)
-      if (eng.p2 && !eng.p2.dead) {
+      // FIXED DRAWING CONDITION: Palaging i-render ang Companion Player (P2) basta may hawak itong valid numbers
+      if (eng.p2 && (isHost || eng.p2Target)) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
         const px = eng.p2.x; const py = eng.p2.y; const pr = eng.p2.r;
@@ -434,7 +434,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      // Draw Local Controlled Avatar (P)
+      // Draw Local Controlled Character (P)
       if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
