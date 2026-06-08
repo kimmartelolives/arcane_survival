@@ -466,8 +466,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
 
-      const p2X = isCoop ? ( !isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x ) : (W*2/3);
-      const p2Y = isCoop ? ( !isHost ? (eng.p2 ? eng.p2.y : H/2)   : eng.p2Render.y ) : (H/2);
+      const p2X = isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
+      const p2Y = isHost ? (eng.p2 ? eng.p2.y : H/2) : eng.p2Render.y;
 
       // Draw Player 1 (Violet)
       if (eng.p && !eng.p.dead) {
