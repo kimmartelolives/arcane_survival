@@ -45,7 +45,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // 📡 Network Stream Receiver - Optimized Routing to Eliminate Rubberbanding
+  // 📡 Central Canvas Interceptor Pipeline
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -55,7 +55,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!eng) return;
       
       if (event === 'state_sync' && !net.isHost) {
-        // Direct object reconstruction mapping to clear serialization issues
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
           dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0
@@ -70,11 +69,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
 
-        // Feed position targets safely for linear interpolation frames
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
 
-        // FIXED: Sync metrics and metadata structures ONLY. Do not forcibly override active player input axis coordinates.
         if (payload.p1 && eng.p) {
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
@@ -123,7 +120,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       
-      // Fixed structural placement layout maps
       eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
       eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
 
@@ -159,6 +155,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     let lastTime = performance.now();
     let animId;
     let syncTimer = 0;
+
+    // Helper utility inside rendering tree to generate clean randomized card offerings pools
+    const rollUpgradeOptions = () => {
+      const fullPool = ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+      return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
+    };
 
     const loop = (ts) => {
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
@@ -202,7 +204,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        // FIXED: Client-side Prediction Rules. Allow instant movement rendering loop execution profiles.
         if (isHost) {
           if (eng.p && !eng.p.dead) {
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
@@ -215,12 +216,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
-          // Player 2 controls their vector independently without waiting for host network updates
           if (eng.p2 && !eng.p2.dead) {
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
           }
-          // Compute smooth linear interpolation for the companion node (Host)
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
@@ -228,7 +227,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * f;
         }
 
-        // Optimized network telemetry frames (15Hz downsampled buffer stream limit)
         if (isCoop && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
@@ -365,13 +363,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 eng.p2.xp += g.xp;
                 if (eng.p2.xp >= eng.p2.xpNext) {
                   eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                  netRef.current.channel.send('offer_levelup', { ups: ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'] });
+                  // FIXED: Fired dynamic randomized array layout maps to client
+                  netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
                 }
               } else if (eng.p) {
                 eng.p.xp += g.xp;
                 if (eng.p.xp >= eng.p.xpNext) {
                   eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                  onLevelUpOffer(['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot']); 
+                  // FIXED: Triggers dynamically randomized options instead of hardcoded slices
+                  onLevelUpOffer(rollUpgradeOptions()); 
                   setScreen('levelup');
                 }
               }
@@ -441,7 +441,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
         if (e.hp < e.maxHp) {
           const bw = e.r * 2.5; const bh = 4; const bx = e.x - bw / 2; const by = e.y - e.r - 10;
-          ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(bx, by, bw, bh);
+          ctx.fillRect(bx, by, bw, bh);
           ctx.fillStyle = e.boss ? '#fbbf24' : '#ef4444'; ctx.fillRect(bx, by, bw * (e.hp / e.maxHp), bh);
         }
         ctx.restore();
@@ -451,11 +451,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
-      // Drawing bounds configurations
       const p1Color = '#8b5cf6'; 
       const p2Color = '#f97316'; 
 
-      // FIXED RENDERING LOGIC: Render using local positional updates for local entities, and render companion smooth vectors
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
       const p2X = !isHost ? (eng.p2 ? eng.p2.x : W*2/3) : eng.p2Render.x;
@@ -550,6 +548,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         {/* HUD Overlay Layer */}
         {(screen === 'playing' || screen === 'levelup') && (
           <div className="hud-layer">
+            <div id="ping-display" className="hud-ping-overlay">PING: --ms</div>
+            
             <div className="hud-pause-hint">[ESC] PAUSE</div>
 
             <div className="hud-score-module">

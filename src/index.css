@@ -347,3 +347,22 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
   margin-top: 10px;
   text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
 }
+
+/* 🔮 ARCADE HUD MULTIPLAYER LATENCY OVERLAY */
+.hud-ping-overlay {
+  position: absolute;
+  bottom: 75px; /* Itataas natin nang konti para nasa itaas siya ng HP/XP bars */
+  left: 15px;    /* Inilipat sa KALIWA para hindi harangan ang Score sa kanan */
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: bold;
+  color: #34d399; /* Neon Emerald Green */
+  text-shadow: 0 0 10px rgba(52, 211, 153, 0.4), 0 2px 4px #000;
+  background: rgba(10, 6, 30, 0.65);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  letter-spacing: 0.05em;
+  z-index: 20;
+  pointer-events: none;
+}
