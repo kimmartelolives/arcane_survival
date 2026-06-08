@@ -166,14 +166,22 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
   z-index: 10;
 }
 
+/* ⌨️ PAUSE BUTTON HINT ACCENT */
 .hud-pause-hint {
   position: absolute;
-  top: 24px;
-  left: 30px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: rgba(167, 139, 250, 0.3);
-  letter-spacing: 1px;
+  bottom: 50px;    /* Inilagay sa ibaba katabi ng general control hints */
+  right: 15px;     /* Aligned parallel sa Score layout grid sa kanan */
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8rem;
+  color: #a78bfa;   /* Light Arcane Purple */
+  text-shadow: 0 0 8px rgba(167, 139, 250, 0.4), 0 2px 4px #000;
+  background: rgba(10, 6, 30, 0.5);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(167, 139, 250, 0.15);
+  letter-spacing: 0.05em;
+  z-index: 20;
+  pointer-events: none;
 }
 
 .hud-score-module {
@@ -347,12 +355,11 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
   margin-top: 10px;
   text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
 }
-
 /* 🔮 ARCADE HUD MULTIPLAYER LATENCY OVERLAY */
 .hud-ping-overlay {
   position: absolute;
-  bottom: 75px; /* Itataas natin nang konti para nasa itaas siya ng HP/XP bars */
-  left: 15px;    /* Inilipat sa KALIWA para hindi harangan ang Score sa kanan */
+  top: 15px;      /* Anchored securely to the top edge */
+  left: 15px;     /* Aligned parallel with the left margin boundary */
   font-family: 'Share Tech Mono', monospace;
   font-size: 0.85rem;
   font-weight: bold;

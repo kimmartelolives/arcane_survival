@@ -41,8 +41,7 @@ export default function App() {
 
   const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
 
-  const handleSelectUpgrade = (choice) => {
-    console.log("👆 Selecting Upgrade Card Option:", choice);
+const handleSelectUpgrade = (choice) => {
     if (!netRef.current.isHost && netRef.current.channel) {
       netRef.current.channel.send('guest_levelup_choice', { choice });
     } else if (window.runUpgrade) {
@@ -51,7 +50,7 @@ export default function App() {
     setScreen('playing');
   };
 
-  // Centralized Master Network Router - Handles instant option switches
+// Centralized Master Network Router
   const routeNetworkMessage = (event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
@@ -68,10 +67,17 @@ export default function App() {
       setScreen('playing');
     }
 
-    // FIXED: Pwersahing i-update ang top-level React hook state array kapag inutusan ng Host server node
     if (event === 'offer_levelup' && !netRef.current.isHost) {
       setLevelUpOptions(payload.ups || ['Vitality', 'Arcane Might', 'Gain Multi-Shot']);
       setScreen('levelup');
+    }
+
+    // ⏸ FIXED: Saluhin ang network pause/resume commands sa Guest POV
+    if (event === 'game_paused') {
+      setScreen('pause');
+    }
+    if (event === 'game_resumed') {
+      setScreen('playing');
     }
 
     if (netRef.current.onCanvasMsg) {
