@@ -409,3 +409,91 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
   margin: 0;
   font-size: 14px;
 }
+
+/* Ultimate Skill Placement & UI Layout */
+  .ult-skill-container {
+    position: relative;
+    display: inline-block;
+    margin-left: 16px;
+    vertical-align: middle;
+  }
+  .ult-skill-circle {
+    position: relative;
+    width: 68px; /* Mas malaki nang kaunti sa regular slots mo */
+    height: 68px;
+    border-radius: 50%;
+    border: 3px solid #bf55ec;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    outline: none;
+    box-shadow: 0 0 15px rgba(191, 85, 236, 0.5);
+    background: linear-gradient(135deg, #2e0854 0%, #120224 100%);
+    transition: transform 0.1s ease, box-shadow 0.2s ease;
+  }
+  .ult-skill-circle:hover:not(:disabled) {
+    transform: scale(1.06);
+    box-shadow: 0 0 25px rgba(191, 85, 236, 0.85);
+    border-color: #df9eff;
+  }
+  .ult-skill-circle:disabled {
+    background: #111116;
+    border-color: #4b5563;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .ult-cooldown-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    z-index: 2;
+    transform: rotate(-90deg);
+  }
+  .ult-icon-graphic {
+    font-size: 24px;
+    z-index: 1;
+    user-select: none;
+  }
+  .ult-cooldown-text {
+    position: absolute;
+    z-index: 3;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 900;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.9);
+  }
+  .ult-ring-glow {
+    position: absolute;
+    top: -1px; left: -1px; right: -1px; bottom: -1px;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 4;
+  }
+  /* Tooltip Box Layout */
+  .ult-tooltip {
+    position: absolute;
+    bottom: 85px;
+    right: 0px;
+    width: 310px;
+    background: rgba(10, 6, 18, 0.96);
+    border: 2px solid #bf55ec;
+    border-radius: 8px;
+    padding: 12px;
+    color: #fff;
+    font-family: sans-serif;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.85);
+    z-index: 9999;
+    text-align: left;
+    pointer-events: none;
+  }
+  .ult-tooltip h3 { margin: 0; font-size: 16px; color: #f0c27b; }
+  .ult-tooltip p.sub { margin: 2px 0 6px 0; font-size: 10px; color: #a29bfe; text-transform: uppercase; }
+  .ult-tooltip p.desc { font-size: 11px; color: #ccc; line-height: 1.4; margin-bottom: 8px; font-style: italic; }
+  .ult-debuff-list { margin: 0; padding-left: 14px; font-size: 11px; color: #b4b4c0; }
+  .ult-debuff-list strong { color: #ff7675; }

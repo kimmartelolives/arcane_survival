@@ -241,10 +241,11 @@ const focusStyles = `
     left: 50%;
     transform: translateX(-50%);
     display: flex;
+    align-items: center;
     gap: 10px;
     background: rgba(11, 8, 38, 0.9);
     border: 2px solid #8b5cf6;
-    padding: 6px 12px;
+    padding: 6px 14px;
     border-radius: 8px;
     box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
     z-index: 55;
@@ -284,9 +285,45 @@ const focusStyles = `
     opacity: 0.4;
     cursor: not-allowed;
   }
+  
+  /* --- ULTIMATE SKILL SLOT OVERLAY DESIGN --- */
+  .mmo-hotbar-ult-slot {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    background: radial-gradient(circle, #2e1065 0%, #09051c 100%);
+    border: 3px solid #d946ef;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 0 20px rgba(217, 70, 239, 0.6), inset 0 0 10px rgba(217, 70, 239, 0.4);
+    margin-left: 6px;
+  }
+  .mmo-hotbar-ult-slot:hover:not(.not-learned) {
+    border-color: #f472b6;
+    box-shadow: 0 0 32px rgba(244, 114, 182, 0.9), inset 0 0 14px rgba(244, 114, 182, 0.6);
+    transform: scale(1.08) translateY(-4px);
+  }
+  .mmo-hotbar-ult-slot.not-learned {
+    border-color: #4b5563;
+    background: #111827;
+    box-shadow: none;
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  
   .hotbar-icon {
     font-size: 1.3rem;
     margin-bottom: -1px;
+  }
+  .mmo-hotbar-ult-slot .hotbar-icon {
+    font-size: 1.7rem;
+    text-shadow: 0 0 10px rgba(217, 70, 239, 0.8);
   }
   .hotbar-name {
     font-size: 0.52rem;
@@ -297,6 +334,12 @@ const focusStyles = `
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .mmo-hotbar-ult-slot .hotbar-name {
+    font-size: 0.48rem;
+    color: #f472b6;
+    font-weight: bold;
+    max-width: 64px;
+  }
   .hotbar-key-bind {
     position: absolute;
     top: 2px;
@@ -304,6 +347,12 @@ const focusStyles = `
     font-size: 0.55rem;
     color: #fbbf24;
     font-weight: bold;
+  }
+  .mmo-hotbar-ult-slot .hotbar-key-bind {
+    top: 4px;
+    left: 14px;
+    font-size: 0.65rem;
+    color: #a78bfa;
   }
   .hotbar-status-dot {
     position: absolute;
@@ -321,7 +370,7 @@ const focusStyles = `
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.72);
+    background: rgba(0, 0, 0, 0.76);
     border-radius: 4px;
     display: flex;
     align-items: center;
@@ -330,6 +379,12 @@ const focusStyles = `
     font-size: 1.1rem;
     font-weight: bold;
     pointer-events: none;
+  }
+  .mmo-hotbar-ult-slot .hotbar-cooldown-overlay {
+    border-radius: 50%;
+    font-size: 1.3rem;
+    color: #fef08a;
+    text-shadow: 0 0 8px rgba(234, 179, 8, 0.9);
   }
 `;
 
@@ -364,16 +419,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     bodyCutter: { learned: false, enabled: true },
     shootingStar: { learned: false, enabled: true, cd: 0 },
     cubeBash: { learned: false, enabled: true, cd: 0 },
-    vacuumSlash: { learned: false, enabled: true, cd: 0 }
+    vacuumSlash: { learned: false, enabled: true, cd: 0 },
+    arcaneCollapse: { learned: false, enabled: true, cd: 0 }
   });
 
   const [skillsState, setSkillsState] = useState(initSkills());
 
   const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
-    gameStarted: false, 
+    gameStarted: false, screenShake: 0,
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
-    slashes: [], cubeBashes: [], stars: [],
+    slashes: [], cubeBashes: [], stars: [], collapses: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
@@ -481,7 +537,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
           dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0,
-          stunnedTime: e.stunnedTime || 0, stigmaTime: e.stigmaTime || 0
+          stunnedTime: e.stunnedTime || 0, stigmaTime: e.stigmaTime || 0,
+          temporalSlowTime: e.temporalSlowTime || 0, arcaneBurnTime: e.arcaneBurnTime || 0,
+          voidExhaustTime: e.voidExhaustTime || 0, instabTime: e.instabTime || 0
         }));
 
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
@@ -541,6 +599,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           window.learnSkillTreeTech(payload.skillId, 'p2');
         }
       }
+
+      if (event === 'guest_cast_ultimate' && net.isHost) {
+        if (window.castArcaneCollapseUltimate) {
+          window.castArcaneCollapseUltimate('p2');
+        }
+      }
       
       if (event === 'offer_levelup' && !net.isHost) {
         onLevelUpOffer(payload.ups);
@@ -583,12 +647,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
   useEffect(() => {
     const eng = engineRef.current;
+
+    if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
+      return;
+    }
+
     if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
       
       setP1VotedRestart(false);
       setP2VotedRestart(false);
       setPlayerLevel(1);
-      setIsTreeOpen(true); // reset tree panel visible on new matches
+      setIsTreeOpen(true); 
       setSkillsState(initSkills());
 
       if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
@@ -597,9 +666,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
       const isCoop = Boolean(netRef.current && netRef.current.channel);
       
-      eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
+      eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22; eng.screenShake = 0;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
-      eng.slashes = []; eng.cubeBashes = []; eng.stars = [];
+      eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = [];
       eng.gameStarted = false; 
       setHasStarted(false);     
       
@@ -656,7 +725,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!target || target.dead) return;
 
       const baseSkills = ['berserk', 'haste', 'fortify', 'shield'];
-      const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'];
+      const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash', 'arcaneCollapse'];
       
       if (baseSkills.includes(skillId) && target.level < 5) return; 
       if (attackSkills.includes(skillId) && target.level < 10) return;
@@ -679,15 +748,88 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (['shootingStar', 'cubeBash', 'vacuumSlash'].includes(skillId)) {
           target.skills[skillId].cd = 0;
         }
+        if (skillId === 'arcaneCollapse') {
+          target.skills[skillId].cd = 0;
+        }
       } else {
         // Toggle on/off state logic
-        target.skills[skillId].enabled = !target.skills[skillId].enabled;
+        if (skillId !== 'arcaneCollapse') {
+          target.skills[skillId].enabled = !target.skills[skillId].enabled;
+        }
       }
 
       if (isCoop && !forcedTarget) {
         if (!netRef.current.isHost) {
           netRef.current.channel.send('guest_learned_skill', { skillId });
         }
+      }
+
+      if (target === ((isCoop && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+        setSkillsState({ ...target.skills });
+      }
+    };
+
+    // Global manual trigger system for Arcane Collapse Ultimate
+    window.castArcaneCollapseUltimate = (forcedTarget = null) => {
+      const eng = engineRef.current;
+      if (!eng) return;
+
+      const isCoop = Boolean(netRef.current && netRef.current.channel);
+      let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+      if (forcedTarget === 'p2') target = eng.p2;
+      if (forcedTarget === 'p1') target = eng.p;
+
+      if (!target || target.dead || target.level < 10) return;
+      if (!target.skills) target.skills = initSkills();
+      
+      // Auto learn if not explicitly unlocked
+      if (!target.skills.arcaneCollapse?.learned) {
+        target.skills.arcaneCollapse = { learned: true, enabled: true, cd: 0 };
+      }
+
+      if (target.skills.arcaneCollapse.cd > 0) return;
+
+      // Deduct CD metrics
+      target.skills.arcaneCollapse.cd = 30.0;
+      eng.screenShake = 0.8; // Dramatic shake
+
+      // Generate localized crash data
+      if (!eng.collapses) eng.collapses = [];
+      eng.collapses.push({
+        x: target.x, y: target.y,
+        radius: 10, maxRadius: 520,
+        life: 2.2, pulseTimer: 0, pulseCount: 0
+      });
+
+      // Distribute splash damage & deep tier parameters across all alive targets on screen
+      for (const enemy of eng.enemies) {
+        enemy.hp -= 85; 
+        enemy.flash = 0.35;
+        
+        // Stack the 7 core control debuff statuses
+        enemy.stunnedTime = 4.0;       // Time Lock
+        enemy.temporalSlowTime = 6.0;  // Temporal Slowdown / Moving speed reduction
+        enemy.arcaneBurnTime = 6.0;    // Arcane Burn damage-over-time
+        enemy.voidExhaustTime = 6.0;   // Void Exhaustion / Lowers overall damage output
+        enemy.instabTime = 6.0;        // Elemental Instability / Increased skill damage taken
+
+        if (enemy.hp <= 0) enemy.deadTrigger = true;
+      }
+
+      // Disperse flashy cosmic dust particles
+      for (let k = 0; k < 35; k++) {
+        const pa = Math.random() * Math.PI * 2;
+        const ps = Math.random() * 220 + 80;
+        eng.particles.push({
+          x: target.x, y: target.y,
+          vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+          color: Math.random() < 0.5 ? '#d946ef' : '#a855f7',
+          life: 0.6, ml: 0.6, r: Math.random() * 3 + 1.5
+        });
+      }
+
+      if (isCoop && !forcedTarget && !netRef.current.isHost) {
+        netRef.current.channel.send('guest_cast_ultimate', {});
       }
 
       if (target === ((isCoop && !netRef.current.isHost) ? eng.p2 : eng.p)) {
@@ -771,6 +913,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
+        if (eng.screenShake > 0) {
+          eng.screenShake -= dt;
+        }
+
         if (eng.gameStarted) {
           eng.waveT += dt;
           eng.spawnT += dt;
@@ -786,14 +932,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
-              eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0 });
+              eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
             }
             if (eng.waveT >= eng.waveLen) {
               eng.waveT = 0; eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
               if (eng.wave % 3 === 0) {
                 const t = ET[3];
-                eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0, stunnedTime: 0, stigmaTime: 0 });
+                eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
               }
             }
           }
@@ -803,6 +949,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (!playerObj || playerObj.dead) return;
           if (!playerObj.skills) {
             playerObj.skills = initSkills();
+          }
+
+          // Arcane Collapse Cooldown Decay
+          if (playerObj.skills.arcaneCollapse?.cd > 0) {
+            playerObj.skills.arcaneCollapse.cd -= dt;
           }
 
           // Berserk Aura
@@ -970,7 +1121,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             } else {
               netRef.current.channel.send('state_sync', {
                 gameStarted: eng.gameStarted, 
-                enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash, stunnedTime: e.stunnedTime, stigmaTime: e.stigmaTime })),
+                enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash, stunnedTime: e.stunnedTime, stigmaTime: e.stigmaTime, temporalSlowTime: e.temporalSlowTime, arcaneBurnTime: e.arcaneBurnTime, voidExhaustTime: e.voidExhaustTime, instabTime: e.instabTime })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
@@ -1001,7 +1152,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 28) {
                 if (!sl.hits.has(enemy)) {
                   sl.hits.add(enemy);
-                  enemy.hp -= 42; 
+                  
+                  let baseSkillDmg = 42;
+                  if (enemy.instabTime > 0) baseSkillDmg *= 1.5; // Elemental Instability scaling
+                  
+                  enemy.hp -= baseSkillDmg; 
                   enemy.flash = 0.15;
                   if (enemy.hp <= 0) {
                     enemy.deadTrigger = true;
@@ -1021,7 +1176,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               // Explode area trigger splash
               for (const enemy of eng.enemies) {
                 if (Math.hypot(enemy.x - star.x, enemy.y - star.targetY) <= star.radius) {
-                  enemy.hp -= 70;
+                  let splashDmg = 70;
+                  if (enemy.instabTime > 0) splashDmg *= 1.5;
+
+                  enemy.hp -= splashDmg;
                   enemy.flash = 0.2;
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
@@ -1042,6 +1200,35 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             cb.radius += cb.speed * dt;
             if (cb.radius >= cb.maxRadius) {
               eng.cubeBashes.splice(cbIdx, 1);
+            }
+          }
+        }
+
+        // Processing Arcane Collapse Timeline Pulses
+        if (eng.collapses) {
+          for (let cIdx = eng.collapses.length - 1; cIdx >= 0; cIdx--) {
+            const col = eng.collapses[cIdx];
+            col.life -= dt;
+            col.pulseTimer += dt;
+            col.radius += 360 * dt;
+
+            // Generate repeated shockwave cycles
+            if (col.pulseTimer >= 0.5 && col.pulseCount < 3) {
+              col.pulseTimer = 0;
+              col.pulseCount++;
+              eng.screenShake = 0.4;
+
+              for (const enemy of eng.enemies) {
+                let colPulseDmg = 50;
+                if (enemy.instabTime > 0) colPulseDmg *= 1.5;
+                enemy.hp -= colPulseDmg;
+                enemy.flash = 0.25;
+                if (enemy.hp <= 0) enemy.deadTrigger = true;
+              }
+            }
+
+            if (col.life <= 0) {
+              eng.collapses.splice(cIdx, 1);
             }
           }
         }
@@ -1103,7 +1290,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 const e = eng.enemies[j];
                 if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
-                  const calculatedDmg = isBerserkActive ? Math.ceil(eng.boltDmg * 1.5) : eng.boltDmg;
+                  let calculatedDmg = isBerserkActive ? Math.ceil(eng.boltDmg * 1.5) : eng.boltDmg;
+
+                  if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
                   e.hp -= calculatedDmg; e.flash = 0.1;
                   
@@ -1142,6 +1331,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 if (e.hp <= 0) e.deadTrigger = true;
               }
 
+              // Arcane Collapse Debuff Decay / Logic
+              if (e.temporalSlowTime > 0) e.temporalSlowTime -= dt;
+              if (e.voidExhaustTime > 0) e.voidExhaustTime -= dt;
+              if (e.instabTime > 0) e.instabTime -= dt;
+              if (e.arcaneBurnTime > 0) {
+                e.arcaneBurnTime -= dt;
+                e.hp -= 45 * dt; // Heavy cosmic collapse damage ticks
+                if (Math.random() < 0.22) {
+                  eng.particles.push({ x: e.x + (Math.random()-0.5)*16, y: e.y + (Math.random()-0.5)*16, vx: (Math.random()-0.5)*15, vy: -25, color: '#d946ef', life: 0.3, ml: 0.3, r: 2 });
+                }
+                if (e.hp <= 0) e.deadTrigger = true;
+              }
+
               // Post-projectile verification state updates
               if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
@@ -1162,7 +1364,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 }
                 if (tx) {
                   const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
-                  e.x += Math.cos(ea) * e.speed * dt; e.y += Math.sin(ea) * e.speed * dt;
+                  let runSpeed = e.speed;
+                  
+                  // Temporal Slowdown / Energy Collapse modifier
+                  if (e.temporalSlowTime > 0) runSpeed *= 0.30; 
+
+                  e.x += Math.cos(ea) * runSpeed * dt; e.y += Math.sin(ea) * runSpeed * dt;
                 }
               }
               
@@ -1170,6 +1377,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
                 let damageTaken = e.dmg;
+                if (e.voidExhaustTime > 0) damageTaken *= 0.5; // Void Exhaustion reduction
+
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
                   damageTaken = 0; 
                 } else if (eng.p.skills?.fortify?.learned && eng.p.skills?.fortify?.enabled !== false) {
@@ -1181,6 +1390,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               }
               if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
                 let damageTakenp2 = e.dmg;
+                if (e.voidExhaustTime > 0) damageTakenp2 *= 0.5;
+
                 if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
                   damageTakenp2 = 0;
                 } else if (eng.p2.skills?.fortify?.learned && eng.p2.skills?.fortify?.enabled !== false) {
@@ -1279,6 +1490,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     worker.postMessage('start');
 
     const renderLoop = () => {
+      ctx.save();
+      // Apply procedural render pipeline screenshake transformations
+      if (eng.screenShake > 0) {
+        const dx = (Math.random() - 0.5) * 9;
+        const dy = (Math.random() - 0.5) * 9;
+        ctx.translate(dx, dy);
+      }
+
       ctx.fillStyle = '#030111'; ctx.fillRect(0, 0, W, H);
       if (eng.floorPat) { ctx.fillStyle = eng.floorPat; ctx.fillRect(0, 0, W, H); }
 
@@ -1348,6 +1567,29 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
+      // Drawing custom Arcane Collapse temporal matrix rings
+      if (eng.collapses) {
+        for (const col of eng.collapses) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(217, 70, 239, ' + Math.max(0, col.life / 2.2) + ')';
+          ctx.lineWidth = 5;
+          ctx.shadowBlur = 24;
+          ctx.shadowColor = '#d946ef';
+          
+          // Draw radiating geometric matrix gears
+          ctx.beginPath();
+          ctx.arc(col.x, col.y, col.radius % col.maxRadius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = 'rgba(168, 85, 247, ' + Math.max(0, col.life / 3) + ')';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(col.x, col.y, (col.radius * 0.6) % col.maxRadius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       for (const e of eng.enemies) {
         ctx.save(); ctx.fillStyle = e.flash > 0 ? '#fff' : e.color; ctx.shadowColor = e.flash > 0 ? '#fff' : e.glow; ctx.shadowBlur = e.boss ? 22 : 12;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
@@ -1357,6 +1599,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 2;
           ctx.strokeRect(e.x - e.r - 2, e.y - e.r - 2, (e.r * 2) + 4, (e.r * 2) + 4);
+        }
+
+        // Chrono containment overlay for Arcane Collapse slowdown
+        if (e.temporalSlowTime > 0) {
+          ctx.strokeStyle = '#d946ef';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, e.r + 4, 0, Math.PI * 2);
+          ctx.stroke();
         }
 
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
@@ -1435,6 +1686,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
+      ctx.restore(); // Restore shaking transform state safely
       renderAnimId = requestAnimationFrame(renderLoop);
     };
     renderAnimId = requestAnimationFrame(renderLoop);
@@ -1453,6 +1705,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (e.key === '2') window.learnSkillTreeTech('shootingStar');
         if (e.key === '3') window.learnSkillTreeTech('cubeBash');
         if (e.key === '4') window.learnSkillTreeTech('vacuumSlash');
+        if (e.key === '5') window.castArcaneCollapseUltimate();
       }
     };
     const up = (e) => { eng.keys[e.key] = false; };
@@ -1606,6 +1859,20 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </>
               )}
             </div>
+
+            {/* --- ARCANE COLLAPSE ULTIMATE (SLIGHT BIG CIRCLE ON THE RIGHT) --- */}
+            <div 
+              className="mmo-hotbar-ult-slot"
+              onClick={() => window.castArcaneCollapseUltimate()}
+              title="Arcane Collapse: Judgment of the Wizard Council"
+            >
+              <span className="hotbar-key-bind">5</span>
+              <span className="hotbar-icon">🌌</span>
+              <span className="hotbar-name">A.Collapse</span>
+              {skillsState.arcaneCollapse?.cd > 0 && (
+                <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneCollapse.cd)}s</div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1724,7 +1991,20 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   <span>🌀 Vacuum Slash {skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.vacuumSlash?.learned && <span className="skill-cd-text">AUTO</span>}
                 </button>
-                <div className="skill-node-desc">Powerful attack by slashing the air generating massive force to damage the enemy[cite: 3].</div>
+                <div className="skill-node-desc">Powerful attack by slashing the air generating massive force to damage the enemy.</div>
+
+                {/* Arcane Collapse Skill Tree Info Node */}
+                <button 
+                  className="skill-row-btn learned"
+                  style={{ borderGradient: 'linear-gradient(to right, #d946ef, #8b5cf6)' }}
+                  onClick={() => window.castArcaneCollapseUltimate()}
+                >
+                  <span>🌌 Arcane Collapse [Press 5]</span>
+                  <span className="skill-cd-text">30s CD</span>
+                </button>
+                <div className="skill-node-desc" style={{ borderColor: '#d946ef' }}>
+                  Shatters reality! Casts Time Lock (4s freeze), Temporal Slow, Arcane Burn DoT, Void Exhaustion, and 50% extra skill damage vulnerability onto all targets.
+                </div>
               </>
             )}
           </div>
