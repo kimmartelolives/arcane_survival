@@ -197,7 +197,7 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
 
 .btn-arcane {
   position: relative;
-  background: linear-gradient(135s, var(--bg-surface), rgba(139, 92, 246, 0.1));
+  background: linear-gradient(135deg, var(--bg-surface), rgba(139, 92, 246, 0.1));
   border: 1px solid var(--arcane-purple);
   color: #fff;
   font-family: 'Cinzel', serif;
@@ -560,3 +560,41 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
   .ult-tooltip p.desc { font-size: 11px; color: #ccc; line-height: 1.4; margin-bottom: 8px; font-style: italic; }
   .ult-debuff-list { margin: 0; padding-left: 14px; font-size: 11px; color: #b4b4c0; }
   .ult-debuff-list strong { color: #ff7675; }
+
+/* ==========================================================================
+   🔮 GLOBAL UNIFORM ARCANE SCROLLBAR STYLES (Added Seamlessly)
+   ========================================================================== */
+
+/* Gumagana sa lahat ng scrollable div tulad ng Skills container, Chat, at Leaderboard */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* Ang Track (Background ng dinadaanan ng scroll handle) */
+::-webkit-scrollbar-track {
+  background: radial-gradient(circle, #0e071e 0%, var(--bg-main) 100%) !important;
+  border-left: 1px dashed rgba(251, 191, 36, 0.15) !important; /* Gintong runic marker line */
+  border-radius: 4px;
+}
+
+/* Ang Thumb (Ang makalumang tanso/gold bar na hinihila) */
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--gold-primary) 0%, var(--gold-dark) 100%) !important;
+  border: 2px solid #060413 !important; /* Space separator laban sa track background */
+  border-radius: 10px !important;
+  box-shadow: 0 0 6px var(--gold-glow) !important;
+}
+
+/* Kapag tinapatan ng mouse o hinawakan ng player habang pumipili ng skills o tumitingin sa logs */
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #fef08a 0%, var(--gold-primary) 100%) !important; /* Celestial Bright Gold Glow */
+  box-shadow: 0 0 12px rgba(251, 191, 36, 0.8) !important;
+  cursor: pointer;
+}
+
+/* Firefox Engine Compatibility */
+html, * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--gold-primary) #060413;
+}
