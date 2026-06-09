@@ -50,7 +50,7 @@ export default function App() {
     setScreen('playing');
   };
 
-  const routeNetworkMessage = (event, payload) => {
+const routeNetworkMessage = (event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
       setTimeout(() => {
@@ -64,6 +64,18 @@ export default function App() {
     if (event === 'start_game') {
       setCoop(prev => ({ ...prev, p2Name: payload.p1Name }));
       setScreen('playing');
+    }
+
+// FIXED: I-intercept ang guest_exited at mag-fire ng native browser-wide event
+    if (event === 'guest_exited') {
+      setCoop(prev => ({ 
+        ...prev, 
+        p2Name: 'Disconnected', 
+        status: 'Player 2 has left the match.' 
+      }));
+      
+      // Mag-dispatch ng Custom Event para siguradong magigising ang GameCanvas POV
+      window.dispatchEvent(new CustomEvent('network_guest_exited_trigger'));
     }
 
     if (event === 'offer_levelup' && !netRef.current.isHost) {
@@ -161,10 +173,23 @@ export default function App() {
           setScreen('levelup'); 
         }}
       />
-
       {screen === 'playing' && (
         <>
-          <button id="btn-pause-exit" onClick={() => setScreen('menu')}>Exit</button>
+          {/* FIXED: Imbis na setScreen('menu'), tatawagin na nito ang global network cleanup router natin */}
+          <button 
+            id="btn-pause-exit" 
+            onClick={() => {
+              if (window.executeNetworkExitAction) {
+                window.executeNetworkExitAction();
+              } else {
+                // Fallback kung sakaling wala pa ang hook handler
+                setScreen('menu');
+              }
+            }}
+          >
+            Exit
+          </button>
+          
           {coop.isEnabled && <div id="coop-hud" className="active">⚔️ {wizardName} & {coop.p2Name}</div>}
         </>
       )}

@@ -496,6 +496,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [isStatsOpen, setIsStatsOpen] = useState(false); 
   const [playerLevel, setPlayerLevel] = useState(1);
   const [activeBuffsList, setActiveBuffsList] = useState([]);
+  const [guestExitedAlert, setGuestExitedAlert] = useState(false);
+
+  // NEW MULTIPLAYER STATES
+  const [hostExitedCountdown, setHostExitedCountdown] = useState(null);
+  const exitTimerRef = useRef(null);
   
   const initSkills = () => ({
     berserk: { learned: false, enabled: true, cd: 0, duration: 0 },
@@ -525,7 +530,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p2History: []
   });
 
-  useEffect(() => {
+    useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -535,9 +540,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       canvas.style.width = Math.round(W * s) + 'px';
       canvas.style.height = Math.round(H * s) + 'px';
     };
+
+    // FIXED: Makinig sa trigger mula sa App.jsx kapag nag-exit si Player 2
+    const handleGlobalGuestExit = () => {
+      console.log("🎯 GameCanvas caught the global guest exit event signal!");
+      const eng = engineRef.current;
+      if (eng) eng.p2 = null; // Burahin agad ang avatar/model ni Player 2 sa canvas loop
+      
+      setGuestExitedAlert(true); // Puwersahing lumabas ang pulang alert banner sa Host HUD
+      
+      // Pagkalipas ng 4 na segundo, kusa itong mawawala
+      setTimeout(() => {
+        setGuestExitedAlert(false);
+      }, 4000);
+    };
+
     window.addEventListener('resize', handleResize);
+    window.addEventListener('network_guest_exited_trigger', handleGlobalGuestExit);
+    
     handleResize();
-    return () => window.removeEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('network_guest_exited_trigger', handleGlobalGuestExit);
+    };
   }, []);
 
   const activateAudioKeepAlive = () => {
@@ -600,6 +626,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }));
   }, [p1VotedRestart, p2VotedRestart, hudRef]);
 
+  // NETWORK MESSAGES HANDLING
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -607,6 +634,41 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     net.onCanvasMsg = (event, payload) => {
       const eng = engineRef.current;
       if (!eng) return;
+
+      // FIXED: Sync Host Pause to Guest POV
+      if (event === 'host_paused' && !net.isHost) {
+        setScreen('pause');
+        return;
+      }
+
+      if (event === 'host_resumed' && !net.isHost) {
+        setScreen('playing');
+        return;
+      }
+
+      // FIXED: Host exited room handler (5 seconds auto-boot counter)
+      if (event === 'host_exited' && !net.isHost) {
+        let count = 5;
+        setHostExitedCountdown(count);
+        if (exitTimerRef.current) clearInterval(exitTimerRef.current);
+        exitTimerRef.current = setInterval(() => {
+          count -= 1;
+          if (count <= 0) {
+            clearInterval(exitTimerRef.current);
+            setHostExitedCountdown(null);
+            setScreen('menu');
+          } else {
+            setHostExitedCountdown(count);
+          }
+        }, 1000);
+        return;
+      }
+
+      // FIXED: Guest exited room handler (Remove assets, host can continue solo)
+      if (event === 'guest_exited' && net.isHost) {
+        eng.p2 = null;
+        return;
+      }
 
       if (event === 'state_sync' && !net.isHost) {
         if (payload.gameStarted !== undefined) {
@@ -617,8 +679,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (!eng.p) {
           eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
         }
-        if (!eng.p2) {
-          eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
+        
+        // Kung hindi pa umalis si Guest, i-sync ang assets niya
+        if (payload.p2 && eng.p2 !== null) {
+          if (!eng.p2) {
+            eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
+          }
+          eng.p2.hp = payload.p2.hp;
+          eng.p2.maxHp = payload.p2.maxHp;
+          eng.p2.dead = payload.p2.dead;
+          eng.p2.inv = payload.p2.inv ?? eng.p2.inv;
+          eng.p2.dmg = payload.p2.dmg ?? eng.p2.dmg;
+          eng.p2.shootRate = payload.p2.shootRate ?? eng.p2.shootRate;
+          eng.p2.chatBubble = payload.p2.chatBubble; 
+          eng.p2.level = payload.p2_level || eng.p2.level;
+          eng.p2.xp = payload.p2_xp || eng.p2.xp;
+          eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
+          if (payload.p2_skills) eng.p2.skills = payload.p2_skills;
+          if (payload.p2_potBuffs) eng.p2.potBuffs = payload.p2_potBuffs;
+          
+          const hts = payload.ts || Date.now();
+          eng.p2History.push({ t: hts, x: payload.p2.x, y: payload.p2.y });
+          const now = Date.now();
+          while (eng.p2History.length > 20) eng.p2History.shift();
+          eng.p2History = eng.p2History.filter(s => (now - s.t) < 2000);
         }
 
         eng.enemies = (payload.enemies || []).map(e => ({
@@ -649,37 +733,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p.dead = payload.p1.dead;
           eng.p.dmg = payload.p1.dmg ?? eng.p.dmg;
           eng.p.shootRate = payload.p1.shootRate ?? eng.p.shootRate;
-          
-          // Sync live coordinates parameters
           eng.p.x = payload.p1.x;
           eng.p.y = payload.p1.y;
-
-          // === FIXED: RECEIVED ACTIVE TEXT BUBBLE SYNC DATA FROM NETWORK payload ===
           eng.p.chatBubble = payload.p1.chatBubble;
 
           if (payload.p1_skills) eng.p.skills = payload.p1_skills;
           if (payload.p1_potBuffs) eng.p.potBuffs = payload.p1_potBuffs;
-        }
-
-        if (payload.p2 && eng.p2) {
-          eng.p2.hp = payload.p2.hp;
-          eng.p2.maxHp = payload.p2.maxHp;
-          eng.p2.dead = payload.p2.dead;
-          eng.p2.inv = payload.p2.inv ?? eng.p2.inv;
-          eng.p2.dmg = payload.p2.dmg ?? eng.p2.dmg;
-          eng.p2.shootRate = payload.p2.shootRate ?? eng.p2.shootRate;
-          eng.p2.chatBubble = payload.p2.chatBubble; // Sync player 2 bubble text map
-          eng.p2.level = payload.p2_level || eng.p2.level;
-          eng.p2.xp = payload.p2_xp || eng.p2.xp;
-          eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
-          if (payload.p2_skills) eng.p2.skills = payload.p2_skills;
-          if (payload.p2_potBuffs) eng.p2.potBuffs = payload.p2_potBuffs;
-          
-          const hts = payload.ts || Date.now();
-          eng.p2History.push({ t: hts, x: payload.p2.x, y: payload.p2.y });
-          const now = Date.now();
-          while (eng.p2History.length > 20) eng.p2History.shift();
-          eng.p2History = eng.p2History.filter(s => (now - s.t) < 2000);
         }
 
         if (eng.p2) {
@@ -693,27 +752,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       if (event === 'guest_levelup_choice' && net.isHost) {
-        if (window.runUpgrade) {
-          window.runUpgrade(payload.choice, 'p2');
-        }
+        if (window.runUpgrade) window.runUpgrade(payload.choice, 'p2');
       }
 
       if (event === 'guest_learned_skill' && net.isHost) {
-        if (window.learnSkillTreeTech) {
-          window.learnSkillTreeTech(payload.skillId, 'p2');
-        }
+        if (window.learnSkillTreeTech) window.learnSkillTreeTech(payload.skillId, 'p2');
       }
 
       if (event === 'guest_cast_ultimate' && net.isHost) {
-        if (window.castArcaneCollapseUltimate) {
-          window.castArcaneCollapseUltimate('p2');
-        }
+        if (window.castArcaneCollapseUltimate) window.castArcaneCollapseUltimate('p2');
       }
 
       if (event === 'guest_cast_instinct' && net.isHost) {
-        if (window.castArcaneInstinctUltimate) {
-          window.castArcaneInstinctUltimate('p2');
-        }
+        if (window.castArcaneInstinctUltimate) window.castArcaneInstinctUltimate('p2');
       }
       
       if (event === 'offer_levelup' && !net.isHost) {
@@ -726,11 +777,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       if (event === 'player_voted_restart') {
-        if (net.isHost) {
-          setP2VotedRestart(payload.voted);
-        } else {
-          setP1VotedRestart(payload.voted);
-        }
+        if (net.isHost) setP2VotedRestart(payload.voted);
+        else setP1VotedRestart(payload.voted);
       }
 
       if (event === 'restart_game') {
@@ -755,27 +803,28 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
+  // FIXED: Trigger reset only on initial loading or authentic full restart state (Hindi tuwing babalik galing pause menu)
   useEffect(() => {
     const eng = engineRef.current;
 
-    if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
-      return;
+    if (screen === 'playing') {
+      // Kung kasalukuyang tumatakbo ang makina, huwag burahin ang state vectors nito
+      if (eng.gameStarted && eng.p && !eng.p.dead) {
+        return;
+      }
     }
 
     if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
-      
       setP1VotedRestart(false);
       setP2VotedRestart(false);
       setPlayerLevel(1);
       setIsTreeOpen(true); 
       setSkillsState(initSkills());
       setActiveBuffsList([]);
+      if (exitTimerRef.current) clearInterval(exitTimerRef.current);
+      setHostExitedCountdown(null);
 
-      if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
-        return;
-      }
-
-      const isCoop = Boolean(netRef.current && netRef.current.channel);
+      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22; eng.screenShake = 0;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
@@ -783,11 +832,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.gameStarted = false; 
       setHasStarted(false);     
       
-      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+      eng.p = { x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
-      if (isCoop) {
+      if (isCoopActive) {
         eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
@@ -801,12 +850,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   }, [screen, netRef]);
 
+  // Expose global execution methods to App level overlay handlers
   useEffect(() => {
     window.triggerRestartVote = () => {
       const net = netRef.current;
-      const isCoop = Boolean(net && net.channel);
+      const isCoopActive = Boolean(net && net.channel);
 
-      if (!isCoop) {
+      if (!isCoopActive) {
         setScreen('playing');
         return;
       }
@@ -821,6 +871,59 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         net.channel.send('player_voted_restart', { voted: nextVoteState });
       }
     };
+
+    // FIXED: Global registration endpoints para sa pause broadcast engine
+    window.executeNetworkPauseAction = () => {
+      const net = netRef.current;
+      if (net && net.channel && net.isHost) {
+        setScreen('pause');
+        net.channel.send('host_paused', {});
+      }
+    };
+
+    // FIXED: Mas pinatibay na Resume Action registration sa GameCanvas.jsx
+    window.executeNetworkResumeAction = () => {
+      const net = netRef.current;
+      const isCoopActive = Boolean(net && net.channel);
+
+      // 1. I-set agad ang local screen sa 'playing' para magpatuloy ang render loop
+      setScreen('playing');
+
+      // 2. Kung multiplayer at ikaw ang Host, sabihan si Player 2 na mag-resume na rin
+      if (isCoopActive && net.isHost) {
+        net.channel.send('host_resumed', {});
+      }
+    };
+
+// FIXED: Mas pinatibay na Exit Action na may delay para makarating ang packet sa kabilang panig
+    window.executeNetworkExitAction = () => {
+      const net = netRef?.current;
+      const isCoopActive = Boolean(net && net.channel);
+
+      console.log(" 🚪 Triggering Match Exit. Co-op Active:", isCoopActive);
+
+      if (isCoopActive) {
+        try {
+          if (net.isHost) {
+            net.channel.send('host_exited', {});
+          } else {
+            net.channel.send('guest_exited', {});
+          }
+        } catch (err) {
+          console.error("Network broadcast fail during exit:", err);
+        }
+      }
+
+      // FIXED: Bigyan ng 100ms delay bago tuluyang isara ang render loop at lumipat ng screen
+      // para may sapat na oras ang network na ma-iresibat ang data packet kay Host
+      setTimeout(() => {
+        if (workerRef.current) {
+          workerRef.current.postMessage('stop');
+        }
+        setScreen('menu');
+      }, 100);
+    };
+
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
   useEffect(() => {
@@ -828,8 +931,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const eng = engineRef.current;
       if (!eng) return;
       
-      const isCoop = Boolean(netRef.current && netRef.current.channel);
-      let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+      let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
       if (forcedTarget === 'p2') target = eng.p2;
       if (forcedTarget === 'p1') target = eng.p;
 
@@ -842,9 +945,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (attackSkills.includes(skillId) && target.level < 10) return;
       if (['arcaneCollapse', 'arcaneInstinct'].includes(skillId) && target.level < 12) return; 
 
-      if (!target.skills) {
-        target.skills = initSkills();
-      }
+      if (!target.skills) target.skills = initSkills();
 
       if (!target.skills[skillId]) {
         target.skills[skillId] = { learned: false, enabled: true };
@@ -869,13 +970,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      if (isCoop && !forcedTarget) {
+      if (isCoopActive && !forcedTarget) {
         if (!netRef.current.isHost) {
           netRef.current.channel.send('guest_learned_skill', { skillId });
         }
       }
 
-      if (target === ((isCoop && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
         setSkillsState({ ...target.skills });
       }
     };
@@ -884,8 +985,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const eng = engineRef.current;
       if (!eng) return;
 
-      const isCoop = Boolean(netRef.current && netRef.current.channel);
-      let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+      let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
       if (forcedTarget === 'p2') target = eng.p2;
       if (forcedTarget === 'p1') target = eng.p;
 
@@ -901,7 +1002,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       target.skills.arcaneCollapse.cd = 30.0;
       eng.screenShake = 0.8; 
 
-      // === FIXED: ADDED CHAT BUBBLE SHOUT METRIC DATA ON ULTIMATE CAST ===
       target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
 
       if (!eng.collapses) eng.collapses = [];
@@ -946,11 +1046,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         });
       }
 
-      if (isCoop && !forcedTarget && !netRef.current.isHost) {
+      if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
         netRef.current.channel.send('guest_cast_ultimate', {});
       }
 
-      if (target === ((isCoop && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
         setSkillsState({ ...target.skills });
       }
     };
@@ -959,8 +1059,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const eng = engineRef.current;
       if (!eng) return;
 
-      const isCoop = Boolean(netRef.current && netRef.current.channel);
-      let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+      let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
       if (forcedTarget === 'p2') target = eng.p2;
       if (forcedTarget === 'p1') target = eng.p;
 
@@ -978,7 +1078,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       target.skills.arcaneInstinct.autoTimer = 3.0; 
       eng.screenShake = 1.2; 
 
-      // === FIXED: ADDED RPG SHOUTING TEXT EFFECT ON ARCANE INSTINCT CAST ===
       target.chatBubble = { text: "ARCANE INSTINCT!!!", life: 1.8 };
 
       for (const enemy of eng.enemies) {
@@ -997,11 +1096,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         });
       }
 
-      if (isCoop && !forcedTarget && !netRef.current.isHost) {
+      if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
         netRef.current.channel.send('guest_cast_instinct', {});
       }
 
-      if (target === ((isCoop && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
         setSkillsState({ ...target.skills });
       }
     };
@@ -1060,8 +1159,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       lastTime = ts;
 
       const net = netRef.current || {};
-      const isCoop = Boolean(net.channel);
-      const isHost = Boolean(net.isHost) || !isCoop;
+      const isCoopActive = Boolean(net.channel);
+      const isHost = Boolean(net.isHost) || !isCoopActive;
+
+      // FIXED: Patigilin ang buong physics calculation engine kapag naka-pause ang laro
+      if (screen === 'pause') {
+        return;
+      }
 
       if (screen === 'playing' || screen === 'levelup') {
         let mx = 0, my = 0;
@@ -1091,7 +1195,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.waveT += dt;
           eng.spawnT += dt;
 
-          if (!isCoop || isHost) {
+          if (!isCoopActive || isHost) {
             if (eng.spawnT >= eng.spawnRate) {
               eng.spawnT = 0;
               eng.spawnRate = Math.max(0.35, 2 - eng.wave * 0.12);
@@ -1117,14 +1221,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         const tickPlayerSkillTrackers = (playerObj) => {
           if (!playerObj || playerObj.dead) return;
-          if (!playerObj.skills) {
-            playerObj.skills = initSkills();
-          }
-          if (!playerObj.potBuffs) {
-            playerObj.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
-          }
+          if (!playerObj.skills) playerObj.skills = initSkills();
+          if (!playerObj.potBuffs) playerObj.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
 
-          // Bubble text local physics decay tracking
           if (playerObj.chatBubble && playerObj.chatBubble.life > 0) {
             playerObj.chatBubble.life -= dt;
           }
@@ -1138,13 +1237,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             playerObj.hp = Math.min(playerObj.maxHp, playerObj.hp + 3.5 * dt); 
           }
 
-          if (playerObj.skills.arcaneCollapse?.cd > 0) {
-            playerObj.skills.arcaneCollapse.cd -= dt;
-          }
-
-          if (playerObj.skills.arcaneInstinct?.cd > 0) {
-            playerObj.skills.arcaneInstinct.cd -= dt;
-          }
+          if (playerObj.skills.arcaneCollapse?.cd > 0) playerObj.skills.arcaneCollapse.cd -= dt;
+          if (playerObj.skills.arcaneInstinct?.cd > 0) playerObj.skills.arcaneInstinct.cd -= dt;
+          
           if (playerObj.skills.arcaneInstinct?.duration > 0) {
             playerObj.skills.arcaneInstinct.duration -= dt;
             
@@ -1268,7 +1363,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         };
 
-        if (isHost || !isCoop) {
+        if (isHost || !isCoopActive) {
           if (eng.p && !eng.p.dead) {
             tickPlayerSkillTrackers(eng.p);
 
@@ -1280,7 +1375,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * calculatedSpeed * dt));
             if (eng.p.inv > 0) eng.p.inv -= dt;
           }
-          if (isCoop && eng.p2 && !eng.p2.dead && eng.gameStarted) {
+          if (isCoopActive && eng.p2 && !eng.p2.dead && eng.gameStarted) {
             tickPlayerSkillTrackers(eng.p2);
 
             let calculatedSpeedp2 = 200;
@@ -1327,7 +1422,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
         }
 
-        const localTrackedObj = (isCoop && !isHost) ? eng.p2 : eng.p;
+        const localTrackedObj = (isCoopActive && !isHost) ? eng.p2 : eng.p;
         if (localTrackedObj) {
           setPlayerLevel(localTrackedObj.level);
           if (localTrackedObj.skills) {
@@ -1386,7 +1481,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (statCdRef.current) statCdRef.current.textContent = `${currentCd.toFixed(2)}s`;
         }
 
-        if (isCoop && netRef.current.channel) {
+        if (isCoopActive && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
             syncTimer = 0.033;
@@ -1401,7 +1496,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
                 collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                // === FIXED: SERIALIZED THE CURRENT ACTIVE CHATBUBBLE STATE FIELD IN STATE SYNC PAYLOAD ===
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead, dmg: eng.p.dmg, shootRate: eng.p.shootRate, chatBubble: eng.p.chatBubble } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead, dmg: eng.p2.dmg, shootRate: eng.p2.shootRate, chatBubble: eng.p2.chatBubble } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
@@ -1444,9 +1538,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   }
 
                   enemy.hp -= baseSkillDmg; 
-                  if (enemy.hp <= 0) {
-                    enemy.deadTrigger = true;
-                  }
+                  if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
             }
@@ -1519,9 +1611,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               }
             }
 
-            if (col.life <= 0) {
-              eng.collapses.splice(cIdx, 1);
-            }
+            if (col.life <= 0) eng.collapses.splice(cIdx, 1);
           }
         }
 
@@ -1532,7 +1622,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (pot.life <= 0) { eng.potions.splice(pIdx, 1); continue; }
 
             let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
-            if (isCoop && eng.p2 && !eng.p2.dead) {
+            if (isCoopActive && eng.p2 && !eng.p2.dead) {
               const dP1 = eng.p ? Math.hypot(eng.p.x - pot.x, eng.p.y - pot.y) : Infinity;
               if (Math.hypot(eng.p2.x - pot.x, eng.p2.y - pot.y) < dP1) {
                 tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
@@ -1592,7 +1682,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               }
             }
 
-            if (isCoop && eng.p2 && !eng.p2.dead) {
+            if (isCoopActive && eng.p2 && !eng.p2.dead) {
               eng.p2.shootCd -= dt;
               if (eng.p2.shootCd <= 0) {
                 let near = null, nd = Infinity;
@@ -1616,7 +1706,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          if (!isCoop || isHost) {
+          if (!isCoopActive || isHost) {
             for (let i = eng.bullets.length - 1; i >= 0; i--) {
               const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
               if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) { 
@@ -1645,9 +1735,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   e.hp -= calculatedDmg;
                   
                   const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
-                  if (hasBodyCutter) {
-                    e.stigmaTime = 4.0;
-                  }
+                  if (hasBodyCutter) e.stigmaTime = 4.0;
 
                   for(let k=0; k<5; k++) {
                     const pa = Math.random()*Math.PI*2; const ps = Math.random()*80+40;
@@ -1666,7 +1754,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                         life: 14.0
                       });
                     }
-
                     eng.enemies.splice(j, 1);
                   }
                   break;
@@ -1711,7 +1798,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                     life: 14.0
                   });
                 }
-
                 eng.enemies.splice(j, 1);
                 continue;
               }
@@ -1720,7 +1806,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 e.stunnedTime -= dt;
               } else {
                 let tx = (eng.p && !eng.p.dead) ? eng.p : null;
-                if (isCoop && eng.p2 && !eng.p2.dead) {
+                if (isCoopActive && eng.p2 && !eng.p2.dead) {
                   const d1 = (!eng.p || eng.p.dead) ? Infinity : Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
                   const d2 = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
                   if (d2 < d1) tx = eng.p2;
@@ -1729,7 +1815,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
                   let runSpeed = e.speed;
                   if (e.temporalSlowTime > 0) runSpeed *= 0.30; 
-
                   e.x += Math.cos(ea) * runSpeed * dt; e.y += Math.sin(ea) * runSpeed * dt;
                 }
               }
@@ -1748,9 +1833,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 }
 
                 eng.p.hp -= damageTaken; eng.p.inv = 0.7;
-                if (eng.p.hp <= 0) { eng.p.dead = true; if(!isCoop || !eng.p2 || eng.p2.dead) { if(isCoop) netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
+                // FIXED: Solo/Host Game-over check updates
+                if (eng.p.hp <= 0) { 
+                  eng.p.dead = true; 
+                  if(!isCoopActive || !eng.p2 || eng.p2.dead) { 
+                    if(isCoopActive) netRef.current.channel.send('game_over',{}); 
+                    setScreen('gameover'); 
+                  } 
+                }
               }
-              if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
+              if (isCoopActive && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
                 let damageTakenp2 = e.dmg;
                 if (e.voidExhaustTime > 0) damageTakenp2 *= 0.5;
                 if (eng.p2.potBuffs?.defense > 0) damageTakenp2 *= 0.65;
@@ -1773,7 +1865,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               const g = eng.gems[i]; g.life -= dt;
               if (g.life <= 0) { eng.gems.splice(i, 1); continue; }
               let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
-              if (isCoop && eng.p2 && !eng.p2.dead) {
+              if (isCoopActive && eng.p2 && !eng.p2.dead) {
                 const dP1 = eng.p ? Math.hypot(eng.p.x - g.x, eng.p.y - g.y) : Infinity;
                 if (Math.hypot(eng.p2.x - g.x, eng.p2.y - g.y) < dP1) {
                   tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
@@ -1786,11 +1878,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 g.x += Math.cos(ga) * 260 * dt; g.y += Math.sin(ga) * 260 * dt;
               }
               if (!targetPlayer.dead && Math.hypot(targetPlayer.x - g.x, targetPlayer.y - g.y) < targetPlayer.r + g.r) {
-                
                 let distributedXp = g.xp;
                 if (targetPlayer.potBuffs?.xpBoost > 0) distributedXp = Math.ceil(distributedXp * 1.5); 
 
-                if (isCoop && targetPlayer === eng.p2) {
+                if (isCoopActive && targetPlayer === eng.p2) {
                   eng.p2.xp += distributedXp;
                   if (eng.p2.xp >= eng.p2.xpNext) {
                     eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
@@ -1809,7 +1900,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          if (!isHost && isCoop) {
+          if (!isHost && isCoopActive) {
             for (let i = eng.bullets.length - 1; i >= 0; i--) {
               const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
               if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
@@ -1819,11 +1910,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        const localTarget = (isCoop && !isHost) ? eng.p2 : eng.p;
+        const localTarget = (isCoopActive && !isHost) ? eng.p2 : eng.p;
         if (localTarget) {
           hudRef.current = { 
             score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, 
-            p: localTarget, p2: (isCoop && isHost) ? eng.p2 : eng.p,
+            p: localTarget, p2: (isCoopActive && isHost) ? eng.p2 : eng.p,
             p1VotedRestart, p2VotedRestart
           };
         }
@@ -1856,7 +1947,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     worker.postMessage('start');
 
-    // === FIXED: HELPER ENGINE FUNCTION TO RENDER THE retro RPG STYLE DIALOG CHAT BUBBLE OVER ASSET AVATARS ===
     const renderRpgChatBubble = (x, y, txt) => {
       ctx.save();
       ctx.font = 'bold 11px monospace';
@@ -1864,9 +1954,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const boxWidth = textWidth + 16;
       const boxHeight = 22;
       const boxX = x - boxWidth / 2;
-      const boxY = y - 48; // Floating directly above wizard body context maps
+      const boxY = y - 48;
 
-      // Drawing custom border gradient glow panel wrapper
       ctx.fillStyle = 'rgba(11, 8, 38, 0.93)';
       ctx.strokeStyle = '#d946ef';
       ctx.lineWidth = 2;
@@ -1874,15 +1963,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       ctx.shadowColor = '#d946ef';
       
       ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
-      } else {
-        ctx.rect(boxX, boxY, boxWidth, boxHeight);
-      }
+      if (ctx.roundRect) ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
+      else ctx.rect(boxX, boxY, boxWidth, boxHeight);
       ctx.fill();
       ctx.stroke();
 
-      // Draw downward indicator point triangle tail
       ctx.beginPath();
       ctx.moveTo(x - 5, boxY + boxHeight);
       ctx.lineTo(x + 5, boxY + boxHeight);
@@ -1897,7 +1982,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       ctx.lineTo(x + 5, boxY + boxHeight);
       ctx.stroke();
 
-      // Render inner yellow bold shouting RPG text
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#fef08a';
       ctx.textAlign = 'center';
@@ -2068,14 +2152,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const p2Color = '#f97316'; 
 
       const net = netRef.current || {};
-      const isCoop = Boolean(net.channel);
-      const isHost = Boolean(net.isHost) || !isCoop;
+      const isCoopActive = Boolean(net.channel);
+      const isHost = Boolean(net.isHost) || !isCoopActive;
 
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
 
-      const p2X = (isCoop && !isHost && eng.p2Render) ? eng.p2Render.x : (eng.p2 ? eng.p2.x : W*2/3);
-      const p2Y = (isCoop && !isHost && eng.p2Render) ? eng.p2Render.y : (eng.p2 ? eng.p2.y : H/2);
+      const p2X = (isCoopActive && !isHost && eng.p2Render) ? eng.p2Render.x : (eng.p2 ? eng.p2.x : W*2/3);
+      const p2Y = (isCoopActive && !isHost && eng.p2Render) ? eng.p2Render.y : (eng.p2 ? eng.p2.y : H/2);
 
       if (eng.p && !eng.p.dead) {
         ctx.save();
@@ -2125,13 +2209,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p1X - pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p1X + pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
 
-        // === FIXED: DRAW PLAYER 1 DIALOG CHAT BUBBLE SHOUT ABOVE MODEL AVATAR ===
         if (eng.p.chatBubble && eng.p.chatBubble.life > 0) {
           renderRpgChatBubble(p1X, p1Y, eng.p.chatBubble.text);
         }
       }
 
-      if (isCoop && eng.p2 && !eng.p2.dead) {
+      // FIXED: Siguraduhing may umiiral na p2 object bago ito i-render (para kapag lumabas si P2, mawala ang character niya)
+      if (isCoopActive && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
         const pr = eng.p2.r;
@@ -2179,7 +2263,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p2X - pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p2X + pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
 
-        // === FIXED: DRAW PLAYER 2 DIALOG CHAT BUBBLE SHOUT ABOVE MODEL AVATAR ===
         if (eng.p2.chatBubble && eng.p2.chatBubble.life > 0) {
           renderRpgChatBubble(p2X, p2Y, eng.p2.chatBubble.text);
         }
@@ -2192,12 +2275,23 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     const down = (e) => { 
       eng.keys[e.key] = true; 
-      if (e.key === 'Escape' && screen === 'playing') {
-        setScreen('pause');
+      
+      // PINALITAN: Bukod sa Escape, gagana na rin ang letrang 'P' o 'p' para mag-pause
+      if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && screen === 'playing') {
+        const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+        
+        // Tanging host lang o solo player ang pwedeng mag-pause
+        if (!isCoopActive || netRef.current.isHost) {
+          if (window.executeNetworkPauseAction) {
+            window.executeNetworkPauseAction();
+          }
+        }
       }
+      
       if ((e.key === 'k' || e.key === 'K' || e.key === 't' || e.key === 'T') && screen === 'playing') {
         setIsTreeOpen(prev => !prev);
       }
+      
       if (screen === 'playing') {
         if (e.key === '1') window.learnSkillTreeTech('bodyCutter');
         if (e.key === '2') window.learnSkillTreeTech('shootingStar');
@@ -2207,6 +2301,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (e.key === '6') window.castArcaneInstinctUltimate(); 
       }
     };
+
     const up = (e) => { eng.keys[e.key] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -2225,8 +2320,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
     
-    const isCoop = Boolean(netRef.current && netRef.current.channel);
-    let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
     if (forcedTarget === 'p2') target = eng.p2;
     if (forcedTarget === 'p1') target = eng.p;
     
@@ -2259,15 +2354,59 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
 
-        {/* TOP STATUS HUD */}
+{/* TOP STATUS HUD */}
         {screen === 'playing' && (
-          <div className="game-hud-top">
+          <div className="game-hud-top" style={{ pointerEvents: 'auto' }}>
             <div>SCORE: <span ref={scoreValueRef}>0</span></div>
+            
+            {/* Clickable Pause para sa Host / Solo Player */}
+            {isHostInstance && (
+              <button 
+                onClick={() => {
+                  // FIXED: Kapag may network action (Co-op Host), tawagin ito. Kapag wala (Solo Play), mag-pause agad locally.
+                  if (window.executeNetworkPauseAction && isNetworked) {
+                    window.executeNetworkPauseAction();
+                  } else {
+                    setScreen('pause');
+                  }
+                }}
+                style={{
+                  background: 'rgba(27, 16, 59, 0.6)', // Transparent dark purple katulad ng panel sa itaas
+                  border: '1px solid #4c2d82', // Manipis at swaktong violet border
+                  color: '#a78bfa', // Light violet text color para malinis tingnan
+                  fontFamily: 'Georgia, serif',
+                  fontSize: '0.75rem',
+                  fontWeight: '800',
+                  letterSpacing: '0.05em',
+                  padding: '6px 16px',
+                  borderRadius: '20px', // Rounded pill shape para tugma sa profile header
+                  cursor: 'pointer',
+                  boxShadow: '0 0 10px rgba(124, 58, 237, 0.25)', // Subtle purple glow
+                  transition: 'all 0.2s ease-in-out',
+                  pointerEvents: 'auto'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'rgba(44, 26, 92, 0.8)';
+                  e.currentTarget.style.borderColor = '#6d28d9';
+                  e.currentTarget.style.boxShadow = '0 0 14px rgba(167, 139, 250, 0.45)';
+                  e.currentTarget.style.color = '#ffffff';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'rgba(27, 16, 59, 0.6)';
+                  e.currentTarget.style.borderColor = '#4c2d82';
+                  e.currentTarget.style.boxShadow = '0 0 10px rgba(124, 58, 237, 0.25)';
+                  e.currentTarget.style.color = '#a78bfa';
+                }}
+              >
+                ⏸ PAUSE GAME
+              </button>
+            )}
+
             <div ref={waveValueRef}>WAVE 1 | 30s</div>
           </div>
         )}
 
-        {/* --- RPG STYLE UPPER MIDDLE LIVE BUFF OVERLAY --- */}
+
         {screen === 'playing' && activeBuffsList.length > 0 && (
           <div className="rpg-buff-container">
             {activeBuffsList.map((buff, idx) => (
@@ -2279,7 +2418,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* BOTTOM VITAL STATUS HUDS + RPG STATS PANEL */}
         {screen === 'playing' && (
           <div className="game-hud-bottom">
             <button 
@@ -2332,7 +2470,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */}
         {screen === 'playing' && playerLevel >= 10 && (
           <div className="mmo-hotbar-container">
             <div 
@@ -2472,7 +2609,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('haste')}
             >
-              <span>👟 Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              <span>canny Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.haste?.learned && (
                 <span className="skill-cd-text">
                   {skillsState.haste.duration > 0 ? `Active ${Math.ceil(skillsState.haste.duration)}s` : `CD ${Math.ceil(skillsState.haste.cd)}s`}
@@ -2589,6 +2726,55 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   ? "Press WASD or Arrow Keys to begin battle." 
                   : "The arena will initialize once the match host begins moving."}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* FIXED: Display static message banner for Player 2 when Host pauses the session room */}
+        {screen === 'pause' && isNetworked && !netRef.current.isHost && (
+          <div className="hud-start-overlay" style={{ zIndex: 110 }}>
+            <div className="hud-start-modal" style={{ borderColor: '#a78bfa' }}>
+              <h2>MATCH PAUSED</h2>
+              <p>The Host has paused the session. Standing by for resumption...</p>
+            </div>
+          </div>
+        )}
+
+        {/* FIXED: Display reconnection auto-boot alert banner overlay window */}
+        {hostExitedCountdown !== null && (
+          <div className="hud-start-overlay" style={{ zIndex: 120 }}>
+            <div className="hud-start-modal" style={{ borderColor: '#ef4444' }}>
+              <h2>HOST EXITED THE ROOM</h2>
+              <p style={{ fontSize: '1.2rem', color: '#f87171', fontWeight: 'bold', margin: '10px 0' }}>
+                Exiting to main menu in {hostExitedCountdown}s...
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* FIXED: LALABAS NA ITO SA POV NG HOST KAPAG NAG-EXIT SI PLAYER 2 */}
+        {guestExitedAlert && (
+          <div style={{
+            position: 'absolute',
+            top: '100px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(11, 8, 38, 0.96)',
+            border: '2px solid #ef4444',
+            boxShadow: '0 0 25px rgba(239, 68, 68, 0.6)',
+            padding: '14px 28px',
+            borderRadius: '8px',
+            color: '#ffffff',
+            fontFamily: 'monospace',
+            zIndex: 9999,
+            textAlign: 'center',
+            pointerEvents: 'none'
+          }}>
+            <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: '#ef4444', letterSpacing: '1px' }}>
+              ⚠️ ALLY LEFT THE MATCH
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#cbd5e1', marginTop: '4px' }}>
+              Player 2 has disconnected. You can continue defending the realm alone!
             </div>
           </div>
         )}

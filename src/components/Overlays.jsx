@@ -123,7 +123,6 @@ export default function Overlays({
             <div className="menu-sub">A Wizard's Last Stand</div>
             <div className="divider" />
             
-            {/* FIXED: Dito inilagay ang Input text box para sa Solo Players */}
             <div className="field-group" style={{ width: '100%', marginBottom: '14px' }}>
               <label className="field-label">Wizard Character Name</label>
               <input 
@@ -299,16 +298,46 @@ export default function Overlays({
         </div>
       )}
 
-      {/* MATCH PAUSE OVERLAY */}
-      {screen === 'pause' && (
-        <div className="overlay active">
-          <div className="panel" style={{ width: '320px' }}>
-            <div className="section-title">⏸ Paused</div>
-            <button className="btn" onClick={() => setScreen('playing')}>Resume</button>
-            <button className="btn danger" onClick={() => setScreen('menu')}>Exit Match</button>
-          </div>
-        </div>
-      )}
+    {/* MATCH PAUSE OVERLAY */}
+          {screen === 'pause' && (
+            <div className="overlay active">
+              <div className="panel" style={{ width: '320px' }}>
+                <div className="section-title">⏸ Paused</div>
+                
+                {/* RESUME BUTTON */}
+                <button 
+                  className="btn" 
+                  onClick={() => {
+                    if (window.executeNetworkResumeAction) {
+                      window.executeNetworkResumeAction();
+                    } else {
+                      setScreen('playing');
+                    }
+                  }}
+                >
+                  Resume
+                </button>
+                
+                {/* FIXED: Direct Core Execution para iwas bara sa React State Tree */}
+                <button 
+                  className="btn danger" 
+                  onClick={() => {
+                    if (window.executeNetworkExitAction) {
+                      window.executeNetworkExitAction();
+                    } else {
+                      // Hard reset fallback kung sakaling hindi pa nag-mount ang Canvas engine
+                      setScreen('menu');
+                      if (onAction) {
+                        try { onAction('exit-match'); } catch(e) {}
+                      }
+                    }
+                  }}
+                >
+                  Exit Match
+                </button>
+              </div>
+            </div>
+          )}
     </div>
   );
 }
