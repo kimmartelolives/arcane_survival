@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 
 const W = 900;
 const H = 560;
-
 const ET = [
   { r: 13, speed: 65,  hp: 30,  dmg: 8,  xp: 15,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
   { r: 11, speed: 105, hp: 20,  dmg: 12, xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
@@ -61,9 +60,9 @@ const focusStyles = `
     line-height: 1.4;
     margin: 0;
   }
-.game-hud-top {
+  .game-hud-top {
     position: absolute;
-    top: 4px; /* Binabaan mula 12px para lalong umangat at hindi maharangan ng potion modal */
+    top: 4px; 
     left: 12px;
     right: 12px;
     display: flex;
@@ -468,19 +467,17 @@ const focusStyles = `
     text-shadow: 0 0 8px rgba(234, 179, 8, 0.9);
   }
 
-/* Layout container para sa kanang bahagi ng HUD */
-.game-hud-right-group {
+  .game-hud-right-group {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     gap: 1px;
-    background: rgba(3, 1, 17, 0.4);
+    background: transparent;
     padding: 2px 6px 4px 6px;
     border-radius: 6px;
   }
 
-  /* HUD Title configuration */
-.hud-menu-title {
+  .hud-menu-title {
     font-family: 'Cinzel Decorative', serif !important;
     font-size: 1.15rem;
     font-weight: 900;
@@ -490,27 +487,7 @@ const focusStyles = `
     -webkit-font-smoothing: antialiased;
   }
   
-  /* ARCANE: Ginawang solid purple ang magkabilang dulo, pinakipot ang puting kislap (46% hanggang 54%) */
   .hud-menu-title span.arc {
-    background: linear-gradient(
-      110deg, 
-      #a78bfa 42%, 
-      #ffffff 50%, 
-      #a78bfa 58%
-    );
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    
-    /* Pinatinding Neon Purple Aura Glow */
-    filter: drop-shadow(0 0 5px #8b5cf6) 
-            drop-shadow(0 0 15px rgba(139, 92, 246, 0.8));
-    
-    display: inline-block;
-    animation: hudGlassShine 4s ease-in-out infinite;
-  }
-  
-.hud-menu-title span.arc {
     background: linear-gradient(110deg, #a78bfa 42%, #ffffff 50%, #a78bfa 58%);
     background-size: 200% auto;
     -webkit-background-clip: text;
@@ -531,12 +508,11 @@ const focusStyles = `
     animation-delay: 0.15s;
   }
   
-  /* 🔥 Subtitle: Eksaktong kahaba na ngayon ng salitang SURVIVAL */
   .hud-menu-sub {
     font-family: 'Georgia', serif;
-    font-size: 0.44rem; /* Ginawang mas compact ang font size */
-    letter-spacing: 0.285em; /* Pinalawak ang espasyo para pumantay sa haba ng title */
-    margin-right: -0.285em; /* Nilapat sa kanang gilid para i-offset ang huling space */
+    font-size: 0.44rem;
+    letter-spacing: 0.285em;
+    margin-right: -0.285em;
     color: #a78bfa;
     text-transform: uppercase;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
@@ -551,11 +527,93 @@ const focusStyles = `
     18% { background-position: 100% center; }
     100% { background-position: 100% center; }
   }
+
+  .coop-party-panel {
+    position: absolute;
+    top: 110px;
+    right: 12px;
+    width: 220px;
+    background: rgba(9, 6, 28, 0.88);
+    border: 1px solid #7c3aed;
+    border-radius: 6px;
+    padding: 10px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 0.9rem;
+    z-index: 20;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6), inset 0 0 10px rgba(124, 58, 237, 0.2);
+  }
+  .coop-party-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .coop-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .coop-name { 
+    font-size: 0.9rem; 
+    font-weight: bold; 
+    color: #fbbf24;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  }
+  .coop-lvl-badge {
+    font-size: 0.65rem;
+    background: #7c3aed;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .coop-hp-container {
+    position: relative;
+    width: 100%;
+    height: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .coop-hp-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+    transition: width 0.15s ease-out;
+  }
+  .coop-hp-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 0.65rem;
+    font-weight: bold;
+    color: #ffffff;
+    text-shadow: 1px 1px 1px #000;
+  }
+  .coop-xp-text { 
+    font-size: 0.65rem;
+    color: #9ca3af; 
+    text-align: right;
+    letter-spacing: 0.5px;
+  }
 `;
 
-export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, isCoop }) {
+export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
   const canvasRef = useRef(null);
   const workerRef = useRef(null);
+  
+  const [showPartyList, setShowPartyList] = useState(true);
   
   const scoreValueRef = useRef(null);
   const waveValueRef = useRef(null);
@@ -564,29 +622,27 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const xpFillRef = useRef(null);
   const xpTextRef = useRef(null);
   const audioCtxRef = useRef(null);
-
   const statAtkRef = useRef(null);
   const statDefRef = useRef(null);
   const statCritRef = useRef(null);
   const statSpdRef = useRef(null);
-  const statCdRef = useRef(null); 
+  const statCdRef = useRef(null);
+  const allyHpTextRef = useRef(null);
+  const allyXpTextRef = useRef(null);
 
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
-
   const [p1VotedRestart, setP1VotedRestart] = useState(false);
   const [p2VotedRestart, setP2VotedRestart] = useState(false);
 
   const [isTreeOpen, setIsTreeOpen] = useState(true);
-  const [isStatsOpen, setIsStatsOpen] = useState(false); 
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [playerLevel, setPlayerLevel] = useState(1);
   const [activeBuffsList, setActiveBuffsList] = useState([]);
   const [guestExitedAlert, setGuestExitedAlert] = useState(false);
-
-  // NEW MULTIPLAYER STATES
   const [hostExitedCountdown, setHostExitedCountdown] = useState(null);
   const exitTimerRef = useRef(null);
-  
+
   const initSkills = () => ({
     berserk: { learned: false, enabled: true, cd: 0, duration: 0 },
     haste: { learned: false, enabled: true, cd: 0, duration: 0 },
@@ -597,7 +653,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     cubeBash: { learned: false, enabled: true, cd: 0 },
     vacuumSlash: { learned: false, enabled: true, cd: 0 },
     arcaneCollapse: { learned: false, enabled: true, cd: 0 },
-    arcaneInstinct: { learned: false, enabled: true, cd: 0, duration: 0, autoTimer: 0 }
+    arcaneInstinct: { learned: false, enabled: true, cd: 0, duration: 0, autoTimer: 0 },
+    arcaneResurrection: { learned: false, enabled: true, cd: 0 }
   });
 
   const [skillsState, setSkillsState] = useState(initSkills());
@@ -615,7 +672,293 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p2History: []
   });
 
-    useEffect(() => {
+  // --- COMPONENT SCOPED ABILITIES ---
+  const learnSkillTreeTech = (skillId, forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+
+    if (!target || target.dead) return;
+
+    const baseSkills = ['berserk', 'haste', 'fortify', 'shield'];
+    const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'];
+    
+    if (baseSkills.includes(skillId) && target.level < 5) return; 
+    if (attackSkills.includes(skillId) && target.level < 10) return;
+    if (['arcaneCollapse', 'arcaneInstinct', 'arcaneResurrection'].includes(skillId) && target.level < 13) return; //resu level
+
+    if (!target.skills) target.skills = initSkills();
+
+    if (!target.skills[skillId]) {
+      target.skills[skillId] = { learned: false, enabled: true };
+    }
+
+    if (!target.skills[skillId].learned) {
+      target.skills[skillId].learned = true;
+      target.skills[skillId].enabled = true;
+      if (skillId === 'berserk' || skillId === 'haste' || skillId === 'shield') {
+        target.skills[skillId].cd = 0;
+        target.skills[skillId].duration = 0;
+      }
+      if (['shootingStar', 'cubeBash', 'vacuumSlash'].includes(skillId)) {
+        target.skills[skillId].cd = 0;
+      }
+      if (['arcaneCollapse', 'arcaneInstinct', 'arcaneResurrection'].includes(skillId)) {
+        target.skills[skillId].cd = 0;
+      }
+    } else {
+      if (!['arcaneCollapse', 'arcaneInstinct', 'arcaneResurrection'].includes(skillId)) {
+        target.skills[skillId].enabled = !target.skills[skillId].enabled;
+      }
+    }
+
+    if (isCoopActive && !forcedTarget) {
+      if (!netRef.current.isHost) {
+        netRef.current.channel.send('guest_learned_skill', { skillId });
+      }
+    }
+
+    if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      setSkillsState({ ...target.skills });
+    }
+  };
+
+  const castArcaneCollapseUltimate = (forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    if (!target || target.dead || target.level < 12) return; 
+    if (!target.skills) target.skills = initSkills();
+    if (!target.skills.arcaneCollapse?.learned) {
+      target.skills.arcaneCollapse = { learned: true, enabled: true, cd: 0 };
+    }
+
+    if (target.skills.arcaneCollapse.cd > 0) return;
+
+    target.skills.arcaneCollapse.cd = 30.0;
+    eng.screenShake = 0.8;
+    target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
+
+    if (!eng.collapses) eng.collapses = [];
+    eng.collapses.push({
+      x: target.x, y: target.y,
+      radius: 10, maxRadius: 520,
+      life: 2.2, pulseTimer: 0, pulseCount: 0
+    });
+    for (const enemy of eng.enemies) {
+      let colPulseDmg = 85;
+      if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
+      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 2.5;
+      if (enemy.instabTime > 0) colPulseDmg *= 1.5;
+
+      if (target.potBuffs?.crit > 0 && Math.random() < 0.35) {
+        colPulseDmg *= 2;
+        enemy.flash = 0.5;
+      } else {
+        enemy.flash = 0.35;
+      }
+
+      enemy.hp -= colPulseDmg;
+      
+      enemy.stunnedTime = 4.0;       
+      enemy.temporalSlowTime = 6.0;  
+      enemy.arcaneBurnTime = 6.0;
+      enemy.voidExhaustTime = 6.0;   
+      enemy.instabTime = 6.0;        
+
+      if (enemy.hp <= 0) enemy.deadTrigger = true;
+    }
+
+    for (let k = 0; k < 35; k++) {
+      const pa = Math.random() * Math.PI * 2;
+      const ps = Math.random() * 220 + 80;
+      eng.particles.push({
+        x: target.x, y: target.y,
+        vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+        color: Math.random() < 0.5 ? '#d946ef' : '#a855f7',
+        life: 0.6, ml: 0.6, r: Math.random() * 3 + 1.5
+      });
+    }
+
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_ultimate', {});
+    }
+
+    if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      setSkillsState({ ...target.skills });
+    }
+  };
+
+  const castArcaneInstinctUltimate = (forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    if (!target || target.dead || target.level < 12) return;
+    if (!target.skills) target.skills = initSkills();
+    if (!target.skills.arcaneInstinct) {
+      target.skills.arcaneInstinct = { learned: true, enabled: true, cd: 0, duration: 0, autoTimer: 0 };
+    }
+
+    if (target.skills.arcaneInstinct.cd > 0) return;
+
+    target.skills.arcaneInstinct.cd = 45.0;
+    target.skills.arcaneInstinct.duration = 10.0;
+    target.skills.arcaneInstinct.autoTimer = 3.0;
+    eng.screenShake = 1.2; 
+
+    target.chatBubble = { text: "ARCANE INSTINCT!!!", life: 1.8 };
+    for (const enemy of eng.enemies) {
+      enemy.stunnedTime = 2.0;
+      enemy.flash = 0.4;
+    }
+
+    for (let k = 0; k < 45; k++) {
+      const pa = Math.random() * Math.PI * 2;
+      const ps = Math.random() * 260 + 60;
+      eng.particles.push({
+        x: target.x, y: target.y,
+        vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+        color: Math.random() < 0.4 ? '#ffffff' : '#e879f9',
+        life: 0.7, ml: 0.7, r: Math.random() * 4 + 2
+      });
+    }
+
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_instinct', {});
+    }
+
+    if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      setSkillsState({ ...target.skills });
+    }
+  };
+
+  const castArcaneResurrectionUltimate = (forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    
+    // QoL Fix: Give feedback if testing in Solo Mode
+    if (!isCoopActive) {
+       if (eng.p) eng.p.chatBubble = { text: "CO-OP ONLY SPELL!", life: 1.5 };
+       return;
+    }
+
+    // Determine Caster and Target (Ally)
+    let caster = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    let ally = (isCoopActive && !netRef.current.isHost) ? eng.p : eng.p2;
+
+    if (forcedTarget === 'p2') { caster = eng.p2; ally = eng.p; }
+    if (forcedTarget === 'p1') { caster = eng.p; ally = eng.p2; }
+
+    // Validate Caster State
+    if (!caster || caster.dead || caster.level < 12) return;
+    
+    // Validate Ally State (Must be dead to resurrect)
+    if (!ally || !ally.dead) {
+      caster.chatBubble = { text: "ALLY IS NOT DEAD!", life: 1.5 };
+      return;
+    }
+
+    if (!caster.skills) caster.skills = initSkills();
+    if (!caster.skills.arcaneResurrection) {
+      caster.skills.arcaneResurrection = { learned: true, enabled: true, cd: 0 };
+    }
+
+    // Check Cooldown
+    if (caster.skills.arcaneResurrection.cd > 0) return;
+
+    // 🛑 COST APPLICATION (The Forbidden Sacrifice)
+    caster.skills.arcaneResurrection.cd = 300.0;
+    caster.level = Math.max(1, caster.level - 1); // Lose 1 Level
+    caster.xp = caster.xp / 2; // Lose half of current EXP
+    eng.screenShake = 1.5;
+    caster.chatBubble = { text: "FORBIDDEN: RESURRECTION!!!", life: 2.5 };
+
+    // ✨ REVIVAL APPLICATION
+    ally.dead = false;
+    ally.hp = ally.maxHp * 0.70; // Revive at 70% HP
+    
+    // Grant Rigid Defender for 10 seconds
+    if (!ally.skills) ally.skills = initSkills();
+    if (!ally.skills.shield) ally.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
+    ally.skills.shield.learned = true;
+    ally.skills.shield.duration = 10.0;
+
+    // 🌟 VISUAL EFFECTS: Radiant circle of glowing runes
+    for (let k = 0; k < 60; k++) {
+      const pa = Math.random() * Math.PI * 2;
+      const ps = Math.random() * 200 + 50;
+      eng.particles.push({
+        x: ally.x, y: ally.y,
+        vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+        color: Math.random() < 0.5 ? '#10b981' : '#fef08a', 
+        life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
+      });
+    }
+
+    // Sync Over Network
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_resurrection', {});
+    }
+
+    // Update Local State
+    if (caster === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      setSkillsState({ ...caster.skills });
+      setPlayerLevel(caster.level);
+    }
+  };
+
+  const runUpgrade = (choice, forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng || !eng.p) return;
+    
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    
+    if (!target) return;
+    const token = String(choice || '').toLowerCase().trim();
+    console.log(`🔮 Applying Arcane Upgrade:`, token);
+    if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
+      target.maxHp += 25; 
+      target.hp = target.maxHp;
+    }
+    else if (token.includes('damage') || token.includes('might') || token.includes('increase')) {
+      target.dmg = (target.dmg || 0) + 14;
+    }
+    else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
+      target.shootRate = Math.max(0.15, target.shootRate - 0.1);
+    }
+    else if (token.includes('multi') || token.includes('shot') || token.includes('split')) {
+      target.multiShot += 1;
+    }
+  };
+
+  // --- WINDOW BINDINGS ---
+  useEffect(() => {
+    window.learnSkillTreeTech = learnSkillTreeTech;
+    window.castArcaneCollapseUltimate = castArcaneCollapseUltimate;
+    window.castArcaneInstinctUltimate = castArcaneInstinctUltimate;
+    window.castArcaneResurrectionUltimate = castArcaneResurrectionUltimate;
+    window.runUpgrade = runUpgrade;
+  }, [netRef]);
+
+  // --- RESIZE & EVENT LISTENERS ---
+  useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -626,15 +969,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       canvas.style.height = Math.round(H * s) + 'px';
     };
 
-    // FIXED: Makinig sa trigger mula sa App.jsx kapag nag-exit si Player 2
     const handleGlobalGuestExit = () => {
       console.log("🎯 GameCanvas caught the global guest exit event signal!");
       const eng = engineRef.current;
-      if (eng) eng.p2 = null; // Burahin agad ang avatar/model ni Player 2 sa canvas loop
+      if (eng) eng.p2 = null; 
       
-      setGuestExitedAlert(true); // Puwersahing lumabas ang pulang alert banner sa Host HUD
+      setGuestExitedAlert(true); 
       
-      // Pagkalipas ng 4 na segundo, kusa itong mawawala
       setTimeout(() => {
         setGuestExitedAlert(false);
       }, 4000);
@@ -711,7 +1052,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }));
   }, [p1VotedRestart, p2VotedRestart, hudRef]);
 
-  // NETWORK MESSAGES HANDLING
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -720,7 +1060,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const eng = engineRef.current;
       if (!eng) return;
 
-      // FIXED: Sync Host Pause to Guest POV
       if (event === 'host_paused' && !net.isHost) {
         setScreen('pause');
         return;
@@ -731,7 +1070,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         return;
       }
 
-      // FIXED: Host exited room handler (5 seconds auto-boot counter)
       if (event === 'host_exited' && !net.isHost) {
         let count = 5;
         setHostExitedCountdown(count);
@@ -749,7 +1087,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         return;
       }
 
-      // FIXED: Guest exited room handler (Remove assets, host can continue solo)
       if (event === 'guest_exited' && net.isHost) {
         eng.p2 = null;
         return;
@@ -765,7 +1102,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
         }
         
-        // Kung hindi pa umalis si Guest, i-sync ang assets niya
         if (payload.p2 && eng.p2 !== null) {
           if (!eng.p2) {
             eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
@@ -797,12 +1133,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           temporalSlowTime: e.temporalSlowTime || 0, arcaneBurnTime: e.arcaneBurnTime || 0,
           voidExhaustTime: e.voidExhaustTime || 0, instabTime: e.instabTime || 0
         }));
-
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
         eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2 }));
         eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
         eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life }));
-
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
         eng.waveT = payload.waveT ?? eng.waveT;
@@ -811,7 +1145,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
-
         if (payload.p1 && eng.p) {
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
@@ -824,11 +1157,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
           if (payload.p1_skills) eng.p.skills = payload.p1_skills;
           if (payload.p1_potBuffs) eng.p.potBuffs = payload.p1_potBuffs;
+          eng.p.level = payload.p1_level || eng.p.level;
+          eng.p.xp = payload.p1_xp || eng.p.xp;
+          eng.p.xpNext = payload.p1_xpNext || eng.p.xpNext;
         }
 
         if (eng.p2) {
           setPlayerLevel(eng.p2.level);
           if (eng.p2.skills) setSkillsState({ ...eng.p2.skills });
+        } else if (eng.p) {
+          setPlayerLevel(eng.p.level);
+          if (eng.p.skills) setSkillsState({ ...eng.p.skills });
         }
       }
       
@@ -837,19 +1176,23 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       if (event === 'guest_levelup_choice' && net.isHost) {
-        if (window.runUpgrade) window.runUpgrade(payload.choice, 'p2');
+        runUpgrade(payload.choice, 'p2');
       }
 
       if (event === 'guest_learned_skill' && net.isHost) {
-        if (window.learnSkillTreeTech) window.learnSkillTreeTech(payload.skillId, 'p2');
+        learnSkillTreeTech(payload.skillId, 'p2');
       }
 
       if (event === 'guest_cast_ultimate' && net.isHost) {
-        if (window.castArcaneCollapseUltimate) window.castArcaneCollapseUltimate('p2');
+        castArcaneCollapseUltimate('p2');
       }
 
       if (event === 'guest_cast_instinct' && net.isHost) {
-        if (window.castArcaneInstinctUltimate) window.castArcaneInstinctUltimate('p2');
+        castArcaneInstinctUltimate('p2');
+      }
+      
+      if (event === 'guest_cast_resurrection' && net.isHost) {
+        castArcaneResurrectionUltimate('p2');
       }
       
       if (event === 'offer_levelup' && !net.isHost) {
@@ -867,7 +1210,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       if (event === 'restart_game') {
-        setScreen('playing'); 
+        setScreen('playing');
         setP1VotedRestart(false); 
         setP2VotedRestart(false);
       }
@@ -888,12 +1231,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
-  // FIXED: Trigger reset only on initial loading or authentic full restart state (Hindi tuwing babalik galing pause menu)
   useEffect(() => {
     const eng = engineRef.current;
 
     if (screen === 'playing') {
-      // Kung kasalukuyang tumatakbo ang makina, huwag burahin ang state vectors nito
       if (eng.gameStarted && eng.p && !eng.p.dead) {
         return;
       }
@@ -915,8 +1256,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
       eng.gameStarted = false; 
-      setHasStarted(false);     
-      
+      setHasStarted(false);
       eng.p = { x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
@@ -925,7 +1265,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
-
         if (screen === 'playing' && netRef.current.isHost) {
           netRef.current.channel.send('restart_game', {});
         }
@@ -935,7 +1274,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   }, [screen, netRef]);
 
-  // Expose global execution methods to App level overlay handlers
   useEffect(() => {
     window.triggerRestartVote = () => {
       const net = netRef.current;
@@ -957,7 +1295,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
     };
 
-    // FIXED: Global registration endpoints para sa pause broadcast engine
     window.executeNetworkPauseAction = () => {
       const net = netRef.current;
       if (net && net.channel && net.isHost) {
@@ -966,27 +1303,21 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
     };
 
-    // FIXED: Mas pinatibay na Resume Action registration sa GameCanvas.jsx
     window.executeNetworkResumeAction = () => {
       const net = netRef.current;
       const isCoopActive = Boolean(net && net.channel);
 
-      // 1. I-set agad ang local screen sa 'playing' para magpatuloy ang render loop
       setScreen('playing');
-
-      // 2. Kung multiplayer at ikaw ang Host, sabihan si Player 2 na mag-resume na rin
       if (isCoopActive && net.isHost) {
         net.channel.send('host_resumed', {});
       }
     };
 
-// FIXED: Mas pinatibay na Exit Action na may delay para makarating ang packet sa kabilang panig
     window.executeNetworkExitAction = () => {
       const net = netRef?.current;
       const isCoopActive = Boolean(net && net.channel);
 
       console.log(" 🚪 Triggering Match Exit. Co-op Active:", isCoopActive);
-
       if (isCoopActive) {
         try {
           if (net.isHost) {
@@ -999,8 +1330,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      // FIXED: Bigyan ng 100ms delay bago tuluyang isara ang render loop at lumipat ng screen
-      // para may sapat na oras ang network na ma-iresibat ang data packet kay Host
       setTimeout(() => {
         if (workerRef.current) {
           workerRef.current.postMessage('stop');
@@ -1010,187 +1339,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
 
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
-
-  useEffect(() => {
-    window.learnSkillTreeTech = (skillId, forcedTarget = null) => {
-      const eng = engineRef.current;
-      if (!eng) return;
-      
-      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-      let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-      if (forcedTarget === 'p2') target = eng.p2;
-      if (forcedTarget === 'p1') target = eng.p;
-
-      if (!target || target.dead) return;
-
-      const baseSkills = ['berserk', 'haste', 'fortify', 'shield'];
-      const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'];
-      
-      if (baseSkills.includes(skillId) && target.level < 5) return; 
-      if (attackSkills.includes(skillId) && target.level < 10) return;
-      if (['arcaneCollapse', 'arcaneInstinct'].includes(skillId) && target.level < 12) return; 
-
-      if (!target.skills) target.skills = initSkills();
-
-      if (!target.skills[skillId]) {
-        target.skills[skillId] = { learned: false, enabled: true };
-      }
-
-      if (!target.skills[skillId].learned) {
-        target.skills[skillId].learned = true;
-        target.skills[skillId].enabled = true;
-        if (skillId === 'berserk' || skillId === 'haste' || skillId === 'shield') {
-          target.skills[skillId].cd = 0;
-          target.skills[skillId].duration = 0;
-        }
-        if (['shootingStar', 'cubeBash', 'vacuumSlash'].includes(skillId)) {
-          target.skills[skillId].cd = 0;
-        }
-        if (['arcaneCollapse', 'arcaneInstinct'].includes(skillId)) {
-          target.skills[skillId].cd = 0;
-        }
-      } else {
-        if (!['arcaneCollapse', 'arcaneInstinct'].includes(skillId)) {
-          target.skills[skillId].enabled = !target.skills[skillId].enabled;
-        }
-      }
-
-      if (isCoopActive && !forcedTarget) {
-        if (!netRef.current.isHost) {
-          netRef.current.channel.send('guest_learned_skill', { skillId });
-        }
-      }
-
-      if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
-        setSkillsState({ ...target.skills });
-      }
-    };
-
-    window.castArcaneCollapseUltimate = (forcedTarget = null) => {
-      const eng = engineRef.current;
-      if (!eng) return;
-
-      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-      let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-      if (forcedTarget === 'p2') target = eng.p2;
-      if (forcedTarget === 'p1') target = eng.p;
-
-      if (!target || target.dead || target.level < 12) return; 
-      if (!target.skills) target.skills = initSkills();
-      
-      if (!target.skills.arcaneCollapse?.learned) {
-        target.skills.arcaneCollapse = { learned: true, enabled: true, cd: 0 };
-      }
-
-      if (target.skills.arcaneCollapse.cd > 0) return;
-
-      target.skills.arcaneCollapse.cd = 30.0;
-      eng.screenShake = 0.8; 
-
-      target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
-
-      if (!eng.collapses) eng.collapses = [];
-      eng.collapses.push({
-        x: target.x, y: target.y,
-        radius: 10, maxRadius: 520,
-        life: 2.2, pulseTimer: 0, pulseCount: 0
-      });
-
-      for (const enemy of eng.enemies) {
-        let colPulseDmg = 85;
-        if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
-        if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 2.5; 
-        if (enemy.instabTime > 0) colPulseDmg *= 1.5;
-
-        if (target.potBuffs?.crit > 0 && Math.random() < 0.35) {
-          colPulseDmg *= 2;
-          enemy.flash = 0.5;
-        } else {
-          enemy.flash = 0.35;
-        }
-
-        enemy.hp -= colPulseDmg;
-        
-        enemy.stunnedTime = 4.0;       
-        enemy.temporalSlowTime = 6.0;  
-        enemy.arcaneBurnTime = 6.0;    
-        enemy.voidExhaustTime = 6.0;   
-        enemy.instabTime = 6.0;        
-
-        if (enemy.hp <= 0) enemy.deadTrigger = true;
-      }
-
-      for (let k = 0; k < 35; k++) {
-        const pa = Math.random() * Math.PI * 2;
-        const ps = Math.random() * 220 + 80;
-        eng.particles.push({
-          x: target.x, y: target.y,
-          vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
-          color: Math.random() < 0.5 ? '#d946ef' : '#a855f7',
-          life: 0.6, ml: 0.6, r: Math.random() * 3 + 1.5
-        });
-      }
-
-      if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
-        netRef.current.channel.send('guest_cast_ultimate', {});
-      }
-
-      if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
-        setSkillsState({ ...target.skills });
-      }
-    };
-
-    window.castArcaneInstinctUltimate = (forcedTarget = null) => {
-      const eng = engineRef.current;
-      if (!eng) return;
-
-      const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-      let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-      if (forcedTarget === 'p2') target = eng.p2;
-      if (forcedTarget === 'p1') target = eng.p;
-
-      if (!target || target.dead || target.level < 12) return;
-      if (!target.skills) target.skills = initSkills();
-
-      if (!target.skills.arcaneInstinct) {
-        target.skills.arcaneInstinct = { learned: true, enabled: true, cd: 0, duration: 0, autoTimer: 0 };
-      }
-
-      if (target.skills.arcaneInstinct.cd > 0) return;
-
-      target.skills.arcaneInstinct.cd = 45.0;
-      target.skills.arcaneInstinct.duration = 10.0;
-      target.skills.arcaneInstinct.autoTimer = 3.0; 
-      eng.screenShake = 1.2; 
-
-      target.chatBubble = { text: "ARCANE INSTINCT!!!", life: 1.8 };
-
-      for (const enemy of eng.enemies) {
-        enemy.stunnedTime = 2.0;
-        enemy.flash = 0.4;
-      }
-
-      for (let k = 0; k < 45; k++) {
-        const pa = Math.random() * Math.PI * 2;
-        const ps = Math.random() * 260 + 60;
-        eng.particles.push({
-          x: target.x, y: target.y,
-          vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
-          color: Math.random() < 0.4 ? '#ffffff' : '#e879f9',
-          life: 0.7, ml: 0.7, r: Math.random() * 4 + 2
-        });
-      }
-
-      if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
-        netRef.current.channel.send('guest_cast_instinct', {});
-      }
-
-      if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
-        setSkillsState({ ...target.skills });
-      }
-    };
-
-  }, [netRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1221,7 +1369,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const fullPool = ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
       return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
     };
-
     const workerBlob = new Blob([`
       let timer = null;
       self.onmessage = function(e) {
@@ -1246,8 +1393,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       const net = netRef.current || {};
       const isCoopActive = Boolean(net.channel);
       const isHost = Boolean(net.isHost) || !isCoopActive;
-
-      // FIXED: Patigilin ang buong physics calculation engine kapag naka-pause ang laro
+      
       if (screen === 'pause') {
         return;
       }
@@ -1267,7 +1413,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             setHasStarted(true);
             activateAudioKeepAlive(); 
           } else if (!isHost) {
-            mx = 0; 
+            mx = 0;
             my = 0;
           }
         }
@@ -1294,7 +1440,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
             }
             if (eng.waveT >= eng.waveLen) {
-              eng.waveT = 0; eng.wave++;
+              eng.waveT = 0;
+              eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
               if (eng.wave % 3 === 0) {
                 const t = ET[3];
@@ -1308,7 +1455,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (!playerObj || playerObj.dead) return;
           if (!playerObj.skills) playerObj.skills = initSkills();
           if (!playerObj.potBuffs) playerObj.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
-
           if (playerObj.chatBubble && playerObj.chatBubble.life > 0) {
             playerObj.chatBubble.life -= dt;
           }
@@ -1324,19 +1470,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
           if (playerObj.skills.arcaneCollapse?.cd > 0) playerObj.skills.arcaneCollapse.cd -= dt;
           if (playerObj.skills.arcaneInstinct?.cd > 0) playerObj.skills.arcaneInstinct.cd -= dt;
+          if (playerObj.skills.arcaneResurrection?.cd > 0) playerObj.skills.arcaneResurrection.cd -= dt;
           
           if (playerObj.skills.arcaneInstinct?.duration > 0) {
             playerObj.skills.arcaneInstinct.duration -= dt;
-            
             if (playerObj.skills.arcaneInstinct.autoTimer > 0) {
               playerObj.skills.arcaneInstinct.autoTimer -= dt;
-              
               if (!playerObj.skills.arcaneInstinct.burstTick) playerObj.skills.arcaneInstinct.burstTick = 0;
               playerObj.skills.arcaneInstinct.burstTick += dt;
 
               if (playerObj.skills.arcaneInstinct.burstTick >= 0.15) {
                 playerObj.skills.arcaneInstinct.burstTick = 0;
-
                 let targetEnemy = null; let minDist = Infinity;
                 for (const e of eng.enemies) {
                   const d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y);
@@ -1346,7 +1490,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 if (targetEnemy) angle = Math.atan2(targetEnemy.y - playerObj.y, targetEnemy.x - playerObj.x);
                 if (!eng.slashes) eng.slashes = [];
                 eng.slashes.push({ x: playerObj.x, y: playerObj.y, vx: Math.cos(angle) * 340, vy: Math.sin(angle) * 340, angle: angle, life: 1.2, hits: new Set(), p2: playerObj === eng.p2 });
-
                 let targetX = playerObj.x + (Math.random() - 0.5) * 220;
                 let targetY = playerObj.y + (Math.random() - 0.5) * 220;
                 if (eng.enemies.length > 0) {
@@ -1355,7 +1498,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 }
                 if (!eng.stars) eng.stars = [];
                 eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 300, targetY: targetY, progress: 0, radius: 85, p2: playerObj === eng.p2 });
-
                 if (!eng.cubeBashes) eng.cubeBashes = [];
                 eng.cubeBashes.push({ x: playerObj.x, y: playerObj.y, radius: 10, maxRadius: 120, speed: 320 });
               }
@@ -1367,7 +1509,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (playerObj.skills.berserk.duration > 0) {
               playerObj.skills.berserk.duration -= dt;
             } else if (playerObj.skills.berserk.cd <= 0 && playerObj.skills.berserk.enabled !== false) {
-              playerObj.skills.berserk.duration = 6; 
+              playerObj.skills.berserk.duration = 6;
               playerObj.skills.berserk.cd = 15;      
             }
           }
@@ -1377,7 +1519,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (playerObj.skills.haste.duration > 0) {
               playerObj.skills.haste.duration -= dt;
             } else if (playerObj.skills.haste.cd <= 0 && playerObj.skills.haste.enabled !== false) {
-              playerObj.skills.haste.duration = 6; 
+              playerObj.skills.haste.duration = 6;
               playerObj.skills.haste.cd = 15;      
             }
           }
@@ -1387,7 +1529,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (playerObj.skills.shield.duration > 0) {
               playerObj.skills.shield.duration -= dt;
             } else if (playerObj.skills.shield.cd <= 0 && playerObj.skills.shield.enabled !== false) {
-              playerObj.skills.shield.duration = 5; 
+              playerObj.skills.shield.duration = 5;
               playerObj.skills.shield.cd = 18;      
             }
           }
@@ -1447,13 +1589,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
         };
-
         if (isHost || !isCoopActive) {
           if (eng.p && !eng.p.dead) {
             tickPlayerSkillTrackers(eng.p);
-
             let calculatedSpeed = 200;
-            if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45; 
+            if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45;
             if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 2.50; 
 
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * calculatedSpeed * dt));
@@ -1462,7 +1602,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
           if (isCoopActive && eng.p2 && !eng.p2.dead && eng.gameStarted) {
             tickPlayerSkillTrackers(eng.p2);
-
             let calculatedSpeedp2 = 200;
             if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
             if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 2.50;
@@ -1474,7 +1613,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         } else {
           if (eng.p2 && !eng.p2.dead) {
             tickPlayerSkillTrackers(eng.p2);
-
             let calculatedSpeedp2 = 200;
             if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
             if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 2.50;
@@ -1482,7 +1620,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * calculatedSpeedp2 * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * calculatedSpeedp2 * dt));
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
-
             const predFactor = Math.min(1, dt * 18);
             eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
             eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
@@ -1553,8 +1690,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
           let currentSpd = 200;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 2.50); 
-
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 2.50);
           let currentCd = localTrackedObj.shootRate || 0.6;
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentCd *= 0.5;
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCd *= 0.35; 
@@ -1587,8 +1723,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 p2_skills: eng.p2 ? eng.p2.skills : null,
                 p1_potBuffs: eng.p ? eng.p.potBuffs : null,
                 p2_potBuffs: eng.p2 ? eng.p2.potBuffs : null,
-                ts: Date.now(),
-                p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80
+                p1_level: eng.p ? eng.p.level : 1, p1_xp: eng.p ? eng.p.xp : 0, p1_xpNext: eng.p ? eng.p.xpNext : 80,
+                p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80,
+                ts: Date.now()
               });
             }
           }
@@ -1608,13 +1745,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 28) {
                 if (!sl.hits.has(enemy)) {
                   sl.hits.add(enemy);
-                  
                   let baseSkillDmg = 42;
                   const shooterObj = sl.p2 ? eng.p2 : eng.p;
-                  if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4; 
+                  if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.5; 
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
-
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
                     baseSkillDmg *= 2;
                     enemy.flash = 0.45;
@@ -1622,7 +1757,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                     enemy.flash = 0.15;
                   }
 
-                  enemy.hp -= baseSkillDmg; 
+                  enemy.hp -= baseSkillDmg;
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
@@ -1643,7 +1778,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   if (shooterObj?.potBuffs?.power > 0) splashDmg *= 1.4;
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 2.5;
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
-
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
                     splashDmg *= 2;
                     enemy.flash = 0.5;
@@ -1681,7 +1815,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             col.life -= dt;
             col.pulseTimer += dt;
             col.radius += 360 * dt;
-
             if (col.pulseTimer >= 0.5 && col.pulseCount < 3) {
               col.pulseTimer = 0;
               col.pulseCount++;
@@ -1704,17 +1837,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           for (let pIdx = eng.potions.length - 1; pIdx >= 0; pIdx--) {
             const pot = eng.potions[pIdx];
             pot.life -= dt;
-            if (pot.life <= 0) { eng.potions.splice(pIdx, 1); continue; }
+            if (pot.life <= 0) { eng.potions.splice(pIdx, 1); continue;
+            }
 
             let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
             if (isCoopActive && eng.p2 && !eng.p2.dead) {
               const dP1 = eng.p ? Math.hypot(eng.p.x - pot.x, eng.p.y - pot.y) : Infinity;
               if (Math.hypot(eng.p2.x - pot.x, eng.p2.y - pot.y) < dP1) {
-                tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
+                tx = eng.p2.x;
+                ty = eng.p2.y; targetPlayer = eng.p2;
               }
             }
             if (!targetPlayer) continue;
-
             const pd = Math.hypot(tx - pot.x, ty - pot.y);
             if (pd < 110) {
               const ga = Math.atan2(ty - pot.y, tx - pot.x);
@@ -1727,11 +1861,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               }
 
               if (pot.type === 'health') {
-                targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20); 
+                targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20);
               } else if (pot.type === 'regen') {
                 targetPlayer.potBuffs.regen = 10.0;
               } else {
-                targetPlayer.potBuffs[pot.type] = 12.0; 
+                targetPlayer.potBuffs[pot.type] = 12.0;
               }
 
               for(let k=0; k<8; k++) {
@@ -1753,7 +1887,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
-                  let activeRate = (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) ? (eng.p.shootRate * 0.5) : eng.p.shootRate;
+                  let activeRate = (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) ?
+                    (eng.p.shootRate * 0.5) : eng.p.shootRate;
                   if (eng.p.skills?.arcaneInstinct?.duration > 0) activeRate *= 0.35; 
 
                   eng.p.shootCd = activeRate;
@@ -1776,7 +1911,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
-                  let activeRatep2 = (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) ? (eng.p2.shootRate * 0.5) : eng.p2.shootRate;
+                  let activeRatep2 = (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) ?
+                    (eng.p2.shootRate * 0.5) : eng.p2.shootRate;
                   if (eng.p2.skills?.arcaneInstinct?.duration > 0) activeRatep2 *= 0.35;
 
                   eng.p2.shootCd = activeRatep2;
@@ -1795,7 +1931,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             for (let i = eng.bullets.length - 1; i >= 0; i--) {
               const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
               if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) { 
-                eng.bullets.splice(i, 1); 
+                eng.bullets.splice(i, 1);
                 continue; 
               }
               let hit = false;
@@ -1805,9 +1941,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   const shooterObj = b.p2 ? eng.p2 : eng.p;
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
                   let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
-
                   if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); 
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.50); 
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.50);
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
@@ -1818,19 +1953,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   }
 
                   e.hp -= calculatedDmg;
-                  
                   const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
                   if (hasBodyCutter) e.stigmaTime = 4.0;
 
                   for(let k=0; k<5; k++) {
-                    const pa = Math.random()*Math.PI*2; const ps = Math.random()*80+40;
+                    const pa = Math.random()*Math.PI*2;
+                    const ps = Math.random()*80+40;
                     eng.particles.push({ x: b.x, y: b.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: e.color, life: 0.3, ml: 0.3, r: 2 });
                   }
-                  eng.bullets.splice(i, 1); hit = true;
+                  eng.bullets.splice(i, 1);
+                  hit = true;
                   if (e.hp <= 0) {
                     eng.score += e.boss ? 1500 : 100;
                     eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
-
                     if (Math.random() < 0.22) {
                       const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
                       eng.potions.push({
@@ -1849,7 +1984,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             for (let j = eng.enemies.length - 1; j >= 0; j--) {
               const e = eng.enemies[j];
-
               if (e.stigmaTime > 0) {
                 e.stigmaTime -= dt;
                 e.hp -= 20 * dt; 
@@ -1874,7 +2008,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
                 eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
-                
                 if (Math.random() < 0.22) {
                   const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
                   eng.potions.push({
@@ -1900,29 +2033,28 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
                   let runSpeed = e.speed;
                   if (e.temporalSlowTime > 0) runSpeed *= 0.30; 
-                  e.x += Math.cos(ea) * runSpeed * dt; e.y += Math.sin(ea) * runSpeed * dt;
+                  e.x += Math.cos(ea) * runSpeed * dt;
+                  e.y += Math.sin(ea) * runSpeed * dt;
                 }
               }
               
               if (e.flash > 0) e.flash -= dt;
-
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
                 let damageTaken = e.dmg;
                 if (e.voidExhaustTime > 0) damageTaken *= 0.5; 
-                if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65; 
-
+                if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65;
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
-                  damageTaken = 0; 
+                  damageTaken = 0;
                 } else if (eng.p.skills?.fortify?.learned && eng.p.skills?.fortify?.enabled !== false) {
-                  damageTaken *= 0.75; 
+                  damageTaken *= 0.75;
                 }
 
-                eng.p.hp -= damageTaken; eng.p.inv = 0.7;
-                // FIXED: Solo/Host Game-over check updates
+                eng.p.hp -= damageTaken;
+                eng.p.inv = 0.7;
                 if (eng.p.hp <= 0) { 
-                  eng.p.dead = true; 
+                  eng.p.dead = true;
                   if(!isCoopActive || !eng.p2 || eng.p2.dead) { 
-                    if(isCoopActive) netRef.current.channel.send('game_over',{}); 
+                    if(isCoopActive) netRef.current.channel.send('game_over',{});
                     setScreen('gameover'); 
                   } 
                 }
@@ -1931,29 +2063,32 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 let damageTakenp2 = e.dmg;
                 if (e.voidExhaustTime > 0) damageTakenp2 *= 0.5;
                 if (eng.p2.potBuffs?.defense > 0) damageTakenp2 *= 0.65;
-
                 if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
                   damageTakenp2 = 0;
                 } else if (eng.p2.skills?.fortify?.learned && eng.p2.skills?.fortify?.enabled !== false) {
                   damageTakenp2 *= 0.75;
                 }
 
-                eng.p2.hp -= damageTakenp2; eng.p2.inv = 0.7;
+                eng.p2.hp -= damageTakenp2;
+                eng.p2.inv = 0.7;
                 if (eng.p2.hp <= 0) {
-                  eng.p2.dead = true; 
+                  eng.p2.dead = true;
                   if(!eng.p || eng.p.dead) { netRef.current.channel.send('game_over',{}); setScreen('gameover'); } 
                 }
               }
             }
 
             for (let i = eng.gems.length - 1; i >= 0; i--) {
-              const g = eng.gems[i]; g.life -= dt;
-              if (g.life <= 0) { eng.gems.splice(i, 1); continue; }
+              const g = eng.gems[i];
+              g.life -= dt;
+              if (g.life <= 0) { eng.gems.splice(i, 1); continue;
+              }
               let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
               if (isCoopActive && eng.p2 && !eng.p2.dead) {
                 const dP1 = eng.p ? Math.hypot(eng.p.x - g.x, eng.p.y - g.y) : Infinity;
                 if (Math.hypot(eng.p2.x - g.x, eng.p2.y - g.y) < dP1) {
-                  tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
+                  tx = eng.p2.x;
+                  ty = eng.p2.y; targetPlayer = eng.p2;
                 }
               }
               if (!targetPlayer) continue;
@@ -1969,13 +2104,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 if (isCoopActive && targetPlayer === eng.p2) {
                   eng.p2.xp += distributedXp;
                   if (eng.p2.xp >= eng.p2.xpNext) {
-                    eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
+                    eng.p2.xp -= eng.p2.xpNext;
+                    eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
                     netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
                   }
                 } else if (eng.p) {
                   eng.p.xp += distributedXp;
                   if (eng.p.xp >= eng.p.xpNext) {
-                    eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
+                    eng.p.xp -= eng.p.xpNext;
+                    eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
                     onLevelUpOffer(rollUpgradeOptions()); 
                     setScreen('levelup');
                   }
@@ -1987,7 +2124,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
           if (!isHost && isCoopActive) {
             for (let i = eng.bullets.length - 1; i >= 0; i--) {
-              const b = eng.bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
+              const b = eng.bullets[i];
+              b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
               if (b.life <= 0 || b.x < -20 || b.x > W + 20 || b.y < -20 || b.y > H + 20) {
                 eng.bullets.splice(i, 1);
               }
@@ -2013,7 +2151,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
           if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
           if (hpTextRef.current) hpTextRef.current.textContent = `HP ${Math.max(0, Math.ceil(localTarget.hp))}/${localTarget.maxHp}`;
-
           const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
           if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
           if (xpTextRef.current) xpTextRef.current.textContent = `LV${localTarget.level} XP ${localTarget.xp}/${localTarget.xpNext}`;
@@ -2021,17 +2158,20 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       for (let i = eng.particles.length - 1; i >= 0; i--) {
-        const p = eng.particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt;
+        const p = eng.particles[i];
+        p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.93; p.vy *= 0.93; p.life -= dt;
         if (p.life <= 0) eng.particles.splice(i, 1);
       }
       for (const a of eng.ambs) {
-        a.x += a.vx * dt; a.y += a.vy * dt; a.t -= dt * 0.22;
-        if (a.t <= 0 || a.y < -10) { a.x = Math.random() * W; a.y = H + 10; a.t = 1; }
+        a.x += a.vx * dt;
+        a.y += a.vy * dt; a.t -= dt * 0.22;
+        if (a.t <= 0 || a.y < -10) { a.x = Math.random() * W; a.y = H + 10;
+        a.t = 1; }
       }
+
     };
 
     worker.postMessage('start');
-
     const renderRpgChatBubble = (x, y, txt) => {
       ctx.save();
       ctx.font = 'bold 11px monospace';
@@ -2066,7 +2206,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       ctx.lineTo(x, boxY + boxHeight + 6);
       ctx.lineTo(x + 5, boxY + boxHeight);
       ctx.stroke();
-
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#fef08a';
       ctx.textAlign = 'center';
@@ -2074,7 +2213,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       ctx.fillText(txt, x, boxY + boxHeight / 2 + 1);
       ctx.restore();
     };
-
     const renderLoop = () => {
       ctx.save();
       if (eng.screenShake > 0) {
@@ -2083,15 +2221,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.translate(dx, dy);
       }
 
-      ctx.fillStyle = '#030111'; ctx.fillRect(0, 0, W, H);
-      if (eng.floorPat) { ctx.fillStyle = eng.floorPat; ctx.fillRect(0, 0, W, H); }
+      ctx.fillStyle = '#030111';
+      ctx.fillRect(0, 0, W, H);
+      if (eng.floorPat) { ctx.fillStyle = eng.floorPat; ctx.fillRect(0, 0, W, H);
+      }
 
       for (const a of eng.ambs) {
-        ctx.save(); ctx.globalAlpha = a.a * a.t; ctx.fillStyle = a.c;
+        ctx.save();
+        ctx.globalAlpha = a.a * a.t; ctx.fillStyle = a.c;
         ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
       for (const g of eng.gems) {
-        ctx.save(); ctx.shadowColor = '#34d399'; ctx.shadowBlur = 12; ctx.fillStyle = '#34d399';
+        ctx.save();
+        ctx.shadowColor = '#34d399'; ctx.shadowBlur = 12; ctx.fillStyle = '#34d399';
         ctx.beginPath(); ctx.moveTo(g.x, g.y - g.r); ctx.lineTo(g.x + g.r * 0.6, g.y);
         ctx.lineTo(g.x, g.y + g.r); ctx.lineTo(g.x - g.r * 0.6, g.y); ctx.closePath(); ctx.fill(); ctx.restore();
       }
@@ -2127,8 +2269,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       for (const b of eng.bullets) {
-        ctx.save(); ctx.shadowColor = b.p2 ? '#fb923c' : '#e879f9'; ctx.shadowBlur = 16;
-        ctx.fillStyle = b.p2 ? '#fed7aa' : '#f5d0fe'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.save();
+        ctx.shadowColor = b.p2 ? '#fb923c' : '#e879f9'; ctx.shadowBlur = 16;
+        ctx.fillStyle = b.p2 ? '#fed7aa' : '#f5d0fe'; ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
 
       if (eng.slashes) {
@@ -2191,7 +2335,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           ctx.beginPath();
           ctx.arc(col.x, col.y, col.radius % col.maxRadius, 0, Math.PI * 2);
           ctx.stroke();
-
           ctx.strokeStyle = 'rgba(168, 85, 247, ' + Math.max(0, col.life / 3) + ')';
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -2202,9 +2345,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       for (const e of eng.enemies) {
-        ctx.save(); ctx.fillStyle = e.flash > 0 ? '#fff' : e.color; ctx.shadowColor = e.flash > 0 ? '#fff' : e.glow; ctx.shadowBlur = e.boss ? 22 : 12;
+        ctx.save();
+        ctx.fillStyle = e.flash > 0 ? '#fff' : e.color; ctx.shadowColor = e.flash > 0 ? '#fff' : e.glow;
+        ctx.shadowBlur = e.boss ? 22 : 12;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
-        
         if (e.stunnedTime > 0) {
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 2;
@@ -2219,9 +2363,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           ctx.stroke();
         }
 
-        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#030111'; ctx.beginPath();
+        ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2);
+        ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
         if (e.hp < e.maxHp) {
-          const bw = e.r * 2.5; const bh = 4; const bx = e.x - bw / 2; const by = e.y - e.r - 10;
+          const bw = e.r * 2.5;
+          const bh = 4; const bx = e.x - bw / 2; const by = e.y - e.r - 10;
           ctx.fillRect(bx, by, bw, bh);
           ctx.fillStyle = e.boss ? '#fbbf24' : '#ef4444'; ctx.fillRect(bx, by, bw * (e.hp / e.maxHp), bh);
         }
@@ -2229,7 +2376,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
 
       for (const p of eng.particles) {
-        ctx.save(); ctx.globalAlpha = p.life / p.ml; ctx.fillStyle = p.color;
+        ctx.save();
+        ctx.globalAlpha = p.life / p.ml; ctx.fillStyle = p.color;
         ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
       }
 
@@ -2242,10 +2390,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
       const p1X = isHost ? (eng.p ? eng.p.x : W/3) : eng.p1Render.x;
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
-
       const p2X = (isCoopActive && !isHost && eng.p2Render) ? eng.p2Render.x : (eng.p2 ? eng.p2.x : W*2/3);
       const p2Y = (isCoopActive && !isHost && eng.p2Render) ? eng.p2Render.y : (eng.p2 ? eng.p2.y : H/2);
-
       if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
@@ -2261,7 +2407,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             ctx.lineWidth = 2 + layer * 2;
             ctx.shadowColor = '#d946ef';
             ctx.shadowBlur = 18;
-
             for (let angleDeg = 0; angleDeg <= 360; angleDeg += 20) {
               const rad = (angleDeg * Math.PI) / 180;
               const offsetPulse = pr + 10 + Math.sin(auraTime + angleDeg) * 7;
@@ -2276,30 +2421,35 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
 
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
-        ctx.beginPath(); ctx.arc(p1X, p1Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
-        
+        ctx.beginPath();
+        ctx.arc(p1X, p1Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
-          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
-          ctx.beginPath(); ctx.arc(p1X, p1Y + 3, pr + 10, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(p1X, p1Y + 3, pr + 10, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
         }
         if (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) {
-          ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath();
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2; ctx.beginPath();
           ctx.arc(p1X, p1Y + 3, pr + 5, 0, Math.PI * 2); ctx.stroke();
         }
 
         ctx.fillStyle = fl ? '#b91c1c' : '#5b21b6';
-        ctx.beginPath(); ctx.moveTo(p1X, p1Y - pr * 1.8); ctx.lineTo(p1X + pr * 0.9, p1Y - pr * 0.2); ctx.lineTo(p1X - pr * 0.9, p1Y - pr * 0.2); ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(p1X, p1Y - pr * 1.8); ctx.lineTo(p1X + pr * 0.9, p1Y - pr * 0.2);
+        ctx.lineTo(p1X - pr * 0.9, p1Y - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#c4b5fd';
-        ctx.beginPath(); ctx.ellipse(p1X, p1Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p1X - pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p1X + pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(p1X, p1Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p1X - pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2);
+        ctx.arc(p1X + pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
-
         if (eng.p.chatBubble && eng.p.chatBubble.life > 0) {
           renderRpgChatBubble(p1X, p1Y, eng.p.chatBubble.text);
         }
       }
 
-      // FIXED: Siguraduhing may umiiral na p2 object bago ito i-render (para kapag lumabas si P2, mawala ang character niya)
       if (isCoopActive && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
@@ -2315,7 +2465,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             ctx.lineWidth = 2 + layer * 2;
             ctx.shadowColor = '#d946ef';
             ctx.shadowBlur = 18;
-
             for (let angleDeg = 0; angleDeg <= 360; angleDeg += 20) {
               const rad = (angleDeg * Math.PI) / 180;
               const offsetPulse = pr + 10 + Math.sin(auraTime2 + angleDeg) * 7;
@@ -2324,30 +2473,38 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (angleDeg === 0) ctx.moveTo(fx, fy);
               else ctx.lineTo(fx, fy);
             }
+
+            
             ctx.stroke();
           }
           ctx.restore();
         }
 
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
-        ctx.beginPath(); ctx.arc(p2X, p2Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
-        
+        ctx.beginPath();
+        ctx.arc(p2X, p2Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
-          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
-          ctx.beginPath(); ctx.arc(p2X, p2Y + 3, pr + 10, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+          ctx.beginPath();
+          ctx.arc(p2X, p2Y + 3, pr + 10, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
         }
         if (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) {
-          ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath();
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2; ctx.beginPath();
           ctx.arc(p2X, p2Y + 3, pr + 5, 0, Math.PI * 2); ctx.stroke();
         }
 
         ctx.fillStyle = fl ? '#b91c1c' : '#c2410c';
-        ctx.beginPath(); ctx.moveTo(p2X, p2Y - pr * 1.8); ctx.lineTo(p2X + pr * 0.9, p2Y - pr * 0.2); ctx.lineTo(p2X - pr * 0.9, p2Y - pr * 0.2); ctx.closePath(); ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(p2X, p2Y - pr * 1.8); ctx.lineTo(p2X + pr * 0.9, p2Y - pr * 0.2);
+        ctx.lineTo(p2X - pr * 0.9, p2Y - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#ffedd5';
-        ctx.beginPath(); ctx.ellipse(p2X, p2Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p2X - pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p2X + pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(p2X, p2Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p2X - pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2);
+        ctx.arc(p2X + pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
-
         if (eng.p2.chatBubble && eng.p2.chatBubble.life > 0) {
           renderRpgChatBubble(p2X, p2Y, eng.p2.chatBubble.text);
         }
@@ -2357,15 +2514,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       renderAnimId = requestAnimationFrame(renderLoop);
     };
     renderAnimId = requestAnimationFrame(renderLoop);
-
     const down = (e) => { 
-      eng.keys[e.key] = true; 
-      
-      // PINALITAN: Bukod sa Escape, gagana na rin ang letrang 'P' o 'p' para mag-pause
+      eng.keys[e.key] = true;
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && screen === 'playing') {
         const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-        
-        // Tanging host lang o solo player ang pwedeng mag-pause
         if (!isCoopActive || netRef.current.isHost) {
           if (window.executeNetworkPauseAction) {
             window.executeNetworkPauseAction();
@@ -2378,12 +2530,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
       
       if (screen === 'playing') {
-        if (e.key === '1') window.learnSkillTreeTech('bodyCutter');
-        if (e.key === '2') window.learnSkillTreeTech('shootingStar');
-        if (e.key === '3') window.learnSkillTreeTech('cubeBash');
-        if (e.key === '4') window.learnSkillTreeTech('vacuumSlash');
-        if (e.key === '5') window.castArcaneCollapseUltimate();
-        if (e.key === '6') window.castArcaneInstinctUltimate(); 
+        if (e.key === '1') learnSkillTreeTech('bodyCutter');
+        if (e.key === '2') learnSkillTreeTech('shootingStar');
+        if (e.key === '3') learnSkillTreeTech('cubeBash');
+        if (e.key === '4') learnSkillTreeTech('vacuumSlash');
+        if (e.key === '5') castArcaneCollapseUltimate();
+        if (e.key === '6') castArcaneInstinctUltimate(); 
+        if (e.key === '7') castArcaneResurrectionUltimate();
       }
     };
 
@@ -2401,116 +2554,132 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [screen]);
 
-  window.runUpgrade = (choice, forcedTarget = null) => {
-    const eng = engineRef.current;
-    if (!eng || !eng.p) return;
-    
-    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-    if (forcedTarget === 'p2') target = eng.p2;
-    if (forcedTarget === 'p1') target = eng.p;
-    
-    if (!target) return;
-    
-    const token = String(choice || '').toLowerCase().trim();
-    console.log(`🔮 Applying Arcane Upgrade:`, token);
-    
-    if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
-      target.maxHp += 25; 
-      target.hp = target.maxHp; 
-    }
-    else if (token.includes('damage') || token.includes('might') || token.includes('increase')) {
-      target.dmg = (target.dmg || 0) + 14; 
-    }
-    else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
-      target.shootRate = Math.max(0.15, target.shootRate - 0.1); 
-    }
-    else if (token.includes('multi') || token.includes('shot') || token.includes('split')) {
-      target.multiShot += 1; 
-    }
-  };
-
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
-
+  
   return (
     <div id="wrap">
       <style>{focusStyles}</style>
       <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
 
-{/* TOP STATUS HUD */}
-      {screen === 'playing' && (
-        <div className="game-hud-top" style={{ pointerEvents: 'auto', alignItems: 'flex-start' }}>
-          
-          {/* 1. KALIWANG BAHAGI: Score Text */}
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', marginTop: '2px' }}>
-            <div>SCORE: <span ref={scoreValueRef}>0</span></div>
-          </div>
-
-          {/* 2. GITNANG BAHAGI: PAUSE GAME button (Inangat nang husto) */}
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', marginTop: '0px' }}>
-            {isHostInstance && (
-              <button 
-                onClick={() => {
-                  if (window.executeNetworkPauseAction && isNetworked) {
-                    window.executeNetworkPauseAction();
-                  } else {
-                    setScreen('pause');
-                  }
-                }}
-                style={{
-                  background: 'rgba(27, 16, 59, 0.6)',
-                  border: '1px solid #4c2d82',
-                  color: '#a78bfa',
-                  fontFamily: 'Georgia, serif',
-                  fontSize: '0.75rem',
-                  fontWeight: '800',
-                  letterSpacing: '0.05em',
-                  padding: '6px 16px',
-                  borderRadius: '20px',
-                  cursor: 'pointer',
-                  boxShadow: '0 0 10px rgba(124, 58, 237, 0.25)',
-                  transition: 'all 0.2s ease-in-out',
-                  pointerEvents: 'auto'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'rgba(44, 26, 92, 0.8)';
-                  e.currentTarget.style.borderColor = '#6d28d9';
-                  e.currentTarget.style.boxShadow = '0 0 14px rgba(167, 139, 250, 0.45)';
-                  e.currentTarget.style.color = '#ffffff';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'rgba(27, 16, 59, 0.6)';
-                  e.currentTarget.style.borderColor = '#4c2d82';
-                  e.currentTarget.style.boxShadow = '0 0 10px rgba(124, 58, 237, 0.25)';
-                  e.currentTarget.style.color = '#a78bfa';
-                }}
-              >
-                ⏸ PAUSE GAME
-              </button>
-            )}
-          </div>
-
-          {/* 3. KANANG BAHAGI: Title at Wave Layout */}
-          <div className="game-hud-right-group" style={{ flex: 1 }}>
-
-            
-            <div ref={waveValueRef} style={{ fontSize: '1rem', fontWeight: 'bold', color: '#ffffff', textShadow: '0 0 8px rgba(255,255,255,0.5)', marginTop: '2px' }}>
-              WAVE 1 | 30s
+        {isCoop && (isHostInstance ? engineRef.current.p2 : engineRef.current.p) && showPartyList && (
+          <div className="coop-party-panel">
+            <div className="coop-party-row">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <div className="coop-name">
+                  Ally: {allyName || "Unknown"}
+                </div>
+                <button 
+                  onClick={() => setShowPartyList(false)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#fbbf24',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    padding: '0 4px',
+                    pointerEvents: 'auto'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="coop-stats">
+                HP: {Math.round(isHostInstance ?
+                  engineRef.current.p2.hp : engineRef.current.p.hp)} / {isHostInstance ? engineRef.current.p2.maxHp : engineRef.current.p.maxHp}<br />
+                LVL: {isHostInstance ?
+                  engineRef.current.p2.level : engineRef.current.p.level} | EXP: {Math.round(isHostInstance ? engineRef.current.p2.xp : engineRef.current.p.xp)}
+              </div>
             </div>
-            
-                        <div className="hud-menu-title">
-              <span className="arc">ARCANE</span><br/>
-              <span className="sur">SURVIVAL</span>
-            </div>
-             <div className="hud-menu-sub">The Last Covenant</div>
-           
           </div>
+        )}
 
-        </div>
-      )}
+        {isCoop && !showPartyList && (
+          <button
+            onClick={() => setShowPartyList(true)}
+            style={{
+              position: 'absolute',
+              top: '110px',
+              right: '12px',
+              background: 'rgba(9, 6, 28, 0.88)',
+              border: '1px solid #7c3aed',
+              borderRadius: '6px',
+              padding: '4px 8px',
+              color: '#fbbf24',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontFamily: 'monospace',
+              pointerEvents: 'auto',
+              zIndex: 20
+            }}
+          >
+            👥 Show Party
+          </button>
+        )}
 
+        {screen === 'playing' && (
+          <div className="game-hud-top" style={{ pointerEvents: 'auto', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', marginTop: '2px' }}>
+              <div>SCORE: <span ref={scoreValueRef}>0</span></div>
+            </div>
+
+            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', marginTop: '0px' }}>
+              {isHostInstance && (
+                <button 
+                  onClick={() => {
+                    if (window.executeNetworkPauseAction && isNetworked) {
+                      window.executeNetworkPauseAction();
+                    } else {
+                      setScreen('pause');
+                    }
+                  }}
+                  style={{
+                    background: 'rgba(27, 16, 59, 0.6)',
+                    border: '1px solid #4c2d82',
+                    color: '#a78bfa',
+                    fontFamily: 'Georgia, serif',
+                    fontSize: '0.75rem',
+                    fontWeight: '800',
+                    letterSpacing: '0.05em',
+                    padding: '6px 16px',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    boxShadow: '0 0 10px rgba(124, 58, 237, 0.25)',
+                    transition: 'all 0.2s ease-in-out',
+                    pointerEvents: 'auto'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(44, 26, 92, 0.8)';
+                    e.currentTarget.style.borderColor = '#6d28d9';
+                    e.currentTarget.style.boxShadow = '0 0 14px rgba(167, 139, 250, 0.45)';
+                    e.currentTarget.style.color = '#ffffff';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'rgba(27, 16, 59, 0.6)';
+                    e.currentTarget.style.borderColor = '#4c2d82';
+                    e.currentTarget.style.boxShadow = '0 0 10px rgba(124, 58, 237, 0.25)';
+                    e.currentTarget.style.color = '#a78bfa';
+                  }}
+                >
+                  ⏸ PAUSE GAME
+                </button>
+              )}
+            </div>
+
+            <div className="game-hud-right-group" style={{ flex: 1 }}>
+              <div ref={waveValueRef} style={{ fontSize: '1rem', fontWeight: 'bold', color: '#ffffff', textShadow: '0 0 8px rgba(255,255,255,0.5)', marginTop: '2px' }}>
+                WAVE 1 | 30s
+              </div>
+              
+              <div className="hud-menu-title">
+                <span className="arc">ARCANE</span><br/>
+                <span className="sur">SURVIVAL</span>
+              </div>
+              <div className="hud-menu-sub">The Last Covenant</div>
+            </div>
+          </div>
+        )}
 
         {screen === 'playing' && activeBuffsList.length > 0 && (
           <div className="rpg-buff-container">
@@ -2579,7 +2748,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           <div className="mmo-hotbar-container">
             <div 
               className={`mmo-hotbar-slot ${!skillsState.bodyCutter?.learned ? 'not-learned' : (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.bodyCutter?.learned && window.learnSkillTreeTech('bodyCutter')}
+              onClick={() => skillsState.bodyCutter?.learned && learnSkillTreeTech('bodyCutter')}
             >
               <span className="hotbar-key-bind">1</span>
               <span className="hotbar-icon">🩸</span>
@@ -2593,7 +2762,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             <div 
               className={`mmo-hotbar-slot ${!skillsState.shootingStar?.learned ? 'not-learned' : (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.shootingStar?.learned && window.learnSkillTreeTech('shootingStar')}
+              onClick={() => skillsState.shootingStar?.learned && learnSkillTreeTech('shootingStar')}
             >
               <span className="hotbar-key-bind">2</span>
               <span className="hotbar-icon">🌠</span>
@@ -2612,7 +2781,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             <div 
               className={`mmo-hotbar-slot ${!skillsState.cubeBash?.learned ? 'not-learned' : (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.cubeBash?.learned && window.learnSkillTreeTech('cubeBash')}
+              onClick={() => skillsState.cubeBash?.learned && learnSkillTreeTech('cubeBash')}
             >
               <span className="hotbar-key-bind">3</span>
               <span className="hotbar-icon">📦</span>
@@ -2631,7 +2800,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             <div 
               className={`mmo-hotbar-slot ${!skillsState.vacuumSlash?.learned ? 'not-learned' : (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.vacuumSlash?.learned && window.learnSkillTreeTech('vacuumSlash')}
+              onClick={() => skillsState.vacuumSlash?.learned && learnSkillTreeTech('vacuumSlash')}
             >
               <span className="hotbar-key-bind">4</span>
               <span className="hotbar-icon">🌀</span>
@@ -2652,7 +2821,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               <>
                 <div 
                   className="mmo-hotbar-ult-slot"
-                  onClick={() => window.castArcaneCollapseUltimate()}
+                  onClick={() => castArcaneCollapseUltimate()}
                   title="Arcane Collapse: Judgment of the Wizard Council"
                 >
                   <span className="hotbar-key-bind">5</span>
@@ -2666,7 +2835,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 <div 
                   className="mmo-hotbar-ult-slot"
                   style={{ border: '3px solid #e879f9', background: 'radial-gradient(circle, #4c0519 0%, #0c0004 100%)' }}
-                  onClick={() => window.castArcaneInstinctUltimate()}
+                  onClick={() => castArcaneInstinctUltimate()}
                   title="Arcane Instinct: Transcendent State"
                 >
                   <span className="hotbar-key-bind">6</span>
@@ -2674,6 +2843,20 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   <span className="hotbar-name">A.Instinct</span>
                   {skillsState.arcaneInstinct?.cd > 0 && (
                     <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneInstinct.cd)}s</div>
+                  )}
+                </div>
+
+                <div 
+                  className="mmo-hotbar-ult-slot"
+                  style={{ border: '3px solid #10b981', background: 'radial-gradient(circle, #064e3b 0%, #022c22 100%)' }}
+                  onClick={() => castArcaneResurrectionUltimate()}
+                  title="Forbidden Spell: Resurrection of Arcane"
+                >
+                  <span className="hotbar-key-bind">7</span>
+                  <span className="hotbar-icon">⚚</span>
+                  <span className="hotbar-name">A.Resurrect</span>
+                  {skillsState.arcaneResurrection?.cd > 0 && (
+                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneResurrection.cd)}s</div>
                   )}
                 </div>
               </>
@@ -2693,13 +2876,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
           <div className="skill-tree-container">
             <div className="skill-tree-title-row">
-              <span className="skill-tree-title">✨ DEFENSIVE SKILLS (LV 5+)</span>
+              <span className="skill-tree-title">✨ DEFENSIVE SPELLS (LV 5+)</span>
               <button className="skill-tree-close-x" onClick={() => setIsTreeOpen(false)}>✕</button>
             </div>
             
             <button 
               className={`skill-row-btn ${skillsState.berserk?.learned ? (skillsState.berserk.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => window.learnSkillTreeTech('berserk')}
+              onClick={() => learnSkillTreeTech('berserk')}
             >
               <span>🔥 Berserk Aura {skillsState.berserk?.learned ? (skillsState.berserk.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.berserk?.learned && (
@@ -2712,7 +2895,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             <button 
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => window.learnSkillTreeTech('haste')}
+              onClick={() => learnSkillTreeTech('haste')}
             >
               <span>⚡ Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.haste?.learned && (
@@ -2725,7 +2908,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             <button 
               className={`skill-row-btn ${skillsState.fortify?.learned ? (skillsState.fortify.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => window.learnSkillTreeTech('fortify')}
+              onClick={() => learnSkillTreeTech('fortify')}
             >
               <span>🛡️ Fortify {skillsState.fortify?.learned ? (skillsState.fortify.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.fortify?.learned && <span className="skill-cd-text">PERMANENT</span>}
@@ -2734,7 +2917,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             <button 
               className={`skill-row-btn ${skillsState.shield?.learned ? (skillsState.shield.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => window.learnSkillTreeTech('shield')}
+              onClick={() => learnSkillTreeTech('shield')}
             >
               <span>🔮 Rigid's Defender {skillsState.shield?.learned ? (skillsState.shield.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.shield?.learned && (
@@ -2748,12 +2931,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             {playerLevel >= 10 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ OFFENSIVE SKILLS (LV 10+)</span>
+                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ OFFENSIVE SPELLS (LV 10+)</span>
                 </div>
 
                 <button 
                   className={`skill-row-btn ${skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => window.learnSkillTreeTech('bodyCutter')}
+                  onClick={() => learnSkillTreeTech('bodyCutter')}
                 >
                   <span>🩸 Body Cutter {skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.bodyCutter?.learned && <span className="skill-cd-text">PASSIVE</span>}
@@ -2762,7 +2945,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
                 <button 
                   className={`skill-row-btn ${skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => window.learnSkillTreeTech('shootingStar')}
+                  onClick={() => learnSkillTreeTech('shootingStar')}
                 >
                   <span>🌠 Shooting Star {skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.shootingStar?.learned && <span className="skill-cd-text">AUTO</span>}
@@ -2771,7 +2954,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
                 <button 
                   className={`skill-row-btn ${skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => window.learnSkillTreeTech('cubeBash')}
+                  onClick={() => learnSkillTreeTech('cubeBash')}
                 >
                   <span>📦 Cube Bash {skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.cubeBash?.learned && <span className="skill-cd-text">AUTO</span>}
@@ -2780,7 +2963,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
                 <button 
                   className={`skill-row-btn ${skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => window.learnSkillTreeTech('vacuumSlash')}
+                  onClick={() => learnSkillTreeTech('vacuumSlash')}
                 >
                   <span>🌀 Vacuum Slash {skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.vacuumSlash?.learned && <span className="skill-cd-text">AUTO</span>}
@@ -2792,12 +2975,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             {playerLevel >= 12 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 ULTIMATE SKILLS (LV 12+)</span>
+                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 ULTIMATE SPELLS (LV 12+)</span>
                 </div>
 
                 <button 
                   className="skill-row-btn learned"
-                  onClick={() => window.castArcaneCollapseUltimate()}
+                  onClick={() => castArcaneCollapseUltimate()}
                 >
                   <span>🌌 Arcane Collapse [Press 5]</span>
                   <span className="skill-cd-text">30s CD</span>
@@ -2809,13 +2992,25 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 <button 
                   className="skill-row-btn learned"
                   style={{ border: '1px solid #e879f9' }}
-                  onClick={() => window.castArcaneInstinctUltimate()}
+                  onClick={() => castArcaneInstinctUltimate()}
                 >
                   <span>⚡ Arcane Instinct [Press 6]</span>
                   <span className="skill-cd-text">45s CD</span>
                 </button>
                 <div className="skill-node-desc" style={{ borderColor: '#e879f9' }}>
                   Bypasses reality casting parameters! Freezes all screen targets (2s), triggers rapid consecutive offensive skills burst auto-casts (3s), and magnifies ALL hero stats by +250% (10s).
+                </div>
+
+                <button 
+                  className="skill-row-btn learned"
+                  style={{ border: '1px solid #10b981' }}
+                  onClick={() => castArcaneResurrectionUltimate()}
+                >
+                  <span>⚚ Arcane Resurrection [Press 7]</span>
+                  <span className="skill-cd-text">300s CD</span>
+                </button>
+                <div className="skill-node-desc" style={{ borderColor: '#10b981' }}>
+                  Forbidden Magic: Revives a fallen ally with 70% Max HP and immediately grants them a 10s Rigid Defender shield. <br/><span style={{ color: '#f87171' }}>SACRIFICE: Casting this halves your current EXP and permanently burns away 1 of your Levels.</span>
                 </div>
               </>
             )}
@@ -2835,7 +3030,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* FIXED: Display static message banner for Player 2 when Host pauses the session room */}
         {screen === 'pause' && isNetworked && !netRef.current.isHost && (
           <div className="hud-start-overlay" style={{ zIndex: 110 }}>
             <div className="hud-start-modal" style={{ borderColor: '#a78bfa' }}>
@@ -2845,7 +3039,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* FIXED: Display reconnection auto-boot alert banner overlay window */}
         {hostExitedCountdown !== null && (
           <div className="hud-start-overlay" style={{ zIndex: 120 }}>
             <div className="hud-start-modal" style={{ borderColor: '#ef4444' }}>
@@ -2857,7 +3050,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* FIXED: LALABAS NA ITO SA POV NG HOST KAPAG NAG-EXIT SI PLAYER 2 */}
         {guestExitedAlert && (
           <div style={{
             position: 'absolute',
@@ -2904,6 +3096,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </div>
           </div>
         )}
+
       </div>
     </div>
   );

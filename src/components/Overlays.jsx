@@ -614,9 +614,10 @@ export default function Overlays({
                       className="field-input wizard-field-input" 
                       type="text" 
                       value={wizardName} 
+                      maxLength={15}
                       onChange={e => setWizardName(e.target.value)} 
                       onKeyDown={e => e.key === 'Enter' && handleSubmitScore()}
-                      placeholder="Wizard name" 
+                      placeholder="e.g. Archmage Martel" 
                       style={{ flex: 1 }}
                     />
                     <button className="btn wizard-btn gold-theme" onClick={handleSubmitScore} style={{ margin: 0, width: 'auto', padding: '0 20px' }}>Submit</button>
@@ -656,7 +657,7 @@ export default function Overlays({
                 }
               }}
             >
-              Resume Spell
+              Resume Trial
             </button>
             
             {/* EXIT MATCH BUTTON */}

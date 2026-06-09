@@ -169,6 +169,7 @@ export default function App() {
         hudRef={hudRef}
         netRef={netRef}
         playerName={wizardName}
+        allyName={coop.p2Name}
         isCoop={coop.isEnabled}
         onLevelUpOffer={(options) => { 
           const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];

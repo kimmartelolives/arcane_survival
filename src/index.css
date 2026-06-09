@@ -39,8 +39,8 @@ body {
 #wrap { display: flex; align-items: center; justify-content: center; width: 100%; padding: 6px; }
 canvas { display: block; border-radius: 6px; border: 1px solid var(--border); box-shadow: 0 0 60px rgba(109,40,217,.12); }
 
-#overlays { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 100; }
-.overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: all; background: rgba(3,1,17,.88); }
+#overlays { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 100; overflow: hidden; }
+.overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: all; background: rgba(3,1,17,.88); }
 
 .panel {
   position: relative; width: min(540px, 94vw);
