@@ -51,11 +51,74 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
   text-align: center;
 }
 
-.menu-title { font-family: 'Cinzel Decorative', serif; font-size: clamp(2rem, 6vw, 3rem); font-weight: 700; line-height: 1.1; margin-bottom: 6px; }
-.menu-title span.arc { color: #c4b5fd; text-shadow: 0 0 32px rgba(139,92,246,.8); }
-.menu-title span.sur { color: #fde68a; text-shadow: 0 0 32px rgba(251,191,36,.6); }
-.menu-sub { font-size: .72rem; letter-spacing: .25em; color: #6d28d9; text-transform: uppercase; margin-bottom: 30px; }
-.divider { width: 70px; height: 1px; background: linear-gradient(90deg, transparent, rgba(139,92,246,.5), transparent); margin: 0 auto 24px; }
+/* ==========================================================================
+   ARCANE SURVIVAL - GLASS SHINE EFFECT COOKED PERFECTLY FOR YOUR STYLES
+   ========================================================================== */
+.menu-title { 
+  font-family: 'Cinzel Decorative', serif; 
+  font-size: clamp(2rem, 6vw, 3rem); 
+  font-weight: 700; 
+  line-height: 1.1; 
+  margin-bottom: 6px; 
+  text-align: center;
+}
+
+.menu-title span.arc { 
+  /* Base purple color na may matalas na puting glass line sa gitna */
+  background: linear-gradient(110deg, #c4b5fd 35%, #ffffff 50%, #c4b5fd 65%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  
+  /* Mas matibay na glow gamit ang drop-shadow */
+  filter: drop-shadow(0 0 20px rgba(139,92,246,.8));
+  
+  display: inline-block;
+  animation: arcaneGlassShine 4.5s ease-in-out infinite;
+}
+
+.menu-title span.sur { 
+  /* Base gold color na may matalas na puting glass line sa gitna */
+  background: linear-gradient(110deg, #fde68a 35%, #ffffff 50%, #fde68a 65%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  
+  filter: drop-shadow(0 0 20px rgba(251,191,36,.6));
+  
+  display: inline-block;
+  animation: arcaneGlassShine 4.5s ease-in-out infinite;
+  /* 0.2s delay para swabe ang pagtawid ng kislap mula kaliwa pakanan */
+  animation-delay: 0.2s; 
+}
+
+.menu-sub { 
+  font-size: .72rem; 
+  letter-spacing: .25em; 
+  color: #6d28d9; 
+  text-transform: uppercase; 
+  margin-bottom: 30px; 
+}
+
+.divider { 
+  width: 70px; 
+  height: 1px; 
+  background: linear-gradient(90deg, transparent, rgba(139,92,246,.5), transparent); 
+  margin: 0 auto 24px; 
+}
+
+/* @keyframes para sa sweeping velocity ng shining glass reflection */
+@keyframes arcaneGlassShine {
+  0% {
+    background-position: -100% center;
+  }
+  22% {
+    background-position: 100% center;
+  }
+  100% {
+    background-position: 100% center; /* Dito nagpapahinga ang kislap bago umulit para hindi masakit sa mata */
+  }
+}
 
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 10px;

@@ -61,13 +61,14 @@ const focusStyles = `
     line-height: 1.4;
     margin: 0;
   }
-  .game-hud-top {
+.game-hud-top {
     position: absolute;
-    top: 12px;
+    top: 4px; /* Binabaan mula 12px para lalong umangat at hindi maharangan ng potion modal */
     left: 12px;
     right: 12px;
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     font-family: monospace;
     font-size: 1.1rem;
     color: #fff;
@@ -465,6 +466,90 @@ const focusStyles = `
     font-size: 1.3rem;
     color: #fef08a;
     text-shadow: 0 0 8px rgba(234, 179, 8, 0.9);
+  }
+
+/* Layout container para sa kanang bahagi ng HUD */
+.game-hud-right-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 1px;
+    background: rgba(3, 1, 17, 0.4);
+    padding: 2px 6px 4px 6px;
+    border-radius: 6px;
+  }
+
+  /* HUD Title configuration */
+.hud-menu-title {
+    font-family: 'Cinzel Decorative', serif !important;
+    font-size: 1.15rem;
+    font-weight: 900;
+    line-height: 1.05;
+    text-align: right;
+    margin-top: 0px;
+    -webkit-font-smoothing: antialiased;
+  }
+  
+  /* ARCANE: Ginawang solid purple ang magkabilang dulo, pinakipot ang puting kislap (46% hanggang 54%) */
+  .hud-menu-title span.arc {
+    background: linear-gradient(
+      110deg, 
+      #a78bfa 42%, 
+      #ffffff 50%, 
+      #a78bfa 58%
+    );
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    /* Pinatinding Neon Purple Aura Glow */
+    filter: drop-shadow(0 0 5px #8b5cf6) 
+            drop-shadow(0 0 15px rgba(139, 92, 246, 0.8));
+    
+    display: inline-block;
+    animation: hudGlassShine 4s ease-in-out infinite;
+  }
+  
+.hud-menu-title span.arc {
+    background: linear-gradient(110deg, #a78bfa 42%, #ffffff 50%, #a78bfa 58%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 5px #8b5cf6) drop-shadow(0 0 15px rgba(139, 92, 246, 0.8));
+    display: inline-block;
+    animation: hudGlassShine 4s ease-in-out infinite;
+  }
+  
+  .hud-menu-title span.sur {
+    background: linear-gradient(110deg, #fbbf24 42%, #ffffff 50%, #fbbf24 58%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 5px #f59e0b) drop-shadow(0 0 15px rgba(251, 191, 36, 0.8));
+    display: inline-block;
+    animation: hudGlassShine 4s ease-in-out infinite;
+    animation-delay: 0.15s;
+  }
+  
+  /* 🔥 Subtitle: Eksaktong kahaba na ngayon ng salitang SURVIVAL */
+  .hud-menu-sub {
+    font-family: 'Georgia', serif;
+    font-size: 0.44rem; /* Ginawang mas compact ang font size */
+    letter-spacing: 0.285em; /* Pinalawak ang espasyo para pumantay sa haba ng title */
+    margin-right: -0.285em; /* Nilapat sa kanang gilid para i-offset ang huling space */
+    color: #a78bfa;
+    text-transform: uppercase;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+    opacity: 0.9;
+    text-align: right;
+    display: block;
+    width: 100%;
+  }
+
+  @keyframes hudGlassShine {
+    0% { background-position: -100% center; }
+    18% { background-position: 100% center; }
+    100% { background-position: 100% center; }
   }
 `;
 
@@ -2355,15 +2440,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         <canvas ref={canvasRef} id="gameCanvas" />
 
 {/* TOP STATUS HUD */}
-        {screen === 'playing' && (
-          <div className="game-hud-top" style={{ pointerEvents: 'auto' }}>
+      {screen === 'playing' && (
+        <div className="game-hud-top" style={{ pointerEvents: 'auto', alignItems: 'flex-start' }}>
+          
+          {/* 1. KALIWANG BAHAGI: Score Text */}
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', marginTop: '2px' }}>
             <div>SCORE: <span ref={scoreValueRef}>0</span></div>
-            
-            {/* Clickable Pause para sa Host / Solo Player */}
+          </div>
+
+          {/* 2. GITNANG BAHAGI: PAUSE GAME button (Inangat nang husto) */}
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', marginTop: '0px' }}>
             {isHostInstance && (
               <button 
                 onClick={() => {
-                  // FIXED: Kapag may network action (Co-op Host), tawagin ito. Kapag wala (Solo Play), mag-pause agad locally.
                   if (window.executeNetworkPauseAction && isNetworked) {
                     window.executeNetworkPauseAction();
                   } else {
@@ -2371,17 +2460,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   }
                 }}
                 style={{
-                  background: 'rgba(27, 16, 59, 0.6)', // Transparent dark purple katulad ng panel sa itaas
-                  border: '1px solid #4c2d82', // Manipis at swaktong violet border
-                  color: '#a78bfa', // Light violet text color para malinis tingnan
+                  background: 'rgba(27, 16, 59, 0.6)',
+                  border: '1px solid #4c2d82',
+                  color: '#a78bfa',
                   fontFamily: 'Georgia, serif',
                   fontSize: '0.75rem',
                   fontWeight: '800',
                   letterSpacing: '0.05em',
                   padding: '6px 16px',
-                  borderRadius: '20px', // Rounded pill shape para tugma sa profile header
+                  borderRadius: '20px',
                   cursor: 'pointer',
-                  boxShadow: '0 0 10px rgba(124, 58, 237, 0.25)', // Subtle purple glow
+                  boxShadow: '0 0 10px rgba(124, 58, 237, 0.25)',
                   transition: 'all 0.2s ease-in-out',
                   pointerEvents: 'auto'
                 }}
@@ -2401,10 +2490,26 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 ⏸ PAUSE GAME
               </button>
             )}
-
-            <div ref={waveValueRef}>WAVE 1 | 30s</div>
           </div>
-        )}
+
+          {/* 3. KANANG BAHAGI: Title at Wave Layout */}
+          <div className="game-hud-right-group" style={{ flex: 1 }}>
+
+            
+            <div ref={waveValueRef} style={{ fontSize: '1rem', fontWeight: 'bold', color: '#ffffff', textShadow: '0 0 8px rgba(255,255,255,0.5)', marginTop: '2px' }}>
+              WAVE 1 | 30s
+            </div>
+            
+                        <div className="hud-menu-title">
+              <span className="arc">ARCANE</span><br/>
+              <span className="sur">SURVIVAL</span>
+            </div>
+             <div className="hud-menu-sub">A Wizard's Last Stand</div>
+           
+          </div>
+
+        </div>
+      )}
 
 
         {screen === 'playing' && activeBuffsList.length > 0 && (
