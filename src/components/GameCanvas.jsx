@@ -114,6 +114,7 @@ const focusStyles = `
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
 
+  /* --- RPG STYLE CHARACTER STATS PANEL & TOGGLE --- */
   .stats-toggle-btn {
     background: #110c36;
     border: 1px solid #8b5cf6;
@@ -166,6 +167,7 @@ const focusStyles = `
   .stats-label { color: #94a3b8; }
   .stats-value { color: #34d399; font-weight: bold; }
 
+  /* --- RPG ACTIVE BUFF DISPLAY BAR (UPPER MIDDLE) --- */
   .rpg-buff-container {
     position: absolute;
     top: 48px;
@@ -197,6 +199,7 @@ const focusStyles = `
   .rpg-buff-badge.pot-regen { border-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
   .rpg-buff-badge.pot-xpBoost { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
 
+  /* --- TOGGLE BUTTON OVERLAY FOR SKILL TREE --- */
   .skill-tree-toggle-btn {
     position: absolute;
     bottom: 12px;
@@ -219,6 +222,7 @@ const focusStyles = `
     transform: translateY(-2px);
   }
 
+  /* --- SKILL TREE LOWER RIGHT SIDE PANEL UI --- */
   .skill-tree-container {
     position: absolute;
     bottom: 46px;
@@ -315,6 +319,7 @@ const focusStyles = `
     border-left: 2px solid #7c3aed;
   }
 
+  /* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */
   .mmo-hotbar-container {
     position: absolute;
     bottom: 14px;
@@ -366,6 +371,7 @@ const focusStyles = `
     cursor: not-allowed;
   }
   
+  /* --- ULTIMATE SKILL SLOT OVERLAY DESIGN --- */
   .mmo-hotbar-ult-slot {
     position: relative;
     width: 72px;
@@ -483,6 +489,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const statDefRef = useRef(null);
   const statCritRef = useRef(null);
   const statSpdRef = useRef(null);
+  const statCdRef = useRef(null); // Added dynamic Ref binding node element mapping
 
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
@@ -1228,6 +1235,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
           setActiveBuffsList(activeBuffs);
 
+          // Fixed target crash tracking reference
           let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0);
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
           if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
@@ -1242,10 +1250,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           let currentSpd = 200;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
 
+          // Evaluate live attack interval sequence
+          let currentCd = localTrackedObj.shootRate || 0.6;
+          if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentCd *= 0.5;
+
           if (statAtkRef.current) statAtkRef.current.textContent = currentAtk;
           if (statDefRef.current) statDefRef.current.textContent = `${currentDef}%`;
           if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
           if (statSpdRef.current) statSpdRef.current.textContent = `${currentSpd} IPS`;
+          if (statCdRef.current) statCdRef.current.textContent = `${currentCd.toFixed(2)}s`;
         }
 
         if (isCoop && netRef.current.channel) {
@@ -2026,6 +2039,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         {/* BOTTOM VITAL STATUS HUDS + RPG STATS PANEL */}
         {screen === 'playing' && (
           <div className="game-hud-bottom">
+            {/* Toggle Button for Stats Panel */}
             <button 
               className="stats-toggle-btn" 
               onClick={() => setIsStatsOpen(prev => !prev)}
@@ -2033,6 +2047,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               {isStatsOpen ? "▼ Hide Stats Panel" : "▲ Show Character Stats"}
             </button>
 
+            {/* RPG Character Stats Board Layout */}
             {isStatsOpen && (
               <div className="rpg-stats-panel">
                 <div className="stats-header">⚔️ HERO STATUS ATTRIBUTES</div>
@@ -2045,6 +2060,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 <div className="stats-row">
                   <span className="stats-label">Attack Power:</span>
                   <span ref={statAtkRef} className="stats-value">22</span>
+                </div>
+                <div className="stats-row">
+                  <span className="stats-label">Attack Rate:</span>
+                  <span ref={statCdRef} className="stats-value">0.60s</span>
                 </div>
                 <div className="stats-row">
                   <span className="stats-label">Defense Block:</span>
@@ -2061,6 +2080,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               </div>
             )}
 
+            {/* Vital Status Resource Fill Gauges */}
             <div className="hud-bar-container">
               <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
               <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
@@ -2072,8 +2092,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
+        {/* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */}
         {screen === 'playing' && playerLevel >= 10 && (
           <div className="mmo-hotbar-container">
+            {/* Body Cutter Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.bodyCutter?.learned ? 'not-learned' : (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.bodyCutter?.learned && window.learnSkillTreeTech('bodyCutter')}
@@ -2088,6 +2110,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
+            {/* Shooting Star Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.shootingStar?.learned ? 'not-learned' : (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.shootingStar?.learned && window.learnSkillTreeTech('shootingStar')}
@@ -2107,6 +2130,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
+            {/* Cube Bash Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.cubeBash?.learned ? 'not-learned' : (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.cubeBash?.learned && window.learnSkillTreeTech('cubeBash')}
@@ -2126,6 +2150,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
+            {/* Vacuum Slash Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.vacuumSlash?.learned ? 'not-learned' : (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.vacuumSlash?.learned && window.learnSkillTreeTech('vacuumSlash')}
@@ -2145,6 +2170,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
+            {/* --- ARCANE COLLAPSE ULTIMATE (UNLOCK GATED AT LEVEL 12) --- */}
             {playerLevel >= 12 && (
               <div 
                 className="mmo-hotbar-ult-slot"
@@ -2162,6 +2188,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
+        {/* --- TOGGLE BUTTON IN THE LOWER RIGHT CORNER --- */}
         {screen === 'playing' && playerLevel >= 5 && (
           <button 
             className="skill-tree-toggle-btn" 
@@ -2171,13 +2198,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </button>
         )}
 
+        {/* --- INTERACTIVE LOWER RIGHT SIDE SKILL TREE PANEL WITH DESCRIPTIONS --- */}
         {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
           <div className="skill-tree-container">
             <div className="skill-tree-title-row">
-              <span className="skill-tree-title">✨ ELITE SKILL TREE (LV 5+)</span>
+              <span className="skill-tree-title">✨ DEFENSIVE SKILLS (LV 5+)</span>
               <button className="skill-tree-close-x" onClick={() => setIsTreeOpen(false)}>✕</button>
             </div>
             
+            {/* Berserk Aura */}
             <button 
               className={`skill-row-btn ${skillsState.berserk?.learned ? (skillsState.berserk.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('berserk')}
@@ -2191,6 +2220,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Cuts your active shooting interval directly in half and increases bolt damage output by +50%.</div>
 
+            {/* Massive Haste */}
             <button 
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('haste')}
@@ -2204,6 +2234,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Increases character movement velocity by +45% to easily kite massive groups of enemies.</div>
 
+            {/* Fortify */}
             <button 
               className={`skill-row-btn ${skillsState.fortify?.learned ? (skillsState.fortify.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('fortify')}
@@ -2213,6 +2244,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Hardens your wizard robes to grant a flat, permanent 25% damage reduction from all sources.</div>
 
+            {/* Rigid's Defender */}
             <button 
               className={`skill-row-btn ${skillsState.shield?.learned ? (skillsState.shield.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('shield')}
@@ -2226,12 +2258,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Spawns a glowing energy bubble around you that completely blocks oncoming damage.</div>
 
+            {/* --- LEVEL 10 ATTACK SKILLS SUBSECTION --- */}
             {playerLevel >= 10 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ ULTIMATE ATTACK SKILLS (LV 10+)</span>
+                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ OFFENSIVE SKILLS (LV 10+)</span>
                 </div>
 
+                {/* Body Cutter */}
                 <button 
                   className={`skill-row-btn ${skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('bodyCutter')}
@@ -2241,6 +2275,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </button>
                 <div className="skill-node-desc">Applies stigma/debuff and damage-over-time effects to your enemies.</div>
 
+                {/* Shooting Star */}
                 <button 
                   className={`skill-row-btn ${skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('shootingStar')}
@@ -2250,6 +2285,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </button>
                 <div className="skill-node-desc">Summons explosive cube effects for area damage.</div>
 
+                {/* Cube Bash */}
                 <button 
                   className={`skill-row-btn ${skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('cubeBash')}
@@ -2259,6 +2295,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </button>
                 <div className="skill-node-desc">Cube-based control attack that can disable or stun enemies.</div>
 
+                {/* Vacuum Slash */}
                 <button 
                   className={`skill-row-btn ${skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('vacuumSlash')}
@@ -2270,6 +2307,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               </>
             )}
 
+            {/* --- LEVEL 12 CHRONO SEGMENT --- */}
             {playerLevel >= 12 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
@@ -2291,6 +2329,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
+        {/* INITIALIZATION OVERLAY SCREEN */}
         {screen === 'playing' && !hasStarted && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal">
@@ -2304,6 +2343,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
+        {/* CO-OP RESTART VOTING OVERLAY STATUS FALLBACK */}
         {screen === 'gameover' && isNetworked && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal" style={{ borderColor: '#fbbf24' }}>
