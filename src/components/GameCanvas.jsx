@@ -2714,7 +2714,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('haste')}
             >
-              <span>canny Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              <span>⚡ Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.haste?.learned && (
                 <span className="skill-cd-text">
                   {skillsState.haste.duration > 0 ? `Active ${Math.ceil(skillsState.haste.duration)}s` : `CD ${Math.ceil(skillsState.haste.cd)}s`}
