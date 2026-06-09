@@ -351,7 +351,7 @@ export default function Overlays({
             
             <div className="panel-shine" />
             <div className="menu-title"><span className="arc">ARCANE</span><br/><span className="sur">SURVIVAL</span></div>
-            <div className="menu-sub">The Last Trial</div>
+            <div className="menu-sub">The Last Covenant</div>
             <div className="divider mystic-divider" />
             
             <div className="field-group" style={{ width: '100%', marginBottom: '16px' }}>
