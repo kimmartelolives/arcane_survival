@@ -114,6 +114,38 @@ const focusStyles = `
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
 
+  /* --- RPG ACTIVE BUFF DISPLAY BAR (UPPER MIDDLE) --- */
+  .rpg-buff-container {
+    position: absolute;
+    top: 48px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 80;
+    font-family: monospace;
+    pointer-events: none;
+  }
+  .rpg-buff-badge {
+    background: linear-gradient(180deg, #130b3a 0%, #060314 100%);
+    border: 1px solid #c084fc;
+    box-shadow: 0 0 10px rgba(192, 132, 252, 0.4);
+    border-radius: 4px;
+    padding: 3px 6px;
+    color: #ffffff;
+    font-size: 0.72rem;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+  .rpg-buff-badge.pot-power { border-color: #f97316; box-shadow: 0 0 10px rgba(249, 115, 22, 0.4); }
+  .rpg-buff-badge.pot-defense { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4); }
+  .rpg-buff-badge.pot-crit { border-color: #eab308; box-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
+  .rpg-buff-badge.pot-regen { border-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
+  .rpg-buff-badge.pot-xpBoost { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+
   /* --- TOGGLE BUTTON OVERLAY FOR SKILL TREE --- */
   .skill-tree-toggle-btn {
     position: absolute;
@@ -406,10 +438,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [p1VotedRestart, setP1VotedRestart] = useState(false);
   const [p2VotedRestart, setP2VotedRestart] = useState(false);
 
-  // States to control tree toggle visibility on screen 
   const [isTreeOpen, setIsTreeOpen] = useState(true);
-
   const [playerLevel, setPlayerLevel] = useState(1);
+  const [activeBuffsList, setActiveBuffsList] = useState([]);
   
   const initSkills = () => ({
     berserk: { learned: false, enabled: true, cd: 0, duration: 0 },
@@ -429,7 +460,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
     gameStarted: false, screenShake: 0,
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
-    slashes: [], cubeBashes: [], stars: [], collapses: [],
+    slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
@@ -545,6 +576,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
         eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2 }));
         
+        // Sync custom potions layer map tracking
+        eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
+
+        eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life }));
+
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
         eng.waveT = payload.waveT ?? eng.waveT;
@@ -559,6 +595,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p.maxHp = payload.p1.maxHp;
           eng.p.dead = payload.p1.dead;
           if (payload.p1_skills) eng.p.skills = payload.p1_skills;
+          if (payload.p1_potBuffs) eng.p.potBuffs = payload.p1_potBuffs;
         }
 
         if (payload.p2 && eng.p2) {
@@ -570,6 +607,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
           if (payload.p2_skills) eng.p2.skills = payload.p2_skills;
+          if (payload.p2_potBuffs) eng.p2.potBuffs = payload.p2_potBuffs;
           
           const hts = payload.ts || Date.now();
           eng.p2History.push({ t: hts, x: payload.p2.x, y: payload.p2.y });
@@ -659,6 +697,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       setPlayerLevel(1);
       setIsTreeOpen(true); 
       setSkillsState(initSkills());
+      setActiveBuffsList([]);
 
       if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
         return;
@@ -668,16 +707,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22; eng.screenShake = 0;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
-      eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = [];
+      eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
       eng.gameStarted = false; 
       setHasStarted(false);     
       
-      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills() };
+      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
       if (isCoop) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills() };
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
 
@@ -725,10 +764,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (!target || target.dead) return;
 
       const baseSkills = ['berserk', 'haste', 'fortify', 'shield'];
-      const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash', 'arcaneCollapse'];
+      const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'];
       
       if (baseSkills.includes(skillId) && target.level < 5) return; 
       if (attackSkills.includes(skillId) && target.level < 10) return;
+      if (skillId === 'arcaneCollapse' && target.level < 12) return; // Ultimate scales into Level 12 bounds
 
       if (!target.skills) {
         target.skills = initSkills();
@@ -752,7 +792,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           target.skills[skillId].cd = 0;
         }
       } else {
-        // Toggle on/off state logic
         if (skillId !== 'arcaneCollapse') {
           target.skills[skillId].enabled = !target.skills[skillId].enabled;
         }
@@ -769,7 +808,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
     };
 
-    // Global manual trigger system for Arcane Collapse Ultimate
     window.castArcaneCollapseUltimate = (forcedTarget = null) => {
       const eng = engineRef.current;
       if (!eng) return;
@@ -779,21 +817,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (forcedTarget === 'p2') target = eng.p2;
       if (forcedTarget === 'p1') target = eng.p;
 
-      if (!target || target.dead || target.level < 10) return;
+      if (!target || target.dead || target.level < 12) return; // Hard locked to Level 12 boundaries
       if (!target.skills) target.skills = initSkills();
       
-      // Auto learn if not explicitly unlocked
       if (!target.skills.arcaneCollapse?.learned) {
         target.skills.arcaneCollapse = { learned: true, enabled: true, cd: 0 };
       }
 
       if (target.skills.arcaneCollapse.cd > 0) return;
 
-      // Deduct CD metrics
       target.skills.arcaneCollapse.cd = 30.0;
-      eng.screenShake = 0.8; // Dramatic shake
+      eng.screenShake = 0.8; 
 
-      // Generate localized crash data
       if (!eng.collapses) eng.collapses = [];
       eng.collapses.push({
         x: target.x, y: target.y,
@@ -801,22 +836,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         life: 2.2, pulseTimer: 0, pulseCount: 0
       });
 
-      // Distribute splash damage & deep tier parameters across all alive targets on screen
       for (const enemy of eng.enemies) {
-        enemy.hp -= 85; 
-        enemy.flash = 0.35;
+        let colPulseDmg = 85;
+        if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; // Consumable scaling
+        if (enemy.instabTime > 0) colPulseDmg *= 1.5;
+
+        // Apply critical multiplication factor to Arcane Collapse
+        if (target.potBuffs?.crit > 0 && Math.random() < 0.35) {
+          colPulseDmg *= 2;
+          enemy.flash = 0.5;
+        } else {
+          enemy.flash = 0.35;
+        }
+
+        enemy.hp -= colPulseDmg;
         
-        // Stack the 7 core control debuff statuses
-        enemy.stunnedTime = 4.0;       // Time Lock
-        enemy.temporalSlowTime = 6.0;  // Temporal Slowdown / Moving speed reduction
-        enemy.arcaneBurnTime = 6.0;    // Arcane Burn damage-over-time
-        enemy.voidExhaustTime = 6.0;   // Void Exhaustion / Lowers overall damage output
-        enemy.instabTime = 6.0;        // Elemental Instability / Increased skill damage taken
+        enemy.stunnedTime = 4.0;       // Time Lock Status
+        enemy.temporalSlowTime = 6.0;  // Temporal Slowdown / Energy Collapse
+        enemy.arcaneBurnTime = 6.0;    // Arcane Burn Damage over time
+        enemy.voidExhaustTime = 6.0;   // Void Exhaustion / Divine Suppression
+        enemy.instabTime = 6.0;        // Elemental Instability
 
         if (enemy.hp <= 0) enemy.deadTrigger = true;
       }
 
-      // Disperse flashy cosmic dust particles
       for (let k = 0; k < 35; k++) {
         const pa = Math.random() * Math.PI * 2;
         const ps = Math.random() * 220 + 80;
@@ -949,6 +992,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (!playerObj || playerObj.dead) return;
           if (!playerObj.skills) {
             playerObj.skills = initSkills();
+          }
+          if (!playerObj.potBuffs) {
+            playerObj.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
+          }
+
+          // Potion buff clocks decaying steps
+          if (playerObj.potBuffs.power > 0) playerObj.potBuffs.power -= dt;
+          if (playerObj.potBuffs.defense > 0) playerObj.potBuffs.defense -= dt;
+          if (playerObj.potBuffs.crit > 0) playerObj.potBuffs.crit -= dt;
+          if (playerObj.potBuffs.xpBoost > 0) playerObj.potBuffs.xpBoost -= dt;
+          if (playerObj.potBuffs.regen > 0) {
+            playerObj.potBuffs.regen -= dt;
+            playerObj.hp = Math.min(playerObj.maxHp, playerObj.hp + 3.5 * dt); // Gradual recovery
           }
 
           // Arcane Collapse Cooldown Decay
@@ -1110,6 +1166,27 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           if (localTrackedObj.skills) {
             setSkillsState({ ...localTrackedObj.skills });
           }
+
+          // Distribute list compilation to RPG active buff board component elements
+          const activeBuffs = [];
+          if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) {
+            activeBuffs.push({ type: 'skill', name: 'BERSERK', icon: '🔥', life: localTrackedObj.skills.berserk.duration });
+          }
+          if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) {
+            activeBuffs.push({ type: 'skill', name: 'HASTE', icon: '👟', life: localTrackedObj.skills.haste.duration });
+          }
+          if (localTrackedObj.skills?.shield?.duration > 0 && localTrackedObj.skills?.shield?.enabled) {
+            activeBuffs.push({ type: 'skill', name: 'SHIELD', icon: '🔮', life: localTrackedObj.skills.shield.duration });
+          }
+
+          if (localTrackedObj.potBuffs) {
+            if (localTrackedObj.potBuffs.power > 0) activeBuffs.push({ type: 'pot-power', name: 'POWER', icon: '💪', life: localTrackedObj.potBuffs.power });
+            if (localTrackedObj.potBuffs.defense > 0) activeBuffs.push({ type: 'pot-defense', name: 'DEFENSE', icon: '🛡️', life: localTrackedObj.potBuffs.defense });
+            if (localTrackedObj.potBuffs.crit > 0) activeBuffs.push({ type: 'pot-crit', name: 'CRIT CHANCE', icon: '🎯', life: localTrackedObj.potBuffs.crit });
+            if (localTrackedObj.potBuffs.regen > 0) activeBuffs.push({ type: 'pot-regen', name: 'REGEN', icon: '🌿', life: localTrackedObj.potBuffs.regen });
+            if (localTrackedObj.potBuffs.xpBoost > 0) activeBuffs.push({ type: 'pot-xpBoost', name: 'XP BOOST', icon: '✨', life: localTrackedObj.potBuffs.xpBoost });
+          }
+          setActiveBuffsList(activeBuffs);
         }
 
         if (isCoop && netRef.current.channel) {
@@ -1124,11 +1201,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash, stunnedTime: e.stunnedTime, stigmaTime: e.stigmaTime, temporalSlowTime: e.temporalSlowTime, arcaneBurnTime: e.arcaneBurnTime, voidExhaustTime: e.voidExhaustTime, instabTime: e.instabTime })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
+                potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
+                collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
                 p2_skills: eng.p2 ? eng.p2.skills : null,
+                p1_potBuffs: eng.p ? eng.p.potBuffs : null,
+                p2_potBuffs: eng.p2 ? eng.p2.potBuffs : null,
                 ts: Date.now(),
                 p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80
               });
@@ -1147,17 +1228,25 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               eng.slashes.splice(slIdx, 1);
               continue;
             }
-            // Penetrating hits logic
             for (const enemy of eng.enemies) {
               if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 28) {
                 if (!sl.hits.has(enemy)) {
                   sl.hits.add(enemy);
                   
                   let baseSkillDmg = 42;
-                  if (enemy.instabTime > 0) baseSkillDmg *= 1.5; // Elemental Instability scaling
-                  
+                  const shooterObj = sl.p2 ? eng.p2 : eng.p;
+                  if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4; // Consumable scaling
+                  if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
+
+                  // Double damage check logic
+                  if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
+                    baseSkillDmg *= 2;
+                    enemy.flash = 0.45;
+                  } else {
+                    enemy.flash = 0.15;
+                  }
+
                   enemy.hp -= baseSkillDmg; 
-                  enemy.flash = 0.15;
                   if (enemy.hp <= 0) {
                     enemy.deadTrigger = true;
                   }
@@ -1173,14 +1262,21 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             star.progress += dt * 2.5;
             star.currentY = star.targetY - 400 * (1 - star.progress);
             if (star.progress >= 1) {
-              // Explode area trigger splash
               for (const enemy of eng.enemies) {
                 if (Math.hypot(enemy.x - star.x, enemy.y - star.targetY) <= star.radius) {
                   let splashDmg = 70;
+                  const shooterObj = star.p2 ? eng.p2 : eng.p;
+                  if (shooterObj?.potBuffs?.power > 0) splashDmg *= 1.4;
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
 
+                  if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
+                    splashDmg *= 2;
+                    enemy.flash = 0.5;
+                  } else {
+                    enemy.flash = 0.2;
+                  }
+
                   enemy.hp -= splashDmg;
-                  enemy.flash = 0.2;
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
@@ -1212,7 +1308,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             col.pulseTimer += dt;
             col.radius += 360 * dt;
 
-            // Generate repeated shockwave cycles
             if (col.pulseTimer >= 0.5 && col.pulseCount < 3) {
               col.pulseTimer = 0;
               col.pulseCount++;
@@ -1229,6 +1324,49 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
             if (col.life <= 0) {
               eng.collapses.splice(cIdx, 1);
+            }
+          }
+        }
+
+        // Processing potion buff attraction fields
+        if (eng.potions) {
+          for (let pIdx = eng.potions.length - 1; pIdx >= 0; pIdx--) {
+            const pot = eng.potions[pIdx];
+            pot.life -= dt;
+            if (pot.life <= 0) { eng.potions.splice(pIdx, 1); continue; }
+
+            let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; let targetPlayer = eng.p;
+            if (isCoop && eng.p2 && !eng.p2.dead) {
+              const dP1 = eng.p ? Math.hypot(eng.p.x - pot.x, eng.p.y - pot.y) : Infinity;
+              if (Math.hypot(eng.p2.x - pot.x, eng.p2.y - pot.y) < dP1) {
+                tx = eng.p2.x; ty = eng.p2.y; targetPlayer = eng.p2;
+              }
+            }
+            if (!targetPlayer) continue;
+
+            const pd = Math.hypot(tx - pot.x, ty - pot.y);
+            if (pd < 110) {
+              const ga = Math.atan2(ty - pot.y, tx - pot.x);
+              pot.x += Math.cos(ga) * 260 * dt; pot.y += Math.sin(ga) * 260 * dt;
+            }
+
+            if (!targetPlayer.dead && Math.hypot(targetPlayer.x - pot.x, targetPlayer.y - pot.y) < targetPlayer.r + pot.r) {
+              if (!targetPlayer.potBuffs) {
+                targetPlayer.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
+              }
+
+              if (pot.type === 'health') {
+                targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20); // Small instant flat heal
+              } else if (pot.type === 'regen') {
+                targetPlayer.potBuffs.regen = 10.0;
+              } else {
+                targetPlayer.potBuffs[pot.type] = 12.0; // Consumable runtime lifespan
+              }
+
+              for(let k=0; k<8; k++) {
+                eng.particles.push({ x: pot.x, y: pot.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#f472b6', life: 0.25, ml: 0.25, r: 2 });
+              }
+              eng.potions.splice(pIdx, 1);
             }
           }
         }
@@ -1289,12 +1427,22 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               for (let j = eng.enemies.length - 1; j >= 0; j--) {
                 const e = eng.enemies[j];
                 if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
+                  const shooterObj = b.p2 ? eng.p2 : eng.p;
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
                   let calculatedDmg = isBerserkActive ? Math.ceil(eng.boltDmg * 1.5) : eng.boltDmg;
 
+                  if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); // Consumable Fire Power Boost
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
-                  e.hp -= calculatedDmg; e.flash = 0.1;
+                  // Double damage check logic
+                  if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
+                    calculatedDmg *= 2;
+                    e.flash = 0.45;
+                  } else {
+                    e.flash = 0.1;
+                  }
+
+                  e.hp -= calculatedDmg;
                   
                   // Body Cutter Stigma application
                   const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
@@ -1310,6 +1458,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   if (e.hp <= 0) {
                     eng.score += e.boss ? 1500 : 100;
                     eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
+
+                    // Roll randomized drop calculations across potion item array types
+                    if (Math.random() < 0.22) {
+                      const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
+                      eng.potions.push({
+                        x: e.x, y: e.y, r: 8,
+                        type: types[Math.floor(Math.random() * types.length)],
+                        life: 14.0
+                      });
+                    }
+
                     eng.enemies.splice(j, 1);
                   }
                   break;
@@ -1337,17 +1496,26 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (e.instabTime > 0) e.instabTime -= dt;
               if (e.arcaneBurnTime > 0) {
                 e.arcaneBurnTime -= dt;
-                e.hp -= 45 * dt; // Heavy cosmic collapse damage ticks
+                e.hp -= 45 * dt; 
                 if (Math.random() < 0.22) {
                   eng.particles.push({ x: e.x + (Math.random()-0.5)*16, y: e.y + (Math.random()-0.5)*16, vx: (Math.random()-0.5)*15, vy: -25, color: '#d946ef', life: 0.3, ml: 0.3, r: 2 });
                 }
                 if (e.hp <= 0) e.deadTrigger = true;
               }
 
-              // Post-projectile verification state updates
               if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
                 eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
+                
+                if (Math.random() < 0.22) {
+                  const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
+                  eng.potions.push({
+                    x: e.x, y: e.y, r: 8,
+                    type: types[Math.floor(Math.random() * types.length)],
+                    life: 14.0
+                  });
+                }
+
                 eng.enemies.splice(j, 1);
                 continue;
               }
@@ -1365,8 +1533,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 if (tx) {
                   const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
                   let runSpeed = e.speed;
-                  
-                  // Temporal Slowdown / Energy Collapse modifier
                   if (e.temporalSlowTime > 0) runSpeed *= 0.30; 
 
                   e.x += Math.cos(ea) * runSpeed * dt; e.y += Math.sin(ea) * runSpeed * dt;
@@ -1377,7 +1543,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
                 let damageTaken = e.dmg;
-                if (e.voidExhaustTime > 0) damageTaken *= 0.5; // Void Exhaustion reduction
+                if (e.voidExhaustTime > 0) damageTaken *= 0.5; 
+                if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65; // Defense Potion Reduction
 
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
                   damageTaken = 0; 
@@ -1391,6 +1558,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
                 let damageTakenp2 = e.dmg;
                 if (e.voidExhaustTime > 0) damageTakenp2 *= 0.5;
+                if (eng.p2.potBuffs?.defense > 0) damageTakenp2 *= 0.65;
 
                 if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
                   damageTakenp2 = 0;
@@ -1423,14 +1591,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 g.x += Math.cos(ga) * 260 * dt; g.y += Math.sin(ga) * 260 * dt;
               }
               if (!targetPlayer.dead && Math.hypot(targetPlayer.x - g.x, targetPlayer.y - g.y) < targetPlayer.r + g.r) {
+                
+                let distributedXp = g.xp;
+                if (targetPlayer.potBuffs?.xpBoost > 0) distributedXp = Math.ceil(distributedXp * 1.5); // Experience Buff multiplier
+
                 if (isCoop && targetPlayer === eng.p2) {
-                  eng.p2.xp += g.xp;
+                  eng.p2.xp += distributedXp;
                   if (eng.p2.xp >= eng.p2.xpNext) {
                     eng.p2.xp -= eng.p2.xpNext; eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
                     netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
                   }
                 } else if (eng.p) {
-                  eng.p.xp += g.xp;
+                  eng.p.xp += distributedXp;
                   if (eng.p.xp >= eng.p.xpNext) {
                     eng.p.xp -= eng.p.xpNext; eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
                     onLevelUpOffer(rollUpgradeOptions()); 
@@ -1491,7 +1663,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     const renderLoop = () => {
       ctx.save();
-      // Apply procedural render pipeline screenshake transformations
       if (eng.screenShake > 0) {
         const dx = (Math.random() - 0.5) * 9;
         const dy = (Math.random() - 0.5) * 9;
@@ -1510,6 +1681,39 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.beginPath(); ctx.moveTo(g.x, g.y - g.r); ctx.lineTo(g.x + g.r * 0.6, g.y);
         ctx.lineTo(g.x, g.y + g.r); ctx.lineTo(g.x - g.r * 0.6, g.y); ctx.closePath(); ctx.fill(); ctx.restore();
       }
+
+      // Render custom RPG styled volumetric potions onto game field layer maps
+      if (eng.potions) {
+        for (const pot of eng.potions) {
+          ctx.save();
+          let color = '#ef4444';
+          if (pot.type === 'power') color = '#f97316';
+          if (pot.type === 'defense') color = '#3b82f6';
+          if (pot.type === 'crit') color = '#eab308';
+          if (pot.type === 'regen') color = '#22c55e';
+          if (pot.type === 'xp') color = '#a855f7';
+
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 14;
+          ctx.fillStyle = color;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+
+          // Draw custom flask geometry structure
+          ctx.beginPath();
+          ctx.moveTo(pot.x - pot.r * 0.4, pot.y - pot.r);
+          ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r);
+          ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r * 0.4);
+          ctx.lineTo(pot.x + pot.r, pot.y + pot.r);
+          ctx.lineTo(pot.x - pot.r, pot.y + pot.r);
+          ctx.lineTo(pot.x - pot.r * 0.4, pot.y - pot.r * 0.4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
       for (const b of eng.bullets) {
         ctx.save(); ctx.shadowColor = b.p2 ? '#fb923c' : '#e879f9'; ctx.shadowBlur = 16;
         ctx.fillStyle = b.p2 ? '#fed7aa' : '#f5d0fe'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
@@ -1576,7 +1780,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           ctx.shadowBlur = 24;
           ctx.shadowColor = '#d946ef';
           
-          // Draw radiating geometric matrix gears
           ctx.beginPath();
           ctx.arc(col.x, col.y, col.radius % col.maxRadius, 0, Math.PI * 2);
           ctx.stroke();
@@ -1594,14 +1797,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.save(); ctx.fillStyle = e.flash > 0 ? '#fff' : e.color; ctx.shadowColor = e.flash > 0 ? '#fff' : e.glow; ctx.shadowBlur = e.boss ? 22 : 12;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
         
-        // Stun ice indicator halo
         if (e.stunnedTime > 0) {
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 2;
           ctx.strokeRect(e.x - e.r - 2, e.y - e.r - 2, (e.r * 2) + 4, (e.r * 2) + 4);
         }
 
-        // Chrono containment overlay for Arcane Collapse slowdown
         if (e.temporalSlowTime > 0) {
           ctx.strokeStyle = '#d946ef';
           ctx.lineWidth = 1.5;
@@ -1686,7 +1887,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.restore();
       }
 
-      ctx.restore(); // Restore shaking transform state safely
+      ctx.restore(); 
       renderAnimId = requestAnimationFrame(renderLoop);
     };
     renderAnimId = requestAnimationFrame(renderLoop);
@@ -1699,7 +1900,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if ((e.key === 'k' || e.key === 'K' || e.key === 't' || e.key === 'T') && screen === 'playing') {
         setIsTreeOpen(prev => !prev);
       }
-      // Added MMO hotkeys mapping for level 10 attack triggers
       if (screen === 'playing') {
         if (e.key === '1') window.learnSkillTreeTech('bodyCutter');
         if (e.key === '2') window.learnSkillTreeTech('shootingStar');
@@ -1765,6 +1965,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           <div className="game-hud-top">
             <div>SCORE: <span ref={scoreValueRef}>0</span></div>
             <div ref={waveValueRef}>WAVE 1 | 30s</div>
+          </div>
+        )}
+
+        {/* --- RPG STYLE UPPER MIDDLE LIVE BUFF OVERLAY --- */}
+        {screen === 'playing' && activeBuffsList.length > 0 && (
+          <div className="rpg-buff-container">
+            {activeBuffsList.map((buff, idx) => (
+              <div key={idx} className={`rpg-buff-badge ${buff.type}`}>
+                <span>{buff.icon}</span>
+                <span>{buff.name} ({Math.ceil(buff.life)}s)</span>
+              </div>
+            ))}
           </div>
         )}
 
@@ -1860,19 +2072,21 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
-            {/* --- ARCANE COLLAPSE ULTIMATE (SLIGHT BIG CIRCLE ON THE RIGHT) --- */}
-            <div 
-              className="mmo-hotbar-ult-slot"
-              onClick={() => window.castArcaneCollapseUltimate()}
-              title="Arcane Collapse: Judgment of the Wizard Council"
-            >
-              <span className="hotbar-key-bind">5</span>
-              <span className="hotbar-icon">🌌</span>
-              <span className="hotbar-name">A.Collapse</span>
-              {skillsState.arcaneCollapse?.cd > 0 && (
-                <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneCollapse.cd)}s</div>
-              )}
-            </div>
+            {/* --- ARCANE COLLAPSE ULTIMATE (LOCKED TO LEVEL 12 SCALE BOUNDS) --- */}
+            {playerLevel >= 12 && (
+              <div 
+                className="mmo-hotbar-ult-slot"
+                onClick={() => window.castArcaneCollapseUltimate()}
+                title="Arcane Collapse: Judgment of the Wizard Council"
+              >
+                <span className="hotbar-key-bind">5</span>
+                <span className="hotbar-icon">🌌</span>
+                <span className="hotbar-name">A.Collapse</span>
+                {skillsState.arcaneCollapse?.cd > 0 && (
+                  <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneCollapse.cd)}s</div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1992,11 +2206,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   {skillsState.vacuumSlash?.learned && <span className="skill-cd-text">AUTO</span>}
                 </button>
                 <div className="skill-node-desc">Powerful attack by slashing the air generating massive force to damage the enemy.</div>
+              </>
+            )}
 
-                {/* Arcane Collapse Skill Tree Info Node */}
+            {/* --- LEVEL 12 CRITICAL MYSTICAL SEGMENT --- */}
+            {playerLevel >= 12 && (
+              <>
+                <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
+                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 CHRONO OVERLORD SEGMENT (LV 12+)</span>
+                </div>
+
                 <button 
                   className="skill-row-btn learned"
-                  style={{ borderGradient: 'linear-gradient(to right, #d946ef, #8b5cf6)' }}
                   onClick={() => window.castArcaneCollapseUltimate()}
                 >
                   <span>🌌 Arcane Collapse [Press 5]</span>
