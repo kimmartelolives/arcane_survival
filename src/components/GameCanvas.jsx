@@ -643,18 +643,21 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
 
-        // FIXED: Sinalo ang dmg at shootRate ni Player 1 sa Guest POV
         if (payload.p1 && eng.p) {
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
           eng.p.dead = payload.p1.dead;
           eng.p.dmg = payload.p1.dmg ?? eng.p.dmg;
           eng.p.shootRate = payload.p1.shootRate ?? eng.p.shootRate;
+          
+          // === FIXED: NA-SYNC NA ANG COORD AT POSISYON NI HOST PAPUNTA SA GUEST LOGIC ===
+          eng.p.x = payload.p1.x;
+          eng.p.y = payload.p1.y;
+
           if (payload.p1_skills) eng.p.skills = payload.p1_skills;
           if (payload.p1_potBuffs) eng.p.potBuffs = payload.p1_potBuffs;
         }
 
-        // FIXED: Sinalo ang dmg at shootRate ni Player 2 sa kaniyang sariling Guest POV
         if (payload.p2 && eng.p2) {
           eng.p2.hp = payload.p2.hp;
           eng.p2.maxHp = payload.p2.maxHp;
@@ -1383,7 +1386,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
                 collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                // FIXED: Idinagdag ang dmg at shootRate sa p1 at p2 serialization objects
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead, dmg: eng.p.dmg, shootRate: eng.p.shootRate } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead, dmg: eng.p2.dmg, shootRate: eng.p2.shootRate } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
