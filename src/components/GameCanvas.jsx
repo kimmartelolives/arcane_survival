@@ -2311,7 +2311,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             {playerLevel >= 12 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 CHRONO OVERLORD SEGMENT (LV 12+)</span>
+                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 ULTIMATE SKILL (LV 12+)</span>
                 </div>
 
                 <button 
