@@ -35,7 +35,7 @@ export default function Overlays({
   useEffect(() => {
     if (screen === 'leaderboard') {
       setLoadingLb(true);
-      sbGet('/rest/v1/leaderboard?select=name,score,wave,level,mode&order=score.desc&limit=10')
+      sbGet('/rest/v1/leaderboard?select=name,score,wave,level,mode&order=score.desc&limit=20')
         .then(data => { 
           setLeaderboard(data || []); 
           setLoadingLb(false); 
@@ -338,6 +338,45 @@ export default function Overlays({
         .witch-table th { background: rgba(30, 11, 61, 0.4); color: #ffe6a3; padding: 12px; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 2px solid rgba(197, 160, 89, 0.3); }
         .witch-table td { padding: 12px; border-bottom: 1px solid rgba(124, 58, 237, 0.15); font-size: 0.88rem; }
         .witch-table tr:hover td { background: rgba(124, 58, 237, 0.1); color: #ffffff; }
+
+        /* Gold Glow for the #1 Rank */
+        .gold-leader {
+          color: #fef08a !important;
+          text-shadow: 0 0 15px rgba(254, 240, 138, 1), 0 0 30px rgba(254, 240, 138, 0.8), 0 0 45px rgba(254, 240, 138, 0.6) !important;
+          font-weight: 900 !important;
+        }
+
+        /* Silver Glow for the #2 Rank */
+        .silver-leader {
+        color: #ffffff !important; /* Pure white core for crisp legibility */
+        text-shadow: 
+          0 0 5px #94a3b8, 
+          0 0 15px rgba(203, 213, 225, 0.8), 
+          0 0 25px rgba(148, 163, 184, 0.5) !important;
+        font-weight: 800 !important;
+      }
+
+        /* Bronze Glow for the #3 Rank */
+        .bronze-leader {
+        color: #fef3c7 !important; /* Very bright pale orange/gold core */
+        text-shadow: 
+          0 0 5px #b45309, 
+          0 0 15px rgba(217, 119, 6, 0.8), 
+          0 0 25px rgba(180, 83, 9, 0.5) !important;
+        font-weight: 800 !important;
+      }
+
+        /* Description below the Leaderboard Title */
+        .lb-description {
+          font-family: 'Georgia', serif;
+          font-size: 0.75rem;
+          color: #94a3b8;
+          text-align: center;
+          margin: -10px 0 15px 0;
+          font-style: italic;
+          line-height: 1.4;
+          padding: 0 20px;
+        }
       `}</style>
 
       {/* MAIN MENU SCREEN */}
@@ -526,6 +565,13 @@ export default function Overlays({
             <div className="panel-corner pc-br" />
 
             <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🏆 COUNCIL OF THE FALLEN</div>
+         <div className="lb-description">
+          When the final spell fades and the last wave falls,{' '}
+          <b style={{ color: '#fef08a', textShadow: '0 0 12px rgba(254, 240, 138, 0.9)' }}>
+            only twenty souls shall remain worthy
+          </b>. 
+          The Council of the Fallen welcomes these Arcane legends, granting them eternal glory beyond the mortal realm.
+        </div>
             <div className="divider mystic-divider" />
             
             <div className="scroll-area" style={{ background: 'rgba(5,2,12,0.6)', border: '1px solid rgba(197,160,89,0.2)', borderRadius: '6px', maxHeight: '320px', overflowY: 'auto' }}>
@@ -539,12 +585,12 @@ export default function Overlays({
                       <tr><td colSpan="5" style={{ textAlign: 'center', color: 'rgba(167,139,250,0.5)', padding: '30px' }}>No records yet. Be the first legend!</td></tr>
                     ) : (
                       leaderboard.map((row, idx) => (
-                        <tr key={idx}>
-                          <td style={{ fontWeight: 'bold', color: '#ffe6a3' }}>{medals[idx] || `#${idx + 1}`}</td>
+                        <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
+                          <td style={{ fontWeight: 'bold' }}>{idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}</td>
                           <td style={{ fontWeight: 600 }}>{row.name || 'Anonymous'}</td>
-                          <td style={{ textTransform: 'uppercase', fontSize: '0.72rem', color: '#a78bfa', letterSpacing: '1px' }}>{row.mode || 'solo'}</td>
-                          <td style={{ color: '#fde047' }}>{row.wave || 1}</td>
-                          <td style={{ fontWeight: 'bold', color: '#ffe6a3', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
+                          <td style={{ textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '1px' }}>{row.mode || 'solo'}</td>
+                          <td>{row.wave || 1}</td>
+                          <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
                         </tr>
                       ))
                     )}
