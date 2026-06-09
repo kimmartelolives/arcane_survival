@@ -1142,6 +1142,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         eng.waveT = payload.waveT ?? eng.waveT;
         eng.waveLen = payload.waveLen ?? eng.waveLen;
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
+        eng.screenShake = payload.screenShake ?? eng.screenShake;
 
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
@@ -1625,13 +1626,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
 
             if (eng.p2Target) {
-              const reconcileFactor = 0.06;
+              const reconcileFactor = 0.15;
               const dx = eng.p2Target.x - eng.p2Render.x;
               const dy = eng.p2Target.y - eng.p2Render.y;
               const dist = Math.hypot(dx, dy);
               if (dist > 60) {
-                eng.p2Render.x = eng.p2Target.x;
-                eng.p2Render.y = eng.p2Target.y;
+                const lerpFactor = 0.15;
+                eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * lerpFactor;
+                eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * lerpFactor;
               } else {
                 eng.p2Render.x += dx * reconcileFactor;
                 eng.p2Render.y += dy * reconcileFactor;
@@ -1705,7 +1707,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         if (isCoopActive && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.033;
+            syncTimer = 0.016;
             if (!isHost) {
               netRef.current.channel.send('guest_input', { x: mx, y: my });
             } else {
@@ -1717,6 +1719,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
                 collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
+                screenShake: eng.screenShake,
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead, dmg: eng.p.dmg, shootRate: eng.p.shootRate, chatBubble: eng.p.chatBubble } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead, dmg: eng.p2.dmg, shootRate: eng.p2.shootRate, chatBubble: eng.p2.chatBubble } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
