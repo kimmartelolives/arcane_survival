@@ -1,5 +1,4 @@
 # Arcane Survival
-[![Ask DeepWiki](https://devin.ai/assets/askdeepwiki.png)](https://deepwiki.com/kimmartelolives/arcane_survival)
 
 *Arcane Survival* is a fantasy co-op survival game where arcane wizards fight endless waves of magic and chaos. Forge covenants, survive the last stand, and rise in the Council of Fallen. Built with React and Supabase, this game features real-time multiplayer, a persistent leaderboard, and a dynamic skill system.
 
