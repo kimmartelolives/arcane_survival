@@ -2504,7 +2504,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               <span className="arc">ARCANE</span><br/>
               <span className="sur">SURVIVAL</span>
             </div>
-             <div className="hud-menu-sub">A Wizard's Last Stand</div>
+             <div className="hud-menu-sub">The Last Covenant</div>
            
           </div>
 

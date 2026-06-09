@@ -321,7 +321,7 @@ export default function Overlays({
             
             <div className="panel-shine" />
             <div className="menu-title"><span className="arc">ARCANE</span><br/><span className="sur">SURVIVAL</span></div>
-            <div className="menu-sub">A Wizard's Last Stand</div>
+            <div className="menu-sub">The Last Covenant</div>
             <div className="divider mystic-divider" />
             
             <div className="field-group" style={{ width: '100%', marginBottom: '16px' }}>
@@ -338,13 +338,13 @@ export default function Overlays({
             </div>
 
             <button className="btn wizard-btn" onClick={() => onAction('start-solo', { name: wizardName })}>
-              <span className="btn-icon">🧙</span><span className="btn-label">Solo Play</span>
+              <span className="btn-icon">🧙</span><span className="btn-label">Solo Trial</span>
             </button>
             <button className="btn gold wizard-btn gold-theme" onClick={() => setScreen('coop-menu')}>
-              <span className="btn-icon">⚔️</span><span className="btn-label">Co-op Play</span>
+              <span className="btn-icon">⚔️</span><span className="btn-label">Co-op Covenant</span>
             </button>
             <button className="btn wizard-btn" onClick={() => setScreen('leaderboard')}>
-              <span className="btn-icon">🏆</span><span className="btn-label">Leaderboard</span>
+              <span className="btn-icon">🏆</span><span className="btn-label">Arcane Tombstones</span>
             </button>
             
             <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
@@ -353,7 +353,7 @@ export default function Overlays({
                 style={{ flex: 1, margin: 0 }}
                 onClick={() => { setCouncilTab('decrees'); setCouncilNewsOpen(true); }}
               >
-                <span className="btn-icon">🏛️</span><span className="btn-label">Council News</span>
+                <span className="btn-icon">🏛️</span><span className="btn-label">Council Chronicles</span>
               </button>
             </div>
           </div>
@@ -370,7 +370,7 @@ export default function Overlays({
             <div className="panel-corner pc-br" />
 
             <div className="section-title" style={{ color: '#ffe6a3', fontSize: '1.25rem', fontFamily: 'Georgia, serif', marginBottom: '14px', textShadow: '0 0 10px rgba(197,160,89,0.5)', textAlign: 'center' }}>
-              🏛️ COUNCIL SANCTUM ARCHIVES
+              🏛️ COUNCIL SANCTUM CHRONICLES
             </div>
             
             <div className="council-tab-headers">
@@ -416,7 +416,7 @@ export default function Overlays({
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⚔️ Co-op Play</div>
+            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⚔️ CO-OP COVENANT</div>
             <div className="divider mystic-divider" />
 
             <div className="field-group" style={{ width: '100%' }}>
@@ -432,7 +432,7 @@ export default function Overlays({
                 style={{ textAlign: 'center', marginBottom: '12px' }}
               />
             </div>
-            <button className="btn wizard-btn gold-theme" onClick={() => onAction('host-game', { name: wizardName })}>Host Room</button>
+            <button className="btn wizard-btn gold-theme" onClick={() => onAction('host-game', { name: wizardName })}>HOST SANCTUM</button>
             
             <div style={{ margin: '12px 0', fontSize: '.7rem', color: '#c4b5fd', fontFamily: 'monospace', letterSpacing: '2px', textAlign: 'center' }}>— OR —</div>
             
@@ -449,8 +449,8 @@ export default function Overlays({
                 style={{ textAlign: 'center', letterSpacing: '.2em', marginBottom: '12px' }} 
               />
             </div>
-            <button className="btn wizard-btn" onClick={() => onAction('join-game', { name: wizardName, code: joinCode })}>Join Game</button>
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => setScreen('menu')}>← Back</button>
+            <button className="btn wizard-btn" onClick={() => onAction('join-game', { name: wizardName, code: joinCode })}>Step Into Sanctum</button>
+            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => setScreen('menu')}>← Leave Sanctum</button>
           </div>
         </div>
       )}
@@ -482,7 +482,7 @@ export default function Overlays({
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🏆 Hall of Legends</div>
+            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🏆 COUNCIL OF THE FALLEN</div>
             <div className="divider mystic-divider" />
             
             <div className="scroll-area" style={{ background: 'rgba(5,2,12,0.6)', border: '1px solid rgba(197,160,89,0.2)', borderRadius: '6px', maxHeight: '320px', overflowY: 'auto' }}>
@@ -509,7 +509,7 @@ export default function Overlays({
                 </table>
               )}
             </div>
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '20px' }} onClick={() => setScreen('menu')}>← Back</button>
+            <button className="btn wizard-btn danger-theme" style={{ marginTop: '20px' }} onClick={() => setScreen('menu')}>← Leave Sanctum</button>
           </div>
         </div>
       )}
