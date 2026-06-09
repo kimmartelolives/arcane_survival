@@ -81,7 +81,7 @@ export default function Overlays({
   }, [screen, levelUpOptions, onSelectUpgrade]);
 
   const handleSubmitScore = async () => {
-    if (!wizardName.trim()) return alert('Enter name first');
+    if (!wizardName.trim()) return alert('Enter Arcane Identity first');
     setSubmitStatus('Submitting…');
     const ok = await sbPost('/rest/v1/leaderboard', {
       name: wizardName.trim(), 
@@ -255,6 +255,36 @@ export default function Overlays({
         }
 
         /* ==========================================================================
+           WIZARDRY SPECIFIC ARCANE TEXT LINK STYLE
+           ========================================================================== */
+        .mystic-tribute-container {
+          margin-top: 24px;
+          text-align: center;
+          width: 100%;
+        }
+        .mystic-tribute-link {
+          color: #c5a059; /* Matching Ancient Gold */
+          font-family: 'Georgia', serif;
+          font-size: 0.74rem;
+          font-weight: bold;
+          letter-spacing: 0.14em;
+          text-decoration: none;
+          opacity: 0.7;
+          transition: all 0.28s ease-in-out;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          text-shadow: 0 0 5px rgba(197, 160, 89, 0.2);
+        }
+        .mystic-tribute-link:hover {
+          color: #ffe6a3; /* Ethereal White-Gold */
+          opacity: 1;
+          text-shadow: 0 0 12px rgba(255, 230, 163, 0.85);
+          letter-spacing: 0.17em;
+          transform: translateY(-1px);
+        }
+
+        /* ==========================================================================
            RE-FIXED & RE-STYLED COUNCIL SANCTUM ARCHIVES SCROLL (image_439347.png FIX)
            ========================================================================== */
         .council-news-box {
@@ -321,17 +351,17 @@ export default function Overlays({
             
             <div className="panel-shine" />
             <div className="menu-title"><span className="arc">ARCANE</span><br/><span className="sur">SURVIVAL</span></div>
-            <div className="menu-sub">The Last Covenant</div>
+            <div className="menu-sub">The Last Trial</div>
             <div className="divider mystic-divider" />
             
             <div className="field-group" style={{ width: '100%', marginBottom: '16px' }}>
-              <label className="field-label wizard-field-label">Wizard Character Name</label>
+              <label className="field-label wizard-field-label">ARCANE IDENTITY</label>
               <input 
                 className="field-input wizard-field-input"
                 type="text"
                 value={wizardName}
                 onChange={e => setWizardName(e.target.value)}
-                placeholder="Enter character name..."
+                placeholder="e.g. Archmage Martel"
                 maxLength={16}
                 style={{ textAlign: 'center' }}
               />
@@ -356,6 +386,19 @@ export default function Overlays({
                 <span className="btn-icon">🏛️</span><span className="btn-label">Council Chronicles</span>
               </button>
             </div>
+
+            {/* 🔮 MYSTIC WITCHCRAFT LINK (AT THE BOTTOM OF THE PANEL) */}
+            <div className="mystic-tribute-container">
+              <a 
+                href="https://ko-fi.com/zidaneee" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="mystic-tribute-link"
+              >
+                ✦ OFFER ARCANE TRIBUTE TO THE ARCHMAGE ✦
+              </a>
+            </div>
+
           </div>
         </div>
       )}
@@ -420,14 +463,14 @@ export default function Overlays({
             <div className="divider mystic-divider" />
 
             <div className="field-group" style={{ width: '100%' }}>
-              <label className="field-label wizard-field-label">Your Wizard Name</label>
+              <label className="field-label wizard-field-label">Arcane Identity</label>
               <input 
                 className="field-input wizard-field-input" 
                 type="text" 
                 value={wizardName} 
                 onChange={e => setWizardName(e.target.value)} 
                 onKeyDown={e => e.key === 'Enter' && onAction('host-game', { name: wizardName })}
-                placeholder="e.g. Eldrin" 
+                placeholder="e.g. Archmage Martel" 
                 maxLength={16} 
                 style={{ textAlign: 'center', marginBottom: '12px' }}
               />
@@ -437,14 +480,14 @@ export default function Overlays({
             <div style={{ margin: '12px 0', fontSize: '.7rem', color: '#c4b5fd', fontFamily: 'monospace', letterSpacing: '2px', textAlign: 'center' }}>— OR —</div>
             
             <div className="field-group" style={{ width: '100%' }}>
-              <label className="field-label wizard-field-label">Room Code</label>
+              <label className="field-label wizard-field-label">Sanctum Code</label>
               <input 
                 className="field-input wizard-field-input" 
                 type="text" 
                 value={joinCode} 
                 onChange={e => setJoinCode(e.target.value.toUpperCase())} 
                 onKeyDown={e => e.key === 'Enter' && onAction('join-game', { name: wizardName, code: joinCode })}
-                placeholder="6-LETTER CODE" 
+                placeholder="6-SIGILS CODE" 
                 maxLength={6} 
                 style={{ textAlign: 'center', letterSpacing: '.2em', marginBottom: '12px' }} 
               />
