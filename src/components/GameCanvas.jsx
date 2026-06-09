@@ -2451,7 +2451,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
           <div className="skill-tree-container">
             <div className="skill-tree-title-row">
-              <span className="skill-tree-title">✨ ELITE SKILL TREE (LV 5+)</span>
+              <span className="skill-tree-title">✨ DEFENSIVE SKILLS (LV 5+)</span>
               <button className="skill-tree-close-x" onClick={() => setIsTreeOpen(false)}>✕</button>
             </div>
             
@@ -2506,7 +2506,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             {playerLevel >= 10 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ ULTIMATE ATTACK SKILLS (LV 10+)</span>
+                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ OFFENSIVE SKILLS (LV 10+)</span>
                 </div>
 
                 <button 
@@ -2550,7 +2550,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             {playerLevel >= 12 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 CHRONO OVERLORD SEGMENT (LV 12+)</span>
+                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 ULTIMATE SKILLS (LV 12+)</span>
                 </div>
 
                 <button 
