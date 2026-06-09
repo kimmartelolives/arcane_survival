@@ -615,10 +615,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
 
         if (!eng.p) {
-          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0 };
+          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
         }
         if (!eng.p2) {
-          eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0 };
+          eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
         }
 
         eng.enemies = (payload.enemies || []).map(e => ({
@@ -650,9 +650,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p.dmg = payload.p1.dmg ?? eng.p.dmg;
           eng.p.shootRate = payload.p1.shootRate ?? eng.p.shootRate;
           
-          // === FIXED: NA-SYNC NA ANG COORD AT POSISYON NI HOST PAPUNTA SA GUEST LOGIC ===
+          // Sync live coordinates parameters
           eng.p.x = payload.p1.x;
           eng.p.y = payload.p1.y;
+
+          // === FIXED: RECEIVED ACTIVE TEXT BUBBLE SYNC DATA FROM NETWORK payload ===
+          eng.p.chatBubble = payload.p1.chatBubble;
 
           if (payload.p1_skills) eng.p.skills = payload.p1_skills;
           if (payload.p1_potBuffs) eng.p.potBuffs = payload.p1_potBuffs;
@@ -665,6 +668,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2.inv = payload.p2.inv ?? eng.p2.inv;
           eng.p2.dmg = payload.p2.dmg ?? eng.p2.dmg;
           eng.p2.shootRate = payload.p2.shootRate ?? eng.p2.shootRate;
+          eng.p2.chatBubble = payload.p2.chatBubble; // Sync player 2 bubble text map
           eng.p2.level = payload.p2_level || eng.p2.level;
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
@@ -779,12 +783,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.gameStarted = false; 
       setHasStarted(false);     
       
-      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
       if (isCoop) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
 
@@ -897,6 +901,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       target.skills.arcaneCollapse.cd = 30.0;
       eng.screenShake = 0.8; 
 
+      // === FIXED: ADDED CHAT BUBBLE SHOUT METRIC DATA ON ULTIMATE CAST ===
+      target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
+
       if (!eng.collapses) eng.collapses = [];
       eng.collapses.push({
         x: target.x, y: target.y,
@@ -970,6 +977,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       target.skills.arcaneInstinct.duration = 10.0;
       target.skills.arcaneInstinct.autoTimer = 3.0; 
       eng.screenShake = 1.2; 
+
+      // === FIXED: ADDED RPG SHOUTING TEXT EFFECT ON ARCANE INSTINCT CAST ===
+      target.chatBubble = { text: "ARCANE INSTINCT!!!", life: 1.8 };
 
       for (const enemy of eng.enemies) {
         enemy.stunnedTime = 2.0;
@@ -1112,6 +1122,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
           if (!playerObj.potBuffs) {
             playerObj.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
+          }
+
+          // Bubble text local physics decay tracking
+          if (playerObj.chatBubble && playerObj.chatBubble.life > 0) {
+            playerObj.chatBubble.life -= dt;
           }
 
           if (playerObj.potBuffs.power > 0) playerObj.potBuffs.power -= dt;
@@ -1386,8 +1401,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
                 collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
-                p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead, dmg: eng.p.dmg, shootRate: eng.p.shootRate } : null,
-                p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead, dmg: eng.p2.dmg, shootRate: eng.p2.shootRate } : null,
+                // === FIXED: SERIALIZED THE CURRENT ACTIVE CHATBUBBLE STATE FIELD IN STATE SYNC PAYLOAD ===
+                p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead, dmg: eng.p.dmg, shootRate: eng.p.shootRate, chatBubble: eng.p.chatBubble } : null,
+                p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead, dmg: eng.p2.dmg, shootRate: eng.p2.shootRate, chatBubble: eng.p2.chatBubble } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
                 p2_skills: eng.p2 ? eng.p2.skills : null,
                 p1_potBuffs: eng.p ? eng.p.potBuffs : null,
@@ -1840,6 +1856,56 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     worker.postMessage('start');
 
+    // === FIXED: HELPER ENGINE FUNCTION TO RENDER THE retro RPG STYLE DIALOG CHAT BUBBLE OVER ASSET AVATARS ===
+    const renderRpgChatBubble = (x, y, txt) => {
+      ctx.save();
+      ctx.font = 'bold 11px monospace';
+      const textWidth = ctx.measureText(txt).width;
+      const boxWidth = textWidth + 16;
+      const boxHeight = 22;
+      const boxX = x - boxWidth / 2;
+      const boxY = y - 48; // Floating directly above wizard body context maps
+
+      // Drawing custom border gradient glow panel wrapper
+      ctx.fillStyle = 'rgba(11, 8, 38, 0.93)';
+      ctx.strokeStyle = '#d946ef';
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#d946ef';
+      
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 5);
+      } else {
+        ctx.rect(boxX, boxY, boxWidth, boxHeight);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw downward indicator point triangle tail
+      ctx.beginPath();
+      ctx.moveTo(x - 5, boxY + boxHeight);
+      ctx.lineTo(x + 5, boxY + boxHeight);
+      ctx.lineTo(x, boxY + boxHeight + 6);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(11, 8, 38, 0.93)';
+      ctx.fill();
+      ctx.strokeStyle = '#d946ef';
+      ctx.beginPath();
+      ctx.moveTo(x - 5, boxY + boxHeight);
+      ctx.lineTo(x, boxY + boxHeight + 6);
+      ctx.lineTo(x + 5, boxY + boxHeight);
+      ctx.stroke();
+
+      // Render inner yellow bold shouting RPG text
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fef08a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(txt, x, boxY + boxHeight / 2 + 1);
+      ctx.restore();
+    };
+
     const renderLoop = () => {
       ctx.save();
       if (eng.screenShake > 0) {
@@ -2058,6 +2124,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.beginPath(); ctx.ellipse(p1X, p1Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p1X - pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p1X + pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+
+        // === FIXED: DRAW PLAYER 1 DIALOG CHAT BUBBLE SHOUT ABOVE MODEL AVATAR ===
+        if (eng.p.chatBubble && eng.p.chatBubble.life > 0) {
+          renderRpgChatBubble(p1X, p1Y, eng.p.chatBubble.text);
+        }
       }
 
       if (isCoop && eng.p2 && !eng.p2.dead) {
@@ -2107,6 +2178,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.beginPath(); ctx.ellipse(p2X, p2Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p2X - pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.arc(p2X + pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+
+        // === FIXED: DRAW PLAYER 2 DIALOG CHAT BUBBLE SHOUT ABOVE MODEL AVATAR ===
+        if (eng.p2.chatBubble && eng.p2.chatBubble.life > 0) {
+          renderRpgChatBubble(p2X, p2Y, eng.p2.chatBubble.text);
+        }
       }
 
       ctx.restore(); 
