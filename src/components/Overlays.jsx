@@ -8,6 +8,7 @@ export default function Overlays({
   roomCode, 
   p2Status, 
   isCoop, 
+  initialWizardName,
   levelUpOptions, 
   onSelectUpgrade, 
   onAction 
@@ -18,7 +19,13 @@ export default function Overlays({
   const [loadingLb, setLoadingLb] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('');
 
-  // Auto-fetch leaderboard records or reset parameters safely across view layers
+  // I-sync ang local field kapag may nakuhang global name prop galing sa App level
+  useEffect(() => {
+    if (initialWizardName) {
+      setWizardName(initialWizardName);
+    }
+  }, [initialWizardName]);
+
   useEffect(() => {
     if (screen === 'leaderboard') {
       setLoadingLb(true);
@@ -37,7 +44,6 @@ export default function Overlays({
     }
   }, [screen]);
 
-  // Keyboard Hotkeys listener to immediately capture character modification selections
   useEffect(() => {
     if (screen !== 'levelup') return;
     
@@ -116,7 +122,22 @@ export default function Overlays({
             <div className="menu-title"><span className="arc">ARCANE</span><br/><span className="sur">SURVIVAL</span></div>
             <div className="menu-sub">A Wizard's Last Stand</div>
             <div className="divider" />
-            <button className="btn" onClick={() => onAction('start-solo')}>
+            
+            {/* FIXED: Dito inilagay ang Input text box para sa Solo Players */}
+            <div className="field-group" style={{ width: '100%', marginBottom: '14px' }}>
+              <label className="field-label">Wizard Character Name</label>
+              <input 
+                className="field-input"
+                type="text"
+                value={wizardName}
+                onChange={e => setWizardName(e.target.value)}
+                placeholder="Enter character name..."
+                maxLength={16}
+                style={{ textAlign: 'center' }}
+              />
+            </div>
+
+            <button className="btn" onClick={() => onAction('start-solo', { name: wizardName })}>
               <span className="btn-icon">🧙</span><span className="btn-label">Solo Play</span>
             </button>
             <button className="btn gold" onClick={() => setScreen('coop-menu')}>
@@ -270,7 +291,7 @@ export default function Overlays({
                 <div style={{ fontSize: '.7rem', color: '#a78bfa', marginTop: '4px', minHeight: '1em' }}>{submitStatus}</div>
               </div>
             )}
-            <button className="btn" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo')}>
+            <button className="btn" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName })}>
               🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
             </button>
             <button className="btn" onClick={() => setScreen('menu')}>🏠 Main Menu</button>

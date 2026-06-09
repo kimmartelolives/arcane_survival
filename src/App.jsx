@@ -12,7 +12,7 @@ export default function App() {
   const [coop, setCoop] = useState({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
   const [wizardName, setWizardName] = useState('Wizard');
   const [toast, setToast] = useState({ message: '', isError: false });
-  const [levelUpOptions, setLevelUpOptions] = useState(['Vitality', 'Arcane Might', 'Rapid Fire']); // Default pool array
+  const [levelUpOptions, setLevelUpOptions] = useState(['Vitality', 'Arcane Might', 'Rapid Fire']); 
 
   const hudRef = useRef({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
   
@@ -41,7 +41,7 @@ export default function App() {
 
   const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
 
-const handleSelectUpgrade = (choice) => {
+  const handleSelectUpgrade = (choice) => {
     if (!netRef.current.isHost && netRef.current.channel) {
       netRef.current.channel.send('guest_levelup_choice', { choice });
     } else if (window.runUpgrade) {
@@ -50,7 +50,6 @@ const handleSelectUpgrade = (choice) => {
     setScreen('playing');
   };
 
-// Centralized Master Network Router
   const routeNetworkMessage = (event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
@@ -72,7 +71,6 @@ const handleSelectUpgrade = (choice) => {
       setScreen('levelup');
     }
 
-    // ⏸ FIXED: Saluhin ang network pause/resume commands sa Guest POV
     if (event === 'game_paused') {
       setScreen('pause');
     }
@@ -95,7 +93,10 @@ const handleSelectUpgrade = (choice) => {
       netRef.current.channel = null;
       setCoop({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
       
-      // SOLO RANDOMIZER POOL SEED
+      // I-save ang pangalan mula sa main menu text input field
+      const name = data?.name?.trim() || 'Wizard';
+      setWizardName(name);
+
       const pool = ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
       const shuffle = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
       setLevelUpOptions(shuffle);
@@ -151,8 +152,9 @@ const handleSelectUpgrade = (choice) => {
         setScreen={setScreen}
         hudRef={hudRef}
         netRef={netRef}
+        playerName={wizardName}
+        isCoop={coop.isEnabled}
         onLevelUpOffer={(options) => { 
-          // FIXED: Pinatibay ang randomization generator array mapping bago ibukas ang viewport overlay panel
           const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
           const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
           setLevelUpOptions(uniqueChoices); 
@@ -163,7 +165,7 @@ const handleSelectUpgrade = (choice) => {
       {screen === 'playing' && (
         <>
           <button id="btn-pause-exit" onClick={() => setScreen('menu')}>Exit</button>
-          {coop.isEnabled && <div id="coop-hud" className="active">⚔ {wizardName} & {coop.p2Name}</div>}
+          {coop.isEnabled && <div id="coop-hud" className="active">⚔️ {wizardName} & {coop.p2Name}</div>}
         </>
       )}
 
@@ -174,7 +176,8 @@ const handleSelectUpgrade = (choice) => {
         roomCode={coop.roomCode}
         p2Status={coop.status}
         isCoop={coop.isEnabled}
-        levelUpOptions={levelUpOptions} // Guaranteed reactive parameter data values
+        initialWizardName={wizardName}
+        levelUpOptions={levelUpOptions} 
         onSelectUpgrade={handleSelectUpgrade}
         onAction={handleAction}
       />

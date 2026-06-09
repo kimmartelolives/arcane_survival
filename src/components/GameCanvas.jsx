@@ -114,7 +114,58 @@ const focusStyles = `
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
 
-  /* --- RPG ACTIVE BUFF DISPLAY BAR (UPPER MIDDLE) --- */
+  .stats-toggle-btn {
+    background: #110c36;
+    border: 1px solid #8b5cf6;
+    color: #e2e8f0;
+    font-family: monospace;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    align-self: flex-start;
+    pointer-events: auto;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+    transition: all 0.15s ease;
+  }
+  .stats-toggle-btn:hover {
+    background: #24145e;
+    border-color: #c084fc;
+    color: #fff;
+  }
+  .rpg-stats-panel {
+    width: 260px;
+    background: rgba(11, 8, 38, 0.94);
+    border: 2px solid #8b5cf6;
+    border-radius: 6px;
+    padding: 10px;
+    color: #fff;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+    backdrop-filter: blur(4px);
+    pointer-events: auto;
+  }
+  .stats-header {
+    font-size: 0.78rem;
+    font-weight: bold;
+    color: #fef08a;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.4);
+    padding-bottom: 4px;
+    margin-bottom: 2px;
+    letter-spacing: 0.5px;
+  }
+  .stats-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+  }
+  .stats-label { color: #94a3b8; }
+  .stats-value { color: #34d399; font-weight: bold; }
+
   .rpg-buff-container {
     position: absolute;
     top: 48px;
@@ -146,7 +197,6 @@ const focusStyles = `
   .rpg-buff-badge.pot-regen { border-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
   .rpg-buff-badge.pot-xpBoost { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
 
-  /* --- TOGGLE BUTTON OVERLAY FOR SKILL TREE --- */
   .skill-tree-toggle-btn {
     position: absolute;
     bottom: 12px;
@@ -169,7 +219,6 @@ const focusStyles = `
     transform: translateY(-2px);
   }
 
-  /* --- SKILL TREE LOWER RIGHT SIDE PANEL UI --- */
   .skill-tree-container {
     position: absolute;
     bottom: 46px;
@@ -266,7 +315,6 @@ const focusStyles = `
     border-left: 2px solid #7c3aed;
   }
 
-  /* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */
   .mmo-hotbar-container {
     position: absolute;
     bottom: 14px;
@@ -318,7 +366,6 @@ const focusStyles = `
     cursor: not-allowed;
   }
   
-  /* --- ULTIMATE SKILL SLOT OVERLAY DESIGN --- */
   .mmo-hotbar-ult-slot {
     position: relative;
     width: 72px;
@@ -420,7 +467,7 @@ const focusStyles = `
   }
 `;
 
-export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer }) {
+export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, isCoop }) {
   const canvasRef = useRef(null);
   const workerRef = useRef(null);
   
@@ -432,6 +479,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const xpTextRef = useRef(null);
   const audioCtxRef = useRef(null);
 
+  const statAtkRef = useRef(null);
+  const statDefRef = useRef(null);
+  const statCritRef = useRef(null);
+  const statSpdRef = useRef(null);
+
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
 
@@ -439,6 +491,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [p2VotedRestart, setP2VotedRestart] = useState(false);
 
   const [isTreeOpen, setIsTreeOpen] = useState(true);
+  const [isStatsOpen, setIsStatsOpen] = useState(false); 
   const [playerLevel, setPlayerLevel] = useState(1);
   const [activeBuffsList, setActiveBuffsList] = useState([]);
   
@@ -559,10 +612,10 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
 
         if (!eng.p) {
-          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0 };
         }
         if (!eng.p2) {
-          eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+          eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0 };
         }
 
         eng.enemies = (payload.enemies || []).map(e => ({
@@ -575,10 +628,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
         eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2 }));
-        
-        // Sync custom potions layer map tracking
         eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
-
         eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life }));
 
         eng.score = payload.score ?? eng.score;
@@ -711,12 +761,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.gameStarted = false; 
       setHasStarted(false);     
       
-      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
       if (isCoop) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
 
@@ -768,7 +818,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       
       if (baseSkills.includes(skillId) && target.level < 5) return; 
       if (attackSkills.includes(skillId) && target.level < 10) return;
-      if (skillId === 'arcaneCollapse' && target.level < 12) return; // Ultimate scales into Level 12 bounds
+      if (skillId === 'arcaneCollapse' && target.level < 12) return; 
 
       if (!target.skills) {
         target.skills = initSkills();
@@ -817,7 +867,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       if (forcedTarget === 'p2') target = eng.p2;
       if (forcedTarget === 'p1') target = eng.p;
 
-      if (!target || target.dead || target.level < 12) return; // Hard locked to Level 12 boundaries
+      if (!target || target.dead || target.level < 12) return; 
       if (!target.skills) target.skills = initSkills();
       
       if (!target.skills.arcaneCollapse?.learned) {
@@ -838,10 +888,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
       for (const enemy of eng.enemies) {
         let colPulseDmg = 85;
-        if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; // Consumable scaling
+        if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
         if (enemy.instabTime > 0) colPulseDmg *= 1.5;
 
-        // Apply critical multiplication factor to Arcane Collapse
         if (target.potBuffs?.crit > 0 && Math.random() < 0.35) {
           colPulseDmg *= 2;
           enemy.flash = 0.5;
@@ -851,11 +900,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         enemy.hp -= colPulseDmg;
         
-        enemy.stunnedTime = 4.0;       // Time Lock Status
-        enemy.temporalSlowTime = 6.0;  // Temporal Slowdown / Energy Collapse
-        enemy.arcaneBurnTime = 6.0;    // Arcane Burn Damage over time
-        enemy.voidExhaustTime = 6.0;   // Void Exhaustion / Divine Suppression
-        enemy.instabTime = 6.0;        // Elemental Instability
+        enemy.stunnedTime = 4.0;       
+        enemy.temporalSlowTime = 6.0;  
+        enemy.arcaneBurnTime = 6.0;    
+        enemy.voidExhaustTime = 6.0;   
+        enemy.instabTime = 6.0;        
 
         if (enemy.hp <= 0) enemy.deadTrigger = true;
       }
@@ -997,22 +1046,19 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             playerObj.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
           }
 
-          // Potion buff clocks decaying steps
           if (playerObj.potBuffs.power > 0) playerObj.potBuffs.power -= dt;
           if (playerObj.potBuffs.defense > 0) playerObj.potBuffs.defense -= dt;
           if (playerObj.potBuffs.crit > 0) playerObj.potBuffs.crit -= dt;
           if (playerObj.potBuffs.xpBoost > 0) playerObj.potBuffs.xpBoost -= dt;
           if (playerObj.potBuffs.regen > 0) {
             playerObj.potBuffs.regen -= dt;
-            playerObj.hp = Math.min(playerObj.maxHp, playerObj.hp + 3.5 * dt); // Gradual recovery
+            playerObj.hp = Math.min(playerObj.maxHp, playerObj.hp + 3.5 * dt); 
           }
 
-          // Arcane Collapse Cooldown Decay
           if (playerObj.skills.arcaneCollapse?.cd > 0) {
             playerObj.skills.arcaneCollapse.cd -= dt;
           }
 
-          // Berserk Aura
           if (playerObj.skills.berserk?.learned) {
             if (playerObj.skills.berserk.cd > 0) playerObj.skills.berserk.cd -= dt;
             if (playerObj.skills.berserk.duration > 0) {
@@ -1023,7 +1069,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          // Massive Haste
           if (playerObj.skills.haste?.learned) {
             if (playerObj.skills.haste.cd > 0) playerObj.skills.haste.cd -= dt;
             if (playerObj.skills.haste.duration > 0) {
@@ -1034,7 +1079,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          // Rigid's Defender Shield
           if (playerObj.skills.shield?.learned) {
             if (playerObj.skills.shield.cd > 0) playerObj.skills.shield.cd -= dt;
             if (playerObj.skills.shield.duration > 0) {
@@ -1045,7 +1089,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          // Shooting Star (AoE Explosive Cubes)
           if (playerObj.skills.shootingStar?.learned) {
             if (playerObj.skills.shootingStar.cd === undefined) playerObj.skills.shootingStar.cd = 0;
             if (playerObj.skills.shootingStar.cd > 0) playerObj.skills.shootingStar.cd -= dt;
@@ -1064,7 +1107,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          // Cube Bash (Control field stun ring)
           if (playerObj.skills.cubeBash?.learned) {
             if (playerObj.skills.cubeBash.cd === undefined) playerObj.skills.cubeBash.cd = 0;
             if (playerObj.skills.cubeBash.cd > 0) playerObj.skills.cubeBash.cd -= dt;
@@ -1081,7 +1123,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             }
           }
 
-          // Vacuum Slash (Wide crescent penetrating slashes)
           if (playerObj.skills.vacuumSlash?.learned) {
             if (playerObj.skills.vacuumSlash.cd === undefined) playerObj.skills.vacuumSlash.cd = 0;
             if (playerObj.skills.vacuumSlash.cd > 0) playerObj.skills.vacuumSlash.cd -= dt;
@@ -1167,7 +1208,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             setSkillsState({ ...localTrackedObj.skills });
           }
 
-          // Distribute list compilation to RPG active buff board component elements
           const activeBuffs = [];
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) {
             activeBuffs.push({ type: 'skill', name: 'BERSERK', icon: '🔥', life: localTrackedObj.skills.berserk.duration });
@@ -1187,6 +1227,25 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             if (localTrackedObj.potBuffs.xpBoost > 0) activeBuffs.push({ type: 'pot-xpBoost', name: 'XP BOOST', icon: '✨', life: localTrackedObj.potBuffs.xpBoost });
           }
           setActiveBuffsList(activeBuffs);
+
+          let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0);
+          if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
+          if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
+
+          let currentDef = 0;
+          if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
+          if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
+
+          let currentCrit = 0;
+          if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
+
+          let currentSpd = 200;
+          if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
+
+          if (statAtkRef.current) statAtkRef.current.textContent = currentAtk;
+          if (statDefRef.current) statDefRef.current.textContent = `${currentDef}%`;
+          if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
+          if (statSpdRef.current) statSpdRef.current.textContent = `${currentSpd} IPS`;
         }
 
         if (isCoop && netRef.current.channel) {
@@ -1217,7 +1276,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Processing Ultimate Attack Projectiles
         if (eng.slashes) {
           for (let slIdx = eng.slashes.length - 1; slIdx >= 0; slIdx--) {
             const sl = eng.slashes[slIdx];
@@ -1235,10 +1293,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   
                   let baseSkillDmg = 42;
                   const shooterObj = sl.p2 ? eng.p2 : eng.p;
-                  if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4; // Consumable scaling
+                  if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4; 
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
 
-                  // Double damage check logic
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
                     baseSkillDmg *= 2;
                     enemy.flash = 0.45;
@@ -1300,7 +1357,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Processing Arcane Collapse Timeline Pulses
         if (eng.collapses) {
           for (let cIdx = eng.collapses.length - 1; cIdx >= 0; cIdx--) {
             const col = eng.collapses[cIdx];
@@ -1328,7 +1384,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           }
         }
 
-        // Processing potion buff attraction fields
         if (eng.potions) {
           for (let pIdx = eng.potions.length - 1; pIdx >= 0; pIdx--) {
             const pot = eng.potions[pIdx];
@@ -1356,17 +1411,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               }
 
               if (pot.type === 'health') {
-                targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20); // Small instant flat heal
+                targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20); 
               } else if (pot.type === 'regen') {
                 targetPlayer.potBuffs.regen = 10.0;
               } else {
-                targetPlayer.potBuffs[pot.type] = 12.0; // Consumable runtime lifespan
+                targetPlayer.potBuffs[pot.type] = 12.0; 
               }
 
               for(let k=0; k<8; k++) {
                 eng.particles.push({ x: pot.x, y: pot.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#f472b6', life: 0.25, ml: 0.25, r: 2 });
               }
-              eng.potions.splice(pIdx, 1);
+              eng.potions.splice(pot.type === 'xp' ? eng.potions.indexOf(pot) : pIdx, 1);
             }
           }
         }
@@ -1429,12 +1484,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
                   const shooterObj = b.p2 ? eng.p2 : eng.p;
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
-                  let calculatedDmg = isBerserkActive ? Math.ceil(eng.boltDmg * 1.5) : eng.boltDmg;
+                  let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
 
-                  if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); // Consumable Fire Power Boost
+                  if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); 
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
-                  // Double damage check logic
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
                     calculatedDmg *= 2;
                     e.flash = 0.45;
@@ -1444,7 +1498,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
                   e.hp -= calculatedDmg;
                   
-                  // Body Cutter Stigma application
                   const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
                   if (hasBodyCutter) {
                     e.stigmaTime = 4.0;
@@ -1459,7 +1512,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                     eng.score += e.boss ? 1500 : 100;
                     eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
 
-                    // Roll randomized drop calculations across potion item array types
                     if (Math.random() < 0.22) {
                       const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
                       eng.potions.push({
@@ -1480,7 +1532,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             for (let j = eng.enemies.length - 1; j >= 0; j--) {
               const e = eng.enemies[j];
 
-              // Handle Stigma DoT ticks
               if (e.stigmaTime > 0) {
                 e.stigmaTime -= dt;
                 e.hp -= 20 * dt; 
@@ -1490,7 +1541,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 if (e.hp <= 0) e.deadTrigger = true;
               }
 
-              // Arcane Collapse Debuff Decay / Logic
               if (e.temporalSlowTime > 0) e.temporalSlowTime -= dt;
               if (e.voidExhaustTime > 0) e.voidExhaustTime -= dt;
               if (e.instabTime > 0) e.instabTime -= dt;
@@ -1520,7 +1570,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 continue;
               }
 
-              // Cube Bash movement suppression
               if (e.stunnedTime > 0) {
                 e.stunnedTime -= dt;
               } else {
@@ -1544,7 +1593,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
                 let damageTaken = e.dmg;
                 if (e.voidExhaustTime > 0) damageTaken *= 0.5; 
-                if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65; // Defense Potion Reduction
+                if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65; 
 
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
                   damageTaken = 0; 
@@ -1593,7 +1642,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (!targetPlayer.dead && Math.hypot(targetPlayer.x - g.x, targetPlayer.y - g.y) < targetPlayer.r + g.r) {
                 
                 let distributedXp = g.xp;
-                if (targetPlayer.potBuffs?.xpBoost > 0) distributedXp = Math.ceil(distributedXp * 1.5); // Experience Buff multiplier
+                if (targetPlayer.potBuffs?.xpBoost > 0) distributedXp = Math.ceil(distributedXp * 1.5); 
 
                 if (isCoop && targetPlayer === eng.p2) {
                   eng.p2.xp += distributedXp;
@@ -1682,7 +1731,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.lineTo(g.x, g.y + g.r); ctx.lineTo(g.x - g.r * 0.6, g.y); ctx.closePath(); ctx.fill(); ctx.restore();
       }
 
-      // Render custom RPG styled volumetric potions onto game field layer maps
       if (eng.potions) {
         for (const pot of eng.potions) {
           ctx.save();
@@ -1699,7 +1747,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           ctx.strokeStyle = '#ffffff';
           ctx.lineWidth = 1.5;
 
-          // Draw custom flask geometry structure
           ctx.beginPath();
           ctx.moveTo(pot.x - pot.r * 0.4, pot.y - pot.r);
           ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r);
@@ -1719,7 +1766,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.fillStyle = b.p2 ? '#fed7aa' : '#f5d0fe'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
 
-      // Drawing custom Active Slashes
       if (eng.slashes) {
         for (const sl of eng.slashes) {
           ctx.save();
@@ -1736,7 +1782,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      // Drawing custom Cosmic Stars indicators
       if (eng.stars) {
         for (const s of eng.stars) {
           ctx.save();
@@ -1758,7 +1803,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      // Drawing custom Cube Bashes
       if (eng.cubeBashes) {
         for (const cb of eng.cubeBashes) {
           ctx.save();
@@ -1771,7 +1815,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         }
       }
 
-      // Drawing custom Arcane Collapse temporal matrix rings
       if (eng.collapses) {
         for (const col of eng.collapses) {
           ctx.save();
@@ -1941,7 +1984,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       target.hp = target.maxHp; 
     }
     else if (token.includes('damage') || token.includes('might') || token.includes('increase')) {
-      eng.boltDmg += 14; 
+      target.dmg = (target.dmg || 0) + 14; 
     }
     else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
       target.shootRate = Math.max(0.15, target.shootRate - 0.1); 
@@ -1980,9 +2023,44 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* BOTTOM VITAL STATUS HUDS */}
+        {/* BOTTOM VITAL STATUS HUDS + RPG STATS PANEL */}
         {screen === 'playing' && (
           <div className="game-hud-bottom">
+            <button 
+              className="stats-toggle-btn" 
+              onClick={() => setIsStatsOpen(prev => !prev)}
+            >
+              {isStatsOpen ? "▼ Hide Stats Panel" : "▲ Show Character Stats"}
+            </button>
+
+            {isStatsOpen && (
+              <div className="rpg-stats-panel">
+                <div className="stats-header">⚔️ HERO STATUS ATTRIBUTES</div>
+                <div className="stats-row">
+                  <span className="stats-label">Character Name:</span>
+                  <span className="stats-value" style={{ color: '#a855f7' }}>
+                    {playerName || (isHostInstance ? "Player 1" : "Player 2")}
+                  </span>
+                </div>
+                <div className="stats-row">
+                  <span className="stats-label">Attack Power:</span>
+                  <span ref={statAtkRef} className="stats-value">22</span>
+                </div>
+                <div className="stats-row">
+                  <span className="stats-label">Defense Block:</span>
+                  <span ref={statDefRef} className="stats-value">0%</span>
+                </div>
+                <div className="stats-row">
+                  <span className="stats-label">Crit Chance:</span>
+                  <span ref={statCritRef} className="stats-value">0%</span>
+                </div>
+                <div className="stats-row">
+                  <span className="stats-label">Movement Speed:</span>
+                  <span ref={statSpdRef} className="stats-value">200 IPS</span>
+                </div>
+              </div>
+            )}
+
             <div className="hud-bar-container">
               <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
               <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
@@ -1994,10 +2072,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */}
         {screen === 'playing' && playerLevel >= 10 && (
           <div className="mmo-hotbar-container">
-            {/* Body Cutter Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.bodyCutter?.learned ? 'not-learned' : (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.bodyCutter?.learned && window.learnSkillTreeTech('bodyCutter')}
@@ -2012,7 +2088,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
-            {/* Shooting Star Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.shootingStar?.learned ? 'not-learned' : (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.shootingStar?.learned && window.learnSkillTreeTech('shootingStar')}
@@ -2032,7 +2107,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
-            {/* Cube Bash Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.cubeBash?.learned ? 'not-learned' : (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.cubeBash?.learned && window.learnSkillTreeTech('cubeBash')}
@@ -2052,7 +2126,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
-            {/* Vacuum Slash Slot */}
             <div 
               className={`mmo-hotbar-slot ${!skillsState.vacuumSlash?.learned ? 'not-learned' : (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle')}`}
               onClick={() => skillsState.vacuumSlash?.learned && window.learnSkillTreeTech('vacuumSlash')}
@@ -2072,7 +2145,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               )}
             </div>
 
-            {/* --- ARCANE COLLAPSE ULTIMATE (LOCKED TO LEVEL 12 SCALE BOUNDS) --- */}
             {playerLevel >= 12 && (
               <div 
                 className="mmo-hotbar-ult-slot"
@@ -2090,7 +2162,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* --- TOGGLE BUTTON IN THE LOWER RIGHT CORNER --- */}
         {screen === 'playing' && playerLevel >= 5 && (
           <button 
             className="skill-tree-toggle-btn" 
@@ -2100,7 +2171,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </button>
         )}
 
-        {/* --- INTERACTIVE LOWER RIGHT SIDE SKILL TREE PANEL WITH DESCRIPTIONS --- */}
         {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
           <div className="skill-tree-container">
             <div className="skill-tree-title-row">
@@ -2108,7 +2178,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               <button className="skill-tree-close-x" onClick={() => setIsTreeOpen(false)}>✕</button>
             </div>
             
-            {/* Berserk Aura */}
             <button 
               className={`skill-row-btn ${skillsState.berserk?.learned ? (skillsState.berserk.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('berserk')}
@@ -2122,7 +2191,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Cuts your active shooting interval directly in half and increases bolt damage output by +50%.</div>
 
-            {/* Massive Haste */}
             <button 
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('haste')}
@@ -2136,7 +2204,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Increases character movement velocity by +45% to easily kite massive groups of enemies.</div>
 
-            {/* Fortify */}
             <button 
               className={`skill-row-btn ${skillsState.fortify?.learned ? (skillsState.fortify.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('fortify')}
@@ -2146,7 +2213,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </button>
             <div className="skill-node-desc">Hardens your wizard robes to grant a flat, permanent 25% damage reduction from all sources.</div>
 
-            {/* Rigid's Defender */}
             <button 
               className={`skill-row-btn ${skillsState.shield?.learned ? (skillsState.shield.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onClick={() => window.learnSkillTreeTech('shield')}
@@ -2158,16 +2224,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </span>
               )}
             </button>
-            <div className="skill-node-desc">Spawns a glowing energy bubble around you that completely negates and blocks oncoming enemy damage.</div>
+            <div className="skill-node-desc">Spawns a glowing energy bubble around you that completely blocks oncoming damage.</div>
 
-            {/* --- LEVEL 10 ATTACK SKILLS SUBSECTION --- */}
             {playerLevel >= 10 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
                   <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ ULTIMATE ATTACK SKILLS (LV 10+)</span>
                 </div>
 
-                {/* Body Cutter */}
                 <button 
                   className={`skill-row-btn ${skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('bodyCutter')}
@@ -2177,7 +2241,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </button>
                 <div className="skill-node-desc">Applies stigma/debuff and damage-over-time effects to your enemies.</div>
 
-                {/* Shooting Star */}
                 <button 
                   className={`skill-row-btn ${skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('shootingStar')}
@@ -2187,7 +2250,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </button>
                 <div className="skill-node-desc">Summons explosive cube effects for area damage.</div>
 
-                {/* Cube Bash */}
                 <button 
                   className={`skill-row-btn ${skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('cubeBash')}
@@ -2197,7 +2259,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                 </button>
                 <div className="skill-node-desc">Cube-based control attack that can disable or stun enemies.</div>
 
-                {/* Vacuum Slash */}
                 <button 
                   className={`skill-row-btn ${skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onClick={() => window.learnSkillTreeTech('vacuumSlash')}
@@ -2209,7 +2270,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               </>
             )}
 
-            {/* --- LEVEL 12 CRITICAL MYSTICAL SEGMENT --- */}
             {playerLevel >= 12 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
@@ -2231,7 +2291,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* INITIALIZATION OVERLAY SCREEN */}
         {screen === 'playing' && !hasStarted && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal">
@@ -2245,7 +2304,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           </div>
         )}
 
-        {/* CO-OP RESTART VOTING OVERLAY STATUS FALLBACK */}
         {screen === 'gameover' && isNetworked && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal" style={{ borderColor: '#fbbf24' }}>
