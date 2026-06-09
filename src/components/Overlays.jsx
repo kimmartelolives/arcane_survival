@@ -46,7 +46,6 @@ export default function Overlays({
         const index = parseInt(e.key, 10) - 1;
         const choices = levelUpOptions || [];
         if (choices[index]) {
-          // Fire raw un-mutated token name directly to trigger upstream dispatchers
           onSelectUpgrade(choices[index]);
         }
       }
@@ -69,7 +68,6 @@ export default function Overlays({
     setSubmitStatus(ok ? '✦ Score submitted!' : 'Failed submission.');
   };
 
-  // FIXED: Pinatibay ang parsing strings evaluation filter engine
   const getUpgradeMeta = (rawString) => {
     const normalize = String(rawString || '').toLowerCase().trim();
     

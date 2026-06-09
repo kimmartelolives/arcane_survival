@@ -10,7 +10,6 @@ const ET = [
   { r: 27, speed: 50,  hp: 260, dmg: 30, xp: 100, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
-// --- CSS FOR FOCUS MITIGATION OVERLAYS & HUD ---
 const focusStyles = `
   #wrap {
     position: relative;
@@ -80,7 +79,6 @@ const focusStyles = `
     position: absolute;
     bottom: 12px;
     left: 12px;
-    right: 12px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -115,6 +113,224 @@ const focusStyles = `
     font-weight: bold;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
   }
+
+  /* --- TOGGLE BUTTON OVERLAY FOR SKILL TREE --- */
+  .skill-tree-toggle-btn {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: #7c3aed;
+    border: 1px solid #a78bfa;
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: #fff;
+    font-family: monospace;
+    font-size: 0.75rem;
+    font-weight: bold;
+    cursor: pointer;
+    z-index: 60;
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
+    transition: all 0.2s;
+  }
+  .skill-tree-toggle-btn:hover {
+    background: #6d28d9;
+    transform: translateY(-2px);
+  }
+
+  /* --- SKILL TREE LOWER RIGHT SIDE PANEL UI --- */
+  .skill-tree-container {
+    position: absolute;
+    bottom: 46px;
+    right: 12px;
+    background: rgba(11, 8, 38, 0.95);
+    border: 2px solid #7c3aed;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 50;
+    font-family: monospace;
+    color: #fff;
+    width: 250px;
+    max-height: 480px;
+    overflow-y: auto;
+    box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+    backdrop-filter: blur(4px);
+  }
+  .skill-tree-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(124, 58, 237, 0.4);
+    padding-bottom: 6px;
+    margin-bottom: 4px;
+  }
+  .skill-tree-title {
+    font-size: 0.75rem;
+    font-weight: bold;
+    color: #fef08a;
+    letter-spacing: 0.5px;
+  }
+  .skill-tree-close-x {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: bold;
+  }
+  .skill-tree-close-x:hover {
+    color: #f87171;
+  }
+  .skill-row-btn {
+    background: linear-gradient(135deg, #1e1145 0%, #0f0726 100%);
+    border: 1px solid #5b21b6;
+    border-radius: 4px;
+    padding: 6px 8px;
+    color: #e2e8f0;
+    font-size: 0.72rem;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .skill-row-btn:hover:not(:disabled) {
+    border-color: #a78bfa;
+    background: #2e146a;
+    color: #fff;
+  }
+  .skill-row-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .skill-row-btn.learned {
+    border-color: #10b981;
+    background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
+    color: #34d399;
+  }
+  .skill-row-btn.disabled-toggle {
+    border-color: #f87171;
+    background: linear-gradient(135deg, #4c0519 0%, #1c0007 100%);
+    color: #f43f5e;
+  }
+  .skill-cd-text {
+    font-size: 0.65rem;
+    color: #fbbf24;
+    font-weight: bold;
+  }
+  .skill-node-desc {
+    font-size: 0.65rem;
+    color: #94a3b8;
+    line-height: 1.3;
+    background: rgba(3, 1, 17, 0.5);
+    padding: 4px 6px;
+    border-radius: 3px;
+    margin-top: -2px;
+    margin-bottom: 4px;
+    border-left: 2px solid #7c3aed;
+  }
+
+  /* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */
+  .mmo-hotbar-container {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    background: rgba(11, 8, 38, 0.9);
+    border: 2px solid #8b5cf6;
+    padding: 6px 12px;
+    border-radius: 8px;
+    box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+    z-index: 55;
+    font-family: monospace;
+    backdrop-filter: blur(4px);
+  }
+  .mmo-hotbar-slot {
+    position: relative;
+    width: 58px;
+    height: 58px;
+    background: #110c36;
+    border: 2px solid #5b21b6;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+  }
+  .mmo-hotbar-slot:hover:not(.not-learned) {
+    border-color: #c084fc;
+    background: #24145e;
+    transform: translateY(-2px);
+  }
+  .mmo-hotbar-slot.disabled-toggle {
+    border-color: #f43f5e;
+    background: #310413;
+  }
+  .mmo-hotbar-slot.learned {
+    border-color: #10b981;
+  }
+  .mmo-hotbar-slot.not-learned {
+    border-color: #374151;
+    background: #1f2937;
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .hotbar-icon {
+    font-size: 1.3rem;
+    margin-bottom: -1px;
+  }
+  .hotbar-name {
+    font-size: 0.52rem;
+    color: #cbd5e1;
+    text-align: center;
+    max-width: 54px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .hotbar-key-bind {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 0.55rem;
+    color: #fbbf24;
+    font-weight: bold;
+  }
+  .hotbar-status-dot {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 0.52rem;
+    font-weight: bold;
+  }
+  .hotbar-status-dot.on { color: #34d399; }
+  .hotbar-status-dot.off { color: #f43f5e; }
+  
+  .hotbar-cooldown-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.72);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fef08a;
+    font-size: 1.1rem;
+    font-weight: bold;
+    pointer-events: none;
+  }
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer }) {
@@ -132,14 +348,32 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
 
-  // --- CO-OP VOTING TRACKER STATE ---
   const [p1VotedRestart, setP1VotedRestart] = useState(false);
   const [p2VotedRestart, setP2VotedRestart] = useState(false);
+
+  // States to control tree toggle visibility on screen 
+  const [isTreeOpen, setIsTreeOpen] = useState(true);
+
+  const [playerLevel, setPlayerLevel] = useState(1);
+  
+  const initSkills = () => ({
+    berserk: { learned: false, enabled: true, cd: 0, duration: 0 },
+    haste: { learned: false, enabled: true, cd: 0, duration: 0 },
+    fortify: { learned: false, enabled: true },
+    shield: { learned: false, enabled: true, cd: 0, duration: 0 },
+    bodyCutter: { learned: false, enabled: true },
+    shootingStar: { learned: false, enabled: true, cd: 0 },
+    cubeBash: { learned: false, enabled: true, cd: 0 },
+    vacuumSlash: { learned: false, enabled: true, cd: 0 }
+  });
+
+  const [skillsState, setSkillsState] = useState(initSkills());
 
   const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
     gameStarted: false, 
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
+    slashes: [], cubeBashes: [], stars: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
@@ -207,7 +441,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [netRef]);
 
-  // --- EXPOSE CO-OP VOTES TO GLOBAL WINDOW AND HUD REF FOR PARENT SCREEN LAYERS ---
   useEffect(() => {
     window.p1VotedRestart = p1VotedRestart;
     window.p2VotedRestart = p2VotedRestart;
@@ -219,13 +452,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       hudRef.current.coopVotes = { p1: p1VotedRestart, p2: p2VotedRestart };
     }
 
-    // Dispatch global event so parent components can listen and trigger immediate DOM updates
     window.dispatchEvent(new CustomEvent('coop_votes_changed', {
       detail: { p1: p1VotedRestart, p2: p2VotedRestart }
     }));
   }, [p1VotedRestart, p2VotedRestart, hudRef]);
 
-  // 📡 Network Interceptor Update
   useEffect(() => {
     const net = netRef.current;
     if (!net) return;
@@ -249,7 +480,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
         eng.enemies = (payload.enemies || []).map(e => ({
           x: e.x, y: e.y, r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp,
-          dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0
+          dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash || 0,
+          stunnedTime: e.stunnedTime || 0, stigmaTime: e.stigmaTime || 0
         }));
 
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
@@ -268,6 +500,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
           eng.p.dead = payload.p1.dead;
+          if (payload.p1_skills) eng.p.skills = payload.p1_skills;
         }
 
         if (payload.p2 && eng.p2) {
@@ -278,11 +511,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           eng.p2.level = payload.p2_level || eng.p2.level;
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
+          if (payload.p2_skills) eng.p2.skills = payload.p2_skills;
+          
           const hts = payload.ts || Date.now();
           eng.p2History.push({ t: hts, x: payload.p2.x, y: payload.p2.y });
           const now = Date.now();
           while (eng.p2History.length > 20) eng.p2History.shift();
           eng.p2History = eng.p2History.filter(s => (now - s.t) < 2000);
+        }
+
+        if (eng.p2) {
+          setPlayerLevel(eng.p2.level);
+          if (eng.p2.skills) setSkillsState({ ...eng.p2.skills });
         }
       }
       
@@ -295,6 +535,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
           window.runUpgrade(payload.choice, 'p2');
         }
       }
+
+      if (event === 'guest_learned_skill' && net.isHost) {
+        if (window.learnSkillTreeTech) {
+          window.learnSkillTreeTech(payload.skillId, 'p2');
+        }
+      }
       
       if (event === 'offer_levelup' && !net.isHost) {
         onLevelUpOffer(payload.ups);
@@ -305,20 +551,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         setScreen('gameover');
       }
 
-      // --- NEW CO-OP RESTART VOTING INTERCEPTORS ---
       if (event === 'player_voted_restart') {
         if (net.isHost) {
-          // Host receives Guest's (Player 2) vote
           setP2VotedRestart(payload.voted);
         } else {
-          // Guest receives Host's (Player 1) vote
           setP1VotedRestart(payload.voted);
         }
       }
 
       if (event === 'restart_game') {
-        setScreen('playing'); // Ensure both sides transition
-        setP1VotedRestart(false); // Reset votes
+        setScreen('playing'); 
+        setP1VotedRestart(false); 
         setP2VotedRestart(false);
       }
     };
@@ -328,25 +571,25 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     };
   }, [onLevelUpOffer, setScreen, netRef]);
 
-  // --- VOTE MATCH WATCHER LOBBY TRIGGER ---
   useEffect(() => {
     const net = netRef.current;
     if (net && net.channel && net.isHost) {
       if (p1VotedRestart && p2VotedRestart) {
-        net.channel.send('restart_game', {}); // Broadcast to guest
+        net.channel.send('restart_game', {}); 
         setScreen('playing');
       }
     }
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
-  // 🛠️ Enhanced screen parameters reset condition tracking
   useEffect(() => {
     const eng = engineRef.current;
     if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
       
-      // Clear out the voting records safely whenever entering a match setup or returning to menu
       setP1VotedRestart(false);
       setP2VotedRestart(false);
+      setPlayerLevel(1);
+      setIsTreeOpen(true); // reset tree panel visible on new matches
+      setSkillsState(initSkills());
 
       if (screen === 'playing' && eng.gameStarted && eng.p && !eng.p.dead) {
         return;
@@ -356,15 +599,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
+      eng.slashes = []; eng.cubeBashes = []; eng.stars = [];
       eng.gameStarted = false; 
       setHasStarted(false);     
       
-      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+      eng.p = { x: isCoop ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills() };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
       if (isCoop) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false };
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, skills: initSkills() };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
 
@@ -377,14 +621,12 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   }, [screen, netRef]);
 
-  // --- GLOBAL EXPOSED SYSTEM CALL TO MANAGE REPLAYS FROM PARENT SCREEN LAYERS ---
   useEffect(() => {
     window.triggerRestartVote = () => {
       const net = netRef.current;
       const isCoop = Boolean(net && net.channel);
 
       if (!isCoop) {
-        // Single player bypasses the checks entirely
         setScreen('playing');
         return;
       }
@@ -400,6 +642,59 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       }
     };
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
+
+  useEffect(() => {
+    window.learnSkillTreeTech = (skillId, forcedTarget = null) => {
+      const eng = engineRef.current;
+      if (!eng) return;
+      
+      const isCoop = Boolean(netRef.current && netRef.current.channel);
+      let target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+      if (forcedTarget === 'p2') target = eng.p2;
+      if (forcedTarget === 'p1') target = eng.p;
+
+      if (!target || target.dead) return;
+
+      const baseSkills = ['berserk', 'haste', 'fortify', 'shield'];
+      const attackSkills = ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'];
+      
+      if (baseSkills.includes(skillId) && target.level < 5) return; 
+      if (attackSkills.includes(skillId) && target.level < 10) return;
+
+      if (!target.skills) {
+        target.skills = initSkills();
+      }
+
+      if (!target.skills[skillId]) {
+        target.skills[skillId] = { learned: false, enabled: true };
+      }
+
+      if (!target.skills[skillId].learned) {
+        target.skills[skillId].learned = true;
+        target.skills[skillId].enabled = true;
+        if (skillId === 'berserk' || skillId === 'haste' || skillId === 'shield') {
+          target.skills[skillId].cd = 0;
+          target.skills[skillId].duration = 0;
+        }
+        if (['shootingStar', 'cubeBash', 'vacuumSlash'].includes(skillId)) {
+          target.skills[skillId].cd = 0;
+        }
+      } else {
+        // Toggle on/off state logic
+        target.skills[skillId].enabled = !target.skills[skillId].enabled;
+      }
+
+      if (isCoop && !forcedTarget) {
+        if (!netRef.current.isHost) {
+          netRef.current.channel.send('guest_learned_skill', { skillId });
+        }
+      }
+
+      if (target === ((isCoop && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+        setSkillsState({ ...target.skills });
+      }
+    };
+  }, [netRef]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -491,34 +786,147 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
-              eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0 });
+              eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0 });
             }
             if (eng.waveT >= eng.waveLen) {
               eng.waveT = 0; eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
               if (eng.wave % 3 === 0) {
                 const t = ET[3];
-                eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0 });
+                eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0, stunnedTime: 0, stigmaTime: 0 });
               }
             }
           }
         }
 
+        const tickPlayerSkillTrackers = (playerObj) => {
+          if (!playerObj || playerObj.dead) return;
+          if (!playerObj.skills) {
+            playerObj.skills = initSkills();
+          }
+
+          // Berserk Aura
+          if (playerObj.skills.berserk?.learned) {
+            if (playerObj.skills.berserk.cd > 0) playerObj.skills.berserk.cd -= dt;
+            if (playerObj.skills.berserk.duration > 0) {
+              playerObj.skills.berserk.duration -= dt;
+            } else if (playerObj.skills.berserk.cd <= 0 && playerObj.skills.berserk.enabled !== false) {
+              playerObj.skills.berserk.duration = 6; 
+              playerObj.skills.berserk.cd = 15;      
+            }
+          }
+
+          // Massive Haste
+          if (playerObj.skills.haste?.learned) {
+            if (playerObj.skills.haste.cd > 0) playerObj.skills.haste.cd -= dt;
+            if (playerObj.skills.haste.duration > 0) {
+              playerObj.skills.haste.duration -= dt;
+            } else if (playerObj.skills.haste.cd <= 0 && playerObj.skills.haste.enabled !== false) {
+              playerObj.skills.haste.duration = 6; 
+              playerObj.skills.haste.cd = 15;      
+            }
+          }
+
+          // Rigid's Defender Shield
+          if (playerObj.skills.shield?.learned) {
+            if (playerObj.skills.shield.cd > 0) playerObj.skills.shield.cd -= dt;
+            if (playerObj.skills.shield.duration > 0) {
+              playerObj.skills.shield.duration -= dt;
+            } else if (playerObj.skills.shield.cd <= 0 && playerObj.skills.shield.enabled !== false) {
+              playerObj.skills.shield.duration = 5; 
+              playerObj.skills.shield.cd = 18;      
+            }
+          }
+
+          // Shooting Star (AoE Explosive Cubes)
+          if (playerObj.skills.shootingStar?.learned) {
+            if (playerObj.skills.shootingStar.cd === undefined) playerObj.skills.shootingStar.cd = 0;
+            if (playerObj.skills.shootingStar.cd > 0) playerObj.skills.shootingStar.cd -= dt;
+            
+            if (playerObj.skills.shootingStar.cd <= 0 && playerObj.skills.shootingStar.enabled !== false) {
+              playerObj.skills.shootingStar.cd = 3.5;
+              let targetX = playerObj.x + (Math.random() - 0.5) * 160;
+              let targetY = playerObj.y + (Math.random() - 0.5) * 160;
+              if (eng.enemies.length > 0) {
+                const randEnemy = eng.enemies[Math.floor(Math.random() * eng.enemies.length)];
+                targetX = randEnemy.x;
+                targetY = randEnemy.y;
+              }
+              if (!eng.stars) eng.stars = [];
+              eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 400, targetY: targetY, progress: 0, radius: 95 });
+            }
+          }
+
+          // Cube Bash (Control field stun ring)
+          if (playerObj.skills.cubeBash?.learned) {
+            if (playerObj.skills.cubeBash.cd === undefined) playerObj.skills.cubeBash.cd = 0;
+            if (playerObj.skills.cubeBash.cd > 0) playerObj.skills.cubeBash.cd -= dt;
+            
+            if (playerObj.skills.cubeBash.cd <= 0 && playerObj.skills.cubeBash.enabled !== false) {
+              playerObj.skills.cubeBash.cd = 4.5;
+              if (!eng.cubeBashes) eng.cubeBashes = [];
+              eng.cubeBashes.push({ x: playerObj.x, y: playerObj.y, radius: 10, maxRadius: 135, speed: 260 });
+              for (const enemy of eng.enemies) {
+                if (Math.hypot(enemy.x - playerObj.x, enemy.y - playerObj.y) <= 135) {
+                  enemy.stunnedTime = 1.6;
+                }
+              }
+            }
+          }
+
+          // Vacuum Slash (Wide crescent penetrating slashes)
+          if (playerObj.skills.vacuumSlash?.learned) {
+            if (playerObj.skills.vacuumSlash.cd === undefined) playerObj.skills.vacuumSlash.cd = 0;
+            if (playerObj.skills.vacuumSlash.cd > 0) playerObj.skills.vacuumSlash.cd -= dt;
+            
+            if (playerObj.skills.vacuumSlash.cd <= 0 && playerObj.skills.vacuumSlash.enabled !== false) {
+              playerObj.skills.vacuumSlash.cd = 2.0;
+              let targetEnemy = null;
+              let minDist = Infinity;
+              for (const e of eng.enemies) {
+                const d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y);
+                if (d < minDist) { minDist = d; targetEnemy = e; }
+              }
+              let angle = -Math.PI / 2;
+              if (targetEnemy) {
+                angle = Math.atan2(targetEnemy.y - playerObj.y, targetEnemy.x - playerObj.x);
+              }
+              if (!eng.slashes) eng.slashes = [];
+              eng.slashes.push({ x: playerObj.x, y: playerObj.y, vx: Math.cos(angle) * 340, vy: Math.sin(angle) * 340, angle: angle, life: 1.6, hits: new Set() });
+            }
+          }
+        };
+
         if (isHost || !isCoop) {
           if (eng.p && !eng.p.dead) {
-            eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * eng.p.speed * dt));
-            eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * eng.p.speed * dt));
+            tickPlayerSkillTrackers(eng.p);
+
+            let calculatedSpeed = 200;
+            if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45; 
+
+            eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * calculatedSpeed * dt));
+            eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * calculatedSpeed * dt));
             if (eng.p.inv > 0) eng.p.inv -= dt;
           }
           if (isCoop && eng.p2 && !eng.p2.dead && eng.gameStarted) {
-            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * eng.p2.speed * dt));
-            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * eng.p2.speed * dt));
+            tickPlayerSkillTrackers(eng.p2);
+
+            let calculatedSpeedp2 = 200;
+            if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
+
+            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * calculatedSpeedp2 * dt));
+            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * calculatedSpeedp2 * dt));
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
           }
         } else {
           if (eng.p2 && !eng.p2.dead) {
-            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * eng.p2.speed * dt));
-            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * eng.p2.speed * dt));
+            tickPlayerSkillTrackers(eng.p2);
+
+            let calculatedSpeedp2 = 200;
+            if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
+
+            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * calculatedSpeedp2 * dt));
+            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * calculatedSpeedp2 * dt));
             if (eng.p2.inv > 0) eng.p2.inv -= dt;
 
             const predFactor = Math.min(1, dt * 18);
@@ -539,9 +947,18 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               }
             }
           }
+          if (eng.p) tickPlayerSkillTrackers(eng.p);
           const f = Math.min(1, dt * 14);
           eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
           eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
+        }
+
+        const localTrackedObj = (isCoop && !isHost) ? eng.p2 : eng.p;
+        if (localTrackedObj) {
+          setPlayerLevel(localTrackedObj.level);
+          if (localTrackedObj.skills) {
+            setSkillsState({ ...localTrackedObj.skills });
+          }
         }
 
         if (isCoop && netRef.current.channel) {
@@ -553,15 +970,78 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             } else {
               netRef.current.channel.send('state_sync', {
                 gameStarted: eng.gameStarted, 
-                enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash })),
+                enemies: eng.enemies.map(e => ({ x: Math.round(e.x), y: Math.round(e.y), r: e.r, speed: e.speed, hp: e.hp, maxHp: e.maxHp, dmg: e.dmg, xp: e.xp, color: e.color, glow: e.glow, boss: e.boss, flash: e.flash, stunnedTime: e.stunnedTime, stigmaTime: e.stigmaTime })),
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead } : null,
                 p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead } : null,
+                p1_skills: eng.p ? eng.p.skills : null,
+                p2_skills: eng.p2 ? eng.p2.skills : null,
                 ts: Date.now(),
                 p2_level: eng.p2 ? eng.p2.level : 1, p2_xp: eng.p2 ? eng.p2.xp : 0, p2_xpNext: eng.p2 ? eng.p2.xpNext : 80
               });
+            }
+          }
+        }
+
+        // Processing Ultimate Attack Projectiles
+        if (eng.slashes) {
+          for (let slIdx = eng.slashes.length - 1; slIdx >= 0; slIdx--) {
+            const sl = eng.slashes[slIdx];
+            sl.x += sl.vx * dt;
+            sl.y += sl.vy * dt;
+            sl.life -= dt;
+            if (sl.life <= 0) {
+              eng.slashes.splice(slIdx, 1);
+              continue;
+            }
+            // Penetrating hits logic
+            for (const enemy of eng.enemies) {
+              if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 28) {
+                if (!sl.hits.has(enemy)) {
+                  sl.hits.add(enemy);
+                  enemy.hp -= 42; 
+                  enemy.flash = 0.15;
+                  if (enemy.hp <= 0) {
+                    enemy.deadTrigger = true;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (eng.stars) {
+          for (let sIdx = eng.stars.length - 1; sIdx >= 0; sIdx--) {
+            const star = eng.stars[sIdx];
+            star.progress += dt * 2.5;
+            star.currentY = star.targetY - 400 * (1 - star.progress);
+            if (star.progress >= 1) {
+              // Explode area trigger splash
+              for (const enemy of eng.enemies) {
+                if (Math.hypot(enemy.x - star.x, enemy.y - star.targetY) <= star.radius) {
+                  enemy.hp -= 70;
+                  enemy.flash = 0.2;
+                  if (enemy.hp <= 0) enemy.deadTrigger = true;
+                }
+              }
+              for (let k = 0; k < 10; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 110 + 50;
+                eng.particles.push({ x: star.x, y: star.targetY, vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, color: '#60a5fa', life: 0.35, ml: 0.35, r: 2.5 });
+              }
+              eng.stars.splice(sIdx, 1);
+            }
+          }
+        }
+
+        if (eng.cubeBashes) {
+          for (let cbIdx = eng.cubeBashes.length - 1; cbIdx >= 0; cbIdx--) {
+            const cb = eng.cubeBashes[cbIdx];
+            cb.radius += cb.speed * dt;
+            if (cb.radius >= cb.maxRadius) {
+              eng.cubeBashes.splice(cbIdx, 1);
             }
           }
         }
@@ -577,7 +1057,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
-                  eng.p.shootCd = eng.p.shootRate;
+                  const activeRate = (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) ? (eng.p.shootRate * 0.5) : eng.p.shootRate;
+                  eng.p.shootCd = activeRate;
                   const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
                   const sp = (eng.p.multiShot - 1) * 0.18;
                   for (let i = 0; i < eng.p.multiShot; i++) {
@@ -597,7 +1078,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
-                  eng.p2.shootCd = eng.p2.shootRate;
+                  const activeRatep2 = (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) ? (eng.p2.shootRate * 0.5) : eng.p2.shootRate;
+                  eng.p2.shootCd = activeRatep2;
                   const ba = Math.atan2(near.y - eng.p2.y, near.x - eng.p2.x);
                   const sp = (eng.p2.multiShot - 1) * 0.18;
                   for (let i = 0; i < eng.p2.multiShot; i++) {
@@ -620,7 +1102,17 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               for (let j = eng.enemies.length - 1; j >= 0; j--) {
                 const e = eng.enemies[j];
                 if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
-                  e.hp -= eng.boltDmg; e.flash = 0.1;
+                  const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
+                  const calculatedDmg = isBerserkActive ? Math.ceil(eng.boltDmg * 1.5) : eng.boltDmg;
+
+                  e.hp -= calculatedDmg; e.flash = 0.1;
+                  
+                  // Body Cutter Stigma application
+                  const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
+                  if (hasBodyCutter) {
+                    e.stigmaTime = 4.0;
+                  }
+
                   for(let k=0; k<5; k++) {
                     const pa = Math.random()*Math.PI*2; const ps = Math.random()*80+40;
                     eng.particles.push({ x: b.x, y: b.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: e.color, life: 0.3, ml: 0.3, r: 2 });
@@ -637,24 +1129,65 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
               if (hit) continue;
             }
 
-            for (const e of eng.enemies) {
-              let tx = (eng.p && !eng.p.dead) ? eng.p : null;
-              if (isCoop && eng.p2 && !eng.p2.dead) {
-                const d1 = (!eng.p || eng.p.dead) ? Infinity : Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
-                const d2 = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
-                if (d2 < d1) tx = eng.p2;
+            for (let j = eng.enemies.length - 1; j >= 0; j--) {
+              const e = eng.enemies[j];
+
+              // Handle Stigma DoT ticks
+              if (e.stigmaTime > 0) {
+                e.stigmaTime -= dt;
+                e.hp -= 20 * dt; 
+                if (Math.random() < 0.15) {
+                  eng.particles.push({ x: e.x + (Math.random() - 0.5) * 10, y: e.y + (Math.random() - 0.5) * 10, vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
+                }
+                if (e.hp <= 0) e.deadTrigger = true;
               }
-              if (!tx) continue;
-              const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
-              e.x += Math.cos(ea) * e.speed * dt; e.y += Math.sin(ea) * e.speed * dt;
+
+              // Post-projectile verification state updates
+              if (e.deadTrigger) {
+                eng.score += e.boss ? 1500 : 100;
+                eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
+                eng.enemies.splice(j, 1);
+                continue;
+              }
+
+              // Cube Bash movement suppression
+              if (e.stunnedTime > 0) {
+                e.stunnedTime -= dt;
+              } else {
+                let tx = (eng.p && !eng.p.dead) ? eng.p : null;
+                if (isCoop && eng.p2 && !eng.p2.dead) {
+                  const d1 = (!eng.p || eng.p.dead) ? Infinity : Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
+                  const d2 = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
+                  if (d2 < d1) tx = eng.p2;
+                }
+                if (tx) {
+                  const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
+                  e.x += Math.cos(ea) * e.speed * dt; e.y += Math.sin(ea) * e.speed * dt;
+                }
+              }
+              
               if (e.flash > 0) e.flash -= dt;
 
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
-                eng.p.hp -= e.dmg; eng.p.inv = 0.7;
+                let damageTaken = e.dmg;
+                if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
+                  damageTaken = 0; 
+                } else if (eng.p.skills?.fortify?.learned && eng.p.skills?.fortify?.enabled !== false) {
+                  damageTaken *= 0.75; 
+                }
+
+                eng.p.hp -= damageTaken; eng.p.inv = 0.7;
                 if (eng.p.hp <= 0) { eng.p.dead = true; if(!isCoop || !eng.p2 || eng.p2.dead) { if(isCoop) netRef.current.channel.send('game_over',{}); setScreen('gameover'); } }
               }
               if (isCoop && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
-                eng.p2.hp -= e.dmg; eng.p2.inv = 0.7;
+                let damageTakenp2 = e.dmg;
+                if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
+                  damageTakenp2 = 0;
+                } else if (eng.p2.skills?.fortify?.learned && eng.p2.skills?.fortify?.enabled !== false) {
+                  damageTakenp2 *= 0.75;
+                }
+
+                eng.p2.hp -= damageTakenp2; eng.p2.inv = 0.7;
                 if (eng.p2.hp <= 0) {
                   eng.p2.dead = true; 
                   if(!eng.p || eng.p.dead) { netRef.current.channel.send('game_over',{}); setScreen('gameover'); } 
@@ -762,9 +1295,70 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         ctx.save(); ctx.shadowColor = b.p2 ? '#fb923c' : '#e879f9'; ctx.shadowBlur = 16;
         ctx.fillStyle = b.p2 ? '#fed7aa' : '#f5d0fe'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
       }
+
+      // Drawing custom Active Slashes
+      if (eng.slashes) {
+        for (const sl of eng.slashes) {
+          ctx.save();
+          ctx.translate(sl.x, sl.y);
+          ctx.rotate(sl.angle);
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.85)';
+          ctx.lineWidth = 4;
+          ctx.shadowBlur = 14;
+          ctx.shadowColor = '#a855f7';
+          ctx.beginPath();
+          ctx.arc(0, 0, 26, -Math.PI / 2, Math.PI / 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      // Drawing custom Cosmic Stars indicators
+      if (eng.stars) {
+        for (const s of eng.stars) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(s.x, s.targetY, s.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          ctx.save();
+          ctx.translate(s.x, s.currentY);
+          ctx.rotate(performance.now() * 0.006);
+          ctx.fillStyle = '#60a5fa';
+          ctx.shadowBlur = 12;
+          ctx.shadowColor = '#3b82f6';
+          ctx.fillRect(-8, -8, 16, 16);
+          ctx.restore();
+        }
+      }
+
+      // Drawing custom Cube Bashes
+      if (eng.cubeBashes) {
+        for (const cb of eng.cubeBashes) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(52, 211, 153, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#34d399';
+          ctx.strokeRect(cb.x - cb.radius, cb.y - cb.radius, cb.radius * 2, cb.radius * 2);
+          ctx.restore();
+        }
+      }
+
       for (const e of eng.enemies) {
         ctx.save(); ctx.fillStyle = e.flash > 0 ? '#fff' : e.color; ctx.shadowColor = e.flash > 0 ? '#fff' : e.glow; ctx.shadowBlur = e.boss ? 22 : 12;
         ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        
+        // Stun ice indicator halo
+        if (e.stunnedTime > 0) {
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(e.x - e.r - 2, e.y - e.r - 2, (e.r * 2) + 4, (e.r * 2) + 4);
+        }
+
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
         if (e.hp < e.maxHp) {
           const bw = e.r * 2.5; const bh = 4; const bx = e.x - bw / 2; const by = e.y - e.r - 10;
@@ -798,6 +1392,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const c = fl ? '#ef4444' : p1Color;
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
         ctx.beginPath(); ctx.arc(p1X, p1Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        
+        if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
+          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+          ctx.beginPath(); ctx.arc(p1X, p1Y + 3, pr + 10, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
+        }
+        if (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) {
+          ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath();
+          ctx.arc(p1X, p1Y + 3, pr + 5, 0, Math.PI * 2); ctx.stroke();
+        }
+
         ctx.fillStyle = fl ? '#b91c1c' : '#5b21b6';
         ctx.beginPath(); ctx.moveTo(p1X, p1Y - pr * 1.8); ctx.lineTo(p1X + pr * 0.9, p1Y - pr * 0.2); ctx.lineTo(p1X - pr * 0.9, p1Y - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#c4b5fd';
@@ -813,6 +1417,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         const c = fl ? '#ef4444' : p2Color;
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
         ctx.beginPath(); ctx.arc(p2X, p2Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        
+        if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
+          ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+          ctx.beginPath(); ctx.arc(p2X, p2Y + 3, pr + 10, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
+        }
+        if (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) {
+          ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 2; ctx.beginPath();
+          ctx.arc(p2X, p2Y + 3, pr + 5, 0, Math.PI * 2); ctx.stroke();
+        }
+
         ctx.fillStyle = fl ? '#b91c1c' : '#c2410c';
         ctx.beginPath(); ctx.moveTo(p2X, p2Y - pr * 1.8); ctx.lineTo(p2X + pr * 0.9, p2Y - pr * 0.2); ctx.lineTo(p2X - pr * 0.9, p2Y - pr * 0.2); ctx.closePath(); ctx.fill();
         ctx.fillStyle = fl ? '#fca5a5' : '#ffedd5';
@@ -829,6 +1443,16 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       eng.keys[e.key] = true; 
       if (e.key === 'Escape' && screen === 'playing') {
         setScreen('pause');
+      }
+      if ((e.key === 'k' || e.key === 'K' || e.key === 't' || e.key === 'T') && screen === 'playing') {
+        setIsTreeOpen(prev => !prev);
+      }
+      // Added MMO hotkeys mapping for level 10 attack triggers
+      if (screen === 'playing') {
+        if (e.key === '1') window.learnSkillTreeTech('bodyCutter');
+        if (e.key === '2') window.learnSkillTreeTech('shootingStar');
+        if (e.key === '3') window.learnSkillTreeTech('cubeBash');
+        if (e.key === '4') window.learnSkillTreeTech('vacuumSlash');
       }
     };
     const up = (e) => { eng.keys[e.key] = false; };
@@ -900,8 +1524,209 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
             </div>
             <div className="hud-bar-container">
               <div ref={xpFillRef} className="hud-bar-fill" style={{ background: '#3b82f6', width: '0%' }}></div>
-              <div ref={xpTextRef} className="hud-bar-text">LV1 XP 0/80</div>
+              <div ref={xpTextRef} className="hud-bar-text">LV{playerLevel} XP 0/80</div>
             </div>
+          </div>
+        )}
+
+        {/* --- MMO ACTION HOTBAR (LOWER MIDDLE) --- */}
+        {screen === 'playing' && playerLevel >= 10 && (
+          <div className="mmo-hotbar-container">
+            {/* Body Cutter Slot */}
+            <div 
+              className={`mmo-hotbar-slot ${!skillsState.bodyCutter?.learned ? 'not-learned' : (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle')}`}
+              onClick={() => skillsState.bodyCutter?.learned && window.learnSkillTreeTech('bodyCutter')}
+            >
+              <span className="hotbar-key-bind">1</span>
+              <span className="hotbar-icon">🩸</span>
+              <span className="hotbar-name">B.Cutter</span>
+              {skillsState.bodyCutter?.learned && (
+                <span className={`hotbar-status-dot ${skillsState.bodyCutter.enabled ? 'on' : 'off'}`}>
+                  {skillsState.bodyCutter.enabled ? 'ON' : 'OFF'}
+                </span>
+              )}
+            </div>
+
+            {/* Shooting Star Slot */}
+            <div 
+              className={`mmo-hotbar-slot ${!skillsState.shootingStar?.learned ? 'not-learned' : (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle')}`}
+              onClick={() => skillsState.shootingStar?.learned && window.learnSkillTreeTech('shootingStar')}
+            >
+              <span className="hotbar-key-bind">2</span>
+              <span className="hotbar-icon">🌠</span>
+              <span className="hotbar-name">S.Star</span>
+              {skillsState.shootingStar?.learned && (
+                <>
+                  <span className={`hotbar-status-dot ${skillsState.shootingStar.enabled ? 'on' : 'off'}`}>
+                    {skillsState.shootingStar.enabled ? 'ON' : 'OFF'}
+                  </span>
+                  {skillsState.shootingStar.enabled && skillsState.shootingStar.cd > 0 && (
+                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.shootingStar.cd)}s</div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Cube Bash Slot */}
+            <div 
+              className={`mmo-hotbar-slot ${!skillsState.cubeBash?.learned ? 'not-learned' : (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle')}`}
+              onClick={() => skillsState.cubeBash?.learned && window.learnSkillTreeTech('cubeBash')}
+            >
+              <span className="hotbar-key-bind">3</span>
+              <span className="hotbar-icon">📦</span>
+              <span className="hotbar-name">C.Bash</span>
+              {skillsState.cubeBash?.learned && (
+                <>
+                  <span className={`hotbar-status-dot ${skillsState.cubeBash.enabled ? 'on' : 'off'}`}>
+                    {skillsState.cubeBash.enabled ? 'ON' : 'OFF'}
+                  </span>
+                  {skillsState.cubeBash.enabled && skillsState.cubeBash.cd > 0 && (
+                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.cubeBash.cd)}s</div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Vacuum Slash Slot */}
+            <div 
+              className={`mmo-hotbar-slot ${!skillsState.vacuumSlash?.learned ? 'not-learned' : (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle')}`}
+              onClick={() => skillsState.vacuumSlash?.learned && window.learnSkillTreeTech('vacuumSlash')}
+            >
+              <span className="hotbar-key-bind">4</span>
+              <span className="hotbar-icon">🌀</span>
+              <span className="hotbar-name">V.Slash</span>
+              {skillsState.vacuumSlash?.learned && (
+                <>
+                  <span className={`hotbar-status-dot ${skillsState.vacuumSlash.enabled ? 'on' : 'off'}`}>
+                    {skillsState.vacuumSlash.enabled ? 'ON' : 'OFF'}
+                  </span>
+                  {skillsState.vacuumSlash.enabled && skillsState.vacuumSlash.cd > 0 && (
+                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.vacuumSlash.cd)}s</div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* --- TOGGLE BUTTON IN THE LOWER RIGHT CORNER --- */}
+        {screen === 'playing' && playerLevel >= 5 && (
+          <button 
+            className="skill-tree-toggle-btn" 
+            onClick={() => setIsTreeOpen(prev => !prev)}
+          >
+            {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
+          </button>
+        )}
+
+        {/* --- INTERACTIVE LOWER RIGHT SIDE SKILL TREE PANEL WITH DESCRIPTIONS --- */}
+        {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
+          <div className="skill-tree-container">
+            <div className="skill-tree-title-row">
+              <span className="skill-tree-title">✨ ELITE SKILL TREE (LV 5+)</span>
+              <button className="skill-tree-close-x" onClick={() => setIsTreeOpen(false)}>✕</button>
+            </div>
+            
+            {/* Berserk Aura */}
+            <button 
+              className={`skill-row-btn ${skillsState.berserk?.learned ? (skillsState.berserk.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+              onClick={() => window.learnSkillTreeTech('berserk')}
+            >
+              <span>🔥 Berserk Aura {skillsState.berserk?.learned ? (skillsState.berserk.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              {skillsState.berserk?.learned && (
+                <span className="skill-cd-text">
+                  {skillsState.berserk.duration > 0 ? `Active ${Math.ceil(skillsState.berserk.duration)}s` : `CD ${Math.ceil(skillsState.berserk.cd)}s`}
+                </span>
+              )}
+            </button>
+            <div className="skill-node-desc">Cuts your active shooting interval directly in half and increases bolt damage output by +50%.</div>
+
+            {/* Massive Haste */}
+            <button 
+              className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+              onClick={() => window.learnSkillTreeTech('haste')}
+            >
+              <span>👟 Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              {skillsState.haste?.learned && (
+                <span className="skill-cd-text">
+                  {skillsState.haste.duration > 0 ? `Active ${Math.ceil(skillsState.haste.duration)}s` : `CD ${Math.ceil(skillsState.haste.cd)}s`}
+                </span>
+              )}
+            </button>
+            <div className="skill-node-desc">Increases character movement velocity by +45% to easily kite massive groups of enemies.</div>
+
+            {/* Fortify */}
+            <button 
+              className={`skill-row-btn ${skillsState.fortify?.learned ? (skillsState.fortify.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+              onClick={() => window.learnSkillTreeTech('fortify')}
+            >
+              <span>🛡️ Fortify {skillsState.fortify?.learned ? (skillsState.fortify.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              {skillsState.fortify?.learned && <span className="skill-cd-text">PERMANENT</span>}
+            </button>
+            <div className="skill-node-desc">Hardens your wizard robes to grant a flat, permanent 25% damage reduction from all sources.</div>
+
+            {/* Rigid's Defender */}
+            <button 
+              className={`skill-row-btn ${skillsState.shield?.learned ? (skillsState.shield.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+              onClick={() => window.learnSkillTreeTech('shield')}
+            >
+              <span>🔮 Rigid's Defender {skillsState.shield?.learned ? (skillsState.shield.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              {skillsState.shield?.learned && (
+                <span className="skill-cd-text">
+                  {skillsState.shield.duration > 0 ? `Active ${Math.ceil(skillsState.shield.duration)}s` : `CD ${Math.ceil(skillsState.shield.cd)}s`}
+                </span>
+              )}
+            </button>
+            <div className="skill-node-desc">Spawns a glowing energy bubble around you that completely negates and blocks oncoming enemy damage.</div>
+
+            {/* --- LEVEL 10 ATTACK SKILLS SUBSECTION --- */}
+            {playerLevel >= 10 && (
+              <>
+                <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
+                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ ULTIMATE ATTACK SKILLS (LV 10+)</span>
+                </div>
+
+                {/* Body Cutter */}
+                <button 
+                  className={`skill-row-btn ${skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+                  onClick={() => window.learnSkillTreeTech('bodyCutter')}
+                >
+                  <span>🩸 Body Cutter {skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  {skillsState.bodyCutter?.learned && <span className="skill-cd-text">PASSIVE</span>}
+                </button>
+                <div className="skill-node-desc">Applies stigma/debuff and damage-over-time effects to your enemies.</div>
+
+                {/* Shooting Star */}
+                <button 
+                  className={`skill-row-btn ${skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+                  onClick={() => window.learnSkillTreeTech('shootingStar')}
+                >
+                  <span>🌠 Shooting Star {skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  {skillsState.shootingStar?.learned && <span className="skill-cd-text">AUTO</span>}
+                </button>
+                <div className="skill-node-desc">Summons explosive cube effects for area damage.</div>
+
+                {/* Cube Bash */}
+                <button 
+                  className={`skill-row-btn ${skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+                  onClick={() => window.learnSkillTreeTech('cubeBash')}
+                >
+                  <span>📦 Cube Bash {skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  {skillsState.cubeBash?.learned && <span className="skill-cd-text">AUTO</span>}
+                </button>
+                <div className="skill-node-desc">Cube-based control attack that can disable or stun enemies.</div>
+
+                {/* Vacuum Slash */}
+                <button 
+                  className={`skill-row-btn ${skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
+                  onClick={() => window.learnSkillTreeTech('vacuumSlash')}
+                >
+                  <span>🌀 Vacuum Slash {skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  {skillsState.vacuumSlash?.learned && <span className="skill-cd-text">AUTO</span>}
+                </button>
+                <div className="skill-node-desc">Powerful attack by slashing the air generating massive force to damage the enemy[cite: 3].</div>
+              </>
+            )}
           </div>
         )}
 
