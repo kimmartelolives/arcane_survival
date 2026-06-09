@@ -3,6 +3,7 @@ import GameCanvas from './components/GameCanvas';
 import Overlays from './components/Overlays';
 import PartyChat from './components/PartyChat';
 import Toast from './components/Toast';
+import AdminPortal from './components/AdminPortal'; // 👈 BAGONG IMPORT
 import { sbRealtime } from './services/supabase';
 import './index.css';
 
@@ -50,7 +51,7 @@ export default function App() {
     setScreen('playing');
   };
 
-const routeNetworkMessage = (event, payload) => {
+  const routeNetworkMessage = (event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
       setTimeout(() => {
@@ -66,15 +67,12 @@ const routeNetworkMessage = (event, payload) => {
       setScreen('playing');
     }
 
-// FIXED: I-intercept ang guest_exited at mag-fire ng native browser-wide event
     if (event === 'guest_exited') {
       setCoop(prev => ({ 
         ...prev, 
         p2Name: 'Disconnected', 
         status: 'Player 2 has left the match.' 
       }));
-      
-      // Mag-dispatch ng Custom Event para siguradong magigising ang GameCanvas POV
       window.dispatchEvent(new CustomEvent('network_guest_exited_trigger'));
     }
 
@@ -105,7 +103,6 @@ const routeNetworkMessage = (event, payload) => {
       netRef.current.channel = null;
       setCoop({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
       
-      // I-save ang pangalan mula sa main menu text input field
       const name = data?.name?.trim() || 'Wizard';
       setWizardName(name);
 
@@ -157,6 +154,13 @@ const routeNetworkMessage = (event, payload) => {
     }
   };
 
+  // 👈 BAGONG ROUTING LOGIC: I-check kung nasa admin URL tayo
+  const currentPath = window.location.pathname;
+  if (currentPath === '/scribe-portal') {
+    return <AdminPortal />;
+  }
+
+  // Kung hindi, i-load ang normal na game UI
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <GameCanvas 
@@ -175,14 +179,12 @@ const routeNetworkMessage = (event, payload) => {
       />
       {screen === 'playing' && (
         <>
-          {/* FIXED: Imbis na setScreen('menu'), tatawagin na nito ang global network cleanup router natin */}
           <button 
             id="btn-pause-exit" 
             onClick={() => {
               if (window.executeNetworkExitAction) {
                 window.executeNetworkExitAction();
               } else {
-                // Fallback kung sakaling wala pa ang hook handler
                 setScreen('menu');
               }
             }}

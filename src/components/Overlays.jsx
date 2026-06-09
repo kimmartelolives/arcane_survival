@@ -25,18 +25,6 @@ export default function Overlays({
   const [newsData, setNewsData] = useState([]);
   const [loadingNews, setLoadingNews] = useState(false);
 
-  // States para sa Exclusive Login and Password Protection Security Gate
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  const [loginError, setLoginError] = useState('');
-
-  // States para sa Admin Dashboard Management Form
-  const [admType, setAdmType] = useState('decree');
-  const [admTitle, setAdmTitle] = useState('');
-  const [admDesc, setAdmDesc] = useState('');
-  const [admStatus, setAdmStatus] = useState('');
-
   // I-sync ang local field kapag may nakuhang global name prop galing sa App level
   useEffect(() => {
     if (initialWizardName) {
@@ -62,9 +50,9 @@ export default function Overlays({
     }
   }, [screen]);
 
-  // Awtomatikong mag-fe-fetch sa Supabase kapag binuksan ang Council News archives or Admin Panel
+  // Awtomatikong mag-fe-fetch sa Supabase kapag binuksan ang Council News archives
   useEffect(() => {
-    if (councilNewsOpen || screen === 'admin-login' || screen === 'admin-dashboard') {
+    if (councilNewsOpen) {
       setLoadingNews(true);
       sbGet('/rest/v1/council_news?select=*&order=created_at.desc')
         .then(data => {
@@ -73,7 +61,7 @@ export default function Overlays({
         })
         .catch(() => setLoadingNews(false));
     }
-  }, [councilNewsOpen, screen]);
+  }, [councilNewsOpen]);
 
   useEffect(() => {
     if (screen !== 'levelup') return;
@@ -103,48 +91,6 @@ export default function Overlays({
       mode: isCoop ? 'coop' : 'solo'
     });
     setSubmitStatus(ok ? '✦ Score submitted!' : 'Failed submission.');
-  };
-
-  // Dedicated credentials check function
-  const handleAdminLogin = (e) => {
-    e.preventDefault();
-    setLoginError('');
-    
-    // Eksklusibong login combination para sa iyo, Waki
-    if (adminUsername === 'waki' && adminPassword === 'WakiAdmin2026!') {
-      setIsAdminAuthenticated(true);
-      setScreen('admin-dashboard');
-      setAdminUsername('');
-      setAdminPassword('');
-    } else {
-      setLoginError('⚠️ Invalid incantation or secret key signature.');
-    }
-  };
-
-  const handleAdminLogout = () => {
-    setIsAdminAuthenticated(false);
-    setScreen('menu');
-  };
-
-  // Pag-post ng bagong balita sa Supabase
-  const handlePublishNews = async () => {
-    if (!admTitle.trim() || !admDesc.trim()) return alert('Mangyaring punan ang lahat ng field.');
-    setAdmStatus('Scribing scroll casting...');
-    
-    const ok = await sbPost('/rest/v1/council_news', {
-      type: admType,
-      title: admTitle.trim(),
-      description: admDesc.trim()
-    });
-
-    if (ok) {
-      setAdmStatus('✨ Decree published to Supabase core matrix!');
-      setAdmTitle('');
-      setAdmDesc('');
-      sbGet('/rest/v1/council_news?select=*&order=created_at.desc').then(d => setNewsData(d || []));
-    } else {
-      setAdmStatus('❌ Spell incantation failed to submit.');
-    }
   };
 
   const getUpgradeMeta = (rawString) => {
@@ -261,16 +207,6 @@ export default function Overlays({
               >
                 <span className="btn-icon">🏛️</span><span className="btn-label">Council News</span>
               </button>
-              
-              {/* Scribe Admin Lock Trigger Button */}
-              <button 
-                className="btn danger" 
-                style={{ width: '54px', padding: 0, margin: 0, border: '1px solid #b45309', background: '#241403' }}
-                onClick={() => setScreen('admin-login')}
-                title="Open Secure Scribe Portal"
-              >
-                👑
-              </button>
             </div>
           </div>
         </div>
@@ -313,115 +249,6 @@ export default function Overlays({
             
             <button className="btn danger sm" style={{ marginTop: '14px', pointerEvents: 'auto', width: '100%' }} onClick={() => setCouncilNewsOpen(false)}>
               ✕ Dismiss Scroll
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* NEW SECURE INTERFACE PAGE: ADMIN LOGIN RESTRICION SCREEN */}
-      {screen === 'admin-login' && (
-        <div className="overlay active">
-          <form className="panel" style={{ width: '360px' }} onSubmit={handleAdminLogin}>
-            <div className="section-title" style={{ color: '#fbbf24' }}>🛡️ Archmage Portal</div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '14px', marginTop: '-8px', fontFamily: 'monospace', textAlign: 'center' }}>
-              Authentication required to reshape core database blocks.
-            </div>
-
-            <div className="field-group">
-              <label className="field-label">Scribe Username</label>
-              <input 
-                className="field-input" 
-                type="text" 
-                placeholder="Enter admin code name..."
-                value={adminUsername}
-                onChange={e => setAdminUsername(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="field-group" style={{ marginBottom: '16px' }}>
-              <label className="field-label">Secret Cipher Key</label>
-              <input 
-                className="field-input" 
-                type="password" 
-                placeholder="••••••••••••"
-                value={adminPassword}
-                onChange={e => setAdminPassword(e.target.value)}
-                required
-              />
-            </div>
-
-            <button className="btn gold" style={{ width: '100%', margin: 0 }} type="submit">
-              🔓 Break Seal & Enter
-            </button>
-            
-            {loginError && (
-              <div style={{ fontSize: '0.7rem', color: '#ef4444', marginTop: '8px', fontFamily: 'monospace', textAlign: 'center' }}>
-                {loginError}
-              </div>
-            )}
-
-            <button className="btn danger sm" style={{ width: '100%', marginTop: '10px' }} type="button" onClick={() => setScreen('menu')}>
-              ✕ Cancel
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* NEW EXCLUSIVE INTERFACE PAGE: SECURED ADMIN PANEL DASHBOARD SCREEN */}
-      {screen === 'admin-dashboard' && isAdminAuthenticated && (
-        <div className="overlay active">
-          <div className="panel" style={{ width: '520px', textAlign: 'left' }}>
-            <div className="section-title" style={{ color: '#a855f7' }}>🛠️ Scribe Matrix Dashboard</div>
-            <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginBottom: '14px', marginTop: '-8px', fontFamily: 'monospace' }}>
-              Welcome, Architect Joaquin. You are writing dynamic scroll data directly into Supabase server clusters.
-            </div>
-
-            <div className="field-group">
-              <label className="field-label">Scroll Parchment Type</label>
-              <select 
-                value={admType} 
-                onChange={e => setAdmType(e.target.value)}
-                style={{ width: '100%', background: '#0b0826', border: '1px solid #4c2d82', color: '#fff', padding: '8px', borderRadius: '4px', fontFamily: 'monospace' }}
-              >
-                <option value="decree">📣 Council Decree (Announcement)</option>
-                <option value="grimoire">📜 Grimoire Log (Patch Notes)</option>
-              </select>
-            </div>
-
-            <div className="field-group">
-              <label className="field-label">Incantation Header Title</label>
-              <input 
-                className="field-input" 
-                type="text" 
-                placeholder="e.g. MULTIPLAYER MATRIX RESTORED"
-                value={admTitle}
-                onChange={e => setAdmTitle(e.target.value)}
-                maxLength={45}
-              />
-            </div>
-
-            <div className="field-group">
-              <label className="field-label">Scroll Content Description</label>
-              <textarea 
-                placeholder="Write spell changes or rules announcement logs..."
-                value={admDesc}
-                onChange={e => setAdmDesc(e.target.value)}
-                rows={5}
-                style={{ width: '100%', background: '#0b0826', border: '1px solid #4c2d82', color: '#fff', padding: '10px', borderRadius: '4px', fontFamily: 'monospace', fontSize: '0.75rem', resize: 'vertical' }}
-              />
-            </div>
-
-            <button className="btn gold" style={{ width: '100%', marginTop: '6px' }} onClick={handlePublishNews}>
-              🔮 Cast and Publish Scroll
-            </button>
-            
-            <div style={{ minHeight: '1.2em', fontSize: '0.7rem', color: '#34d399', margin: '4px 0', fontFamily: 'monospace', textAlign: 'center' }}>
-              {admStatus}
-            </div>
-
-            <button className="btn danger sm" style={{ width: '100%', marginTop: '4px' }} onClick={handleAdminLogout}>
-              🔒 Secure Dashboard Logout
             </button>
           </div>
         </div>
