@@ -2303,7 +2303,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
                   <span ref={statAtkRef} className="stats-value">22</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Attack Interval:</span>
+                  <span className="stats-label">Attack Rate:</span>
                   <span ref={statCdRef} className="stats-value">0.60s</span>
                 </div>
                 <div className="stats-row">
