@@ -15,18 +15,12 @@ const focusStyles = `
     top: 0; left: 0; right: 0; bottom: 0;
     width: 100%;
     height: 100vh;
-    height: -webkit-fill-available;
+    height: -webkit-fill-available; /* Native Safari container height fix */
     display: flex;
     justify-content: center;
     align-items: center;
+    background: #030111;
     overflow: hidden;
-
-    /* 🔥 BAGONG CODE: Extended Magical Floor background fill para sa kaliwa't kanan */
-    background-color: #030111;
-    background-image: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, rgba(3, 1, 17, 1) 75%),
-                      repeating-linear-gradient(rgba(139, 92, 246, 0.015) 0px, rgba(139, 92, 246, 0.015) 1px, transparent 1px, transparent 60px),
-                      repeating-linear-gradient(90deg, rgba(139, 92, 246, 0.015) 0px, rgba(139, 92, 246, 0.015) 1px, transparent 1px, transparent 60px);
-    background-size: 100% 100%, 60px 60px, 60px 60px;
   }
   .game-container {
     position: relative;
@@ -1069,21 +1063,30 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
 // --- RESIZE & EVENT LISTENERS ---
   useEffect(() => {
-    const handleResize = () => {
+const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
       
-      // 🔥 SAFARI FIX: Kukunin ang totoong visual na espasyo (minus the URL tab bar)
+      // Kukunin ang totoong visual na espasyo galing sa Safari/Chrome mobile viewport
       const winW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
       const winH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
       
       const sx = (winW - 12) / W;
       const sy = (winH - 12) / H;
       const s = Math.min(sx, sy, 1.8);
-      canvas.style.width = Math.round(W * s) + 'px';
-      canvas.style.height = Math.round(H * s) + 'px';
 
-      // Piliting isukat ang balot ng laro sa eksaktong visual space para hindi lamunin ng Safari UI
+      // 🔥 BAGONG CODE: Kung mobile phone screen (932px pababa), gagawing full width at height!
+      if (winW <= 932) {
+        canvas.style.width = winW + 'px';
+        canvas.style.height = winH + 'px';
+        canvas.style.borderRadius = '0px'; // Tanggalin ang bilog na sulok para sagad sa screen
+      } else {
+        // Desktop / Tablet behavior (Perfect Proportions)
+        canvas.style.width = Math.round(W * s) + 'px';
+        canvas.style.height = Math.round(H * s) + 'px';
+        canvas.style.borderRadius = '4px';
+      }
+
       const wrap = document.getElementById('wrap');
       if (wrap) {
         wrap.style.height = `${winH}px`;
