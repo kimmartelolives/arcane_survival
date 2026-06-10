@@ -1,5 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 
+// ==========================================================================
+// 🔥 ULTIMATE SPELLS SOUND EFFECTS SINGLETON MATRIX
+// ==========================================================================
+const SOUND_COLLAPSE_URL  = '/collapse.mp3'; // Space shatter placeholder
+const SOUND_INSTINCT_URL  = '/arcane.mp3';   // Electric spark surge placeholder
+const SOUND_REVIVAL_URL   = '/resu.mp3';            // Celestial holy chord placeholder
+
+
+if (typeof window !== 'undefined' && !window.arcaneSfx) {
+  window.arcaneSfx = {
+    collapse: new Audio(SOUND_COLLAPSE_URL),
+    instinct: new Audio(SOUND_INSTINCT_URL),
+    revival: new Audio(SOUND_REVIVAL_URL)
+  };
+}
+
 const W = 1280;
 const H = 720;
 const ET = [
@@ -842,6 +858,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     if (target.skills.arcaneCollapse.cd > 0) return;
 
+    if (window.arcaneSfx && localStorage.getItem('arcane_muted') !== 'true') {
+      window.arcaneSfx.collapse.currentTime = 0;
+      window.arcaneSfx.collapse.play().catch(()=>{});
+    }
+
     target.skills.arcaneCollapse.cd = 30.0;
     eng.screenShake = 0.8;
     target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
@@ -911,6 +932,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
 
     if (target.skills.arcaneInstinct.cd > 0) return;
+
+    if (window.arcaneSfx && localStorage.getItem('arcane_muted') !== 'true') {
+      window.arcaneSfx.instinct.currentTime = 0;
+      window.arcaneSfx.instinct.play().catch(()=>{});
+    }
 
     target.skills.arcaneInstinct.cd = 45.0;
     target.skills.arcaneInstinct.duration = 10.0;
@@ -988,6 +1014,11 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     
     // Check Cooldown
     if (caster.skills.arcaneResurrection.cd > 0) return;
+
+    if (window.arcaneSfx && localStorage.getItem('arcane_muted') !== 'true') {
+      window.arcaneSfx.revival.currentTime = 0;
+      window.arcaneSfx.revival.play().catch(()=>{});
+    }
 
     // 🛑 COST APPLICATION (The Forbidden Sacrifice)
     caster.skills.arcaneResurrection.cd = 300.0;
@@ -2326,7 +2357,9 @@ if (event === 'state_sync' && !net.isHost) {
                     eng.p.xp -= eng.p.xpNext;
                     eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
                     onLevelUpOffer(rollUpgradeOptions()); 
-                    setScreen('levelup');
+                    if (screen === 'playing') {
+                      setScreen('levelup');
+                    }
                   }
                 }
                 eng.gems.splice(i, 1);

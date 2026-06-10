@@ -13,18 +13,31 @@ import CustomCursor from './components/CustomCursor';
 // ==========================================================================
 // 🔥 STEP 1: GLOBAL AUDIO SINGLETON INSTANCE INITIALIZATION
 // ==========================================================================
-// Palitan ang mga URL na ito ng aktwal mong sound assets (mp3/wav) kung nakapwesto na sila
 const MENU_BGM_URL = '../main.mp3';
 const GAME_BGM_URL = "../game.mp3";
+// 🔊 MAGDAGDAG NG MGA URL PARA SA UPGRADE SCREEN SFX DITO
+const LEVEL_UP_SFX_URL = '../level.mp3'; 
+const SELECT_SFX_URL = '../select.mp3';
+
+const GAME_OVER_SFX_URL = '../gameover.mp3';
 
 if (typeof window !== 'undefined' && !window.arcaneAudio) {
   window.arcaneAudio = {
     menuBgm: new Audio(MENU_BGM_URL),
     gameBgm: new Audio(GAME_BGM_URL),
+    levelUpSfx: new Audio(LEVEL_UP_SFX_URL),       // 🔥 Bagong SFX kapag lumabas ang screen
+    selectUpgradeSfx: new Audio(SELECT_SFX_URL), // 🔥 Bagong SFX kapag may piniling upgrade
+    gameOverSfx: new Audio(GAME_OVER_SFX_URL),
     isMuted: localStorage.getItem('arcane_muted') === 'true'
   };
   window.arcaneAudio.menuBgm.loop = true;
   window.arcaneAudio.gameBgm.loop = true;
+
+  window.arcaneAudio.menuBgm.volume = 0.3;
+  window.arcaneAudio.gameBgm.volume = 0.3;
+  window.arcaneAudio.levelUpSfx.volume = 0.5;       // Setup ang volume para sa SFX
+  window.arcaneAudio.selectUpgradeSfx.volume = 0.5;
+  window.arcaneAudio.gameOverSfx.volume = 0.6;
 }
 
 export default function App() {
@@ -53,45 +66,87 @@ export default function App() {
   // ==========================================================================
   // 🔥 STEP 2: GLOBAL AUDIO MUTING & ROUTING CONTROLLERS
   // ==========================================================================
-  const toggleGlobalMute = (e) => {
-    e.stopPropagation();
-    const nextMute = !isMuted;
-    setIsMuted(nextMute);
-    localStorage.setItem('arcane_muted', String(nextMute));
+const toggleGlobalMute = (e) => {
+  e.stopPropagation();
+  const nextMute = !isMuted;
+  setIsMuted(nextMute);
+  localStorage.setItem('arcane_muted', String(nextMute));
+  
+  if (window.arcaneAudio) {
+    window.arcaneAudio.isMuted = nextMute;
+    window.arcaneAudio.menuBgm.muted = nextMute;
+    window.arcaneAudio.gameBgm.muted = nextMute;
+    window.arcaneAudio.levelUpSfx.muted = nextMute;
+    window.arcaneAudio.selectUpgradeSfx.muted = nextMute;
+    window.arcaneAudio.gameOverSfx.muted = nextMute; // 🔥 Isama sa pag-mute
     
-    if (window.arcaneAudio) {
-      window.arcaneAudio.isMuted = nextMute;
-      window.arcaneAudio.menuBgm.muted = nextMute;
-      window.arcaneAudio.gameBgm.muted = nextMute;
-      
-      if (nextMute) {
-        window.arcaneAudio.menuBgm.pause();
-        window.arcaneAudio.gameBgm.pause();
-      } else {
-        if (screen === 'playing') window.arcaneAudio.gameBgm.play().catch(()=>{});
-        else window.arcaneAudio.menuBgm.play().catch(()=>{});
-      }
-    }
-  };
-
-  // Tagalipat ng kanta tuwing nagpapalit ng operational system windows
-  useEffect(() => {
-    if (!window.arcaneAudio) return;
-    const { menuBgm, gameBgm, isMuted: globalMute } = window.arcaneAudio;
-
-    menuBgm.muted = globalMute;
-    gameBgm.muted = globalMute;
-
-    if (globalMute) return;
-
-    if (screen === 'playing') {
-      menuBgm.pause();
-      gameBgm.play().catch(() => {});
+    if (nextMute) {
+      window.arcaneAudio.menuBgm.pause();
+      window.arcaneAudio.gameBgm.pause();
+      window.arcaneAudio.levelUpSfx.pause();
+      window.arcaneAudio.selectUpgradeSfx.pause();
+      window.arcaneAudio.gameOverSfx.pause(); // 🛑 Patayin kapag pinindot ang mute
     } else {
-      gameBgm.pause();
-      menuBgm.play().catch(() => {});
+      if (screen === 'playing') window.arcaneAudio.gameBgm.play().catch(()=>{});
+      else if (screen === 'gameover') window.arcaneAudio.gameOverSfx.play().catch(()=>{}); // 🔥 Patugtugin ulit kung nandito sa screen
+      else window.arcaneAudio.menuBgm.play().catch(()=>{});
     }
-  }, [screen]);
+  }
+};
+
+// Tagalipat ng kanta tuwing nagpapalit ng operational system windows
+useEffect(() => {
+  if (!window.arcaneAudio) return;
+  const { menuBgm, gameBgm, levelUpSfx, selectUpgradeSfx, gameOverSfx, isMuted: globalMute } = window.arcaneAudio;
+
+  menuBgm.muted = globalMute;
+  gameBgm.muted = globalMute;
+  levelUpSfx.muted = globalMute;
+  selectUpgradeSfx.muted = globalMute;
+  gameOverSfx.muted = globalMute;
+
+  if (globalMute) return;
+
+  if (screen === 'playing') {
+    menuBgm.pause();
+    gameOverSfx.pause();
+    gameOverSfx.onended = null; // 🔥 I-clear ang listener para ligtas
+    gameBgm.play().catch(() => {});
+  } else if (screen === 'levelup') {
+    menuBgm.pause();
+    levelUpSfx.currentTime = 0;
+    levelUpSfx.play().catch(() => {});
+  } else if (screen === 'gameover') {
+    gameBgm.pause();
+    menuBgm.pause();
+    
+    gameOverSfx.currentTime = 0;
+    gameOverSfx.play().catch(() => {});
+
+    // ==========================================================================
+    // 🔥 BAGONG DAGDAG: EVENT LISTENER KAPAG NATAPOS ANG GAME OVER SFX
+    // ==========================================================================
+    gameOverSfx.onended = () => {
+      // Siguraduhing hindi naka-mute at nasa gameover screen pa rin ang player
+      if (!window.arcaneAudio.isMuted && screen === 'gameover') {
+        menuBgm.currentTime = 0; // Patugtugin mula sa simula ang Menu BGM
+        menuBgm.play().catch(() => {});
+      }
+    };
+
+  } else {
+    // Kapag nasa Menu o ibang screens (lobby, etc.)
+    gameBgm.pause();
+    gameOverSfx.pause();
+    gameOverSfx.onended = null; // 🔥 I-clear ang listener para ligtas
+    menuBgm.play().catch(() => {});
+  }
+
+  // 🔥 CLEANUP FUNCTION: Tinatanggal ang event listener kapag umalis sa screen
+  return () => {
+    gameOverSfx.onended = null;
+  };
+}, [screen]);
 
   // ==========================================================================
   // EXISTING CORE EFFECTS ENGINE
@@ -121,6 +176,12 @@ export default function App() {
   const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
 
   const handleSelectUpgrade = (choice) => {
+    // 🔥 BAGONG DAGDAG: Patugtugin ang selection upgrade SFX kapag pumili na ng option ang player
+    if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
+      window.arcaneAudio.selectUpgradeSfx.currentTime = 0;
+      window.arcaneAudio.selectUpgradeSfx.play().catch(() => {});
+    }
+
     if (!netRef.current.isHost && netRef.current.channel) {
       netRef.current.channel.send('guest_levelup_choice', { choice });
     } else if (window.runUpgrade) {
@@ -257,19 +318,18 @@ export default function App() {
   }
 
   return (
-    /* 2. Ginawang dynamic height 100dvh para safe sa phone status bars at floating Safari URL boundaries */
     <div 
-      style={{ position: 'relative', width: '100vw', height: '100dvh', overflow: 'hidden', cursor: 'none' }}
-      onClick={() => {
-        // 🔥 STEP 3: AUTOMATIC INTERACTION BYPASS FOR MOBILE BROWSER AUTOPLAY BLOCK
-        if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
-          if (screen === 'playing') window.arcaneAudio.gameBgm.play().catch(()=>{});
-          else window.arcaneAudio.menuBgm.play().catch(()=>{});
-        }
-      }}
-    >
+        style={{ position: 'relative', width: '100vw', height: '100dvh', overflow: 'hidden', cursor: 'none' }}
+        onClick={() => {
+          // 🔥 FIX: Nilagyan ng guard para hindi mag-loop ang sound tuwing pumipili ng upgrade
+          if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
+            if (screen === 'playing') window.arcaneAudio.gameBgm.play().catch(()=>{});
+            else if (screen === 'levelup') return; // 👈 Hihinto rito para hindi na ma-trigger ang levelUpSfx ulit
+            else window.arcaneAudio.menuBgm.play().catch(()=>{});
+          }
+        }}
+      >
       
-      {/* 3. Inilagay ang Animated Custom Cursor dito sa pinakataas */}
       <CustomCursor />
 
       {/* ==========================================================================
@@ -280,21 +340,21 @@ export default function App() {
         style={{
           position: 'fixed',
           top: '16px',
-          left: '24px',          /* Safe edge indentation para umiwas sa modern device rounding/notches */
-          zIndex: 999999,        /* Lumulutang sa pinakamataas na z-index plane layer ng matrix sheet */
+          left: '24px',
+          zIndex: 999999,
           background: 'transparent',
           border: 'none',
           fontSize: '1.4rem',
           cursor: 'pointer',
-          opacity: 0.35,         /* Semi-transparent para nakatago at hindi harang sa pixel graphics */
+          opacity: 0.35,
           transition: 'opacity 0.2s ease, transform 0.1s ease',
-          pointerEvents: 'auto', /* Pinapayagang makasagap ng touch click events */
+          pointerEvents: 'auto',
           userSelect: 'none',
           WebkitTapHighlightColor: 'transparent'
         }}
         onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
         onMouseOut={(e) => e.currentTarget.style.opacity = '0.35'}
-        onPointerDown={(e) => e.stopPropagation()} /* Haharangin ang loop para hindi mag-flicker sa left joystick area */
+        onPointerDown={(e) => e.stopPropagation()}
       >
         {isMuted ? '🔇' : '🔊'}
       </button>
