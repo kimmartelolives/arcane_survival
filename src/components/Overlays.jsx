@@ -227,22 +227,22 @@ useEffect(() => {
         .lu-hotkey { font-size: 0.95rem; color: #fde047; font-weight: bold; font-family: monospace; opacity: 0.85; }
 
         @media (max-width: 768px) {
-  .lu-cards-row {
-    gap: 12px;
-  }
-  .lu-card {
-    width: 30%; 
-    padding: 16px 8px;
-    min-width: 140px;
-  }
-  .lu-card-desc {
-    font-size: 0.65rem;
-    margin-bottom: 8px;
-  }
-  .lu-hotkey {
-    display: none; 
-  }
-}
+          .lu-cards-row {
+            gap: 12px;
+          }
+          .lu-card {
+            width: 30%; 
+            padding: 16px 8px;
+            min-width: 140px;
+          }
+          .lu-card-desc {
+            font-size: 0.65rem;
+            margin-bottom: 8px;
+          }
+          .lu-hotkey {
+            display: none; 
+          }
+        }
 
         .council-news-overlay { position: fixed; inset: 0; background: rgba(3, 1, 17, 0.85); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(6px); pointer-events: auto; }
         
@@ -495,7 +495,6 @@ useEffect(() => {
         .witch-table td { padding: 12px; border-bottom: 1px solid rgba(124, 58, 237, 0.15); font-size: 0.88rem; }
         .witch-table tr:hover td { background: rgba(124, 58, 237, 0.1); color: #ffffff; }
 
-    /* 🔥 ITINAMA: Tinanggal ang !important sa loob dahil bawal ito sa keyframes animation! */
         @keyframes goldPulse {
           0% {
             text-shadow: 
@@ -578,6 +577,76 @@ useEffect(() => {
         /* Tanggalin ang margin-top auto dahil si flex: 1 na sa itaas ang bahalang magtulak pababa */
         .lb-bottom-btn {
           flex-shrink: 0;
+        }
+
+        /* ==========================================================================
+           MOBILE LANDSCAPE HEIGHT COMPRESSION FIX (INJECTED RESPONSIVE LAYER)
+           ========================================================================== */
+        @media (max-height: 540px) and (orientation: landscape) {
+          .wizard-panel {
+            padding: 14px 24px !important;  /* Compressed structural padding metrics */
+            max-height: 96vh !important;    /* Keeps everything contained within physical screen logic */
+            overflow-y: auto !important;    /* Active fallback layout engine if device is ultra compact */
+          }
+          
+          /* Title element scale modifications */
+          .menu-title {
+            font-size: 1.35rem !important;
+            line-height: 1 !important;
+          }
+          .menu-sub {
+            font-size: 0.4rem !important;
+            letter-spacing: 0.18em !important;
+          }
+          
+          /* Divider vector compressed rules */
+          .mystic-divider {
+            margin: 8px 0 !important;
+          }
+          .mystic-divider::after {
+            font-size: 0.65rem !important;
+            padding: 0 8px !important;
+          }
+          
+          /* Field labels alignment configurations */
+          .wizard-field-label {
+            font-size: 0.65rem !important;
+            margin-bottom: 4px !important;
+          }
+          .wizard-field-input {
+            padding: 6px 12px !important;
+            font-size: 0.85rem !important;
+          }
+          
+          /* Action button dimensions reduction */
+          .wizard-btn {
+            padding: 8px 16px !important;
+            font-size: 0.75rem !important;
+            margin-bottom: 4px !important;
+          }
+          
+          /* Bottom kofi anchor node scaling alignment */
+          .mystic-tribute-container {
+            margin-top: 6px !important;
+          }
+          .mystic-tribute-link {
+            font-size: 0.6rem !important;
+          }
+
+          /* Oversized Modals responsive boundary overwrites (Leaderboard / Council Scroll Box) */
+          .council-news-box, .wizard-panel[style*="width: 760px"] {
+            width: 96vw !important;
+            height: 96vh !important;
+            padding: 14px !important;
+          }
+          .council-tab-btn {
+            padding: 8px !important;
+            font-size: 0.75rem !important;
+          }
+          .council-scroll-logs, .lb-scroll-area {
+            padding: 10px !important;
+            margin-bottom: 10px !important;
+          }
         }
       `}</style>
 
