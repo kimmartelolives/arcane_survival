@@ -15,12 +15,18 @@ const focusStyles = `
     top: 0; left: 0; right: 0; bottom: 0;
     width: 100%;
     height: 100vh;
-    height: -webkit-fill-available; /* Native Safari container height fix */
+    height: -webkit-fill-available;
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #030111;
     overflow: hidden;
+
+    /* 🔥 BAGONG CODE: Extended Magical Floor background fill para sa kaliwa't kanan */
+    background-color: #030111;
+    background-image: radial-gradient(circle, rgba(139, 92, 246, 0.12) 0%, rgba(3, 1, 17, 1) 75%),
+                      repeating-linear-gradient(rgba(139, 92, 246, 0.015) 0px, rgba(139, 92, 246, 0.015) 1px, transparent 1px, transparent 60px),
+                      repeating-linear-gradient(90deg, rgba(139, 92, 246, 0.015) 0px, rgba(139, 92, 246, 0.015) 1px, transparent 1px, transparent 60px);
+    background-size: 100% 100%, 60px 60px, 60px 60px;
   }
   .game-container {
     position: relative;
