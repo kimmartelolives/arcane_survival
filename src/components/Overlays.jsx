@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { sbGet, sbPost, hasSupabase } from '../services/supabase';
+import { sbGet, sbPost, hasSupabase, supabase, sbWatchTable } from '../services/supabase';
 
 export default function Overlays({ 
   screen, 
@@ -18,6 +18,7 @@ export default function Overlays({
   const [leaderboard, setLeaderboard] = useState([]);
   const [loadingLb, setLoadingLb] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('');
+  const [isScoreSubmitted, setIsScoreSubmitted] = useState(false);
 
   // States para sa Dynamic Supabase Council News Modal Window
   const [councilNewsOpen, setCouncilNewsOpen] = useState(false);
@@ -32,34 +33,65 @@ export default function Overlays({
     }
   }, [initialWizardName]);
 
-  useEffect(() => {
+useEffect(() => {
     if (screen === 'leaderboard') {
-      setLoadingLb(true);
-      sbGet('/rest/v1/leaderboard?select=name,score,wave,level,mode&order=score.desc&limit=20')
-        .then(data => { 
-          setLeaderboard(data || []); 
-          setLoadingLb(false); 
-        })
-        .catch(() => {
-          setLoadingLb(false);
-        });
+      // Create a fetch function that accepts a 'silent' parameter
+      const fetchLeaderboard = (isSilent = false) => {
+        if (!isSilent) setLoadingLb(true);
+        sbGet('/rest/v1/leaderboard?select=name,score,wave,level,mode&order=score.desc&limit=20')
+          .then(data => { 
+            setLeaderboard(data || []); 
+            if (!isSilent) setLoadingLb(false); 
+          })
+          .catch(() => {
+            if (!isSilent) setLoadingLb(false);
+          });
+      };
+
+      // Initial fetch when screen opens
+      fetchLeaderboard(false);
+
+      // Start Realtime connection
+      const watcher = sbWatchTable('leaderboard', () => {
+        // Silently fetch new data when someone else updates their score
+        fetchLeaderboard(true); 
+      });
+
+      // Cleanup websocket connection when leaving the leaderboard
+      return () => watcher.close();
     }
     
     if (screen !== 'gameover') {
       setSubmitStatus('');
+      setIsScoreSubmitted(false);
     }
   }, [screen]);
 
-  // Awtomatikong mag-fe-fetch sa Supabase kapag binuksan ang Council News archives
   useEffect(() => {
     if (councilNewsOpen) {
-      setLoadingNews(true);
-      sbGet('/rest/v1/council_news?select=*&order=created_at.desc')
-        .then(data => {
-          setNewsData(data || []);
-          setLoadingNews(false)
-        })
-        .catch(() => setLoadingNews(false));
+      const fetchNews = (isSilent = false) => {
+        if (!isSilent) setLoadingNews(true);
+        sbGet('/rest/v1/council_news?select=*&order=created_at.desc')
+          .then(data => {
+            setNewsData(data || []);
+            if (!isSilent) setLoadingNews(false);
+          })
+          .catch(() => {
+            if (!isSilent) setLoadingNews(false);
+          });
+      };
+
+      // Initial fetch
+      fetchNews(false);
+
+      // Start Realtime connection
+      const watcher = sbWatchTable('council_news', () => {
+        // Silently refresh if an admin adds a new log
+        fetchNews(true);
+      });
+
+      // Cleanup websocket when closing the modal
+      return () => watcher.close();
     }
   }, [councilNewsOpen]);
 
@@ -81,16 +113,71 @@ export default function Overlays({
   }, [screen, levelUpOptions, onSelectUpgrade]);
 
   const handleSubmitScore = async () => {
-    if (!wizardName.trim()) return alert('Enter Arcane Identity first');
-    setSubmitStatus('Submitting…');
-    const ok = await sbPost('/rest/v1/leaderboard', {
-      name: wizardName.trim(), 
-      score: hudData?.score || 0, 
-      wave: hudData?.wave || 1, 
-      level: hudData?.p?.level || 1, 
-      mode: isCoop ? 'coop' : 'solo'
-    });
-    setSubmitStatus(ok ? '✦ Score submitted!' : 'Failed submission.');
+    const nameToSubmit = wizardName.trim();
+    if (!nameToSubmit) return alert('Enter Arcane Identity first');
+    
+    const newScore = hudData?.score || 0;
+    if (newScore <= 0) {
+      setSubmitStatus('Score must be greater than 0 to be recorded.');
+      return;
+    }
+
+    setSubmitStatus('Checking ancient records...');
+
+    try {
+      // 1. Hanapin kung may existing record na ang pangalan na ito gamit ang sbGet
+      const existingData = await sbGet(`/rest/v1/leaderboard?select=id,score&name=ilike.${encodeURIComponent(nameToSubmit)}`);
+
+      // 2. Kung MAY NAHANAP na existing record
+      if (existingData && existingData.length > 0) {
+        const existingRecord = existingData[0];
+
+        if (newScore > existingRecord.score) {
+          setSubmitStatus('New personal best! Overwriting old record...');
+          
+          const { error } = await supabase
+            .from('leaderboard')
+            .update({ 
+              score: newScore, 
+              wave: hudData?.wave || 1, 
+              level: hudData?.p?.level || 1,
+              mode: isCoop ? 'coop' : 'solo'
+            })
+            .eq('id', existingRecord.id);
+
+          if (!error) {
+            setSubmitStatus(`✦ New personal best! Overwrote previous score of ${existingRecord.score}.`);
+            setIsScoreSubmitted(true);
+          } else {
+            console.error(error);
+            setSubmitStatus('Failed to overwrite record.');
+          }
+        } else {
+          setSubmitStatus(`A higher record (${existingRecord.score}) already exists for this name.`);
+        }
+      } 
+      
+      else {
+        const ok = await sbPost('/rest/v1/leaderboard', {
+          name: nameToSubmit, 
+          score: newScore, 
+          wave: hudData?.wave || 1, 
+          level: hudData?.p?.level || 1, 
+          mode: isCoop ? 'coop' : 'solo'
+        });
+        
+        if (ok) {
+          setSubmitStatus('✦ Name etched into the Tombstone successfully!');
+          setIsScoreSubmitted(true);
+        } else {
+          setSubmitStatus('Failed submission.');
+        }
+      }
+
+    } catch (err) {
+      console.error("Error submitting score:", err);
+      setSubmitStatus('Failed to access the Tombstone. Try again.');
+    }
   };
 
   const getUpgradeMeta = (rawString) => {
@@ -651,7 +738,7 @@ export default function Overlays({
                 {restartVotes} / 2 voted to restart the game
               </div>
             )}
-            {hasSupabase && (
+            {/* {hasSupabase && (
               <div id="go-submit" style={{ marginBottom: '14px', width: '100%' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label className="wizard-field-label" style={{ textAlign: 'center' }}>Record Name on Tombstone</label>
@@ -671,7 +758,35 @@ export default function Overlays({
                 </div>
                 <div style={{ fontSize: '.75rem', color: '#a78bfa', marginTop: '6px', minHeight: '1em', fontFamily: 'monospace', textAlign: 'center' }}>{submitStatus}</div>
               </div>
+            )} */}
+
+            {hasSupabase && (
+              <div id="go-submit" style={{ marginBottom: '14px', width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="wizard-field-label" style={{ textAlign: 'center' }}>Record Name on Tombstone</label>
+                  
+                  {/* 🔥 DITO NAGBAGO: Ipakita lang ang input at button kung hindi pa submitted */}
+                  {!isScoreSubmitted ? (
+                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                      <input 
+                        className="field-input wizard-field-input" 
+                        type="text" 
+                        value={wizardName} 
+                        maxLength={15}
+                        onChange={e => setWizardName(e.target.value)} 
+                        onKeyDown={e => e.key === 'Enter' && handleSubmitScore()}
+                        placeholder="e.g. Archmage Martel" 
+                        style={{ flex: 1 }}
+                      />
+                      <button className="btn wizard-btn gold-theme" onClick={handleSubmitScore} style={{ margin: 0, width: 'auto', padding: '0 20px' }}>Submit</button>
+                    </div>
+                  ) : null}
+
+                </div>
+                <div style={{ fontSize: '.75rem', color: '#a78bfa', marginTop: '6px', minHeight: '1em', fontFamily: 'monospace', textAlign: 'center' }}>{submitStatus}</div>
+              </div>
             )}
+
             <button className="btn wizard-btn gold-theme" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName })}>
               🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
             </button>
