@@ -10,10 +10,12 @@ const ET = [
 ];
 
 const focusStyles = `
-  #wrap {
-    position: relative;
+#wrap {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
     width: 100%;
-    height: 100%;
+    height: 100vh;
+    height: -webkit-fill-available; /* Native Safari container height fix */
     display: flex;
     justify-content: center;
     align-items: center;
@@ -666,6 +668,20 @@ const focusStyles = `
       font-size: 0.9rem !important;/* Pinaliit ang font size ng Score track text */
     }
 
+    @supports (-webkit-touch-callout: none) {
+    .game-hud-top {
+      /* Tinutulak pababa ang HUD nang sapat para hindi kainin ng Safari Tabs */
+      top: 56px !important; 
+    }
+    
+    /* Para sa cellphone iOS, ibaba rin nang kaunti ang Skill Tree container kung sakaling naka-open */
+    .skill-tree-container, .coop-party-panel {
+      top: 90px !important;
+      bottom: auto !important;
+      max-height: 60vh !important;
+    }
+  }
+
     /* Tinago ang heavy dynamic game logo text container para magkasya ang basic controls */
     .hud-menu-title, 
     .hud-menu-sub {
@@ -1045,16 +1061,27 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     window.runUpgrade = runUpgrade;
   }, [netRef]);
 
-  // --- RESIZE & EVENT LISTENERS ---
+// --- RESIZE & EVENT LISTENERS ---
   useEffect(() => {
     const handleResize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const sx = (window.innerWidth - 12) / W;
-      const sy = (window.innerHeight - 12) / H;
+      
+      // 🔥 SAFARI FIX: Kukunin ang totoong visual na espasyo (minus the URL tab bar)
+      const winW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+      const winH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+      
+      const sx = (winW - 12) / W;
+      const sy = (winH - 12) / H;
       const s = Math.min(sx, sy, 1.8);
       canvas.style.width = Math.round(W * s) + 'px';
       canvas.style.height = Math.round(H * s) + 'px';
+
+      // Piliting isukat ang balot ng laro sa eksaktong visual space para hindi lamunin ng Safari UI
+      const wrap = document.getElementById('wrap');
+      if (wrap) {
+        wrap.style.height = `${winH}px`;
+      }
     };
 
     const handleGlobalGuestExit = () => {
@@ -1072,11 +1099,21 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     window.addEventListener('resize', handleResize);
     window.addEventListener('network_guest_exited_trigger', handleGlobalGuestExit);
     
+    // 🔥 Event listener para sa nagbabagong URL bar ng Safari
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+    }
+    
     handleResize();
 
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('network_guest_exited_trigger', handleGlobalGuestExit);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
     };
   }, []);
 

@@ -580,73 +580,48 @@ useEffect(() => {
         }
 
         /* ==========================================================================
-           MOBILE LANDSCAPE HEIGHT COMPRESSION FIX (INJECTED RESPONSIVE LAYER)
+           MOBILE LANDSCAPE HEIGHT COMPRESSION FIX & SAFARI UI FIX
            ========================================================================== */
         @media (max-height: 540px) and (orientation: landscape) {
+          /* 🔥 iOS Safari Global Overlay Fix */
+          .overlay {
+            position: fixed !important;
+            height: 100vh !important;
+            height: -webkit-fill-available !important; 
+          }
+
           .wizard-panel {
-            padding: 14px 24px !important;  /* Compressed structural padding metrics */
-            max-height: 96vh !important;    /* Keeps everything contained within physical screen logic */
-            overflow-y: auto !important;    /* Active fallback layout engine if device is ultra compact */
+            padding: 8px 16px !important;  
+            max-height: 85vh !important;    
+            margin-top: 25px !important; /* 🔥 Tulak pababa para maka-iwas sa Safari URL bar */
+            overflow-y: auto !important;    
           }
           
           /* Title element scale modifications */
-          .menu-title {
-            font-size: 1.35rem !important;
-            line-height: 1 !important;
-          }
-          .menu-sub {
-            font-size: 0.4rem !important;
-            letter-spacing: 0.18em !important;
-          }
+          .menu-title { font-size: 1.1rem !important; line-height: 1 !important; margin-bottom: 0 !important; }
+          .menu-sub { font-size: 0.35rem !important; letter-spacing: 0.18em !important; margin-bottom: 4px !important; }
           
           /* Divider vector compressed rules */
-          .mystic-divider {
-            margin: 8px 0 !important;
-          }
-          .mystic-divider::after {
-            font-size: 0.65rem !important;
-            padding: 0 8px !important;
-          }
+          .mystic-divider { margin: 6px 0 !important; }
+          .mystic-divider::after { font-size: 0.65rem !important; padding: 0 8px !important; }
           
           /* Field labels alignment configurations */
-          .wizard-field-label {
-            font-size: 0.65rem !important;
-            margin-bottom: 4px !important;
-          }
-          .wizard-field-input {
-            padding: 6px 12px !important;
-            font-size: 0.85rem !important;
-          }
+          .wizard-field-label { font-size: 0.6rem !important; margin-bottom: 4px !important; }
+          .wizard-field-input { padding: 4px 10px !important; font-size: 0.75rem !important; margin-bottom: 6px !important; }
           
           /* Action button dimensions reduction */
-          .wizard-btn {
-            padding: 8px 16px !important;
-            font-size: 0.75rem !important;
-            margin-bottom: 4px !important;
-          }
+          .wizard-btn { padding: 6px 14px !important; font-size: 0.7rem !important; margin-bottom: 4px !important; }
           
           /* Bottom kofi anchor node scaling alignment */
-          .mystic-tribute-container {
-            margin-top: 6px !important;
-          }
-          .mystic-tribute-link {
-            font-size: 0.6rem !important;
-          }
+          .mystic-tribute-container { margin-top: 4px !important; }
+          .mystic-tribute-link { font-size: 0.55rem !important; }
 
-          /* Oversized Modals responsive boundary overwrites (Leaderboard / Council Scroll Box) */
+          /* Oversized Modals */
           .council-news-box, .wizard-panel[style*="width: 760px"] {
-            width: 96vw !important;
-            height: 96vh !important;
-            padding: 14px !important;
+            width: 96vw !important; height: 96vh !important; padding: 14px !important; margin-top: 15px !important;
           }
-          .council-tab-btn {
-            padding: 8px !important;
-            font-size: 0.75rem !important;
-          }
-          .council-scroll-logs, .lb-scroll-area {
-            padding: 10px !important;
-            margin-bottom: 10px !important;
-          }
+          .council-tab-btn { padding: 8px !important; font-size: 0.75rem !important; }
+          .council-scroll-logs, .lb-scroll-area { padding: 10px !important; margin-bottom: 10px !important; }
         }
       `}</style>
 
