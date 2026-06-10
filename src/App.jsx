@@ -7,6 +7,9 @@ import AdminPortal from './components/AdminPortal';
 import { sbRealtime } from './services/supabase';
 import './index.css';
 
+// 1. I-import ang custom cursor components at styles
+import CustomCursor from './components/CustomCursor'; 
+
 export default function App() {
   const [screen, setScreen] = useState('menu');
   const [hud, setHud] = useState({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
@@ -185,7 +188,7 @@ export default function App() {
 
   // const currentPath = window.location.pathname;
   // if (currentPath === '/scribe-portal') {
-  //   return <AdminPortal />;
+  //    return <AdminPortal />;
   // }
 
   const currentHash = window.location.hash;
@@ -194,7 +197,12 @@ export default function App() {
   }
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    /* 2. Nagdagdag ng cursor: 'none' dito para maitago ang lumang Windows cursor mouse cursor sa buong screen nung laro */
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', cursor: 'none' }}>
+      
+      {/* 3. Inilagay ang Animated Custom Cursor dito sa pinakataas */}
+      <CustomCursor />
+
       <GameCanvas 
         screen={screen}
         setScreen={setScreen}

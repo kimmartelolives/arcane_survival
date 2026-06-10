@@ -25,6 +25,10 @@
   --glass-blur: blur(12px);
 }
 
+body, html {
+  cursor: none; /* Itatago nito ang default na palaso */
+}
+
 body {
   background: radial-gradient(circle at center, #0f0a2a 0%, var(--bg-main) 70%);
   font-family: 'Cinzel', serif;
@@ -34,7 +38,24 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* TINANGGAL DITO ANG URL() PARA HINDI MAG-AWAY ANG DESIGN */
 }
+
+.animated-wand-cursor {
+  position: fixed;
+  pointer-events: none; /* Napakahalaga: Para ma-click mo pa rin ang mga buttons sa ilalim ng wand */
+  z-index: 9999; /* Para laging nasa ibabaw ng lahat ng elements */
+  transform: translate(-10px, -10px); /* I-adjust ito depende kung nasaan ang 'hotspot' o dulo ng wand mo */
+  width: 42px; /* I-adjust ang laki ng wand kung kinakailangan */
+  height: 42px;
+}
+
+.animated-wand-cursor img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 
 #wrap { display: flex; align-items: center; justify-content: center; width: 100%; padding: 6px; }
 canvas { display: block; border-radius: 6px; border: 1px solid var(--border); box-shadow: 0 0 60px rgba(109,40,217,.12); }
@@ -597,4 +618,79 @@ canvas { display: block; border-radius: 6px; border: 1px solid var(--border); bo
 html, * {
   scrollbar-width: thin;
   scrollbar-color: var(--gold-primary) #060413;
+}
+
+/* Itago ang lumang Windows cursor sa lahat ng clickable element para hindi lumitaw ang palaso */
+button, a, input, select, textarea, [role="button"] {
+  cursor: none !important;
+}
+
+/* Main Wand Cursor Container */
+.animated-wand-cursor {
+  position: fixed;
+  pointer-events: none;
+  z-index: 10000000; /* Lumulutang sa ibabaw ng lahat ng UI layers */
+  transform: translate(-10px, -10px); /* Dulo ng wand ang tatama sa target */
+  width: 42px;
+  height: 42px;
+}
+
+.animated-wand-cursor img {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Mga Sumusunod na Glitter Sparkles (Gold & Silver Optimized) */
+.glitter-particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999999;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  /* Binago ang tagal papuntang 0.35s para tugma sa React state timer natin */
+  animation: glitter-fade-out 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  display: block !important;
+  /* Ginagawang mas matingkad ang pag-glow ng gold/silver sa dark background */
+  mix-blend-mode: screen; 
+}
+
+/* Looping Sparks kapag nakatutok sa Clickable elements (Gold & White) */
+.clickable-spark {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999999;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  /* Mas mabilis at pabiglang animation curve para sa looping impact */
+  animation: spark-fade-out 0.3s cubic-bezier(0, 0.7, 0.3, 1) forwards;
+  display: block !important;
+  mix-blend-mode: screen; 
+}
+
+/* Animation para sa kumikinang na paglalaho ng Regular Trail */
+@keyframes glitter-fade-out {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+}
+
+/* Animation para sa Explosive Gold & White Sparks (Kapag naka-hover) */
+@keyframes spark-fade-out {
+  0% {
+    transform: translate(-50%, -50%) scale(1.4); /* Bahagyang mas malaki para sa impact */
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
 }

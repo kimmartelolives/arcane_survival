@@ -374,51 +374,82 @@ useEffect(() => {
         /* ==========================================================================
            RE-FIXED & RE-STYLED COUNCIL SANCTUM ARCHIVES SCROLL (image_439347.png FIX)
            ========================================================================== */
-        .council-news-box {
-          background: radial-gradient(circle at 50% 15%, #180833 0%, #05020c 100%) !important; 
-          border: 2px solid #c5a059 !important;
-          box-shadow: 0 0 50px rgba(124, 58, 237, 0.4), inset 0 0 30px rgba(0,0,0,0.9) !important;
-          border-radius: 12px !important;
-          width: 580px; height: 495px; display: flex; flex-direction: column; padding: 26px; position: relative; box-sizing: border-box;
-        }
-        .council-tab-headers {
-          display: flex; gap: 10px; margin-bottom: 14px; position: relative; z-index: 20; width: 100%;
-        }
-        /* Custom Sorcery Tab Look instead of basic white buttons */
-        .council-tab-btn {
-          flex: 1; background: linear-gradient(180deg, #120624 0%, #090312 100%) !important;
-          border: 1px solid rgba(197, 160, 89, 0.3) !important; color: #a78bfa !important;
-          font-family: 'Georgia', serif; font-size: 0.8rem; padding: 11px !important;
-          border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase;
-          transition: all 0.2s ease; box-sizing: border-box;
-        }
-        .council-tab-btn:hover:not(.active) {
-          border-color: rgba(197, 160, 89, 0.7) !important; color: #ffffff !important; background: #1a0a33 !important;
-        }
-        .council-tab-btn.active {
-          background: linear-gradient(180deg, #2e1403 0%, #140801 100%) !important;
-          color: #fef08a !important; border-color: #c5a059 !important;
-          box-shadow: 0 0 12px rgba(197, 160, 89, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-        }
-        
-        /* Darker Void Box Container for Logs */
-        .council-scroll-logs {
-          flex: 1; overflow-y: auto; background: rgba(4, 2, 10, 0.85) !important;
-          border: 1px solid rgba(197, 160, 89, 0.2) !important; border-radius: 6px;
-          padding: 16px !important; text-align: left; box-sizing: border-box;
-        }
-        .council-log-item {
-          margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(197, 160, 89, 0.15);
-        }
-        .council-log-header {
-          font-size: 0.68rem; color: #c5a059; font-family: monospace; font-weight: bold; margin-bottom: 4px; letter-spacing: 1px;
-        }
-        .council-log-title {
-          color: #fef08a; font-size: 0.95rem; font-family: 'Georgia', serif; font-weight: bold; margin-bottom: 6px; text-shadow: 0 0 8px rgba(254,240,138,0.2);
-        }
-        .council-log-desc {
-          color: #cbd5e1; font-size: 0.78rem; line-height: 1.4; font-family: monospace; white-space: pre-line;
-        }
+.council-news-box {
+  background: radial-gradient(circle at 50% 15%, #180833 0%, #05020c 100%) !important; 
+  border: 2px solid #c5a059 !important;
+  box-shadow: 0 0 50px rgba(124, 58, 237, 0.4), inset 0 0 30px rgba(0,0,0,0.9) !important;
+  border-radius: 12px !important;
+  
+  /* 📐 PINALAKING BASE SIZE (Dating 580x495) */
+  width: 760px; 
+  height: 580px; 
+  display: flex; 
+  flex-direction: column; 
+  padding: 30px; /* Mas maluwag na padding */
+  position: relative; 
+  box-sizing: border-box;
+
+  /* 🛠️ TEXTAREA RESIZE AT LIMITS */
+  resize: both;          
+  overflow: hidden;      
+  min-width: 500px;      
+  min-height: 450px;     
+  max-width: 95vw;       
+  max-height: 95vh;
+}
+
+.council-tab-headers {
+  display: flex; gap: 12px; margin-bottom: 16px; position: relative; z-index: 20; width: 100%;
+}
+
+/* Custom Sorcery Tab Look instead of basic white buttons */
+.council-tab-btn {
+  flex: 1; background: linear-gradient(180deg, #120624 0%, #090312 100%) !important;
+  border: 1px solid rgba(197, 160, 89, 0.3) !important; color: #a78bfa !important;
+  font-family: 'Georgia', serif; 
+  font-size: 0.9rem; /* Pinalaki mula 0.8rem */
+  padding: 14px !important; /* Pinalaki ang clickable area ng tab */
+  border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase;
+  transition: all 0.2s ease; box-sizing: border-box;
+}
+
+.council-tab-btn:hover:not(.active) {
+  border-color: rgba(197, 160, 89, 0.7) !important; color: #ffffff !important; background: #1a0a33 !important;
+}
+
+.council-tab-btn.active {
+  background: linear-gradient(180deg, #2e1403 0%, #140801 100%) !important;
+  color: #fef08a !important; border-color: #c5a059 !important;
+  box-shadow: 0 0 12px rgba(197, 160, 89, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+}
+
+/* Darker Void Box Container for Logs */
+.council-scroll-logs {
+  flex: 1; overflow-y: auto; background: rgba(4, 2, 10, 0.85) !important;
+  border: 1px solid rgba(197, 160, 89, 0.2) !important; border-radius: 6px;
+  padding: 20px !important; text-align: left; box-sizing: border-box;
+}
+
+.council-log-item {
+  margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid rgba(197, 160, 89, 0.15);
+}
+
+.council-log-header {
+  font-size: 0.75rem; /* Pinalaki mula 0.68rem */
+  color: #c5a059; font-family: monospace; font-weight: bold; margin-bottom: 6px; letter-spacing: 1px;
+}
+
+.council-log-title {
+  color: #fef08a; 
+  font-size: 1.1rem; /* Pinalaki mula 0.95rem para sa mas magandang hierarchy */
+  font-family: 'Georgia', serif; font-weight: bold; margin-bottom: 8px; text-shadow: 0 0 8px rgba(254,240,138,0.2);
+}
+
+.council-log-desc {
+  color: #cbd5e1; 
+  font-size: 0.85rem; /* Pinalaki mula 0.78rem para mas madaling basahin */
+  line-height: 1.5; font-family: monospace; white-space: pre-line;
+}
 
         /* Leaderboard Ancient Grid Layout */
         .witch-table { width: 100%; border-collapse: collapse; font-family: 'Georgia', serif; color: #cbd5e1; margin-top: 10px; }
