@@ -844,7 +844,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   };
 
-const castArcaneResurrectionUltimate = (forcedTarget = null) => {
+    const castArcaneResurrectionUltimate = (forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng) return;
 
@@ -863,28 +863,32 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
     if (forcedTarget === 'p2') { caster = eng.p2; ally = eng.p; }
     if (forcedTarget === 'p1') { caster = eng.p; ally = eng.p2; }
 
-    // Validate Caster State
-    if (!caster || caster.dead || caster.level < 12) return;
+    if (!caster || caster.dead) return;
+
+    // ✨ FIX 1: I-sync agad sa network bago ang early return checks
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_resurrection', {});
+    }
+
+    // ✨ FIX 2: I-prioritize ang "ALLY IS NOT DEAD" error check bago ang level check
+    if (!ally || !ally.dead) {
+      caster.chatBubble = { text: "ALLY IS NOT DEAD!", life: 1.5 };
+      return;
+    }
+
+    // Saka natin i-check kung pasok ba sa level 12 requirement ang caster
+    if (caster.level < 12) {
+      caster.chatBubble = { text: "LEVEL TOO LOW!", life: 1.5 };
+      return;
+    }
 
     if (!caster.skills) caster.skills = initSkills();
     if (!caster.skills.arcaneResurrection) {
       caster.skills.arcaneResurrection = { learned: true, enabled: true, cd: 0 };
     }
-
-    // ✨ FIX: Sync Over Network BEFORE the early return checks
-    // This allows the Host to register the failed cast and sync the chat bubble properly.
-    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
-      netRef.current.channel.send('guest_cast_resurrection', {});
-    }
     
     // Check Cooldown
     if (caster.skills.arcaneResurrection.cd > 0) return;
-
-    // Validate Ally State (Must be dead to resurrect)
-    if (!ally || !ally.dead) {
-      caster.chatBubble = { text: "ALLY IS NOT DEAD!", life: 1.5 };
-      return;
-    }
 
     // 🛑 COST APPLICATION (The Forbidden Sacrifice)
     caster.skills.arcaneResurrection.cd = 300.0;
@@ -920,7 +924,7 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
       setSkillsState({ ...caster.skills });
       setPlayerLevel(caster.level);
     }
-  };
+};
 
   const runUpgrade = (choice, forcedTarget = null) => {
     const eng = engineRef.current;
@@ -1093,27 +1097,44 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
         return;
       }
 
-      if (event === 'state_sync' && !net.isHost) {
+if (event === 'state_sync' && !net.isHost) {
         if (payload.gameStarted !== undefined) {
           eng.gameStarted = payload.gameStarted;
           setHasStarted(payload.gameStarted);
         }
 
         if (!eng.p) {
-          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
+          eng.p = { x: W / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, name: allyName };
         }
         
         if (payload.p2 && eng.p2 !== null) {
           if (!eng.p2) {
-            eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null };
+            eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, name: playerName };
           }
+
+          // ✨ FIX 1: Detect kung nabuhay si Player 2 para i-play ang Resurrection Particles sa POV niya
+          if (eng.p2.dead === true && payload.p2.dead === false) {
+            for (let k = 0; k < 60; k++) {
+              const pa = Math.random() * Math.PI * 2;
+              const ps = Math.random() * 200 + 50;
+              eng.particles.push({
+                x: payload.p2.x, y: payload.p2.y,
+                vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+                color: Math.random() < 0.5 ? '#10b981' : '#fef08a', 
+                life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
+              });
+            }
+          }
+
           eng.p2.hp = payload.p2.hp;
           eng.p2.maxHp = payload.p2.maxHp;
           eng.p2.dead = payload.p2.dead;
           eng.p2.inv = payload.p2.inv ?? eng.p2.inv;
           eng.p2.dmg = payload.p2.dmg ?? eng.p2.dmg;
           eng.p2.shootRate = payload.p2.shootRate ?? eng.p2.shootRate;
-          eng.p2.chatBubble = payload.p2.chatBubble; 
+          if (payload.p2.chatBubble !== undefined) {
+              eng.p2.chatBubble = payload.p2.chatBubble;
+          }
           eng.p2.level = payload.p2_level || eng.p2.level;
           eng.p2.xp = payload.p2_xp || eng.p2.xp;
           eng.p2.xpNext = payload.p2_xpNext || eng.p2.xpNext;
@@ -1147,7 +1168,23 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
 
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
+        
         if (payload.p1 && eng.p) {
+
+          // ✨ FIX 2: Detect kung nabuhay si Player 1 para makita din ng Guest ang particles kung mamatay ang Host
+          if (eng.p.dead === true && payload.p1.dead === false) {
+            for (let k = 0; k < 60; k++) {
+              const pa = Math.random() * Math.PI * 2;
+              const ps = Math.random() * 200 + 50;
+              eng.particles.push({
+                x: payload.p1.x, y: payload.p1.y,
+                vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+                color: Math.random() < 0.5 ? '#10b981' : '#fef08a', 
+                life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
+              });
+            }
+          }
+
           eng.p.hp = payload.p1.hp;
           eng.p.maxHp = payload.p1.maxHp;
           eng.p.dead = payload.p1.dead;
@@ -1156,6 +1193,7 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
           eng.p.x = payload.p1.x;
           eng.p.y = payload.p1.y;
           eng.p.chatBubble = payload.p1.chatBubble;
+          eng.p.name = payload.p1.name || allyName;
 
           if (payload.p1_skills) eng.p.skills = payload.p1_skills;
           if (payload.p1_potBuffs) eng.p.potBuffs = payload.p1_potBuffs;
@@ -1259,12 +1297,16 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
       eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
       eng.gameStarted = false; 
       setHasStarted(false);
-      eng.p = { x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+      eng.p = { x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
+      name: netRef.current?.isHost ? playerName : allyName
+      };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
       if (isCoopActive) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 } };
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
+        name: netRef.current?.isHost ? allyName : playerName
+        };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
         eng.p2Render = { x: eng.p2.x, y: H / 2 };
         if (screen === 'playing' && netRef.current.isHost) {
@@ -1721,8 +1763,30 @@ const castArcaneResurrectionUltimate = (forcedTarget = null) => {
                 collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 screenShake: eng.screenShake,
-                p1: eng.p ? { x: eng.p.x, y: eng.p.y, hp: eng.p.hp, maxHp: eng.p.maxHp, inv: eng.p.inv, dead: eng.p.dead, dmg: eng.p.dmg, shootRate: eng.p.shootRate, chatBubble: eng.p.chatBubble } : null,
-                p2: eng.p2 ? { x: eng.p2.x, y: eng.p2.y, hp: eng.p2.hp, maxHp: eng.p2.maxHp, inv: eng.p2.inv, dead: eng.p2.dead, dmg: eng.p2.dmg, shootRate: eng.p2.shootRate, chatBubble: eng.p2.chatBubble } : null,
+                p1: eng.p ? { 
+                x: eng.p.x, 
+                y: eng.p.y, 
+                hp: eng.p.hp, 
+                maxHp: eng.p.maxHp, 
+                inv: eng.p.inv, 
+                dead: eng.p.dead, 
+                dmg: eng.p.dmg, 
+                shootRate: eng.p.shootRate, 
+                chatBubble: eng.p.chatBubble,
+                name: playerName
+              } : null,
+              p2: eng.p2 ? { 
+                x: eng.p2.x, 
+                y: eng.p2.y, 
+                hp: eng.p2.hp, 
+                maxHp: eng.p2.maxHp, 
+                inv: eng.p2.inv, 
+                dead: eng.p2.dead, 
+                dmg: eng.p2.dmg, 
+                shootRate: eng.p2.shootRate, 
+                chatBubble: eng.p2.chatBubble, 
+                name: isHost ? allyName : playerName 
+              } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
                 p2_skills: eng.p2 ? eng.p2.skills : null,
                 p1_potBuffs: eng.p ? eng.p.potBuffs : null,

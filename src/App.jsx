@@ -11,7 +11,11 @@ export default function App() {
   const [screen, setScreen] = useState('menu');
   const [hud, setHud] = useState({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
   const [coop, setCoop] = useState({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
-  const [wizardName, setWizardName] = useState('Wizard');
+  // const [wizardName, setWizardName] = useState('Wizard');
+    const [wizardName, setWizardName] = useState(() => {
+    return localStorage.getItem('wizardName') || 'Wizard';
+  });
+  const wizardNameRef = useRef(wizardName);
   const [toast, setToast] = useState({ message: '', isError: false });
   const [levelUpOptions, setLevelUpOptions] = useState(['Vitality', 'Arcane Might', 'Rapid Fire']); 
 
@@ -22,6 +26,11 @@ export default function App() {
     isHost: false,
     onCanvasMsg: null 
   });
+
+  useEffect(() => {
+    localStorage.setItem('wizardName', wizardName);
+    wizardNameRef.current = wizardName;
+  }, [wizardName]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -56,7 +65,8 @@ export default function App() {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
       setTimeout(() => {
         if (netRef.current.channel) {
-          netRef.current.channel.send('start_game', { p1Name: wizardName });
+          // netRef.current.channel.send('start_game', { p1Name: wizardName });
+          netRef.current.channel.send('start_game', { p1Name: wizardNameRef.current });
         }
         setScreen('playing');
       }, 1000);
@@ -115,6 +125,7 @@ export default function App() {
     else if (action === 'host-game') {
       const name = data.name.trim() || 'Host Wizard';
       setWizardName(name);
+      wizardNameRef.current = name;
       const code = Math.random().toString(36).slice(2, 8).toUpperCase();
       
       netRef.current.isHost = true;
