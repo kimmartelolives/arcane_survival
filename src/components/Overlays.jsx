@@ -34,6 +34,47 @@ export default function Overlays({
     }
   }, [initialWizardName]);
 
+
+// 🔥 FIX 1: Basahin agad ang huling alam na status mula sa localStorage para iwas visual flash
+  const [coopActiveInDb, setCoopActiveInDb] = useState(() => {
+    const cached = localStorage.getItem('arcane_coop_enabled');
+    return cached === null ? null : cached === 'true';
+  });
+
+  useEffect(() => {
+    const fetchCoopStatus = () => {
+      sbGet('/rest/v1/game_settings?id=eq.1')
+        .then(data => {
+          if (data && data.length > 0) {
+            const status = data[0].coop_enabled;
+            setCoopActiveInDb(status);
+            // I-save sa local cache para sa susunod na rapid refresh ng player
+            localStorage.setItem('arcane_coop_enabled', String(status)); 
+          } else {
+            setCoopActiveInDb(false);
+            localStorage.setItem('arcane_coop_enabled', 'false');
+          }
+        })
+        .catch(err => {
+          console.error('Error loading game settings:', err);
+          // Kung walang internet pero may lumang cache, panatilihin muna; kung wala, i-lock sa false
+          if (localStorage.getItem('arcane_coop_enabled') === null) {
+            setCoopActiveInDb(false);
+          }
+        });
+    };
+
+    // INITIAL FETCH
+    fetchCoopStatus();
+
+    // REALTIME CONNECTION
+    const watcher = sbWatchTable('game_settings', () => {
+      fetchCoopStatus(); 
+    });
+
+    return () => watcher.close();
+  }, []);
+
 useEffect(() => {
     if (screen === 'leaderboard') {
       // Create a fetch function that accepts a 'silent' parameter
@@ -656,9 +697,71 @@ useEffect(() => {
             <button className="btn wizard-btn" onClick={() => onAction('start-solo', { name: wizardName })}>
               <span className="btn-icon">🧙</span><span className="btn-label">Solo Trial</span>
             </button>
-            <button className="btn gold wizard-btn gold-theme" onClick={() => setScreen('coop-menu')}>
-              <span className="btn-icon">⚔️</span><span className="btn-label">Co-op Covenant</span>
-            </button>
+{/* 🔥 FIX 2: 3-Way Conditional Handling para iwas click-spamming habang nagre-refresh */}
+            {coopActiveInDb === null ? (
+              /* PHASE A: Habang naglo-load pa lang ang internet (Naka-lock at loading style) */
+              <button 
+                className="btn wizard-btn" 
+                disabled 
+                style={{ 
+                  marginBottom: '10px',
+                  opacity: 0.5, 
+                  cursor: 'not-allowed', 
+                  background: 'rgba(11, 4, 26, 0.4)',
+                  borderColor: 'rgba(197, 160, 89, 0.2)',
+                  boxShadow: 'none'
+                }}
+              >
+                <span className="btn-icon">🔮</span>
+                <span className="btn-label" style={{ color: '#94a3b8' }}>Chanting Gate Spell...</span>
+              </button>
+            ) : coopActiveInDb ? (
+              /* PHASE B: Kapag CONFIRMED ng Supabase na totoong TRUE / OPEN ang coop */
+              <button 
+                className="btn gold wizard-btn gold-theme" 
+                onClick={() => {
+                  // 🔥 HARD GUARD: Haharangin ang click event kung hindi pa tapos ang system synchronization
+                  if (coopActiveInDb !== true) return;
+                  setScreen('coop-menu');
+                }}
+              >
+                <span className="btn-icon">⚔️</span>
+                <span className="btn-label">Co-op Covenant</span>
+                <span style={{
+                  position: 'absolute',
+                  right: '12px',
+                  fontSize: '0.52rem',
+                  background: 'linear-gradient(180deg, #b45309 0%, #78350f 100%)',
+                  color: '#ffe6a3',
+                  border: '1px solid #c5a059',
+                  padding: '2px 6px',
+                  borderRadius: '3px',
+                  fontWeight: 'bold',
+                  letterSpacing: '0.5px',
+                  fontFamily: 'monospace',
+                  lineHeight: '1',
+                  textShadow: 'none',
+                  boxShadow: '0 0 6px rgba(197, 160, 89, 0.4)'
+                }}>BETA</span>
+              </button>
+            ) : (
+              /* PHASE C: Kapag CONFIRMED ng Supabase na FALSE / SEALED ang coop */
+              <button 
+                className="btn wizard-btn" 
+                disabled 
+                style={{ 
+                  marginBottom: '10px',
+                  opacity: 0.35, 
+                  cursor: 'not-allowed', 
+                  background: 'rgba(5, 2, 12, 0.6)',
+                  borderColor: 'rgba(255,255,255,0.05)',
+                  boxShadow: 'none'
+                }}
+              >
+                <span className="btn-icon">🔒</span>
+                <span className="btn-label" style={{ color: '#64748b' }}>Co-op Gates Sealed by Council</span>
+              </button>
+            )}
             <button className="btn wizard-btn" onClick={() => setScreen('leaderboard')}>
               <span className="btn-icon">🏆</span><span className="btn-label">Arcane Tombstones</span>
             </button>

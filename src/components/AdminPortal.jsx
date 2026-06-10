@@ -16,14 +16,30 @@ export default function AdminPortal() {
   const [admDesc, setAdmDesc] = useState('');
   const [admStatus, setAdmStatus] = useState('');
 
+  // 🔥 CORE STATE FOR CO-OP TOGGLE GATE
+  const [isCoopEnabled, setIsCoopEnabled] = useState(true);
+
   const fetchNews = async () => {
     const data = await sbGet('/rest/v1/council_news?select=*&order=created_at.desc');
     if (data) setNewsList(data);
   };
 
+  // 🔥 FETCH REALM CO-OP STATUS FROM DATABASE
+  const fetchCoopStatus = async () => {
+    try {
+      const data = await sbGet('/rest/v1/game_settings?id=eq.1');
+      if (data && data.length > 0) {
+        setIsCoopEnabled(data[0].coop_enabled);
+      }
+    } catch (err) {
+      console.error('Error fetching co-op matrix status:', err);
+    }
+  };
+
   useEffect(() => {
     if (isAdminAuthenticated) {
       fetchNews();
+      fetchCoopStatus(); // Kukunin ang network switch configuration status sa pag-login
     }
   }, [isAdminAuthenticated]);
 
@@ -46,7 +62,35 @@ export default function AdminPortal() {
     }
   };
 
-const handlePublishNews = async () => {
+  // 🔥 TOGGLE GATES ENGINE CONTROLLER
+  const handleToggleCoop = async () => {
+    const nextState = !isCoopEnabled;
+    setAdmStatus('Reconfiguring connectivity matrix gates...');
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/game_settings?id=eq.1`, {
+        method: 'PATCH',
+        headers: { 
+          'apikey': SUPABASE_ANON, 
+          'Authorization': `Bearer ${SUPABASE_ANON}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ coop_enabled: nextState })
+      });
+
+      if (response.ok) {
+        setIsCoopEnabled(nextState);
+        setAdmStatus(nextState ? '✨ Co-op Covenant gates successfully opened!' : '🛑 Co-op Covenant gates successfully sealed!');
+      } else {
+        setAdmStatus('❌ Failed to shift the co-op gates.');
+      }
+    } catch (err) {
+      console.error(err);
+      setAdmStatus('❌ Connection error changing co-op gate coordinates.');
+    }
+  };
+
+  const handlePublishNews = async () => {
     if (!admTitle.trim() || !admDesc.trim()) return alert('Your spellbook contains missing runes. Fill every enchanted field to continue');
     setAdmStatus('Scribing scroll casting...');
     
@@ -72,7 +116,6 @@ const handlePublishNews = async () => {
           resetEditor();
           fetchNews();
         } else {
-          // Capture the exact matrix rejection reason
           const errData = await response.json();
           console.error('Update Error:', errData);
           setAdmStatus('❌ Failed to update the scroll.');
@@ -83,7 +126,6 @@ const handlePublishNews = async () => {
       }
     } 
     else {
-      // Create new record
       const ok = await sbPost('/rest/v1/council_news', {
         type: admType,
         title: admTitle.trim(),
@@ -113,7 +155,7 @@ const handlePublishNews = async () => {
       });
       
       if (response.ok) {
-        fetchNews(); // I-refresh ang listahan
+        fetchNews();
       } else {
         alert('Failed to delete the scroll.');
       }
@@ -128,7 +170,7 @@ const handlePublishNews = async () => {
     setAdmTitle(item.title);
     setAdmDesc(item.description);
     setAdmStatus('Editing ancient record...');
-    setAdminTab('editor'); // Ibalik sa editor tab
+    setAdminTab('editor');
   };
 
   const resetEditor = () => {
@@ -140,13 +182,16 @@ const handlePublishNews = async () => {
 
   return (
     <div className="admin-bg">
-      <style>{`
+<style>{`
         .admin-bg { 
           position: fixed; inset: 0; background-color: #030108; 
           background-image: radial-gradient(circle at 50% 50%, #0e0624 0%, #030107 100%);
           display: flex; align-items: center; justify-content: center; 
           font-family: 'Georgia', serif; color: white; padding: 20px;
           z-index: 999999; overflow-y: auto; box-sizing: border-box;
+
+          /* 🔥 FIX: Pwersahing lumabas ang default mouse arrow cursor sa buong portal overlay background */
+          cursor: default !important; 
         }
         .admin-panel { 
           background: rgba(11, 4, 26, 0.95); border: 1px solid rgba(147, 51, 234, 0.25); 
@@ -173,6 +218,9 @@ const handlePublishNews = async () => {
           width: 100%; background: #05020c; border: 1px solid rgba(147, 51, 234, 0.3); 
           border-radius: 6px; color: #f1f5f9; padding: 14px; font-family: monospace; 
           font-size: 0.78rem; transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); box-sizing: border-box; 
+
+          /* 🔥 FIX: Ginagawang standard text selector (I-beam) para alam ng user kung saan pwedeng mag-type */
+          cursor: text !important;
         }
         .admin-textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
         .admin-input:focus, .admin-select:focus, .admin-textarea:focus { 
@@ -182,8 +230,11 @@ const handlePublishNews = async () => {
         .admin-btn { 
           width: 100%; padding: 14px; border-radius: 6px; font-family: 'Georgia', serif; 
           font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.82rem; 
-          cursor: pointer; transition: all 0.2s ease-in-out; display: flex; justify-content: center; 
+          transition: all 0.2s ease-in-out; display: flex; justify-content: center; 
           align-items: center; gap: 10px; box-sizing: border-box; margin-bottom: 12px; 
+
+          /* 🔥 FIX: Ginagawang clickable hand link indicator kapag itinapat sa kahit anong main buttons */
+          cursor: pointer !important;
         }
         .btn-gold { background: linear-gradient(180deg, #271708 0%, #170d03 100%); border: 1px solid #b45309; color: #fef08a; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         .btn-gold:hover { background: linear-gradient(180deg, #3d2208 0%, #221203 100%); border-color: #fbbf24; box-shadow: 0 0 20px rgba(251, 191, 36, 0.25); transform: translateY(-1px); }
@@ -195,7 +246,14 @@ const handlePublishNews = async () => {
 
         /* TAB STYLES */
         .admin-tabs { display: flex; gap: 10px; margin-bottom: 25px; border-bottom: 1px solid rgba(147, 51, 234, 0.3); padding-bottom: 15px; }
-        .tab-btn { flex: 1; background: transparent; border: 1px solid rgba(147, 51, 234, 0.3); color: #94a3b8; padding: 10px; border-radius: 6px; cursor: pointer; font-family: monospace; font-weight: bold; transition: 0.2s; }
+        .tab-btn { 
+          flex: 1; background: transparent; border: 1px solid rgba(147, 51, 234, 0.3); 
+          color: #94a3b8; padding: 10px; border-radius: 6px; font-family: monospace; 
+          font-weight: bold; transition: 0.2s; 
+
+          /* 🔥 FIX: Ginagawang clickable hand indicator para sa mga navigation tab selection controls */
+          cursor: pointer !important;
+        }
         .tab-btn.active { background: rgba(147, 51, 234, 0.2); color: #f1f5f9; border-color: #a855f7; box-shadow: inset 0 0 10px rgba(168, 85, 247, 0.2); }
         .tab-btn:hover:not(.active) { background: rgba(255,255,255,0.05); color: #fff; }
 
@@ -207,7 +265,12 @@ const handlePublishNews = async () => {
         .ac-title { font-size: 1rem; color: #f1f5f9; font-weight: bold; margin-bottom: 6px; text-transform: uppercase; }
         .ac-desc { font-size: 0.75rem; color: #94a3b8; font-family: monospace; line-height: 1.4; white-space: pre-line; }
         .ac-actions { display: flex; flex-direction: column; gap: 8px; }
-        .btn-small { padding: 6px 12px; font-size: 0.7rem; letter-spacing: 0; margin: 0; }
+        .btn-small { 
+          padding: 6px 12px; font-size: 0.7rem; letter-spacing: 0; margin: 0; 
+
+          /* 🔥 FIX: Nagpapakita rin ng link pointer hand sa inner archive modification elements */
+          cursor: pointer !important;
+        }
       `}</style>
 
       {/* --- LOGIN VAULT GATES --- */}
@@ -272,6 +335,13 @@ const handlePublishNews = async () => {
               onClick={() => { setAdminTab('list'); resetEditor(); }}
             >
               📜 View Archives ({newsList.length})
+            </button>
+            {/* 🔥 NEW TOGGLE CONTROL TAB ROUTE */}
+            <button 
+              className={`tab-btn ${adminTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setAdminTab('settings')}
+            >
+              ⚙️ Realm Covenants
             </button>
           </div>
 
@@ -344,6 +414,28 @@ const handlePublishNews = async () => {
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* 🔥 REALM SETTINGS SWITCH MATRIX VIEW */}
+          {adminTab === 'settings' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', background: 'rgba(5, 2, 12, 0.6)', padding: '24px 20px', borderRadius: '8px', border: '1px solid rgba(147, 51, 234, 0.2)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px' }}>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontFamily: 'Georgia', fontSize: '1rem', color: '#ffe6a3', fontWeight: 'bold', letterSpacing: '0.5px' }}>CO-OP COVENANT MULTIPLAYER</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#94a3b8', marginTop: '6px', lineUp: '1.4' }}>
+                    Toggle to deploy or temporarily seal cross-dimension multi-wizard connectivity network gates.
+                  </div>
+                </div>
+                <button 
+                  type="button"
+                  className={`admin-btn ${isCoopEnabled ? 'btn-gold' : 'btn-danger'}`} 
+                  style={{ width: 'auto', margin: 0, padding: '12px 20px', minWidth: '150px', borderRadius: '6px' }}
+                  onClick={handleToggleCoop}
+                >
+                  {isCoopEnabled ? '🔮 GATES OPEN' : '🛑 GATES SEALED'}
+                </button>
+              </div>
             </div>
           )}
 
