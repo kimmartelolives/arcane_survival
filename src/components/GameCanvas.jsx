@@ -335,23 +335,23 @@ const focusStyles = `
   }
 
   @media (max-width: 840px) {
-  .mmo-hotbar-container {
-    gap: 6px;
-    padding: 4px 8px;
-    bottom: 6px;
+    .mmo-hotbar-container {
+      gap: 6px;
+      padding: 4px 8px;
+      bottom: 6px;
+    }
+    .mmo-hotbar-slot {
+      width: 46px;
+      height: 46px;
+    }
+    .mmo-hotbar-ult-slot {
+      width: 54px;
+      height: 54px;
+    }
+    .hotbar-name {
+      display: none; 
+    }
   }
-  .mmo-hotbar-slot {
-    width: 46px;
-    height: 46px;
-  }
-  .mmo-hotbar-ult-slot {
-    width: 54px;
-    height: 54px;
-  }
-  .hotbar-name {
-    display: none; 
-  }
-}
   .mmo-hotbar-slot {
     position: relative;
     width: 58px;
@@ -628,32 +628,66 @@ const focusStyles = `
   }
 
   .orientation-warning {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: #030111;
-  z-index: 999999;
-  color: #fff;
-  font-family: 'Georgia', serif;
-  text-align: center;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-}
-
-@media (orientation: portrait) {
-  .orientation-warning {
-    display: flex;
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #030111;
+    z-index: 999999;
+    color: #fff;
+    font-family: 'Georgia', serif;
+    text-align: center;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
   }
-}
 
-canvas, .mmo-hotbar-slot, .mmo-hotbar-ult-slot, .skill-row-btn, .lu-card {
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
+  @media (orientation: portrait) {
+    .orientation-warning {
+      display: flex;
+    }
+  }
+
+  canvas, .mmo-hotbar-slot, .mmo-hotbar-ult-slot, .skill-row-btn, .lu-card {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ==========================================================================
+     MOBILE RESPONSIVE TOP HUD OPTIMIZATION (INJECTED MOBILE READY FIX)
+     ========================================================================== */
+  @media (max-width: 932px) and (orientation: landscape) {
+    .game-hud-top {
+      top: 16px !important;       /* Iniwas sa mga punch-holes/camera notch ng phone */
+      left: 24px !important;      /* Iniwas sa rounded dynamic layout bounds */
+      right: 24px !important;
+      font-size: 0.9rem !important;/* Pinaliit ang font size ng Score track text */
+    }
+
+    /* Tinago ang heavy dynamic game logo text container para magkasya ang basic controls */
+    .hud-menu-title, 
+    .hud-menu-sub {
+      display: none !important;
+    }
+
+    /* Mas ginitna ang positional coordinate anchor ng Pause execution button */
+    .game-hud-top > div:nth-child(2) {
+      margin-left: -20px !important; 
+    }
+
+    /* Pinaliit ang tactile overlay boundaries ng Pause engine selector */
+    .game-hud-top button {
+      font-size: 0.65rem !important;
+      padding: 6px 12px !important;
+    }
+
+    /* Inayos at pinaliit ang operational wave tracking variables */
+    .game-hud-right-group div {
+      font-size: 0.85rem !important;
+    }
+  }
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
@@ -3204,13 +3238,28 @@ const handlePointerUp = () => {
           </div>
         )}
 
-        {screen === 'playing' && !hasStarted && (
+        {/* {screen === 'playing' && !hasStarted && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal">
               <h2>{isHostInstance ? "MOVE TO START GAME" : "WAITING FOR HOST"}</h2>
               <p>
                 {isHostInstance 
                   ? "Press WASD or Arrow Keys to begin battle." 
+                  : "The arena will initialize once the match host begins moving."}
+              </p>
+            </div>
+          </div>
+        )} */}
+
+        {screen === 'playing' && !hasStarted && (
+          <div className="hud-start-overlay">
+            <div className="hud-start-modal">
+              <h2>{isHostInstance ? "MOVE TO START GAME" : "WAITING FOR HOST"}</h2>
+              <p>
+                {isHostInstance 
+                  ? (('ontouchstart' in window || navigator.maxTouchPoints > 0) 
+                      ? "Touch and drag on the left side of the screen to begin battle." 
+                      : "Press WASD or Arrow Keys to begin battle.")
                   : "The arena will initialize once the match host begins moving."}
               </p>
             </div>
