@@ -46,29 +46,44 @@ export default function AdminPortal() {
     }
   };
 
-  const handlePublishNews = async () => {
+const handlePublishNews = async () => {
     if (!admTitle.trim() || !admDesc.trim()) return alert('Your spellbook contains missing runes. Fill every enchanted field to continue');
     setAdmStatus('Scribing scroll casting...');
     
     if (editId) {
-      const { error } = await supabase
-        .from('council_news')
-        .update({
-          type: admType,
-          title: admTitle.trim(),
-          description: admDesc.trim()
-        })
-        .eq('id', editId);
+      try {
+        const response = await fetch(`${SUPABASE_URL}/rest/v1/council_news?id=eq.${editId}`, {
+          method: 'PATCH',
+          headers: { 
+            'apikey': SUPABASE_ANON, 
+            'Authorization': `Bearer ${SUPABASE_ANON}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            type: admType,
+            title: admTitle.trim(),
+            description: admDesc.trim()
+          })
+        });
 
-      if (!error) {
-        setAdmStatus('✨ Scroll updated successfully!');
-        resetEditor();
-        fetchNews();
-      } else {
-        setAdmStatus('❌ Failed to update the scroll.');
+        if (response.ok) {
+          setAdmStatus('✨ Scroll updated successfully!');
+          resetEditor();
+          fetchNews();
+        } else {
+          // Capture the exact matrix rejection reason
+          const errData = await response.json();
+          console.error('Update Error:', errData);
+          setAdmStatus('❌ Failed to update the scroll.');
+        }
+      } catch (err) {
+        console.error('Network Error:', err);
+        setAdmStatus('❌ Connection to the matrix failed.');
       }
     } 
     else {
+      // Create new record
       const ok = await sbPost('/rest/v1/council_news', {
         type: admType,
         title: admTitle.trim(),
