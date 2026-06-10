@@ -844,7 +844,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   };
 
-  const castArcaneResurrectionUltimate = (forcedTarget = null) => {
+const castArcaneResurrectionUltimate = (forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng) return;
 
@@ -865,20 +865,26 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     // Validate Caster State
     if (!caster || caster.dead || caster.level < 12) return;
-    
-    // Validate Ally State (Must be dead to resurrect)
-    if (!ally || !ally.dead) {
-      caster.chatBubble = { text: "ALLY IS NOT DEAD!", life: 1.5 };
-      return;
-    }
 
     if (!caster.skills) caster.skills = initSkills();
     if (!caster.skills.arcaneResurrection) {
       caster.skills.arcaneResurrection = { learned: true, enabled: true, cd: 0 };
     }
 
+    // ✨ FIX: Sync Over Network BEFORE the early return checks
+    // This allows the Host to register the failed cast and sync the chat bubble properly.
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_resurrection', {});
+    }
+    
     // Check Cooldown
     if (caster.skills.arcaneResurrection.cd > 0) return;
+
+    // Validate Ally State (Must be dead to resurrect)
+    if (!ally || !ally.dead) {
+      caster.chatBubble = { text: "ALLY IS NOT DEAD!", life: 1.5 };
+      return;
+    }
 
     // 🛑 COST APPLICATION (The Forbidden Sacrifice)
     caster.skills.arcaneResurrection.cd = 300.0;
@@ -907,11 +913,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
         color: Math.random() < 0.5 ? '#10b981' : '#fef08a', 
         life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
       });
-    }
-
-    // Sync Over Network
-    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
-      netRef.current.channel.send('guest_cast_resurrection', {});
     }
 
     // Update Local State
