@@ -133,6 +133,15 @@ export default function App() {
         console.log("Room successfully created on network bridge cluster:", code);
       });
 
+      if (netRef.current.channel && typeof netRef.current.channel.subscribe === 'function') {
+        netRef.current.channel.subscribe((status) => {
+          console.log("📡 [HOST NET LOG] Status:", status);
+          if (status === 'CHANNEL_ERROR') {
+            console.error("🛑 QUOTA ERROR: Hindi magawa ang WebSocket stream dahil lumagpas sa 2.7M limit!");
+          }
+        });
+      }
+
       setCoop({ isEnabled: true, isHost: true, channel: netRef.current.channel, roomCode: code, p2Name: 'Player 2', status: '' });
       setScreen('lobby');
     }
@@ -157,6 +166,15 @@ export default function App() {
           }
         }, 150);
       });
+
+      if (netRef.current.channel && typeof netRef.current.channel.subscribe === 'function') {
+        netRef.current.channel.subscribe((status) => {
+          console.log("📡 [GUEST NET LOG] Status:", status);
+          if (status === 'CHANNEL_ERROR') {
+            console.error("🛑 QUOTA ERROR: Ayaw tanggapin ng Supabase ang player connection mo!");
+          }
+        });
+      }
 
       setCoop({ isEnabled: true, isHost: false, channel: netRef.current.channel, roomCode: targetCode, p2Name: 'Host', status: '' });
     }
