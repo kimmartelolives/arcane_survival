@@ -226,6 +226,24 @@ useEffect(() => {
         .lu-card-desc { font-size: 0.78rem; color: #94a3b8; font-family: monospace; margin-bottom: 24px; min-height: 2em; line-height: 1.3; }
         .lu-hotkey { font-size: 0.95rem; color: #fde047; font-weight: bold; font-family: monospace; opacity: 0.85; }
 
+        @media (max-width: 768px) {
+  .lu-cards-row {
+    gap: 12px;
+  }
+  .lu-card {
+    width: 30%; 
+    padding: 16px 8px;
+    min-width: 140px;
+  }
+  .lu-card-desc {
+    font-size: 0.65rem;
+    margin-bottom: 8px;
+  }
+  .lu-hotkey {
+    display: none; 
+  }
+}
+
         .council-news-overlay { position: fixed; inset: 0; background: rgba(3, 1, 17, 0.85); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(6px); pointer-events: auto; }
         
         /* ==========================================================================

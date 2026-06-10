@@ -333,6 +333,25 @@ const focusStyles = `
     font-family: monospace;
     backdrop-filter: blur(4px);
   }
+
+  @media (max-width: 840px) {
+  .mmo-hotbar-container {
+    gap: 6px;
+    padding: 4px 8px;
+    bottom: 6px;
+  }
+  .mmo-hotbar-slot {
+    width: 46px;
+    height: 46px;
+  }
+  .mmo-hotbar-ult-slot {
+    width: 54px;
+    height: 54px;
+  }
+  .hotbar-name {
+    display: none; 
+  }
+}
   .mmo-hotbar-slot {
     position: relative;
     width: 58px;
@@ -607,6 +626,34 @@ const focusStyles = `
     text-align: right;
     letter-spacing: 0.5px;
   }
+
+  .orientation-warning {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #030111;
+  z-index: 999999;
+  color: #fff;
+  font-family: 'Georgia', serif;
+  text-align: center;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+@media (orientation: portrait) {
+  .orientation-warning {
+    display: flex;
+  }
+}
+
+canvas, .mmo-hotbar-slot, .mmo-hotbar-ult-slot, .skill-row-btn, .lu-card {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
@@ -669,7 +716,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p1Render: { x: 300, y: 280 },
     p2Render: { x: 600, y: 280 },
-    p2History: []
+    p2History: [],
+    keys: {},
+  joystick: { active: false, startX: 0, startY: 0, curX: 0, curY: 0, mx: 0, my: 0 }
   });
 
   // --- COMPONENT SCOPED ABILITIES ---
@@ -1385,6 +1434,17 @@ if (event === 'state_sync' && !net.isHost) {
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
   useEffect(() => {
+  const preventDefaultGestures = (e) => {
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault(); 
+    }
+  };
+
+  document.addEventListener('touchstart', preventDefaultGestures, { passive: false });
+  return () => document.removeEventListener('touchstart', preventDefaultGestures);
+}, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -1444,6 +1504,13 @@ if (event === 'state_sync' && !net.isHost) {
 
       if (screen === 'playing' || screen === 'levelup') {
         let mx = 0, my = 0;
+
+        // 1. Read Virtual Joystick Input
+        if (eng.joystick.active) {
+          mx = eng.joystick.mx;
+          my = eng.joystick.my;
+        }
+
         if (eng.keys['ArrowLeft'] || eng.keys['a'] || eng.keys['A']) mx -= 1;
         if (eng.keys['ArrowRight'] || eng.keys['d'] || eng.keys['D']) mx += 1;
         if (eng.keys['ArrowUp'] || eng.keys['w'] || eng.keys['W']) my -= 1;
@@ -1451,16 +1518,13 @@ if (event === 'state_sync' && !net.isHost) {
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
 
-        if (!eng.gameStarted) {
-          if (isHost && (mx !== 0 || my !== 0)) {
-            eng.gameStarted = true;
-            setHasStarted(true);
-            activateAudioKeepAlive(); 
-          } else if (!isHost) {
-            mx = 0;
-            my = 0;
-          }
-        }
+        if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
+  if (isHost) {
+    eng.gameStarted = true;
+    setHasStarted(true);
+    activateAudioKeepAlive();
+  }
+}
 
         if (eng.screenShake > 0) {
           eng.screenShake -= dt;
@@ -2622,12 +2686,67 @@ if (event === 'state_sync' && !net.isHost) {
     };
   }, [screen]);
 
+  const handlePointerDown = (e) => {
+  const eng = engineRef.current;
+  // Only activate joystick if touching the left half of screen area
+  if (e.clientX < window.innerWidth / 2) {
+    eng.joystick.active = true;
+    eng.joystick.startX = e.clientX;
+    eng.joystick.startY = e.clientY;
+    eng.joystick.curX = e.clientX;
+    eng.joystick.curY = e.clientY;
+  }
+};
+
+const handlePointerMove = (e) => {
+  const eng = engineRef.current;
+  if (!eng.joystick.active) return;
+
+  eng.joystick.curX = e.clientX;
+  eng.joystick.curY = e.clientY;
+
+  const dx = eng.joystick.curX - eng.joystick.startX;
+  const dy = eng.joystick.curY - eng.joystick.startY;
+  const dist = Math.hypot(dx, dy);
+  const maxRadius = 50; // Max boundary for thumbstick vector constraint
+
+  if (dist === 0) {
+    eng.joystick.mx = 0;
+    eng.joystick.my = 0;
+  } else {
+    const angle = Math.atan2(dy, dx);
+    const intensity = Math.min(dist / maxRadius, 1);
+    eng.joystick.mx = Math.cos(angle) * intensity;
+    eng.joystick.my = Math.sin(angle) * intensity;
+  }
+};
+
+const handlePointerUp = () => {
+  const eng = engineRef.current;
+  eng.joystick.active = false;
+  eng.joystick.mx = 0;
+  eng.joystick.my = 0;
+};
+
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
   
   return (
-    <div id="wrap">
+    <div 
+  id="wrap"
+  onPointerDown={handlePointerDown}
+  onPointerMove={handlePointerMove}
+  onPointerUp={handlePointerUp}
+  onPointerCancel={handlePointerUp}
+  style={{ touchAction: 'none' }} 
+>
       <style>{focusStyles}</style>
+
+      <div className="orientation-warning">
+  <span style={{ fontSize: '3rem' }}>🔄</span>
+  <h2>Please Rotate Your Device</h2>
+  <p>Arcane Survival requires landscape orientation to harness spell parameters.</p>
+</div>
       <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
 
@@ -3167,5 +3286,7 @@ if (event === 'state_sync' && !net.isHost) {
 
       </div>
     </div>
+
+    
   );
 }
