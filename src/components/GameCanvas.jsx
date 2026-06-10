@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-const W = 900;
-const H = 560;
+const W = 1280;
+const H = 720;
 const ET = [
   { r: 13, speed: 65,  hp: 30,  dmg: 8,  xp: 15,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
   { r: 11, speed: 105, hp: 20,  dmg: 12, xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
