@@ -3,7 +3,7 @@ import GameCanvas from './components/GameCanvas';
 import Overlays from './components/Overlays';
 import PartyChat from './components/PartyChat';
 import Toast from './components/Toast';
-import AdminPortal from './components/AdminPortal'; // 👈 BAGONG IMPORT
+import AdminPortal from './components/AdminPortal';
 import { sbRealtime } from './services/supabase';
 import './index.css';
 
@@ -165,13 +165,16 @@ export default function App() {
     }
   };
 
-  // 👈 BAGONG ROUTING LOGIC: I-check kung nasa admin URL tayo
-  const currentPath = window.location.pathname;
-  if (currentPath === '/scribe-portal') {
+  // const currentPath = window.location.pathname;
+  // if (currentPath === '/scribe-portal') {
+  //   return <AdminPortal />;
+  // }
+
+  const currentHash = window.location.hash;
+  if (currentHash === '#/scribe-portal') {
     return <AdminPortal />;
   }
 
-  // Kung hindi, i-load ang normal na game UI
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
       <GameCanvas 
