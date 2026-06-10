@@ -19,6 +19,7 @@ export default function Overlays({
   const [loadingLb, setLoadingLb] = useState(false);
   const [submitStatus, setSubmitStatus] = useState('');
   const [isScoreSubmitted, setIsScoreSubmitted] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState('solo');
 
   // States para sa Dynamic Supabase Council News Modal Window
   const [councilNewsOpen, setCouncilNewsOpen] = useState(false);
@@ -38,7 +39,9 @@ useEffect(() => {
       // Create a fetch function that accepts a 'silent' parameter
       const fetchLeaderboard = (isSilent = false) => {
         if (!isSilent) setLoadingLb(true);
-        sbGet('/rest/v1/leaderboard?select=name,score,wave,level,mode&order=score.desc&limit=20')
+        
+        // Added mode filter to the endpoint based on the active tab
+        sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
           .then(data => { 
             setLeaderboard(data || []); 
             if (!isSilent) setLoadingLb(false); 
@@ -48,7 +51,7 @@ useEffect(() => {
           });
       };
 
-      // Initial fetch when screen opens
+      // Initial fetch when screen opens or tab changes
       fetchLeaderboard(false);
 
       // Start Realtime connection
@@ -57,7 +60,7 @@ useEffect(() => {
         fetchLeaderboard(true); 
       });
 
-      // Cleanup websocket connection when leaving the leaderboard
+      // Cleanup websocket connection when leaving or swapping tabs
       return () => watcher.close();
     }
     
@@ -65,7 +68,7 @@ useEffect(() => {
       setSubmitStatus('');
       setIsScoreSubmitted(false);
     }
-  }, [screen]);
+  }, [screen, leaderboardTab]); // Added leaderboardTab to dependencies
 
   useEffect(() => {
     if (councilNewsOpen) {
@@ -210,7 +213,7 @@ useEffect(() => {
 
   return (
     <div id="overlays">
-      <style>{`
+<style>{`
         .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; }
         .lu-title { font-size: 2.35rem; font-weight: 800; color: #fef08a; text-shadow: 0 0 20px rgba(251,240,138,0.3); margin-bottom: 8px; letter-spacing: 0.05em; font-family: Georgia, serif; text-transform: uppercase; }
         .lu-subtitle { font-size: 0.85rem; color: #cbd5e1; letter-spacing: 0.08em; margin-bottom: 4px; opacity: 0.9; text-transform: uppercase; font-family: Georgia, serif; }
@@ -240,6 +243,10 @@ useEffect(() => {
           border-radius: 12px !important;
           padding: 42px 32px !important;
           animation: occultAmbient 8s infinite ease-in-out;
+          
+          /* 🔥 Pwersahing maging Flexbox para gumana ang dynamic panel stretching */
+          display: flex !important;
+          flex-direction: column !important;
         }
         @keyframes occultAmbient {
           0% { box-shadow: 0 0 40px rgba(109, 40, 217, 0.25), inset 0 0 30px rgba(0,0,0,0.9); border-color: #c5a059; }
@@ -374,115 +381,159 @@ useEffect(() => {
         /* ==========================================================================
            RE-FIXED & RE-STYLED COUNCIL SANCTUM ARCHIVES SCROLL (image_439347.png FIX)
            ========================================================================== */
-.council-news-box {
-  background: radial-gradient(circle at 50% 15%, #180833 0%, #05020c 100%) !important; 
-  border: 2px solid #c5a059 !important;
-  box-shadow: 0 0 50px rgba(124, 58, 237, 0.4), inset 0 0 30px rgba(0,0,0,0.9) !important;
-  border-radius: 12px !important;
-  
-  /* 📐 PINALAKING BASE SIZE (Dating 580x495) */
-  width: 760px; 
-  height: 580px; 
-  display: flex; 
-  flex-direction: column; 
-  padding: 30px; /* Mas maluwag na padding */
-  position: relative; 
-  box-sizing: border-box;
+        .council-news-box {
+          background: radial-gradient(circle at 50% 15%, #180833 0%, #05020c 100%) !important; 
+          border: 2px solid #c5a059 !important;
+          box-shadow: 0 0 50px rgba(124, 58, 237, 0.4), inset 0 0 30px rgba(0,0,0,0.9) !important;
+          border-radius: 12px !important;
+          
+          /* 📐 PINALAKING BASE SIZE (Dating 580x495) */
+          width: 760px; 
+          height: 680px; 
+          display: flex; 
+          flex-direction: column; 
+          padding: 30px; /* Mas maluwag na padding */
+          position: relative; 
+          box-sizing: border-box;
 
-  /* 🛠️ TEXTAREA RESIZE AT LIMITS */
-  resize: both;          
-  overflow: hidden;      
-  min-width: 500px;      
-  min-height: 450px;     
-  max-width: 95vw;       
-  max-height: 95vh;
-}
+          /* 🛠️ TEXTAREA RESIZE AT LIMITS */
+          resize: both;          
+          overflow: hidden;      
+          min-width: 500px;      
+          min-height: 450px;     
+          max-width: 95vw;       
+          max-height: 95vh;
+        }
 
-.council-tab-headers {
-  display: flex; gap: 12px; margin-bottom: 16px; position: relative; z-index: 20; width: 100%;
-}
+        .council-tab-headers {
+          display: flex; gap: 12px; margin-bottom: 16px; position: relative; z-index: 20; width: 100%;
+        }
 
-/* Custom Sorcery Tab Look instead of basic white buttons */
-.council-tab-btn {
-  flex: 1; background: linear-gradient(180deg, #120624 0%, #090312 100%) !important;
-  border: 1px solid rgba(197, 160, 89, 0.3) !important; color: #a78bfa !important;
-  font-family: 'Georgia', serif; 
-  font-size: 0.9rem; /* Pinalaki mula 0.8rem */
-  padding: 14px !important; /* Pinalaki ang clickable area ng tab */
-  border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase;
-  transition: all 0.2s ease; box-sizing: border-box;
-}
+        /* Custom Sorcery Tab Look instead of basic white buttons */
+        .council-tab-btn {
+          flex: 1; background: linear-gradient(180deg, #120624 0%, #090312 100%) !important;
+          border: 1px solid rgba(197, 160, 89, 0.3) !important; color: #a78bfa !important;
+          font-family: 'Georgia', serif; 
+          font-size: 0.9rem; /* Pinalaki mula 0.8rem */
+          padding: 14px !important; /* Pinalaki ang clickable area ng tab */
+          border-radius: 4px; cursor: pointer; font-weight: bold; text-transform: uppercase;
+          transition: all 0.2s ease; box-sizing: border-box;
+        }
 
-.council-tab-btn:hover:not(.active) {
-  border-color: rgba(197, 160, 89, 0.7) !important; color: #ffffff !important; background: #1a0a33 !important;
-}
+        .council-tab-btn:hover:not(.active) {
+          border-color: rgba(197, 160, 89, 0.7) !important; color: #ffffff !important; background: #1a0a33 !important;
+        }
 
-.council-tab-btn.active {
-  background: linear-gradient(180deg, #2e1403 0%, #140801 100%) !important;
-  color: #fef08a !important; border-color: #c5a059 !important;
-  box-shadow: 0 0 12px rgba(197, 160, 89, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.8);
-}
+        .council-tab-btn.active {
+          background: linear-gradient(180deg, #2e1403 0%, #140801 100%) !important;
+          color: #fef08a !important; border-color: #c5a059 !important;
+          box-shadow: 0 0 12px rgba(197, 160, 89, 0.3); text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
 
-/* Darker Void Box Container for Logs */
-.council-scroll-logs {
-  flex: 1; overflow-y: auto; background: rgba(4, 2, 10, 0.85) !important;
-  border: 1px solid rgba(197, 160, 89, 0.2) !important; border-radius: 6px;
-  padding: 20px !important; text-align: left; box-sizing: border-box;
-}
+        /* Darker Void Box Container for Logs */
+        .council-scroll-logs {
+          flex: 1; overflow-y: auto; background: rgba(4, 2, 10, 0.85) !important;
+          border: 1px solid rgba(197, 160, 89, 0.2) !important; border-radius: 6px;
+          padding: 20px !important; text-align: left; box-sizing: border-box;
+        }
 
-.council-log-item {
-  margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid rgba(197, 160, 89, 0.15);
-}
+        .council-log-item {
+          margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid rgba(197, 160, 89, 0.15);
+        }
 
-.council-log-header {
-  font-size: 0.75rem; /* Pinalaki mula 0.68rem */
-  color: #c5a059; font-family: monospace; font-weight: bold; margin-bottom: 6px; letter-spacing: 1px;
-}
+        .council-log-header {
+          font-size: 0.75rem; /* Pinalaki mula 0.68rem */
+          color: #c5a059; font-family: monospace; font-weight: bold; margin-bottom: 6px; letter-spacing: 1px;
+        }
 
-.council-log-title {
-  color: #fef08a; 
-  font-size: 1.1rem; /* Pinalaki mula 0.95rem para sa mas magandang hierarchy */
-  font-family: 'Georgia', serif; font-weight: bold; margin-bottom: 8px; text-shadow: 0 0 8px rgba(254,240,138,0.2);
-}
+        .council-log-title {
+          color: #fef08a; 
+          font-size: 1.1rem; /* Pinalaki mula 0.95rem para sa mas magandang hierarchy */
+          font-family: 'Georgia', serif; font-weight: bold; margin-bottom: 8px; text-shadow: 0 0 8px rgba(254,240,138,0.2);
+        }
 
-.council-log-desc {
-  color: #cbd5e1; 
-  font-size: 0.85rem; /* Pinalaki mula 0.78rem para mas madaling basahin */
-  line-height: 1.5; font-family: monospace; white-space: pre-line;
-}
+        .council-log-desc {
+          color: #cbd5e1; 
+          font-size: 0.85rem; /* Pinalaki mula 0.78rem para mas madaling basahin */
+          line-height: 1.5; font-family: monospace; white-space: pre-line;
+        }
 
         /* Leaderboard Ancient Grid Layout */
         .witch-table { width: 100%; border-collapse: collapse; font-family: 'Georgia', serif; color: #cbd5e1; margin-top: 10px; }
-        .witch-table th { background: rgba(30, 11, 61, 0.4); color: #ffe6a3; padding: 12px; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; border-bottom: 2px solid rgba(197, 160, 89, 0.3); }
+        /* Na-update para maging Sticky ang Header */
+        .witch-table th { 
+          position: sticky; 
+          top: 0; 
+          z-index: 10; 
+          background: #110624 !important; /* 🔥 Ginawang solid dark imbis na transparent para hindi maghalo ang text kapag nag-scroll */
+          color: #ffe6a3; 
+          padding: 12px; 
+          font-size: 0.8rem; 
+          letter-spacing: 0.1em; 
+          text-transform: uppercase; 
+          border-bottom: 2px solid rgba(197, 160, 89, 0.3); 
+          box-shadow: 0 4px 6px rgba(0,0,0,0.5); /* 🔥 Dagdag anino para mukhang naka-angat */
+        }
         .witch-table td { padding: 12px; border-bottom: 1px solid rgba(124, 58, 237, 0.15); font-size: 0.88rem; }
         .witch-table tr:hover td { background: rgba(124, 58, 237, 0.1); color: #ffffff; }
 
-        /* Gold Glow for the #1 Rank */
-        .gold-leader {
+    /* 🔥 ITINAMA: Tinanggal ang !important sa loob dahil bawal ito sa keyframes animation! */
+        @keyframes goldPulse {
+          0% {
+            text-shadow: 
+              0 0 12px rgba(254, 240, 138, 0.5), 
+              0 0 25px rgba(254, 240, 138, 0.3);
+          }
+          50% {
+            text-shadow: 
+              0 0 25px rgba(254, 240, 138, 1), 
+              0 0 45px rgba(254, 240, 138, 0.8), 
+              0 0 60px rgba(217, 119, 6, 0.6);
+          }
+          100% {
+            text-shadow: 
+              0 0 12px rgba(254, 240, 138, 0.5), 
+              0 0 25px rgba(254, 240, 138, 0.3);
+          }
+        }
+
+        /* Gold Glow for the #1 Rank (Dito natin isasaksak ang !important sa animation track) */
+        .gold-leader td {
           color: #fef08a !important;
-          text-shadow: 0 0 15px rgba(254, 240, 138, 1), 0 0 30px rgba(254, 240, 138, 0.8), 0 0 45px rgba(254, 240, 138, 0.6) !important;
           font-weight: 900 !important;
+          font-size: 1.35rem !important;
+          padding: 18px 12px !important;
+          vertical-align: middle !important;
+          
+          /* 🔥 Pwersahing tumakbo ang malinis na animation sequence */
+          animation: goldPulse 2.5s infinite ease-in-out !important;
         }
 
         /* Silver Glow for the #2 Rank */
-        .silver-leader {
-        color: #ffffff !important; /* Pure white core for crisp legibility */
-        text-shadow: 
-          0 0 5px #94a3b8, 
-          0 0 15px rgba(203, 213, 225, 0.8), 
-          0 0 25px rgba(148, 163, 184, 0.5) !important;
-        font-weight: 800 !important;
-      }
+        .silver-leader td {
+          color: #ffffff !important; 
+          text-shadow: 
+            0 0 5px #94a3b8, 
+            0 0 15px rgba(203, 213, 225, 0.8), 
+            0 0 25px rgba(148, 163, 184, 0.5) !important;
+          font-weight: 800 !important;
+          font-size: 1.15rem !important;
+          padding: 15px 12px !important;
+          vertical-align: middle !important; /* 🔥 Hahatak sa medalya papunta sa gitna */
+        }
 
         /* Bronze Glow for the #3 Rank */
-        .bronze-leader {
-        color: #fef3c7 !important; /* Very bright pale orange/gold core */
-        text-shadow: 
-          0 0 5px #b45309, 
-          0 0 15px rgba(217, 119, 6, 0.8), 
-          0 0 25px rgba(180, 83, 9, 0.5) !important;
-        font-weight: 800 !important;
-      }
+        .bronze-leader td {
+          color: #fef3c7 !important; 
+          text-shadow: 
+            0 0 5px #b45309, 
+            0 0 15px rgba(217, 119, 6, 0.8), 
+            0 0 25px rgba(180, 83, 9, 0.5) !important;
+          font-weight: 800 !important;
+          font-size: 1.02rem !important;
+          padding: 13px 12px !important;
+          vertical-align: middle !important; /* 🔥 Hahatak sa medalya papunta sa gitna */
+        }
 
         /* Description below the Leaderboard Title */
         .lb-description {
@@ -495,7 +546,23 @@ useEffect(() => {
           line-height: 1.4;
           padding: 0 20px;
         }
+
+        /* Custom Rule para sa Leaderboard Box para kainin ang lahat ng bakanteng vertical space */
+        .lb-scroll-area {
+          flex: 1 !important;
+          background: rgba(5, 2, 12, 0.6) !important;
+          border: 1px solid rgba(197, 160, 89, 0.2) !important;
+          border-radius: 6px;
+          overflow-y: auto;
+          margin-bottom: 20px !important; /* 🔥 Ito ang magbibigay ng permanenteng spacing sa itaas ng button */
+        }
+
+        /* Tanggalin ang margin-top auto dahil si flex: 1 na sa itaas ang bahalang magtulak pababa */
+        .lb-bottom-btn {
+          flex-shrink: 0;
+        }
       `}</style>
+
 
       {/* MAIN MENU SCREEN */}
       {screen === 'menu' && (
@@ -672,31 +739,54 @@ useEffect(() => {
           </div>
         </div>
       )}
-
-      {/* HALL OF LEGENDS LEADERBOARD */}
+{/* HALL OF LEGENDS LEADERBOARD */}
       {screen === 'leaderboard' && (
         <div className="overlay active">
-          <div className="panel wizard-panel" style={{ width: 'min(620px, 96vw)' }}>
+          <div className="panel wizard-panel" style={{ width: '760px', height: '680px', maxWidth: '95vw', maxHeight: '95vh', boxSizing: 'border-box' }}>
             <div className="panel-corner pc-tl" />
             <div className="panel-corner pc-tr" />
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
             <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🏆 COUNCIL OF THE FALLEN</div>
-         <div className="lb-description">
-          When the final spell fades and the last wave falls,{' '}
-          <b style={{ color: '#fef08a', textShadow: '0 0 12px rgba(254, 240, 138, 0.9)' }}>
-            only twenty souls shall remain worthy
-          </b>. 
-          The Council of the Fallen welcomes these Arcane legends, granting them eternal glory beyond the mortal realm.
-        </div>
-            <div className="divider mystic-divider" />
+            <div className="lb-description">
+              When the final spell fades and the last wave falls,{' '}
+              <b style={{ color: '#fef08a', textShadow: '0 0 12px rgba(254, 240, 138, 0.9)' }}>
+                only twenty souls shall remain worthy
+              </b>. 
+              The Council of the Fallen welcomes these Arcane legends, granting them eternal glory beyond the mortal realm.
+            </div>
             
-            <div className="scroll-area" style={{ background: 'rgba(5,2,12,0.6)', border: '1px solid rgba(197,160,89,0.2)', borderRadius: '6px', maxHeight: '320px', overflowY: 'auto' }}>
+            <div className="divider mystic-divider" style={{ margin: '14px 0', flexShrink: 0 }} />
+            
+            {/* TABS CONTAINER */}
+            <div className="council-tab-headers" style={{ marginBottom: '16px', flexShrink: 0 }}>
+              <button 
+                className={`council-tab-btn ${leaderboardTab === 'solo' ? 'active' : ''}`} 
+                onClick={() => setLeaderboardTab('solo')}
+              >
+                🧙‍♂️ Solo Records
+              </button>
+              <button 
+                className={`council-tab-btn ${leaderboardTab === 'coop' ? 'active' : ''}`} 
+                onClick={() => setLeaderboardTab('coop')}
+              >
+                ⚔️ Co-op Records
+              </button>
+            </div>
+
+            {/* SCROLL AREA - Malaki na, sagad pababa, at may margin sa ilalim */}
+            <div className="lb-scroll-area">
               {loadingLb ? <div className="lb-loading" style={{ padding: '40px', color: '#a78bfa', fontFamily: 'Georgia', textAlign: 'center' }}>Summoning records from ancient scroll…</div> : (
                 <table className="witch-table">
                   <thead>
-                    <tr><th>#</th><th>Wizard</th><th>Mode</th><th>Wave</th><th>Score</th></tr>
+                    <tr>
+                      <th style={{ textAlign: 'center', width: '60px' }}>#</th>
+                      <th style={{ textAlign: 'center' }}>Wizard</th> {/* 🔥 Naka-center na uli */}
+                      <th style={{ textAlign: 'center', width: '90px' }}>Level</th>
+                      <th style={{ textAlign: 'center', width: '90px' }}>Wave</th>
+                      <th style={{ textAlign: 'right', width: '130px' }}>Score</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {leaderboard.length === 0 ? (
@@ -704,11 +794,21 @@ useEffect(() => {
                     ) : (
                       leaderboard.map((row, idx) => (
                         <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
-                          <td style={{ fontWeight: 'bold' }}>{idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}</td>
-                          <td style={{ fontWeight: 600 }}>{row.name || 'Anonymous'}</td>
-                          <td style={{ textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '1px' }}>{row.mode || 'solo'}</td>
-                          <td>{row.wave || 1}</td>
-                          <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
+                          <td style={{ fontWeight: 'bold', textAlign: 'center' }}>
+                            {idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}
+                          </td>
+                          <td style={{ fontWeight: 600, textAlign: 'center' }}> {/* 🔥 Naka-center na uli */}
+                            {row.name || 'Anonymous'}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {row.level || 1}
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            {row.wave || 1}
+                          </td>
+                          <td style={{ fontWeight: 'bold', textAlign: 'right' }}>
+                            {(row.score || 0).toLocaleString()}
+                          </td>
                         </tr>
                       ))
                     )}
@@ -716,7 +816,9 @@ useEffect(() => {
                 </table>
               )}
             </div>
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '20px' }} onClick={() => setScreen('menu')}>← Leave Sanctum</button>
+            
+            {/* LEAVE BUTTON - Swak na sa pinakailalim nang may saktong awang sa kahon */}
+            <button className="btn wizard-btn danger-theme lb-bottom-btn" onClick={() => setScreen('menu')}>← Leave Sanctum</button>
           </div>
         </div>
       )}
