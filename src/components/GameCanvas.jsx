@@ -720,6 +720,112 @@ const focusStyles = `
       font-size: 0.85rem !important;
     }
   }
+
+  /* ==========================================================================
+     MOBILE RESPONSIVE UI SIZING FIX (SUPER TIGHT HUD & PAUSE SCREEN)
+     ========================================================================== */
+  @media (max-width: 840px) {
+    /* --- 1. PAUSE / START GAME OVERLAY (Itinaas at Pinaliit) --- */
+    .hud-start-overlay {
+      align-items: flex-start !important; /* Ililipat ang content sa itaas imbes na gitna */
+      padding-top: 12vh !important; /* Space mula sa tuktok para hindi dikit sa notch */
+    }
+    .hud-start-modal {
+      padding: 1.2rem !important;
+      max-width: 280px !important; /* Mas manipis na box */
+    }
+    .hud-start-modal h2 {
+      font-size: 1.2rem !important; /* Pinaliit na title */
+    }
+    .hud-start-modal p {
+      font-size: 0.75rem !important; /* Pinaliit na text */
+    }
+
+    /* --- 2. HP at XP Bar (Mas Pinaliit) --- */
+    .hud-bar-container {
+      width: 120px !important; /* Mas maikli */
+      height: 8px !important;  /* Mas manipis */
+    }
+    .hud-bar-text {
+      font-size: 0.5rem !important;
+      line-height: 8px !important;
+    }
+
+    /* --- 3. Buff Statuses (Pinaliit pa nang husto) --- */
+    .rpg-buff-container {
+      top: 20px !important; /* Mas itinaas dahil mas manipis na ang HP bar */
+      gap: 2px !important;
+      transform: translateX(-50%) scale(0.6) !important; /* Pinaliit sa 60% ng original size */
+    }
+
+    /* --- 4. Skills Hotbar (Skills Box sa Ibaba) --- */
+    .mmo-hotbar-container {
+      gap: 3px !important;
+      padding: 3px 4px !important;
+      bottom: 4px !important;
+    }
+    .mmo-hotbar-slot {
+      width: 28px !important;
+      height: 28px !important;
+      border-radius: 3px !important;
+    }
+    .mmo-hotbar-ult-slot {
+      width: 36px !important;
+      height: 36px !important;
+    }
+    .hotbar-icon {
+      font-size: 0.8rem !important;
+    }
+    .mmo-hotbar-ult-slot .hotbar-icon {
+      font-size: 0.95rem !important;
+    }
+    .hotbar-key-bind {
+      font-size: 0.4rem !important; /* Halos tuldok na lang para di humarang */
+      top: 1px !important;
+      left: 2px !important;
+    }
+    .mmo-hotbar-ult-slot .hotbar-key-bind {
+      font-size: 0.45rem !important;
+      left: 6px !important;
+    }
+    .hotbar-status-dot {
+      font-size: 0.35rem !important;
+    }
+    .hotbar-cooldown-overlay {
+      font-size: 0.7rem !important;
+    }
+    .mmo-hotbar-ult-slot .hotbar-cooldown-overlay {
+      font-size: 0.85rem !important;
+    }
+
+    /* --- 5. Hero Attributes (Stats) at Skills Set (Skill Tree) sa Gilid --- */
+    .rpg-stats-panel, .skill-tree-container, .coop-party-panel {
+      width: 135px !important; /* Mas manipis na panel */
+      padding: 4px !important;
+      gap: 2px !important;
+    }
+    .stats-header, .skill-tree-title {
+      font-size: 0.6rem !important;
+      padding-bottom: 2px !important;
+      margin-bottom: 2px !important;
+    }
+    .stats-row, .skill-row-btn, .coop-name {
+      font-size: 0.55rem !important; /* Mas maliliit na text */
+    }
+    .skill-row-btn {
+      padding: 3px 4px !important;
+    }
+    .skill-node-desc {
+      font-size: 0.5rem !important;
+      padding: 2px 3px !important;
+    }
+    
+    /* Toggle buttons sa gilid */
+    .stats-toggle-btn, .skill-tree-toggle-btn {
+      font-size: 0.55rem !important;
+      padding: 3px 5px !important;
+    }
+  }
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {

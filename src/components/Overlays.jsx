@@ -267,21 +267,55 @@ useEffect(() => {
         .lu-card-desc { font-size: 0.78rem; color: #94a3b8; font-family: monospace; margin-bottom: 24px; min-height: 2em; line-height: 1.3; }
         .lu-hotkey { font-size: 0.95rem; color: #fde047; font-weight: bold; font-family: monospace; opacity: 0.85; }
 
-        @media (max-width: 768px) {
-          .lu-cards-row {
-            gap: 12px;
+        @media (max-width: 840px) {
+          /* Compress Title and Headers */
+          .lu-wrapper {
+            padding: 10px !important;
           }
+          .lu-title {
+            font-size: 1.2rem !important; /* Mula 2.35rem pababa sa halos kalahati */
+            margin-bottom: 2px !important;
+          }
+          .lu-subtitle {
+            font-size: 0.55rem !important;
+            margin-bottom: 2px !important;
+          }
+          .lu-warning {
+            font-size: 0.5rem !important;
+            margin-bottom: 8px !important; /* Dikit na dikit na pababa */
+          }
+          
+          /* Compress Cards Layout */
+          .lu-cards-row {
+            gap: 6px !important; /* Tinanggal ang malaking gaps */
+          }
+          
+          /* Shrink Upgrade Cards */
           .lu-card {
-            width: 30%; 
-            padding: 16px 8px;
-            min-width: 140px;
+            width: 31% !important; /* Hatian ang screen sa tatlo */
+            min-width: 100px !important; /* Para hindi pumutok sa sobrang liit na screen */
+            padding: 8px !important; /* Manipis na padding */
+            border-radius: 6px !important; 
+          }
+          
+          /* Shrink Content Inside Cards */
+          .lu-icon {
+            font-size: 1.2rem !important; /* Mula 2.2rem */
+            margin-bottom: 4px !important;
+          }
+          .lu-card-title {
+            font-size: 0.6rem !important; /* Mula 1.15rem */
+            margin-bottom: 4px !important;
+            text-align: center;
           }
           .lu-card-desc {
-            font-size: 0.65rem;
-            margin-bottom: 8px;
+            font-size: 0.45rem !important; /* Mula 0.78rem */
+            margin-bottom: 4px !important;
+            text-align: center;
+            line-height: 1.1 !important;
           }
           .lu-hotkey {
-            display: none; 
+            display: none !important; /* Itago ang hotkeys sa mobile dahil touch screen ito */
           }
         }
 
@@ -663,6 +697,42 @@ useEffect(() => {
           }
           .council-tab-btn { padding: 8px !important; font-size: 0.75rem !important; }
           .council-scroll-logs, .lb-scroll-area { padding: 10px !important; margin-bottom: 10px !important; }
+        }
+
+        /* ==========================================================================
+           MOBILE PAUSE SCREEN FIX (ITINAAS AT PINALIIT)
+           ========================================================================== */
+        @media (max-width: 840px), (max-height: 540px) and (orientation: landscape) {
+          /* 🔥 Ito ang hihila sa Menu pataas imbis na sa gitna */
+          #pause-overlay {
+            align-items: flex-start !important; 
+            padding-top: 12vh !important;       
+          }
+          
+          /* 🔥 Ito ang magpapaliit sa mismong kahon */
+          .pause-panel {
+            width: 200px !important;            
+            padding: 12px 16px !important;      
+            margin-top: 10px !important;
+          }
+          
+          /* 🔥 Papaliitin ang text na "Paused" */
+          .pause-title {
+            font-size: 0.9rem !important;       
+            margin-bottom: 4px !important;
+          }
+          
+          /* 🔥 Papaliitin ang space ng divider line */
+          .pause-panel .mystic-divider {
+            margin: 8px 0 !important;
+          }
+          
+          /* 🔥 Papaliitin ang mga buttons sa loob ng Pause Menu */
+          .pause-panel .wizard-btn {
+            font-size: 0.65rem !important;      
+            padding: 6px 12px !important;       
+            margin-bottom: 6px !important;
+          }
         }
       `}</style>
 
@@ -1093,19 +1163,22 @@ useEffect(() => {
         </div>
       )}
 
-      {/* MATCH PAUSE OVERLAY */}
+{/* MATCH PAUSE OVERLAY */}
       {screen === 'pause' && (
-        <div className="overlay active">
-          <div className="panel wizard-panel" style={{ width: '320px' }}>
+        <div id="pause-overlay" className="overlay active">
+          
+          {/* TANGGALIN: style={{ width: '320px' }} */}
+          {/* IPALIT ITO: className="panel wizard-panel pause-panel" */}
+          <div className="panel wizard-panel pause-panel">
             <div className="panel-corner pc-tl" />
             <div className="panel-corner pc-tr" />
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⏸ Paused</div>
+            {/* Idinagdag ang pause-title na class */}
+            <div className="section-title pause-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⏸ Paused</div>
             <div className="divider mystic-divider" />
             
-            {/* RESUME BUTTON */}
             <button 
               className="btn wizard-btn" 
               onClick={() => {
@@ -1119,7 +1192,6 @@ useEffect(() => {
               Resume Trial
             </button>
             
-            {/* EXIT MATCH BUTTON */}
             <button 
               className="btn wizard-btn danger-theme" 
               onClick={() => {
