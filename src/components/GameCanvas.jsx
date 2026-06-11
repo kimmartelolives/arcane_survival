@@ -397,7 +397,7 @@ const focusStyles = `
   /* ELEMENTAL SIGILS CONTAINER */
   .elemental-sigils-container {
     position: absolute;
-    left: 12px;
+    right: 12px; /* CHANGED: Moved to the right side */
     top: 50%;
     transform: translateY(-50%);
     display: flex;
@@ -484,7 +484,7 @@ const focusStyles = `
     backdrop-filter: blur(4px);
   }
 
-  @media (max-width: 840px) {
+@media (max-width: 840px) {
     .mmo-hotbar-container {
       gap: 6px;
       padding: 4px 8px;
@@ -504,7 +504,7 @@ const focusStyles = `
     .elemental-sigils-container {
       gap: 6px;
       padding: 6px 4px;
-      left: 4px;
+      right: 4px; /* CHANGED: Mobile anchoring moved to the right */
     }
     .sigil-btn {
       width: 38px;
