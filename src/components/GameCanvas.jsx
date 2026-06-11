@@ -3659,40 +3659,44 @@ if (isHost || !isCoopActive) {
       if (screen === 'playing') {
 
         // CHEAT CODES GOD MODE + INSTANT SKILL UNLOCKS
-        if (e.key === '9') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             target.level = Math.max(target.level, 20);
-             target.maxHp += 50000;
-             target.hp = target.maxHp;
-             target.dmg += 15000;
-             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+        // if (e.key === '9') {
+        //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+        //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        //   if (target && !target.dead) {
+        //      target.level = Math.max(target.level, 20);
+        //      target.maxHp += 50000;
+        //      target.hp = target.maxHp;
+        //      target.dmg += 15000;
+        //      target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+        //      setPlayerLevel(target.level);
+        //   }
+        // }
 
-        if (e.key === '0') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             // 1. Maximize Level
-             target.level = Math.max(target.level, 99); 
+        // if (e.key === '0') {
+        //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+        //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        //   if (target && !target.dead) {
+        //      // 1. Maximize Level
+        //      target.level = Math.max(target.level, 99); 
              
-             // 2. Godlike HP & Damage
-             target.maxHp = 999999;
-             target.hp = target.maxHp;
-             target.dmg = 999999; 
+        //      // 2. Godlike HP & Damage
+        //      target.maxHp = 999999;
+        //      target.hp = target.maxHp;
+        //      target.dmg = 999999; 
              
-             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-             target.speed = 800;        // Max Movement Speed Cap
-             target.shootRate = 0.15;   // Max Rapid Fire Cap
-             target.multiShot = 20;      // Max Split Bolt Cap
+        //      // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+        //      target.speed = 800;        // Max Movement Speed Cap
+        //      target.shootRate = 0.15;   // Max Rapid Fire Cap
+        //      target.multiShot = 20;     // Max Split Bolt Cap
 
-             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+        //      // 4. Max out NEW STATS: Crit and Defense
+        //      target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+        //      target.baseDef = 60;       // Max Defense Block Cap (60%)
+
+        //      target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+        //      setPlayerLevel(target.level);
+        //   }
+        // }
         // END CHEAT CODES
 
 
