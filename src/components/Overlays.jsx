@@ -551,21 +551,27 @@ useEffect(() => {
           line-height: 1.5; font-family: monospace; white-space: pre-line;
         }
 
-        /* Leaderboard Ancient Grid Layout */
-        .witch-table { width: 100%; border-collapse: collapse; font-family: 'Georgia', serif; color: #cbd5e1; margin-top: 10px; }
-        /* Na-update para maging Sticky ang Header */
+          .witch-table { 
+          width: 100%; 
+          border-collapse: separate !important; /* 🔥 Iniba ito para mas solid ang sticky header */
+          border-spacing: 0;
+          font-family: 'Georgia', serif; 
+          color: #cbd5e1; 
+          margin-top: 0px; 
+        }
+
         .witch-table th { 
           position: sticky; 
           top: 0; 
           z-index: 10; 
-          background: #110624 !important; /* 🔥 Ginawang solid dark imbis na transparent para hindi maghalo ang text kapag nag-scroll */
+          background: #110624 !important; 
           color: #ffe6a3; 
           padding: 12px; 
           font-size: 0.8rem; 
           letter-spacing: 0.1em; 
           text-transform: uppercase; 
-          border-bottom: 2px solid rgba(197, 160, 89, 0.3); 
-          box-shadow: 0 4px 6px rgba(0,0,0,0.5); /* 🔥 Dagdag anino para mukhang naka-angat */
+          /* 🔥 Gumamit ng box-shadow imbes na border-bottom para walang gap na pumapasok */
+          box-shadow: 0 2px 0 rgba(197, 160, 89, 0.3), 0 4px 6px rgba(0,0,0,0.5); 
         }
         .witch-table td { padding: 12px; border-bottom: 1px solid rgba(124, 58, 237, 0.15); font-size: 0.88rem; }
         .witch-table tr:hover td { background: rgba(124, 58, 237, 0.1); color: #ffffff; }
@@ -646,7 +652,8 @@ useEffect(() => {
           border: 1px solid rgba(197, 160, 89, 0.2) !important;
           border-radius: 6px;
           overflow-y: auto;
-          margin-bottom: 20px !important; /* 🔥 Ito ang magbibigay ng permanenteng spacing sa itaas ng button */
+          padding: 0 !important; /* 🔥 NA-FIX ANG BUTAS: Inalis ang padding para sagad ang header sa taas */
+          margin-bottom: 20px !important;
         }
 
         /* Tanggalin ang margin-top auto dahil si flex: 1 na sa itaas ang bahalang magtulak pababa */
@@ -654,10 +661,10 @@ useEffect(() => {
           flex-shrink: 0;
         }
 
-        /* ==========================================================================
-           MOBILE LANDSCAPE HEIGHT COMPRESSION FIX & SAFARI UI FIX
+          /* ==========================================================================
+           MOBILE LANDSCAPE EXTREME COMPRESSION FIX (V3 - SAFARI BARS COMPLIANT)
            ========================================================================== */
-        @media (max-height: 540px) and (orientation: landscape) {
+        @media (max-width: 932px) and (orientation: landscape) {
           /* 🔥 iOS Safari Global Overlay Fix */
           .overlay {
             position: fixed !important;
@@ -665,38 +672,48 @@ useEffect(() => {
             height: -webkit-fill-available !important; 
           }
 
-          .wizard-panel {
-            padding: 8px 16px !important;  
-            max-height: 85vh !important;    
-            margin-top: 25px !important; /* 🔥 Tulak pababa para maka-iwas sa Safari URL bar */
+          /* 🔥 NA-FIX PARA SA SAFARI BARS (IMG_1163 & IMG_1164 FIX):
+             Binabaan ang max-height sa 80svh/80vh para piliting pumasok sa loob ng screen 
+             ang Title at ang mga bottom buttons nang hindi sila napuputol. */
+          .wizard-panel, .council-news-box {
+            width: 96vw !important;
+            min-width: 0 !important;      
+            min-height: 0 !important;     
+            height: auto !important;      
+            max-height: 80svh !important;  /* Bawas ang sukat ng Safari Address Bar */
+            max-height: 80vh !important;   /* Fallback para sa mga lumang browser */
+            padding: 6px 12px !important;  /* Mas pinalit pa ang padding para sa hininga ng UI */
+            margin-top: 0px !important; 
             overflow-y: auto !important;    
           }
           
-          /* Title element scale modifications */
+          /* Paliitin ang text sa Main Menu para hindi maputol sa taas at baba */
           .menu-title { font-size: 1.1rem !important; line-height: 1 !important; margin-bottom: 0 !important; }
-          .menu-sub { font-size: 0.35rem !important; letter-spacing: 0.18em !important; margin-bottom: 4px !important; }
+          .menu-sub { font-size: 0.45rem !important; letter-spacing: 0.18em !important; margin-bottom: 4px !important; }
+
+          /* Paliitin ang mga Titles at Texts */
+          .section-title { font-size: 0.9rem !important; margin-bottom: 4px !important; }
+          .lb-description { font-size: 0.55rem !important; margin: 0 0 6px 0 !important; line-height: 1.2 !important; }
+          .council-tab-btn { padding: 6px !important; font-size: 0.65rem !important; }
           
-          /* Divider vector compressed rules */
+          /* PALIITIN ANG TABLE SA LEADERBOARD */
+          .lb-scroll-area { margin-bottom: 6px !important; padding: 0 !important; }
+          .witch-table th { padding: 6px !important; font-size: 0.55rem !important; }
+          .witch-table td { padding: 6px !important; font-size: 0.65rem !important; }
+          
+          /* Paliitin ang Medals/Top 3 sa Leaderboard para magkasya */
+          .gold-leader td { font-size: 0.85rem !important; padding: 6px !important; }
+          .silver-leader td { font-size: 0.8rem !important; padding: 6px !important; }
+          .bronze-leader td { font-size: 0.75rem !important; padding: 6px !important; }
+          
+          /* Paliitin ang iba pang elements tulad ng buttons, inputs, at dividers */
           .mystic-divider { margin: 6px 0 !important; }
           .mystic-divider::after { font-size: 0.65rem !important; padding: 0 8px !important; }
-          
-          /* Field labels alignment configurations */
           .wizard-field-label { font-size: 0.6rem !important; margin-bottom: 4px !important; }
           .wizard-field-input { padding: 4px 10px !important; font-size: 0.75rem !important; margin-bottom: 6px !important; }
-          
-          /* Action button dimensions reduction */
-          .wizard-btn { padding: 6px 14px !important; font-size: 0.7rem !important; margin-bottom: 4px !important; }
-          
-          /* Bottom kofi anchor node scaling alignment */
+          .wizard-btn { padding: 6px 12px !important; font-size: 0.65rem !important; margin-bottom: 4px !important; }
           .mystic-tribute-container { margin-top: 4px !important; }
           .mystic-tribute-link { font-size: 0.55rem !important; }
-
-          /* Oversized Modals */
-          .council-news-box, .wizard-panel[style*="width: 760px"] {
-            width: 96vw !important; height: 96vh !important; padding: 14px !important; margin-top: 15px !important;
-          }
-          .council-tab-btn { padding: 8px !important; font-size: 0.75rem !important; }
-          .council-scroll-logs, .lb-scroll-area { padding: 10px !important; margin-bottom: 10px !important; }
         }
 
         /* ==========================================================================
@@ -734,6 +751,27 @@ useEffect(() => {
             margin-bottom: 6px !important;
           }
         }
+
+        /* ==========================================================================
+             IN-GAME HUD & PAUSE BUTTON COMPRESSION (IMG_47cc81 FIX)
+             ========================================================================== */
+          /* Targetin ang pause button o anumang button sa itaas ng HUD */
+          .pause-btn, .hud-pause-btn, .game-hud-top button, .game-hud-top div[role="button"] {
+            padding: 4px 10px !important;    /* Bawasan ang dambuhalang padding */
+            font-size: 0.75rem !important;   /* Paliitin ang font/emoji size */
+            line-height: 1 !important;
+            min-width: auto !important;       /* Tanggalin ang desktop width limits */
+            height: auto !important;          /* Hayaan siyang sumunod sa maliit na padding */
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+
+          /* Siguraduhin ding hindi dambuhala ang buong top HUD bar sa mobile layout */
+          .game-hud-top {
+            padding: 4px 12px !important;
+            font-size: 0.8rem !important;
+          }
       `}</style>
 
 
