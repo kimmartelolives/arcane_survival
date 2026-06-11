@@ -956,6 +956,9 @@ const focusStyles = `
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
   const canvasRef = useRef(null);
   const workerRef = useRef(null);
+
+  const joyBaseRef = useRef(null);
+  const joyKnobRef = useRef(null);
   
   const [showPartyList, setShowPartyList] = useState(true);
   
@@ -3558,20 +3561,26 @@ const handlePointerDown = (e) => {
     if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
     const eng = engineRef.current;
     
-    // Payagan lang mag-start ang joystick kung wala pang active at nasa left side pumindot
     if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
       eng.joystick.active = true;
-      eng.joystick.pointerId = e.pointerId; 
+      eng.joystick.pointerId = e.pointerId ?? 'touch'; 
       eng.joystick.startX = e.clientX;
       eng.joystick.startY = e.clientY;
       eng.joystick.curX = e.clientX;
       eng.joystick.curY = e.clientY;
       
-      // FIX PARA SA IPAD: Gamitin ang e.currentTarget imbes na e.target
-      // para i-lock ang touch sa buong screen wrapper, hindi lang sa maliit na canvas.
-      try { 
-        e.currentTarget.setPointerCapture(e.pointerId); 
-      } catch(err) {}
+      // 🟢 IPAKITA ANG VISUAL JOYSTICK KUNG SAAN PUMINDOT
+      if (joyBaseRef.current && joyKnobRef.current) {
+        joyBaseRef.current.style.display = 'block';
+        joyBaseRef.current.style.left = `${e.clientX}px`;
+        joyBaseRef.current.style.top = `${e.clientY}px`;
+        
+        joyKnobRef.current.style.display = 'block';
+        joyKnobRef.current.style.left = `${e.clientX}px`;
+        joyKnobRef.current.style.top = `${e.clientY}px`;
+      }
+
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch(err) {}
     }
   };
 
@@ -3579,8 +3588,8 @@ const handlePointerDown = (e) => {
     const eng = engineRef.current;
     if (!eng.joystick.active) return;
     
-    // I-check kung ito yung tamang daliri na nag-start ng joystick
-    if (e.pointerId !== eng.joystick.pointerId) return;
+    const currentId = e.pointerId ?? 'touch';
+    if (eng.joystick.pointerId !== 'touch' && currentId !== eng.joystick.pointerId) return;
 
     eng.joystick.curX = e.clientX;
     eng.joystick.curY = e.clientY;
@@ -3590,6 +3599,9 @@ const handlePointerDown = (e) => {
     const dist = Math.hypot(dx, dy);
     const maxRadius = 50; 
 
+    let knobX = e.clientX;
+    let knobY = e.clientY;
+
     if (dist === 0) {
       eng.joystick.mx = 0;
       eng.joystick.my = 0;
@@ -3598,6 +3610,18 @@ const handlePointerDown = (e) => {
       const intensity = Math.min(dist / maxRadius, 1);
       eng.joystick.mx = Math.cos(angle) * intensity;
       eng.joystick.my = Math.sin(angle) * intensity;
+      
+      // 🟢 PIGILAN ANG KNOB NA LUMABAS SA BILOG (Clamp)
+      if (dist > maxRadius) {
+        knobX = eng.joystick.startX + Math.cos(angle) * maxRadius;
+        knobY = eng.joystick.startY + Math.sin(angle) * maxRadius;
+      }
+    }
+
+    // 🟢 PAGALAWIN ANG JOYSTICK KNOB
+    if (joyKnobRef.current) {
+      joyKnobRef.current.style.left = `${knobX}px`;
+      joyKnobRef.current.style.top = `${knobY}px`;
     }
   };
 
@@ -3605,17 +3629,18 @@ const handlePointerDown = (e) => {
     const eng = engineRef.current;
     if (!eng.joystick.active) return;
 
-    // I-stop lang ang joystick kung yung inangat na daliri ay yung ginagamit sa joystick
-    if (e.pointerId === eng.joystick.pointerId) {
+    const currentId = e?.pointerId ?? 'touch';
+    if (eng.joystick.pointerId === 'touch' || currentId === eng.joystick.pointerId) {
       eng.joystick.active = false;
       eng.joystick.pointerId = null;
       eng.joystick.mx = 0;
       eng.joystick.my = 0;
       
-      // FIX PARA SA IPAD: e.currentTarget ang i-release
-      try { 
-        e.currentTarget.releasePointerCapture(e.pointerId); 
-      } catch(err) {}
+      // 🟢 ITAGO ANG JOYSTICK PAG INANGAT ANG DALIRI
+      if (joyBaseRef.current) joyBaseRef.current.style.display = 'none';
+      if (joyKnobRef.current) joyKnobRef.current.style.display = 'none';
+
+      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(err) {}
     }
   };
 
@@ -3640,6 +3665,28 @@ const handlePointerDown = (e) => {
 </div>
       <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
+
+        {/* VISUAL JOYSTICK ELEMENTS */}
+        <div 
+          ref={joyBaseRef}
+          style={{
+            position: 'fixed', display: 'none', width: '110px', height: '110px',
+            borderRadius: '50%', background: 'rgba(11, 8, 38, 0.5)',
+            border: '2px solid rgba(139, 92, 246, 0.4)', pointerEvents: 'none', zIndex: 40,
+            transform: 'translate(-50%, -50%)', backdropFilter: 'blur(2px)'
+          }}
+        />
+        <div 
+          ref={joyKnobRef}
+          style={{
+            position: 'fixed', display: 'none', width: '45px', height: '45px',
+            borderRadius: '50%', background: 'radial-gradient(circle, rgba(167, 139, 250, 0.9) 0%, rgba(109, 40, 217, 0.7) 100%)',
+            boxShadow: '0 0 15px rgba(139, 92, 246, 0.6), inset 0 0 5px rgba(255,255,255,0.5)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+            pointerEvents: 'none', zIndex: 41,
+            transform: 'translate(-50%, -50%)'
+          }}
+        />
 
         {isCoop && (isHostInstance ? engineRef.current.p2 : engineRef.current.p) && showPartyList && (
           <div className="coop-party-panel">
