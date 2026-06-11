@@ -3555,57 +3555,67 @@ const handleResize = () => {
   }, [screen]);
 
 const handlePointerDown = (e) => {
-  if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
-  const eng = engineRef.current;
-  
-  // FIX: Track the pointerId and ensure joystick isn't already active
-  if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
-    eng.joystick.active = true;
-    eng.joystick.pointerId = e.pointerId; // <-- We save the specific finger ID here
-    eng.joystick.startX = e.clientX;
-    eng.joystick.startY = e.clientY;
+    if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
+    const eng = engineRef.current;
+    
+    // Payagan lang mag-start ang joystick kung wala pang active at nasa left side pumindot
+    if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
+      eng.joystick.active = true;
+      // Isave ang specific na ID ng daliri. Fallback sa 'touch' kung hindi supported
+      eng.joystick.pointerId = e.pointerId ?? 'touch'; 
+      eng.joystick.startX = e.clientX;
+      eng.joystick.startY = e.clientY;
+      eng.joystick.curX = e.clientX;
+      eng.joystick.curY = e.clientY;
+      
+      // I-lock ang pointer sa screen para hindi maputol ang drag kahit saan magpunta ang daliri!
+      try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    const eng = engineRef.current;
+    if (!eng.joystick.active) return;
+    
+    // I-check kung ito yung tamang daliri na nag-start ng joystick
+    const currentId = e.pointerId ?? 'touch';
+    if (eng.joystick.pointerId !== 'touch' && currentId !== eng.joystick.pointerId) return;
+
     eng.joystick.curX = e.clientX;
     eng.joystick.curY = e.clientY;
-  }
-};
 
-const handlePointerMove = (e) => {
-  const eng = engineRef.current;
-  
-  // FIX: Ignore movement if the ID doesn't match the joystick finger
-  if (!eng.joystick.active || e.pointerId !== eng.joystick.pointerId) return;
+    const dx = eng.joystick.curX - eng.joystick.startX;
+    const dy = eng.joystick.curY - eng.joystick.startY;
+    const dist = Math.hypot(dx, dy);
+    const maxRadius = 50; 
 
-  eng.joystick.curX = e.clientX;
-  eng.joystick.curY = e.clientY;
+    if (dist === 0) {
+      eng.joystick.mx = 0;
+      eng.joystick.my = 0;
+    } else {
+      const angle = Math.atan2(dy, dx);
+      const intensity = Math.min(dist / maxRadius, 1);
+      eng.joystick.mx = Math.cos(angle) * intensity;
+      eng.joystick.my = Math.sin(angle) * intensity;
+    }
+  };
 
-  const dx = eng.joystick.curX - eng.joystick.startX;
-  const dy = eng.joystick.curY - eng.joystick.startY;
-  const dist = Math.hypot(dx, dy);
-  const maxRadius = 50; 
+  const handlePointerUp = (e) => {
+    const eng = engineRef.current;
+    if (!eng.joystick.active) return;
 
-  if (dist === 0) {
-    eng.joystick.mx = 0;
-    eng.joystick.my = 0;
-  } else {
-    const angle = Math.atan2(dy, dx);
-    const intensity = Math.min(dist / maxRadius, 1);
-    eng.joystick.mx = Math.cos(angle) * intensity;
-    eng.joystick.my = Math.sin(angle) * intensity;
-  }
-};
-
-// FIX: Make sure to pass the event (e) parameter here
-const handlePointerUp = (e) => {
-  const eng = engineRef.current;
-  
-  // FIX: Only stop the joystick if the lifted finger is the joystick finger
-  if (eng.joystick.active && e.pointerId === eng.joystick.pointerId) {
-    eng.joystick.active = false;
-    eng.joystick.pointerId = null;
-    eng.joystick.mx = 0;
-    eng.joystick.my = 0;
-  }
-};
+    // I-stop lang ang joystick kung yung inangat na daliri ay yung ginagamit sa joystick
+    const currentId = e?.pointerId ?? 'touch';
+    if (eng.joystick.pointerId === 'touch' || currentId === eng.joystick.pointerId) {
+      eng.joystick.active = false;
+      eng.joystick.pointerId = null;
+      eng.joystick.mx = 0;
+      eng.joystick.my = 0;
+      
+      // I-release yung lock natin sa daliri
+      try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+  };
 
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
