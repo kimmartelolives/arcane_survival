@@ -3863,7 +3863,7 @@ const handlePointerDown = (e) => {
 
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
-  
+  //
   return (
 <div 
   id="wrap"
