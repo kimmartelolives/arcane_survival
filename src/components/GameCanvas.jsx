@@ -3913,7 +3913,7 @@ const handlePointerUp = () => {
               )}
             </div>
 
-            {playerLevel >= 13 && (
+            {playerLevel >= 16 && (
               <>
                 <div 
                   className="mmo-hotbar-ult-slot"
@@ -4068,7 +4068,7 @@ const handlePointerUp = () => {
               </>
             )}
 
-            {playerLevel >= 12 && (
+            {playerLevel >= 16 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
                   <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 ULTIMATE SPELLS (LV 12+)</span>
