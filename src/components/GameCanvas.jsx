@@ -490,6 +490,40 @@ const focusStyles = `
     backdrop-filter: blur(4px);
   }
 
+  /* ADD THIS INSIDE focusStyles */
+  .hp-vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 5; /* Above canvas, below UI */
+    transition: opacity 0.3s ease;
+    opacity: 0;
+  }
+  .hp-vignette.warning {
+    opacity: 1;
+    animation: pulse-warning 1.5s infinite alternate;
+  }
+  .hp-vignette.danger {
+    opacity: 1;
+    animation: pulse-danger 0.5s infinite alternate;
+  }
+  @keyframes pulse-warning {
+    0% { box-shadow: inset 0 0 50px rgba(245, 158, 11, 0.1); }
+    100% { box-shadow: inset 0 0 120px rgba(245, 158, 11, 0.45); }
+  }
+  @keyframes pulse-danger {
+    0% { 
+      box-shadow: inset 0 0 80px rgba(239, 68, 68, 0.3); 
+      border: 2px solid rgba(239, 68, 68, 0); 
+      background: rgba(239, 68, 68, 0); 
+    }
+    100% { 
+      box-shadow: inset 0 0 180px rgba(239, 68, 68, 0.7); 
+      border: 4px solid rgba(239, 68, 68, 0.5); 
+      background: rgba(239, 68, 68, 0.1); 
+    }
+  }
+
 @media (max-width: 840px) {
     .mmo-hotbar-container {
       gap: 6px;
@@ -962,6 +996,7 @@ const focusStyles = `
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
   const canvasRef = useRef(null);
   const workerRef = useRef(null);
+  const vignetteRef = useRef(null);
 
   const joyBaseRef = useRef(null);
   const joyKnobRef = useRef(null);
@@ -3075,13 +3110,27 @@ if (isHost || !isCoopActive) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
           waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
         }
-        if (localTarget) {
+if (localTarget) {
           const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
           if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
           if (hpTextRef.current) hpTextRef.current.textContent = `HP ${Math.max(0, Math.ceil(localTarget.hp))}/${localTarget.maxHp}`;
+          
           const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
           if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
           if (xpTextRef.current) xpTextRef.current.textContent = `LV${localTarget.level} XP ${localTarget.xp}/${localTarget.xpNext}`;
+
+          // 👇 IDAGDAG ANG BUONG BLOCK NA ITO PARA SA VIGNETTE GLOW
+          if (vignetteRef.current) {
+            const hpRatio = localTarget.hp / localTarget.maxHp;
+            if (hpRatio <= 0.2 && !localTarget.dead) {
+              if (vignetteRef.current.className !== 'hp-vignette danger') vignetteRef.current.className = 'hp-vignette danger';
+            } else if (hpRatio <= 0.5 && !localTarget.dead) {
+              if (vignetteRef.current.className !== 'hp-vignette warning') vignetteRef.current.className = 'hp-vignette warning';
+            } else {
+              if (vignetteRef.current.className !== 'hp-vignette') vignetteRef.current.className = 'hp-vignette';
+            }
+          }
+          // 👆 HANGGANG DITO
         }
       }
 
@@ -3833,6 +3882,7 @@ const handlePointerDown = (e) => {
 </div>
       <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
+        <div ref={vignetteRef} className="hp-vignette"></div>
 
         {/* VISUAL JOYSTICK ELEMENTS */}
         <div 
