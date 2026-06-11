@@ -1,20 +1,84 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 // ==========================================================================
-// 🔥 ULTIMATE SPELLS SOUND EFFECTS SINGLETON MATRIX
+// 🔥 BULLETPROOF AUDIO POOL MANAGER
 // ==========================================================================
-const SOUND_COLLAPSE_URL  = '/collapse.mp3'; // Space shatter placeholder
-const SOUND_INSTINCT_URL  = '/arcane.mp3';   // Electric spark surge placeholder
-const SOUND_REVIVAL_URL   = '/resu.mp3';            // Celestial holy chord placeholder
+class SoundManager {
+  constructor() {
+    this.pools = {
+      collapse: [],
+      instinct: [],
+      revival: [],
+      // 👇 DINAGDAG: 5 Elemental Sigil Pools
+      flare: [],
+      wave: [],
+      fissure: [],
+      lightning: [],
+      ice: []
+    };
+    this.unlocked = false;
 
+    const SFX_MAP = {
+      collapse: '/collapse.mp3',
+      instinct: '/arcane.mp3',
+      revival: '/resu.mp3',
+      // 👇 DINAGDAG: Mga URLs para sa Sigils
+      flare: '/flare.mp3',
+      wave: '/wave.mp3',
+      fissure: '/fissure.mp3',
+      lightning: '/lightning.mp3',
+      ice: '/ice.mp3'
+    };
 
-if (typeof window !== 'undefined' && !window.arcaneSfx) {
-  window.arcaneSfx = {
-    collapse: new Audio(SOUND_COLLAPSE_URL),
-    instinct: new Audio(SOUND_INSTINCT_URL),
-    revival: new Audio(SOUND_REVIVAL_URL)
-  };
+    if (typeof window !== 'undefined') {
+      for (const [key, src] of Object.entries(SFX_MAP)) {
+        // Gumawa ng 3 kopya kada tunog para pwede mag-overlap
+        for (let i = 0; i < 3; i++) {
+          const audio = new Audio(src);
+          audio.load();
+          this.pools[key].push(audio);
+        }
+      }
+    }
+  }
+
+  unlockAll() {
+    if (this.unlocked) return;
+    this.unlocked = true;
+    // Lihim na i-play at i-pause lahat ng tunog para i-whitelist ng browser
+    Object.values(this.pools).forEach(pool => {
+      pool.forEach(audio => {
+        audio.volume = 0; // i-mute para di marinig ang pag-unlock
+        const p = audio.play();
+        if (p !== undefined) {
+          p.then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = 1; // Ibalik ang volume
+          }).catch(() => {});
+        }
+      });
+    });
+  }
+
+  play(type) {
+    if (typeof window === 'undefined' || localStorage.getItem('arcane_muted') === 'true') return;
+    const pool = this.pools[type];
+    if (pool) {
+      // Hanapin yung kopyang hindi kasalukuyang tumutunog
+      let audio = pool.find(a => a.paused || a.ended);
+      if (!audio) audio = pool[0]; // Kung tumutunog lahat, i-force override yung una
+
+      audio.currentTime = 0;
+      audio.volume = 1.0;
+      audio.play().catch(e => console.warn("Browser blocked SFX:", e));
+    }
+  }
 }
+
+// Global attachment para hindi mamatay tuwing nagre-render ang React
+window.ArcaneSoundManager = window.ArcaneSoundManager || new SoundManager();
+const playSfx = (type) => window.ArcaneSoundManager.play(type);
 
 const W = 1280;
 const H = 720;
@@ -334,6 +398,78 @@ const focusStyles = `
     border-left: 2px solid #7c3aed;
   }
 
+  /* ELEMENTAL SIGILS CONTAINER (LEFT SIDE) */
+  .elemental-sigils-container {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 55;
+    background: rgba(11, 8, 38, 0.8);
+    padding: 10px 8px;
+    border: 2px solid #38bdf8;
+    border-radius: 8px;
+    box-shadow: 0 0 25px rgba(56, 189, 248, 0.3);
+    backdrop-filter: blur(4px);
+    pointer-events: auto;
+  }
+  .sigil-btn {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    cursor: pointer;
+    border: 2px solid;
+    background: #0f0726;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+  }
+  .sigil-btn:hover { transform: scale(1.1); }
+  .sigil-fire { border-color: #ef4444; text-shadow: 0 0 10px #ef4444; }
+  .sigil-water { border-color: #3b82f6; text-shadow: 0 0 10px #3b82f6; }
+  .sigil-earth { border-color: #f59e0b; text-shadow: 0 0 10px #f59e0b; }
+  .sigil-lightning { border-color: #c084fc; text-shadow: 0 0 10px #c084fc; }
+  .sigil-ice { border-color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
+  
+  .sigil-cd-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: bold;
+    font-family: monospace;
+    font-size: 1.1rem;
+  }
+  
+  .sigil-title {
+     font-size: 0.5rem;
+     position: absolute;
+     bottom: -16px;
+     color: #fff;
+     white-space: nowrap;
+     font-family: monospace;
+     text-align: center;
+     background: rgba(0,0,0,0.8);
+     padding: 2px 4px;
+     border-radius: 4px;
+     opacity: 0;
+     transition: opacity 0.2s;
+     pointer-events: none;
+     z-index: 100;
+  }
+  .sigil-btn:hover .sigil-title { opacity: 1; }
+
   .mmo-hotbar-container {
     position: absolute;
     bottom: 14px;
@@ -368,6 +504,16 @@ const focusStyles = `
     }
     .hotbar-name {
       display: none; 
+    }
+    .elemental-sigils-container {
+      gap: 6px;
+      padding: 6px 4px;
+      left: 4px;
+    }
+    .sigil-btn {
+      width: 38px;
+      height: 38px;
+      font-size: 1.2rem;
     }
   }
   .mmo-hotbar-slot {
@@ -709,12 +855,6 @@ const focusStyles = `
       margin-left: -20px !important; 
     }
 
-    /* Pinaliit ang tactile overlay boundaries ng Pause engine selector */
-    .game-hud-top button {
-      font-size: 0.65rem !important;
-      padding: 6px 12px !important;
-    }
-
     /* Inayos at pinaliit ang operational wave tracking variables */
     .game-hud-right-group div {
       font-size: 0.85rem !important;
@@ -739,6 +879,12 @@ const focusStyles = `
     }
     .hud-start-modal p {
       font-size: 0.75rem !important; /* Pinaliit na text */
+    }
+
+    .game-hud-top button {
+    font-size: 0.5rem !important;  /* Reduces text size */
+    padding: 4px 8px !important;   /* Tighter inner padding */
+    border-width: 1px !important;  /* Optional: Thinner border for a cleaner mobile look */
     }
 
     /* --- 2. HP at XP Bar (Mas Pinaliit) --- */
@@ -873,7 +1019,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     vacuumSlash: { learned: false, enabled: true, cd: 0 },
     arcaneCollapse: { learned: false, enabled: true, cd: 0 },
     arcaneInstinct: { learned: false, enabled: true, cd: 0, duration: 0, autoTimer: 0 },
-    arcaneResurrection: { learned: false, enabled: true, cd: 0 }
+    arcaneResurrection: { learned: false, enabled: true, cd: 0 },
+    // ELEMENTAL SIGILS
+    flareInferno: { learned: true, enabled: true, cd: 0 },
+    tidalWave: { learned: true, enabled: true, cd: 0 },
+    fissureSlam: { learned: true, enabled: true, cd: 0 },
+    lightningSurge: { learned: true, enabled: true, cd: 0 },
+    iceStorm: { learned: true, enabled: true, cd: 0 }
   });
 
   const [skillsState, setSkillsState] = useState(initSkills());
@@ -883,14 +1035,14 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     gameStarted: false, screenShake: 0,
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
+    tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p1Render: { x: 300, y: 280 },
     p2Render: { x: 600, y: 280 },
     p2History: [],
-    keys: {},
-  joystick: { active: false, startX: 0, startY: 0, curX: 0, curY: 0, mx: 0, my: 0 }
+    joystick: { active: false, startX: 0, startY: 0, curX: 0, curY: 0, mx: 0, my: 0 }
   });
 
   // --- COMPONENT SCOPED ABILITIES ---
@@ -948,6 +1100,102 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   };
 
+  const castElementalSigil = (sigilType, forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    if (!target || target.dead || target.level < 8) return;
+
+    if (!target.skills) target.skills = initSkills();
+    if (!target.skills[sigilType]) target.skills[sigilType] = { learned: true, enabled: true, cd: 0 };
+    if (target.skills[sigilType].cd > 0) return;
+
+    target.skills[sigilType].cd = 40.0; // 40 seconds cooldown for all Sigils
+    eng.screenShake = 0.6;
+
+    // 🔥 PLAY ELEMENTAL SOUND EFFECT
+    const sigilSfxMap = {
+      flareInferno: 'flare',
+      tidalWave: 'wave',
+      fissureSlam: 'fissure',
+      lightningSurge: 'lightning',
+      iceStorm: 'ice'
+    };
+    if (sigilSfxMap[sigilType]) {
+      playSfx(sigilSfxMap[sigilType]);
+    }
+
+    if (!eng.tornados) eng.tornados = [];
+
+    if (!eng.tornados) eng.tornados = [];
+    if (!eng.waves) eng.waves = [];
+    if (!eng.fissures) eng.fissures = [];
+    if (!eng.lightnings) eng.lightnings = [];
+    if (!eng.iceStorms) eng.iceStorms = [];
+
+    if (sigilType === 'flareInferno') {
+      target.chatBubble = { text: "FLARE INFERNO!", life: 1.5 };
+      eng.tornados.push({ x: target.x, y: target.y, life: 5.0, vx: (Math.random()-0.5)*150, vy: (Math.random()-0.5)*150, r: 80 });
+    } else if (sigilType === 'tidalWave') {
+      target.chatBubble = { text: "TIDAL WAVE!", life: 1.5 };
+      eng.waves.push({ x: -200, y: H/2, vx: 450, life: 5.0, width: 300 });
+    } else if (sigilType === 'fissureSlam') {
+      target.chatBubble = { text: "FISSURE SLAM!", life: 1.5 };
+      const angle = Math.random() * Math.PI * 2;
+      eng.fissures.push({ x: target.x, y: target.y, angle, length: W, life: 1.5 });
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      for (const e of eng.enemies) {
+        const dx = e.x - target.x, dy = e.y - target.y;
+        const proj = dx * cos + dy * sin;
+        const perp = Math.abs(dx * sin - dy * cos); 
+        if (proj > 0 && perp < 60) {
+           e.hp -= 80;
+           e.stunnedTime = 5.0;
+           e.flash = 0.5;
+           if(e.hp <= 0) e.deadTrigger = true;
+        }
+      }
+    } else if (sigilType === 'lightningSurge') {
+      target.chatBubble = { text: "LIGHTNING SURGE!", life: 1.5 };
+      let pts = [{x: target.x, y: target.y}];
+      let current = target;
+      let hits = new Set();
+      for (let i = 0; i < 8; i++) {
+        let best = null, minDist = 400;
+        for (const e of eng.enemies) {
+          if (!hits.has(e)) {
+            const d = Math.hypot(e.x - current.x, e.y - current.y);
+            if (d < minDist) { minDist = d; best = e; }
+          }
+        }
+        if (best) {
+          hits.add(best);
+          pts.push({x: best.x, y: best.y});
+          current = best;
+          best.hp -= 200;
+          best.stunnedTime = 1.0;
+          best.flash = 0.5;
+          if (best.hp <= 0) best.deadTrigger = true;
+        } else break;
+      }
+      if (pts.length > 1) eng.lightnings.push({ pts, life: 0.6 });
+    } else if (sigilType === 'iceStorm') {
+      target.chatBubble = { text: "ICE STORM!", life: 1.5 };
+      eng.iceStorms.push({ x: target.x, y: target.y, radius: 250, life: 6.0 });
+    }
+
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_sigil', { sigilType });
+    }
+
+    if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      setSkillsState({ ...target.skills });
+    }
+  };
+
   const castArcaneCollapseUltimate = (forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng) return;
@@ -964,10 +1212,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     if (target.skills.arcaneCollapse.cd > 0) return;
 
-    if (window.arcaneSfx && localStorage.getItem('arcane_muted') !== 'true') {
-      window.arcaneSfx.collapse.currentTime = 0;
-      window.arcaneSfx.collapse.play().catch(()=>{});
-    }
+    playSfx('collapse');
 
     target.skills.arcaneCollapse.cd = 30.0;
     eng.screenShake = 0.8;
@@ -1039,10 +1284,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
     if (target.skills.arcaneInstinct.cd > 0) return;
 
-    if (window.arcaneSfx && localStorage.getItem('arcane_muted') !== 'true') {
-      window.arcaneSfx.instinct.currentTime = 0;
-      window.arcaneSfx.instinct.play().catch(()=>{});
-    }
+    playSfx('instinct');
 
     target.skills.arcaneInstinct.cd = 45.0;
     target.skills.arcaneInstinct.duration = 10.0;
@@ -1121,10 +1363,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     // Check Cooldown
     if (caster.skills.arcaneResurrection.cd > 0) return;
 
-    if (window.arcaneSfx && localStorage.getItem('arcane_muted') !== 'true') {
-      window.arcaneSfx.revival.currentTime = 0;
-      window.arcaneSfx.revival.play().catch(()=>{});
-    }
+    playSfx('revival');
 
     // 🛑 COST APPLICATION (The Forbidden Sacrifice)
     caster.skills.arcaneResurrection.cd = 300.0;
@@ -1195,6 +1434,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     window.castArcaneCollapseUltimate = castArcaneCollapseUltimate;
     window.castArcaneInstinctUltimate = castArcaneInstinctUltimate;
     window.castArcaneResurrectionUltimate = castArcaneResurrectionUltimate;
+    window.castElementalSigil = castElementalSigil;
     window.runUpgrade = runUpgrade;
   }, [netRef]);
 
@@ -1425,6 +1665,14 @@ if (event === 'state_sync' && !net.isHost) {
         eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2 }));
         eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
         eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life }));
+        
+        // Element Sigils state integration
+        eng.tornados = payload.tornados || [];
+        eng.waves = payload.waves || [];
+        eng.fissures = payload.fissures || [];
+        eng.lightnings = payload.lightnings || [];
+        eng.iceStorms = payload.iceStorms || [];
+        
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
         eng.waveT = payload.waveT ?? eng.waveT;
@@ -1500,6 +1748,10 @@ if (event === 'state_sync' && !net.isHost) {
       if (event === 'guest_cast_resurrection' && net.isHost) {
         castArcaneResurrectionUltimate('p2');
       }
+
+      if (event === 'guest_cast_sigil' && net.isHost) {
+        castElementalSigil(payload.sigilType, 'p2');
+      }
       
       if (event === 'offer_levelup' && !net.isHost) {
         onLevelUpOffer(payload.ups);
@@ -1561,6 +1813,7 @@ if (event === 'state_sync' && !net.isHost) {
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22; eng.screenShake = 0;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
+      eng.tornados = []; eng.waves = []; eng.fissures = []; eng.lightnings = []; eng.iceStorms = [];
       eng.gameStarted = false; 
       setHasStarted(false);
       eng.p = { x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
@@ -1776,6 +2029,79 @@ if (event === 'state_sync' && !net.isHost) {
           }
         }
 
+if (eng.tornados) {
+          for (let i = eng.tornados.length - 1; i >= 0; i--) {
+            const t = eng.tornados[i];
+            t.life -= dt;
+            t.x += (t.vx || 0) * dt; // FIX: Nagdagdag ng ( || 0)
+            t.y += (t.vy || 0) * dt; // FIX: Nagdagdag ng ( || 0)
+            if (t.life <= 0) {
+              eng.tornados.splice(i, 1);
+            } else if (isHost || !isCoopActive) {
+              for (const e of eng.enemies) {
+                if (Math.hypot(e.x - t.x, e.y - t.y) < t.r + e.r) {
+                  e.hp -= 99999;
+                  e.flash = 1.0;
+                  if (e.hp <= 0) e.deadTrigger = true;
+                }
+              }
+            }
+          }
+        }
+
+if (eng.waves) {
+          for (let i = eng.waves.length - 1; i >= 0; i--) {
+            const w = eng.waves[i];
+            w.life -= dt;
+            w.x += (w.vx || 0) * dt; // FIX: Nagdagdag ng ( || 0)
+            if (w.life <= 0) {
+              eng.waves.splice(i, 1);
+            } else if (isHost || !isCoopActive) {
+              for (const e of eng.enemies) {
+                if (e.x > w.x - w.width / 2 && e.x < w.x + w.width / 2) {
+                  e.hp -= 99999;
+                  e.flash = 1.0;
+                  if (e.hp <= 0) e.deadTrigger = true;
+                }
+              }
+            }
+          }
+        }
+
+        if (eng.fissures) {
+          for (let i = eng.fissures.length - 1; i >= 0; i--) {
+            eng.fissures[i].life -= dt;
+            if (eng.fissures[i].life <= 0) eng.fissures.splice(i, 1);
+          }
+        }
+
+        if (eng.lightnings) {
+          for (let i = eng.lightnings.length - 1; i >= 0; i--) {
+            eng.lightnings[i].life -= dt;
+            if (eng.lightnings[i].life <= 0) eng.lightnings.splice(i, 1);
+          }
+        }
+
+        if (eng.iceStorms) {
+          for (let i = eng.iceStorms.length - 1; i >= 0; i--) {
+            const s = eng.iceStorms[i];
+            s.life -= dt;
+            if (s.life <= 0) {
+              eng.iceStorms.splice(i, 1);
+            } else if (isHost || !isCoopActive) {
+              for (const e of eng.enemies) {
+                if (Math.hypot(e.x - s.x, e.y - s.y) < s.radius + e.r) {
+                  e.hp -= 200 * dt; 
+                  e.stigmaTime = 1.0; 
+                  e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0); 
+                  if (Math.random() < 0.1) e.flash = 0.5;
+                  if (e.hp <= 0) e.deadTrigger = true;
+                }
+              }
+            }
+          }
+        }
+
         const tickPlayerSkillTrackers = (playerObj) => {
           if (!playerObj || playerObj.dead) return;
           if (!playerObj.skills) playerObj.skills = initSkills();
@@ -1797,6 +2123,12 @@ if (event === 'state_sync' && !net.isHost) {
           if (playerObj.skills.arcaneInstinct?.cd > 0) playerObj.skills.arcaneInstinct.cd -= dt;
           if (playerObj.skills.arcaneResurrection?.cd > 0) playerObj.skills.arcaneResurrection.cd -= dt;
           
+          if (playerObj.skills.flareInferno?.cd > 0) playerObj.skills.flareInferno.cd -= dt;
+          if (playerObj.skills.tidalWave?.cd > 0) playerObj.skills.tidalWave.cd -= dt;
+          if (playerObj.skills.fissureSlam?.cd > 0) playerObj.skills.fissureSlam.cd -= dt;
+          if (playerObj.skills.lightningSurge?.cd > 0) playerObj.skills.lightningSurge.cd -= dt;
+          if (playerObj.skills.iceStorm?.cd > 0) playerObj.skills.iceStorm.cd -= dt;
+
           if (playerObj.skills.arcaneInstinct?.duration > 0) {
             playerObj.skills.arcaneInstinct.duration -= dt;
             if (playerObj.skills.arcaneInstinct.autoTimer > 0) {
@@ -2042,6 +2374,14 @@ if (event === 'state_sync' && !net.isHost) {
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2 })),
                 potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
                 collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
+                
+                // Elemental Sigils State Payload Sync
+                tornados: (eng.tornados || []).map(t => ({ x: Math.round(t.x), y: Math.round(t.y), vx: Math.round(t.vx || 0), vy: Math.round(t.vy || 0), r: t.r, life: t.life })),
+                waves: (eng.waves || []).map(w => ({ x: Math.round(w.x), y: Math.round(w.y), vx: Math.round(w.vx || 0), width: w.width, life: w.life })),
+                fissures: (eng.fissures || []).map(f => ({ x: Math.round(f.x), y: Math.round(f.y), angle: f.angle, length: f.length, life: f.life })),
+                lightnings: (eng.lightnings || []).map(l => ({ pts: l.pts.map(p => ({x: Math.round(p.x), y: Math.round(p.y)})), life: l.life })),
+                iceStorms: (eng.iceStorms || []).map(i => ({ x: Math.round(i.x), y: Math.round(i.y), radius: Math.round(i.radius), life: i.life })),
+
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 screenShake: eng.screenShake,
                 p1: eng.p ? { 
@@ -2619,6 +2959,112 @@ if (event === 'state_sync' && !net.isHost) {
         }
       }
 
+      if (eng.tornados) {
+        for (const t of eng.tornados) {
+           ctx.save();
+           ctx.translate(t.x, t.y);
+           ctx.rotate(performance.now() * 0.015);
+           ctx.strokeStyle = '#f97316';
+           ctx.lineWidth = 10;
+           ctx.shadowBlur = 20;
+           ctx.shadowColor = '#ef4444';
+           ctx.beginPath();
+           ctx.arc(0, 0, t.r + Math.sin(performance.now() * 0.02) * 10, 0, Math.PI * 2);
+           ctx.stroke();
+           ctx.strokeStyle = '#fef08a';
+           ctx.lineWidth = 4;
+           ctx.beginPath();
+           ctx.arc(0, 0, t.r * 0.6 + Math.cos(performance.now() * 0.02) * 10, 0, Math.PI * 2);
+           ctx.stroke();
+           ctx.restore();
+        }
+      }
+
+      if (eng.waves) {
+        for (const w of eng.waves) {
+           ctx.save();
+           const grad = ctx.createLinearGradient(w.x - w.width / 2, 0, w.x + w.width / 2, 0);
+           grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+           grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.8)');
+           grad.addColorStop(1, 'rgba(2, 132, 199, 1)');
+           ctx.fillStyle = grad;
+           ctx.shadowBlur = 30;
+           ctx.shadowColor = '#38bdf8';
+           ctx.fillRect(w.x - w.width / 2, 0, w.width, H);
+           ctx.restore();
+        }
+      }
+
+      if (eng.fissures) {
+        for (const f of eng.fissures) {
+           ctx.save();
+           ctx.translate(f.x, f.y);
+           ctx.rotate(f.angle);
+           ctx.strokeStyle = `rgba(217, 119, 6, ${f.life})`;
+           ctx.lineWidth = 30 * f.life;
+           ctx.lineCap = 'round';
+           ctx.shadowBlur = 20;
+           ctx.shadowColor = '#f59e0b';
+           ctx.beginPath();
+           ctx.moveTo(0, 0);
+           ctx.lineTo(f.length, 0);
+           ctx.stroke();
+           ctx.strokeStyle = `rgba(254, 240, 138, ${f.life})`;
+           ctx.lineWidth = 8 * f.life;
+           ctx.beginPath();
+           ctx.moveTo(0, 0);
+           ctx.lineTo(f.length, 0);
+           ctx.stroke();
+           ctx.restore();
+        }
+      }
+
+      if (eng.lightnings) {
+        for (const l of eng.lightnings) {
+           ctx.save();
+           ctx.strokeStyle = `rgba(167, 139, 250, ${l.life * 2})`;
+           ctx.lineWidth = 8;
+           ctx.shadowBlur = 20;
+           ctx.shadowColor = '#c084fc';
+           ctx.lineJoin = 'miter';
+           ctx.beginPath();
+           ctx.moveTo(l.pts[0].x, l.pts[0].y);
+           for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);
+           ctx.stroke();
+           ctx.strokeStyle = `rgba(255, 255, 255, ${l.life * 2})`;
+           ctx.lineWidth = 3;
+           ctx.beginPath();
+           ctx.moveTo(l.pts[0].x, l.pts[0].y);
+           for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);
+           ctx.stroke();
+           ctx.restore();
+        }
+      }
+
+      if (eng.iceStorms) {
+        for (const s of eng.iceStorms) {
+           ctx.save();
+           ctx.fillStyle = `rgba(125, 211, 252, ${Math.min(0.2, s.life / 2)})`;
+           ctx.beginPath();
+           ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+           ctx.fill();
+           ctx.strokeStyle = `rgba(186, 230, 253, ${Math.min(0.8, s.life)})`;
+           ctx.lineWidth = 2;
+           ctx.setLineDash([15, 15]);
+           ctx.lineDashOffset = performance.now() * 0.05;
+           ctx.beginPath();
+           ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+           ctx.stroke();
+           ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, s.life)})`;
+           for (let i = 0; i < 15; i++) {
+             const a = Math.random() * Math.PI * 2;
+             const d = Math.random() * s.radius;
+             ctx.fillRect(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d + (performance.now() * 0.2) % 20, 3, 8);
+           }
+           ctx.restore();
+        }
+      }
+
       for (const b of eng.bullets) {
         ctx.save();
         ctx.shadowColor = b.p2 ? '#fb923c' : '#e879f9'; ctx.shadowBlur = 16;
@@ -2865,7 +3311,8 @@ if (event === 'state_sync' && !net.isHost) {
       renderAnimId = requestAnimationFrame(renderLoop);
     };
     renderAnimId = requestAnimationFrame(renderLoop);
-    const down = (e) => { 
+const down = (e) => { 
+      if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); // 🔥 UNLOCK AUDIO
       eng.keys[e.key] = true;
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && screen === 'playing') {
         const isCoopActive = Boolean(netRef.current && netRef.current.channel);
@@ -2905,7 +3352,8 @@ if (event === 'state_sync' && !net.isHost) {
     };
   }, [screen]);
 
-  const handlePointerDown = (e) => {
+const handlePointerDown = (e) => {
+  if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); // 🔥 UNLOCK AUDIO
   const eng = engineRef.current;
   // Only activate joystick if touching the left half of screen area
   if (e.clientX < window.innerWidth / 2) {
@@ -3024,6 +3472,39 @@ const handlePointerUp = () => {
           </button>
         )}
 
+        {/* =========================================
+            LEFT PANEL: ELEMENTAL SIGILS MENU
+        ========================================= */}
+        {screen === 'playing' && playerLevel >= 8 && (
+          <div className="elemental-sigils-container">
+            <div className="sigil-btn sigil-fire" onClick={() => castElementalSigil('flareInferno')}>
+              🔥
+              {skillsState.flareInferno?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.flareInferno.cd)}s</div>}
+              <span className="sigil-title">Flare Inferno</span>
+            </div>
+            <div className="sigil-btn sigil-water" onClick={() => castElementalSigil('tidalWave')}>
+              🌊
+              {skillsState.tidalWave?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.tidalWave.cd)}s</div>}
+              <span className="sigil-title">Tidal Wave</span>
+            </div>
+            <div className="sigil-btn sigil-earth" onClick={() => castElementalSigil('fissureSlam')}>
+              🪨
+              {skillsState.fissureSlam?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.fissureSlam.cd)}s</div>}
+              <span className="sigil-title">Fissure Slam</span>
+            </div>
+            <div className="sigil-btn sigil-lightning" onClick={() => castElementalSigil('lightningSurge')}>
+              ⚡
+              {skillsState.lightningSurge?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.lightningSurge.cd)}s</div>}
+              <span className="sigil-title">Lightning Surge</span>
+            </div>
+            <div className="sigil-btn sigil-ice" onClick={() => castElementalSigil('iceStorm')}>
+              ❄️
+              {skillsState.iceStorm?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.iceStorm.cd)}s</div>}
+              <span className="sigil-title">Ice Storm</span>
+            </div>
+          </div>
+        )}
+
         {screen === 'playing' && (
           <div className="game-hud-top" style={{ pointerEvents: 'auto', alignItems: 'flex-start' }}>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', marginTop: '2px' }}>
@@ -3068,7 +3549,7 @@ const handlePointerUp = () => {
                     e.currentTarget.style.color = '#a78bfa';
                   }}
                 >
-                  ⏸ PAUSE GAME
+                  PAUSE?
                 </button>
               )}
             </div>
@@ -3423,19 +3904,6 @@ const handlePointerUp = () => {
           </div>
         )}
 
-        {/* {screen === 'playing' && !hasStarted && (
-          <div className="hud-start-overlay">
-            <div className="hud-start-modal">
-              <h2>{isHostInstance ? "MOVE TO START GAME" : "WAITING FOR HOST"}</h2>
-              <p>
-                {isHostInstance 
-                  ? "Press WASD or Arrow Keys to begin battle." 
-                  : "The arena will initialize once the match host begins moving."}
-              </p>
-            </div>
-          </div>
-        )} */}
-
         {screen === 'playing' && !hasStarted && (
           <div className="hud-start-overlay">
             <div className="hud-start-modal">
@@ -3520,7 +3988,5 @@ const handlePointerUp = () => {
 
       </div>
     </div>
-
-    
   );
 }
