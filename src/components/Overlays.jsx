@@ -1104,11 +1104,19 @@ useEffect(() => {
             <div className="lu-subtitle">Choose an Upgrade (Press 1, 2, 3 or Click)</div>
             <div className="lu-warning">⚠️ Game continues – enemies are still moving!</div>
             
-            <div className="lu-cards-row">
+              <div className="lu-cards-row">
               {displayedChoices.map((opt, i) => {
                 const card = getUpgradeMeta(opt);
                 return (
-                  <div key={i} className="lu-card" style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)' }} onClick={() => onSelectUpgrade(opt)}>
+                  <div 
+                    key={i} 
+                    className="lu-card" 
+                    style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)' }} 
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      onSelectUpgrade(opt);
+                    }}
+                  >
                     <div className="lu-icon" style={{ textShadow: '0 0 10px rgba(255,255,255,0.4)' }}>{card.icon}</div>
                     <div className="lu-card-title" style={{ color: '#ffe6a3' }}>{card.title}</div>
                     <div className="lu-card-desc" style={{ color: '#cbd5e1' }}>{card.desc}</div>

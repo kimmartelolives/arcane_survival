@@ -3675,7 +3675,10 @@ const handlePointerDown = (e) => {
 
         {isCoop && !showPartyList && (
           <button
-            onClick={() => setShowPartyList(true)}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              setShowPartyList(true);
+            }}
             style={{
               position: 'absolute',
               top: '110px',
@@ -3698,27 +3701,27 @@ const handlePointerDown = (e) => {
 
         {screen === 'playing' && playerLevel >= 12 && (
           <div className="elemental-sigils-container">
-            <div className="sigil-btn sigil-fire" onClick={() => castElementalSigil('flareInferno')}>
+            <div className="sigil-btn sigil-fire" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('flareInferno'); }}>
               🔥
               {skillsState.flareInferno?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.flareInferno.cd)}s</div>}
               <span className="sigil-title">Flare Inferno</span>
             </div>
-            <div className="sigil-btn sigil-water" onClick={() => castElementalSigil('tidalWave')}>
+            <div className="sigil-btn sigil-water" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('tidalWave'); }}>
               🌊
               {skillsState.tidalWave?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.tidalWave.cd)}s</div>}
               <span className="sigil-title">Tidal Wave</span>
             </div>
-            <div className="sigil-btn sigil-earth" onClick={() => castElementalSigil('fissureSlam')}>
+            <div className="sigil-btn sigil-earth" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('fissureSlam'); }}>
               🪨
               {skillsState.fissureSlam?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.fissureSlam.cd)}s</div>}
               <span className="sigil-title">Fissure Slam</span>
             </div>
-            <div className="sigil-btn sigil-lightning" onClick={() => castElementalSigil('lightningSurge')}>
+            <div className="sigil-btn sigil-lightning" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('lightningSurge'); }}>
               ⚡
               {skillsState.lightningSurge?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.lightningSurge.cd)}s</div>}
               <span className="sigil-title">Lightning Surge</span>
             </div>
-            <div className="sigil-btn sigil-ice" onClick={() => castElementalSigil('iceStorm')}>
+            <div className="sigil-btn sigil-ice" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('iceStorm'); }}>
               ❄️
               {skillsState.iceStorm?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.iceStorm.cd)}s</div>}
               <span className="sigil-title">Ice Storm</span>
@@ -3804,7 +3807,10 @@ const handlePointerDown = (e) => {
           <div className="game-hud-bottom">
             <button 
               className="stats-toggle-btn" 
-              onClick={() => setIsStatsOpen(prev => !prev)}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                setIsStatsOpen(prev => !prev);
+              }}
             >
               {isStatsOpen ? "▼ Hide Stats Panel" : "▲ Show Character Stats"}
             </button>
@@ -3852,11 +3858,14 @@ const handlePointerDown = (e) => {
           </div>
         )}
 
-        {screen === 'playing' && playerLevel >= 10 && (
+{screen === 'playing' && playerLevel >= 10 && (
           <div className="mmo-hotbar-container">
             <div 
               className={`mmo-hotbar-slot ${!skillsState.bodyCutter?.learned ? 'not-learned' : (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.bodyCutter?.learned && learnSkillTreeTech('bodyCutter')}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (skillsState.bodyCutter?.learned) learnSkillTreeTech('bodyCutter');
+              }}
             >
               <span className="hotbar-key-bind">1</span>
               <span className="hotbar-icon">🩸</span>
@@ -3870,7 +3879,10 @@ const handlePointerDown = (e) => {
 
             <div 
               className={`mmo-hotbar-slot ${!skillsState.shootingStar?.learned ? 'not-learned' : (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.shootingStar?.learned && learnSkillTreeTech('shootingStar')}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (skillsState.shootingStar?.learned) learnSkillTreeTech('shootingStar');
+              }}
             >
               <span className="hotbar-key-bind">2</span>
               <span className="hotbar-icon">🌠</span>
@@ -3889,7 +3901,10 @@ const handlePointerDown = (e) => {
 
             <div 
               className={`mmo-hotbar-slot ${!skillsState.cubeBash?.learned ? 'not-learned' : (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.cubeBash?.learned && learnSkillTreeTech('cubeBash')}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (skillsState.cubeBash?.learned) learnSkillTreeTech('cubeBash');
+              }}
             >
               <span className="hotbar-key-bind">3</span>
               <span className="hotbar-icon">📦</span>
@@ -3908,7 +3923,10 @@ const handlePointerDown = (e) => {
 
             <div 
               className={`mmo-hotbar-slot ${!skillsState.vacuumSlash?.learned ? 'not-learned' : (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle')}`}
-              onClick={() => skillsState.vacuumSlash?.learned && learnSkillTreeTech('vacuumSlash')}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (skillsState.vacuumSlash?.learned) learnSkillTreeTech('vacuumSlash');
+              }}
             >
               <span className="hotbar-key-bind">4</span>
               <span className="hotbar-icon">🌀</span>
@@ -3929,7 +3947,10 @@ const handlePointerDown = (e) => {
               <>
                 <div 
                   className="mmo-hotbar-ult-slot"
-                  onClick={() => castArcaneCollapseUltimate()}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    castArcaneCollapseUltimate();
+                  }}
                   title="Arcane Collapse: Judgment of the Wizard Council"
                 >
                   <span className="hotbar-key-bind">5</span>
@@ -3943,7 +3964,10 @@ const handlePointerDown = (e) => {
                 <div 
                   className="mmo-hotbar-ult-slot"
                   style={{ border: '3px solid #e879f9', background: 'radial-gradient(circle, #4c0519 0%, #0c0004 100%)' }}
-                  onClick={() => castArcaneInstinctUltimate()}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    castArcaneInstinctUltimate();
+                  }}
                   title="Arcane Instinct: Transcendent State"
                 >
                   <span className="hotbar-key-bind">6</span>
@@ -3957,7 +3981,10 @@ const handlePointerDown = (e) => {
                 <div 
                   className="mmo-hotbar-ult-slot"
                   style={{ border: '3px solid #10b981', background: 'radial-gradient(circle, #064e3b 0%, #022c22 100%)' }}
-                  onClick={() => castArcaneResurrectionUltimate()}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    castArcaneResurrectionUltimate();
+                  }}
                   title="Forbidden Spell: Resurrection of Arcane"
                 >
                   <span className="hotbar-key-bind">7</span>
@@ -3973,24 +4000,44 @@ const handlePointerDown = (e) => {
         )}
 
         {screen === 'playing' && playerLevel >= 5 && (
-          <button 
-            className="skill-tree-toggle-btn" 
-            onClick={() => setIsTreeOpen(prev => !prev)}
-          >
-            {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
-          </button>
+        <button 
+          className="skill-tree-toggle-btn" 
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setIsTreeOpen(prev => !prev);
+          }}
+        >
+          {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
+        </button>
+        )}
+
+       {screen === 'playing' && playerLevel >= 5 && (
+        <button 
+          className="skill-tree-toggle-btn" 
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            setIsTreeOpen(prev => !prev);
+          }}
+        >
+          {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
+        </button>
         )}
 
         {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
           <div className="skill-tree-container">
             <div className="skill-tree-title-row">
               <span className="skill-tree-title">✨ DEFENSIVE SPELLS (LV 5+)</span>
-              <button className="skill-tree-close-x" onClick={() => setIsTreeOpen(false)}>✕</button>
+              <button 
+                className="skill-tree-close-x" 
+                onPointerDown={(e) => { e.stopPropagation(); setIsTreeOpen(false); }}
+              >
+                ✕
+              </button>
             </div>
             
             <button 
               className={`skill-row-btn ${skillsState.berserk?.learned ? (skillsState.berserk.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => learnSkillTreeTech('berserk')}
+              onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('berserk'); }}
             >
               <span>🔥 Berserk Aura {skillsState.berserk?.learned ? (skillsState.berserk.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.berserk?.learned && (
@@ -4003,7 +4050,7 @@ const handlePointerDown = (e) => {
 
             <button 
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => learnSkillTreeTech('haste')}
+              onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('haste'); }}
             >
               <span>⚡ Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.haste?.learned && (
@@ -4016,7 +4063,7 @@ const handlePointerDown = (e) => {
 
             <button 
               className={`skill-row-btn ${skillsState.fortify?.learned ? (skillsState.fortify.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => learnSkillTreeTech('fortify')}
+              onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('fortify'); }}
             >
               <span>🛡️ Fortify {skillsState.fortify?.learned ? (skillsState.fortify.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.fortify?.learned && <span className="skill-cd-text">PERMANENT</span>}
@@ -4025,7 +4072,7 @@ const handlePointerDown = (e) => {
 
             <button 
               className={`skill-row-btn ${skillsState.shield?.learned ? (skillsState.shield.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-              onClick={() => learnSkillTreeTech('shield')}
+              onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('shield'); }}
             >
               <span>🔮 Rigid's Defender {skillsState.shield?.learned ? (skillsState.shield.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.shield?.learned && (
@@ -4044,7 +4091,7 @@ const handlePointerDown = (e) => {
 
                 <button 
                   className={`skill-row-btn ${skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => learnSkillTreeTech('bodyCutter')}
+                  onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('bodyCutter'); }}
                 >
                   <span>🩸 Body Cutter {skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.bodyCutter?.learned && <span className="skill-cd-text">PASSIVE</span>}
@@ -4053,7 +4100,7 @@ const handlePointerDown = (e) => {
 
                 <button 
                   className={`skill-row-btn ${skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => learnSkillTreeTech('shootingStar')}
+                  onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('shootingStar'); }}
                 >
                   <span>🌠 Shooting Star {skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.shootingStar?.learned && <span className="skill-cd-text">AUTO</span>}
@@ -4062,7 +4109,7 @@ const handlePointerDown = (e) => {
 
                 <button 
                   className={`skill-row-btn ${skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => learnSkillTreeTech('cubeBash')}
+                  onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('cubeBash'); }}
                 >
                   <span>📦 Cube Bash {skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.cubeBash?.learned && <span className="skill-cd-text">AUTO</span>}
@@ -4071,7 +4118,7 @@ const handlePointerDown = (e) => {
 
                 <button 
                   className={`skill-row-btn ${skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
-                  onClick={() => learnSkillTreeTech('vacuumSlash')}
+                  onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('vacuumSlash'); }}
                 >
                   <span>🌀 Vacuum Slash {skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.vacuumSlash?.learned && <span className="skill-cd-text">AUTO</span>}
@@ -4088,7 +4135,7 @@ const handlePointerDown = (e) => {
 
                 <button 
                   className="skill-row-btn learned"
-                  onClick={() => castArcaneCollapseUltimate()}
+                  onPointerDown={(e) => { e.stopPropagation(); castArcaneCollapseUltimate(); }}
                 >
                   <span>🌌 Arcane Collapse [Press 5]</span>
                   <span className="skill-cd-text">25s CD</span>
@@ -4100,7 +4147,7 @@ const handlePointerDown = (e) => {
                 <button 
                   className="skill-row-btn learned"
                   style={{ border: '1px solid #e879f9' }}
-                  onClick={() => castArcaneInstinctUltimate()}
+                  onPointerDown={(e) => { e.stopPropagation(); castArcaneInstinctUltimate(); }}
                 >
                   <span>⚡ Arcane Instinct [Press 6]</span>
                   <span className="skill-cd-text">40s CD</span>
@@ -4112,7 +4159,7 @@ const handlePointerDown = (e) => {
                 <button 
                   className="skill-row-btn learned"
                   style={{ border: '1px solid #10b981' }}
-                  onClick={() => castArcaneResurrectionUltimate()}
+                  onPointerDown={(e) => { e.stopPropagation(); castArcaneResurrectionUltimate(); }}
                 >
                   <span>⚚ Arcane Resurrection [Press 7]</span>
                   <span className="skill-cd-text">300s CD</span>
