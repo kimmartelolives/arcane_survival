@@ -3684,7 +3684,7 @@ const handlePointerUp = () => {
           </button>
         )}
 
-        {screen === 'playing' && playerLevel >= 15 && (
+        {screen === 'playing' && playerLevel >= 12 && (
           <div className="elemental-sigils-container">
             <div className="sigil-btn sigil-fire" onClick={() => castElementalSigil('flareInferno')}>
               🔥
@@ -3913,7 +3913,7 @@ const handlePointerUp = () => {
               )}
             </div>
 
-            {playerLevel >= 12 && (
+            {playerLevel >= 13 && (
               <>
                 <div 
                   className="mmo-hotbar-ult-slot"
