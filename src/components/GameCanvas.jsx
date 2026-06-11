@@ -1954,33 +1954,33 @@ const handleResize = () => {
 
         //DEV MODE: INSTANTLY START GAME AND SPAWN BOSSES FOR TESTING
          // 🔥 DEV MODE: SPAWN ALL 4 BOSSES IMMEDIATELY CHEAT CODE
-        if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
-          if (isHost) {
-            eng.gameStarted = true;
-            setHasStarted(true);
-            activateAudioKeepAlive();
-
-           
-            const startY = -150;
-            // 1. The Abyss
-            eng.enemies.push({ x: W/2 - 300, y: startY, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-            // 2. Primordial Demon
-            eng.enemies.push({ x: W/2 - 100, y: startY - 50, r: 35, speed: 65, hp: 150000, maxHp: 150000, dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-            // 3. Archdemon
-            eng.enemies.push({ x: W/2 + 100, y: startY - 50, r: 25, speed: 75, hp: 40000, maxHp: 40000, dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-            // 4. Demon Knight
-            eng.enemies.push({ x: W/2 + 300, y: startY, r: 20, speed: 85, hp: 15000, maxHp: 15000, dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-          }
-        }
-
-        // NORMAL SPAWN LOGIC (UNCOMMENT BELOW TO ENABLE NORMAL SPAWNING)
         // if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
         //   if (isHost) {
         //     eng.gameStarted = true;
         //     setHasStarted(true);
         //     activateAudioKeepAlive();
+
+           
+        //     const startY = -150;
+        //     // 1. The Abyss
+        //     eng.enemies.push({ x: W/2 - 300, y: startY, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+        //     // 2. Primordial Demon
+        //     eng.enemies.push({ x: W/2 - 100, y: startY - 50, r: 35, speed: 65, hp: 150000, maxHp: 150000, dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+        //     // 3. Archdemon
+        //     eng.enemies.push({ x: W/2 + 100, y: startY - 50, r: 25, speed: 75, hp: 40000, maxHp: 40000, dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+        //     // 4. Demon Knight
+        //     eng.enemies.push({ x: W/2 + 300, y: startY, r: 20, speed: 85, hp: 15000, maxHp: 15000, dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
         //   }
         // }
+
+        // NORMAL SPAWN LOGIC (UNCOMMENT BELOW TO ENABLE NORMAL SPAWNING)
+        if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
+          if (isHost) {
+            eng.gameStarted = true;
+            setHasStarted(true);
+            activateAudioKeepAlive();
+          }
+        }
 
         if (eng.screenShake > 0) {
           eng.screenShake -= dt;
@@ -3525,18 +3525,18 @@ const handleResize = () => {
       if (screen === 'playing') {
 
         // CHEAT CODES GOD MODE + INSTANT SKILL UNLOCKS
-        if (e.key === '9') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             target.level = Math.max(target.level, 12);
-             target.maxHp += 50000;
-             target.hp = target.maxHp;
-             target.dmg += 15000;
-             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+        // if (e.key === '9') {
+        //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+        //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        //   if (target && !target.dead) {
+        //      target.level = Math.max(target.level, 12);
+        //      target.maxHp += 50000;
+        //      target.hp = target.maxHp;
+        //      target.dmg += 15000;
+        //      target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+        //      setPlayerLevel(target.level);
+        //   }
+        // }
         // END CHEAT CODES
 
 
