@@ -1868,17 +1868,6 @@ const handleResize = () => {
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
   useEffect(() => {
-  const preventDefaultGestures = (e) => {
-    if (e.touches && e.touches.length > 1) {
-      e.preventDefault(); 
-    }
-  };
-
-  document.addEventListener('touchstart', preventDefaultGestures, { passive: false });
-  return () => document.removeEventListener('touchstart', preventDefaultGestures);
-}, []);
-
-  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
