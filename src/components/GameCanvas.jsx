@@ -3561,15 +3561,17 @@ const handlePointerDown = (e) => {
     // Payagan lang mag-start ang joystick kung wala pang active at nasa left side pumindot
     if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
       eng.joystick.active = true;
-      // Isave ang specific na ID ng daliri. Fallback sa 'touch' kung hindi supported
-      eng.joystick.pointerId = e.pointerId ?? 'touch'; 
+      eng.joystick.pointerId = e.pointerId; 
       eng.joystick.startX = e.clientX;
       eng.joystick.startY = e.clientY;
       eng.joystick.curX = e.clientX;
       eng.joystick.curY = e.clientY;
       
-      // I-lock ang pointer sa screen para hindi maputol ang drag kahit saan magpunta ang daliri!
-      try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
+      // FIX PARA SA IPAD: Gamitin ang e.currentTarget imbes na e.target
+      // para i-lock ang touch sa buong screen wrapper, hindi lang sa maliit na canvas.
+      try { 
+        e.currentTarget.setPointerCapture(e.pointerId); 
+      } catch(err) {}
     }
   };
 
@@ -3578,8 +3580,7 @@ const handlePointerDown = (e) => {
     if (!eng.joystick.active) return;
     
     // I-check kung ito yung tamang daliri na nag-start ng joystick
-    const currentId = e.pointerId ?? 'touch';
-    if (eng.joystick.pointerId !== 'touch' && currentId !== eng.joystick.pointerId) return;
+    if (e.pointerId !== eng.joystick.pointerId) return;
 
     eng.joystick.curX = e.clientX;
     eng.joystick.curY = e.clientY;
@@ -3605,15 +3606,16 @@ const handlePointerDown = (e) => {
     if (!eng.joystick.active) return;
 
     // I-stop lang ang joystick kung yung inangat na daliri ay yung ginagamit sa joystick
-    const currentId = e?.pointerId ?? 'touch';
-    if (eng.joystick.pointerId === 'touch' || currentId === eng.joystick.pointerId) {
+    if (e.pointerId === eng.joystick.pointerId) {
       eng.joystick.active = false;
       eng.joystick.pointerId = null;
       eng.joystick.mx = 0;
       eng.joystick.my = 0;
       
-      // I-release yung lock natin sa daliri
-      try { e.target.releasePointerCapture(e.pointerId); } catch(err) {}
+      // FIX PARA SA IPAD: e.currentTarget ang i-release
+      try { 
+        e.currentTarget.releasePointerCapture(e.pointerId); 
+      } catch(err) {}
     }
   };
 
@@ -3621,13 +3623,13 @@ const handlePointerDown = (e) => {
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
   
   return (
-    <div 
+<div 
   id="wrap"
   onPointerDown={handlePointerDown}
   onPointerMove={handlePointerMove}
   onPointerUp={handlePointerUp}
-  onPointerCancel={handlePointerUp}
-  style={{ touchAction: 'none' }} 
+  onPointerCancel={handlePointerUp} /* Super important ito sa iPad! */
+  style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} 
 >
       <style>{focusStyles}</style>
 
