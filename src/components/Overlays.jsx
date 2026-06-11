@@ -224,20 +224,57 @@ useEffect(() => {
     }
   };
 
-  const getUpgradeMeta = (rawString) => {
+  // const getUpgradeMeta = (rawString) => {
+  //   const normalize = String(rawString || '').toLowerCase().trim();
+    
+  //   if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
+  //     return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s' };
+  //   }
+  //   if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
+  //     return { icon: '🔮', title: 'ARCANE MIGHT', desc: 'BOLT DAMAGE +14 POINTS' };
+  //   }
+  //   if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
+  //     return { icon: '💛', title: 'VITALITY', desc: 'MAX HP +25 & FULL HEAL' };
+  //   }
+  //   if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
+  //     return { icon: '🏹', title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE' };
+  //   }
+  //   return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
+  // };
+
+const getUpgradeMeta = (rawString, wave = 1) => {
     const normalize = String(rawString || '').toLowerCase().trim();
     
+    // 🔥 DYNAMIC SCALING FORMULAS
+    const dmgBoost = 14 + Math.floor(wave * 1.5); 
+    const hpBoost = 25 + Math.floor(wave * 2.5);  
+    const spdBoost = 10 + Math.floor(wave * 1.2); 
+    
+    // 👇 BAGONG FORMULAS PARA SA CRIT AT DEFENSE (+5% base, pataas nang pataas)
+    const critBoost = 5 + Math.floor(wave * 0.2);
+    const defBoost = 4 + Math.floor(wave * 0.2);
+
     if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
-      return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s' };
+      return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s (CAP: 0.15s)' };
     }
     if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
-      return { icon: '🔮', title: 'ARCANE MIGHT', desc: 'BOLT DAMAGE +14 POINTS' };
+      return { icon: '🔮', title: 'ARCANE MIGHT', desc: `BOLT DAMAGE +${dmgBoost} POINTS` };
     }
     if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
-      return { icon: '💛', title: 'VITALITY', desc: 'MAX HP +25 & FULL HEAL' };
+      return { icon: '💛', title: 'VITALITY', desc: `MAX HP +${hpBoost} & FULL HEAL` };
     }
     if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
-      return { icon: '🏹', title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE' };
+      return { icon: '🏹', title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 20)' };
+    }
+    if (normalize.includes('swift') || normalize.includes('speed') || normalize.includes('stride')) {
+      return { icon: '👟', title: 'SWIFT STRIDE', desc: `MOVEMENT SPEED +${spdBoost} (CAP: 800)` };
+    }
+    // 👇 IDAGDAG ITO PARA SA BAGONG UPGRADES
+    if (normalize.includes('crit') || normalize.includes('fatal') || normalize.includes('strike')) {
+      return { icon: '🎯', title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
+    }
+    if (normalize.includes('def') || normalize.includes('armor') || normalize.includes('plating')) {
+      return { icon: '🛡️', title: 'IRON PLATING', desc: `DEFENSE BLOCK +${defBoost}% (CAP: 60%)` };
     }
     return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
   };
@@ -1106,7 +1143,7 @@ useEffect(() => {
             
               <div className="lu-cards-row">
               {displayedChoices.map((opt, i) => {
-                const card = getUpgradeMeta(opt);
+                const card = getUpgradeMeta(opt, hudData?.wave || 1);
                 return (
                   <div 
                     key={i} 

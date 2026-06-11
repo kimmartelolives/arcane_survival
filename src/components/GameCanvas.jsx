@@ -15,7 +15,8 @@ class SoundManager {
       wave: [],
       fissure: [],
       lightning: [],
-      ice: []
+      ice: [],
+      heal: []
     };
     this.unlocked = false;
 
@@ -27,7 +28,8 @@ class SoundManager {
       wave: '/wave.mp3',
       fissure: '/fissure.mp3',
       lightning: '/lightning.mp3',
-      ice: '/ice.mp3'
+      ice: '/ice.mp3',
+      heal: '/heal.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -433,6 +435,10 @@ const focusStyles = `
   .sigil-earth { border-color: #f59e0b; text-shadow: 0 0 10px #f59e0b; }
   .sigil-lightning { border-color: #c084fc; text-shadow: 0 0 10px #c084fc; }
   .sigil-ice { border-color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
+
+  .sigil-ice { border-color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
+  /* ADD THIS NEW LINE BELOW SIGIL-ICE */
+  .sigil-nature { border-color: #22c55e; text-shadow: 0 0 10px #22c55e; }
   
   .sigil-cd-overlay {
     position: absolute;
@@ -1004,7 +1010,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     tidalWave: { learned: true, enabled: true, cd: 0 },
     fissureSlam: { learned: true, enabled: true, cd: 0 },
     lightningSurge: { learned: true, enabled: true, cd: 0 },
-    iceStorm: { learned: true, enabled: true, cd: 0 }
+    iceStorm: { learned: true, enabled: true, cd: 0 },
+    natureRecovery: { learned: true, enabled: true, cd: 0 }
   });
 
   const [skillsState, setSkillsState] = useState(initSkills());
@@ -1177,6 +1184,57 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 
     if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
       netRef.current.channel.send('guest_cast_sigil', { sigilType });
+    }
+
+    if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+      setSkillsState({ ...target.skills });
+    }
+  };
+
+
+
+  const castHealingSigil = (forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng) return;
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    if (!target || target.dead || target.level < 12) return;
+
+    if (!target.skills) target.skills = initSkills();
+    if (!target.skills.natureRecovery) target.skills.natureRecovery = { learned: true, enabled: true, cd: 0 };
+    if (target.skills.natureRecovery.cd > 0) return;
+
+    // Set Cooldown (e.g., 45 seconds)
+    target.skills.natureRecovery.cd = 40.0;
+
+    playSfx('heal');
+    target.chatBubble = { text: "NATURE'S RECOVERY!", life: 1.5 };
+
+    // Heal 50% of CURRENT HP (If you want 50% of Max HP instead, change 'target.hp' to 'target.maxHp' in the math below)
+    const healAmount = target.maxHp * 0.5;
+    target.hp = Math.min(target.maxHp, target.hp + healAmount);
+
+    // Apply Regen Buff for 10 seconds
+    if (!target.potBuffs) target.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
+    target.potBuffs.regen = 10.0; 
+
+    // Visual Particles
+    for (let k = 0; k < 30; k++) {
+      const pa = Math.random() * Math.PI * 2;
+      const ps = Math.random() * 120 + 30;
+      eng.particles.push({
+        x: target.x, y: target.y,
+        vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+        color: '#22c55e',
+        life: 1.5, ml: 1.5, r: Math.random() * 4 + 2
+      });
+    }
+
+    // Network Sync for Co-op
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_cast_healing', {});
     }
 
     if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
@@ -1382,7 +1440,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     }
 };
 
-  const runUpgrade = (choice, forcedTarget = null) => {
+const runUpgrade = (choice, forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng || !eng.p) return;
     
@@ -1392,19 +1450,44 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     if (forcedTarget === 'p1') target = eng.p;
     
     if (!target) return;
+
+    // 🔥 KUNIN ANG CURRENT WAVE AT I-COMPUTE ANG BOOST
+    const currentWave = eng.wave || 1;
+    const dmgBoost = 14 + Math.floor(currentWave * 1.5);
+    const hpBoost = 25 + Math.floor(currentWave * 2.5);
+    const spdBoost = 10 + Math.floor(currentWave * 1.2);
+    const critBoost = 5 + Math.floor(currentWave * 0.2);
+    const defBoost = 4 + Math.floor(currentWave * 0.2);
+
     const token = String(choice || '').toLowerCase().trim();
     if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
-      target.maxHp += 25; 
+      target.maxHp += hpBoost; // Ginamit ang dynamic hpBoost
       target.hp = target.maxHp;
     }
     else if (token.includes('damage') || token.includes('might') || token.includes('increase')) {
-      target.dmg = (target.dmg || 0) + 14;
+      target.dmg = (target.dmg || 0) + dmgBoost; // Ginamit ang dynamic dmgBoost
+    }
+    else if (token.includes('swift') || token.includes('speed') || token.includes('stride')) {
+      // 👇 IA-APPLY ANG NEW SPEED HANGGANG SA CAP NA 800
+      const MAX_SPEED = 800;
+      target.speed = Math.min(MAX_SPEED, (target.speed || 200) + spdBoost);
     }
     else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
-      target.shootRate = Math.max(0.15, target.shootRate - 0.1);
+      // ✅ Nakasiguro na hindi bababa sa 0.15 seconds ang cooldown
+      target.shootRate = Math.max(0.15, (target.shootRate || 0.6) - 0.1); 
     }
     else if (token.includes('multi') || token.includes('shot') || token.includes('split')) {
-      target.multiShot += 1;
+      // 👇 IDINAGDAG ANG HARD CAP NA 7 PROJECTILES
+      const MAX_PROJECTILES = 20;
+      target.multiShot = Math.min(MAX_PROJECTILES, (target.multiShot || 1) + 1);
+    }
+    else if (token.includes('crit') || token.includes('fatal') || token.includes('strike')) {
+      const MAX_CRIT = 60;
+      target.baseCrit = Math.min(MAX_CRIT, (target.baseCrit || 0) + critBoost);
+    }
+    else if (token.includes('def') || token.includes('armor') || token.includes('plating')) {
+      const MAX_DEF = 60;
+      target.baseDef = Math.min(MAX_DEF, (target.baseDef || 0) + defBoost);
     }
   };
 
@@ -1414,6 +1497,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     window.castArcaneInstinctUltimate = castArcaneInstinctUltimate;
     window.castArcaneResurrectionUltimate = castArcaneResurrectionUltimate;
     window.castElementalSigil = castElementalSigil;
+    window.castHealingSigil = castHealingSigil;
     window.runUpgrade = runUpgrade;
   }, [netRef]);
 
@@ -1609,6 +1693,11 @@ const handleResize = () => {
           eng.p2.inv = payload.p2.inv ?? eng.p2.inv;
           eng.p2.dmg = payload.p2.dmg ?? eng.p2.dmg;
           eng.p2.shootRate = payload.p2.shootRate ?? eng.p2.shootRate;
+
+          eng.p2.speed = payload.p2.speed ?? eng.p2.speed;
+          eng.p2.baseCrit = payload.p2.baseCrit ?? eng.p2.baseCrit;
+          eng.p2.baseDef = payload.p2.baseDef ?? eng.p2.baseDef;
+          eng.p2.multiShot = payload.p2.multiShot ?? eng.p2.multiShot;
           if (payload.p2.chatBubble !== undefined) {
               eng.p2.chatBubble = payload.p2.chatBubble;
           }
@@ -1674,6 +1763,12 @@ const handleResize = () => {
           eng.p.dead = payload.p1.dead;
           eng.p.dmg = payload.p1.dmg ?? eng.p.dmg;
           eng.p.shootRate = payload.p1.shootRate ?? eng.p.shootRate;
+
+          eng.p.speed = payload.p1.speed ?? eng.p.speed;
+          eng.p.baseCrit = payload.p1.baseCrit ?? eng.p.baseCrit;
+          eng.p.baseDef = payload.p1.baseDef ?? eng.p.baseDef;
+          eng.p.multiShot = payload.p1.multiShot ?? eng.p.multiShot;
+
           eng.p.x = payload.p1.x;
           eng.p.y = payload.p1.y;
           eng.p.chatBubble = payload.p1.chatBubble;
@@ -1721,6 +1816,10 @@ const handleResize = () => {
 
       if (event === 'guest_cast_sigil' && net.isHost) {
         castElementalSigil(payload.sigilType, 'p2');
+      }
+
+      if (event === 'guest_cast_healing' && net.isHost) {
+        castHealingSigil('p2');
       }
       
       if (event === 'offer_levelup' && !net.isHost) {
@@ -1895,10 +1994,26 @@ const handleResize = () => {
     let renderAnimId;
     let syncTimer = 0;
 
-    const rollUpgradeOptions = () => {
-      const fullPool = ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
-      return [...fullPool].sort(() => 0.5 - Math.random()).slice(0, 3);
+      const rollUpgradeOptions = (playerObj) => {
+      let pool = ['Vitality', 'Arcane Might']; 
+
+      if (playerObj) {
+        // I-add lang sa pool kung HINDI PA sagad sa cap
+        if ((playerObj.shootRate || 0.6) > 0.151) pool.push('Rapid Fire');
+        if ((playerObj.multiShot || 1) < 20) pool.push('Gain Multi-Shot');
+        if ((playerObj.speed || 200) < 800) pool.push('Swift Stride');
+        
+        // 👇 NEW CAPS CHECK
+        if ((playerObj.baseCrit || 0) < 60) pool.push('Fatal Strike');
+        if ((playerObj.baseDef || 0) < 60) pool.push('Iron Plating');
+      } else {
+        // Fallback
+        pool.push('Rapid Fire', 'Gain Multi-Shot', 'Swift Stride', 'Fatal Strike', 'Iron Plating');
+      }
+
+      return pool.sort(() => 0.5 - Math.random()).slice(0, 3);
     };
+
     const workerBlob = new Blob([`
       let timer = null;
       self.onmessage = function(e) {
@@ -2131,6 +2246,8 @@ const handleResize = () => {
           if (playerObj.skills.lightningSurge?.cd > 0) playerObj.skills.lightningSurge.cd -= dt;
           if (playerObj.skills.iceStorm?.cd > 0) playerObj.skills.iceStorm.cd -= dt;
 
+          if (playerObj.skills.natureRecovery?.cd > 0) playerObj.skills.natureRecovery.cd -= dt;
+
           // 🔥 BUFF/FIX: ARCANE INSTINCT RAIN LOGIC
           if (playerObj.skills.arcaneInstinct?.duration > 0) {
             playerObj.skills.arcaneInstinct.duration -= dt;
@@ -2258,10 +2375,11 @@ const handleResize = () => {
           }
         };
 
-        if (isHost || !isCoopActive) {
+if (isHost || !isCoopActive) {
           if (eng.p && !eng.p.dead) {
             tickPlayerSkillTrackers(eng.p);
-            let calculatedSpeed = 200;
+            // 👇 Updated to read dynamic speed
+            let calculatedSpeed = eng.p.speed || 200;
             if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45;
             if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
 
@@ -2271,7 +2389,8 @@ const handleResize = () => {
           }
           if (isCoopActive && eng.p2 && !eng.p2.dead && eng.gameStarted) {
             tickPlayerSkillTrackers(eng.p2);
-            let calculatedSpeedp2 = 200;
+            // 👇 Updated to read dynamic speed for Player 2 (Host side)
+            let calculatedSpeedp2 = eng.p2.speed || 200;
             if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
             if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
 
@@ -2282,7 +2401,8 @@ const handleResize = () => {
         } else {
           if (eng.p2 && !eng.p2.dead) {
             tickPlayerSkillTrackers(eng.p2);
-            let calculatedSpeedp2 = 200;
+            // 👇 Updated to read dynamic speed for Player 2 (Guest side)
+            let calculatedSpeedp2 = eng.p2.speed || 200;
             if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
             if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
 
@@ -2349,16 +2469,25 @@ const handleResize = () => {
           if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 5.0); // 🔥 BUFF: Attack multiplier x5.0
 
-          let currentDef = 0;
+          // let currentDef = 0;
+          // if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
+          // if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
+          // if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500; // 🔥 BUFF: Def multiplier +500
+
+          let currentDef = localTrackedObj.baseDef || 0;
           if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
           if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500; // 🔥 BUFF: Def multiplier +500
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500;
 
-          let currentCrit = 0;
+          // let currentCrit = 0;
+          // if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
+          // if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500; // 🔥 BUFF: Crit multiplier +500
+
+          let currentCrit = localTrackedObj.baseCrit || 0;
           if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500; // 🔥 BUFF: Crit multiplier +500
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500;
 
-          let currentSpd = 200;
+          let currentSpd = localTrackedObj.speed || 200;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 5.0); // 🔥 BUFF: Spd multiplier x5.0
           
@@ -2404,7 +2533,11 @@ const handleResize = () => {
                 inv: eng.p.inv, 
                 dead: eng.p.dead, 
                 dmg: eng.p.dmg, 
-                shootRate: eng.p.shootRate, 
+                shootRate: eng.p.shootRate,
+                speed: eng.p.speed,
+                baseCrit: eng.p.baseCrit,
+                baseDef: eng.p.baseDef,
+                multiShot: eng.p.multiShot, 
                 chatBubble: eng.p.chatBubble,
                 name: playerName
               } : null,
@@ -2417,6 +2550,10 @@ const handleResize = () => {
                 dead: eng.p2.dead, 
                 dmg: eng.p2.dmg, 
                 shootRate: eng.p2.shootRate, 
+                speed: eng.p2.speed,
+                baseCrit: eng.p2.baseCrit,
+                baseDef: eng.p2.baseDef,
+                multiShot: eng.p2.multiShot,
                 chatBubble: eng.p2.chatBubble, 
                 name: isHost ? allyName : playerName 
               } : null,
@@ -2451,7 +2588,8 @@ const handleResize = () => {
                   if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 5.0; // 🔥 BUFF: Skill dmg multiplier x5.0
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
-                  if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
+                  let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  if (Math.random() < (totalCrit / 100)) {
                     baseSkillDmg *= 2;
                     enemy.flash = 0.45;
                   } else {
@@ -2479,7 +2617,8 @@ const handleResize = () => {
                   if (shooterObj?.potBuffs?.power > 0) splashDmg *= 1.4;
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 5.0; // 🔥 BUFF: Splash dmg multiplier x5.0
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
-                  if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
+                  let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  if (Math.random() < (totalCrit / 100)) {
                     splashDmg *= 2;
                     enemy.flash = 0.5;
                   } else {
@@ -2642,6 +2781,7 @@ const handleResize = () => {
                 for (const pTarget of [eng.p, isCoopActive ? eng.p2 : null]) {
                   if (pTarget && !pTarget.dead && pTarget.inv <= 0 && Math.hypot(b.x - pTarget.x, b.y - pTarget.y) < b.r + pTarget.r) {
                     let damageTaken = b.dmg;
+                    if (eng.p.baseDef > 0) damageTaken *= (1 - (eng.p.baseDef / 100));
                     if (pTarget.potBuffs?.defense > 0) damageTaken *= 0.65;
                     if (pTarget.skills?.shield?.duration > 0 && pTarget.skills?.shield?.enabled !== false) {
                       damageTaken = 0;
@@ -2677,7 +2817,8 @@ const handleResize = () => {
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 5.0); // 🔥 BUFF: Final bullet damage x5.0
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
-                  if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
+                  let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  if (Math.random() < (totalCrit / 100)) {
                     calculatedDmg *= 2;
                     e.flash = 0.45;
                   } else {
@@ -2825,6 +2966,7 @@ const handleResize = () => {
               
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
                 let damageTaken = e.dmg;
+                if (eng.p.baseDef > 0) damageTaken *= (1 - (eng.p.baseDef / 100));
                 if (e.voidExhaustTime > 0) damageTaken *= 0.5; 
                 if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65;
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
@@ -2890,14 +3032,14 @@ const handleResize = () => {
                   if (eng.p2.xp >= eng.p2.xpNext) {
                     eng.p2.xp -= eng.p2.xpNext;
                     eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                    netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions() });
+                    netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions(eng.p2) });
                   }
                 } else if (eng.p) {
                   eng.p.xp += distributedXp;
                   if (eng.p.xp >= eng.p.xpNext) {
                     eng.p.xp -= eng.p.xpNext;
                     eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                    onLevelUpOffer(rollUpgradeOptions()); 
+                    onLevelUpOffer(rollUpgradeOptions(eng.p)); 
                     if (screen === 'playing') {
                       setScreen('levelup');
                     }
@@ -3517,18 +3659,40 @@ const handleResize = () => {
       if (screen === 'playing') {
 
         // CHEAT CODES GOD MODE + INSTANT SKILL UNLOCKS
-        // if (e.key === '9') {
-        //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-        //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-        //   if (target && !target.dead) {
-        //      target.level = Math.max(target.level, 20);
-        //      target.maxHp += 50000;
-        //      target.hp = target.maxHp;
-        //      target.dmg += 15000;
-        //      target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-        //      setPlayerLevel(target.level);
-        //   }
-        // }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 50000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
+
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
+             
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
+             
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;      // Max Split Bolt Cap
+
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         // END CHEAT CODES
 
 
@@ -3773,6 +3937,12 @@ const handlePointerDown = (e) => {
               {skillsState.iceStorm?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.iceStorm.cd)}s</div>}
               <span className="sigil-title">Ice Storm</span>
             </div>
+            <div className="sigil-btn sigil-nature" onPointerDown={(e) => { e.stopPropagation(); castHealingSigil(); }}>
+              🌿
+              {skillsState.natureRecovery?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.natureRecovery.cd)}s</div>}
+              <span className="sigil-title">Nature's Recovery</span>
+            </div>
+
           </div>
         )}
 
