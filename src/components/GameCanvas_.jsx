@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-// SPELL DAMAGE LOGIC search para sa tornados at waves
 
-//CHEAT CODES / DEV
 // ==========================================================================
 // 🔥 BULLETPROOF AUDIO POOL MANAGER
 // ==========================================================================
@@ -1199,22 +1197,20 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 
     playSfx('collapse');
 
-    target.skills.arcaneCollapse.cd = 25.0; // 🔥 BUFF: Cooldown reduced to 25s
-    eng.screenShake = 2.0; // 🔥 BUFF: MASSIVE SCREEN SHAKE FOR IMPACT
+    target.skills.arcaneCollapse.cd = 30.0;
+    eng.screenShake = 0.8;
     target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
 
     if (!eng.collapses) eng.collapses = [];
-    
-    // 🔥 BUFF: SPAWN MULTIPLE FAST SHOCKWAVES WITH INSANE RADIUS AND SPEED
-    eng.collapses.push(
-      { x: target.x, y: target.y, radius: 10, maxRadius: 1500, life: 3.0, pulseTimer: 0, pulseCount: 0, speed: 2500 },
-      { x: target.x, y: target.y, radius: -350, maxRadius: 1500, life: 3.0, pulseTimer: 0, pulseCount: 0, speed: 2500 }
-    );
-    
+    eng.collapses.push({
+      x: target.x, y: target.y,
+      radius: 10, maxRadius: 520,
+      life: 2.2, pulseTimer: 0, pulseCount: 0
+    });
     for (const enemy of eng.enemies) {
-      let colPulseDmg = 3500; // 🔥 BUFF: Initial burst to 3500
+      let colPulseDmg = 85;
       if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
-      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 5.0; // 🔥 BUFF: Instinct stat multiplier x5.0
+      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 2.5;
       if (enemy.instabTime > 0) colPulseDmg *= 1.5;
 
       if (target.potBuffs?.crit > 0 && Math.random() < 0.35) {
@@ -1226,25 +1222,23 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 
       enemy.hp -= colPulseDmg;
       
-      // 🔥 BUFF: All debuffs duration to 8.0s
-      enemy.stunnedTime = 8.0;       
-      enemy.temporalSlowTime = 8.0;  
-      enemy.arcaneBurnTime = 8.0;
-      enemy.voidExhaustTime = 8.0;   
-      enemy.instabTime = 8.0;        
+      enemy.stunnedTime = 4.0;       
+      enemy.temporalSlowTime = 6.0;  
+      enemy.arcaneBurnTime = 6.0;
+      enemy.voidExhaustTime = 6.0;   
+      enemy.instabTime = 6.0;        
 
       if (enemy.hp <= 0) enemy.deadTrigger = true;
     }
 
-    // 🔥 BUFF: 150 PARTICLES FOR EPIC EXPLOSION
-    for (let k = 0; k < 150; k++) {
+    for (let k = 0; k < 35; k++) {
       const pa = Math.random() * Math.PI * 2;
-      const ps = Math.random() * 400 + 100;
+      const ps = Math.random() * 220 + 80;
       eng.particles.push({
         x: target.x, y: target.y,
         vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
-        color: Math.random() < 0.5 ? '#d946ef' : '#ffffff',
-        life: 0.8, ml: 0.8, r: Math.random() * 4 + 2
+        color: Math.random() < 0.5 ? '#d946ef' : '#a855f7',
+        life: 0.6, ml: 0.6, r: Math.random() * 3 + 1.5
       });
     }
 
@@ -1275,9 +1269,9 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 
     playSfx('instinct');
 
-    target.skills.arcaneInstinct.cd = 40.0; // 🔥 BUFF: Cooldown reduced to 40s
-    target.skills.arcaneInstinct.duration = 15.0; // 🔥 BUFF: Duration increased to 15s
-    target.skills.arcaneInstinct.autoTimer = 0.5; // 🔥 BUFF: Auto-cast delay reduced to 0.5s
+    target.skills.arcaneInstinct.cd = 45.0;
+    target.skills.arcaneInstinct.duration = 10.0;
+    target.skills.arcaneInstinct.autoTimer = 3.0;
     eng.screenShake = 1.2; 
 
     target.chatBubble = { text: "ARCANE INSTINCT!!!", life: 1.8 };
@@ -1633,7 +1627,7 @@ const handleResize = () => {
         eng.gems = (payload.gems || []).map(g => ({ x: g.x, y: g.y, r: g.r, xp: g.xp, life: g.life }));
         eng.bullets = (payload.bullets || []).map(b => ({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, life: b.life, p2: b.p2, isEnemy: b.isEnemy, dmg: b.dmg }));
         eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
-        eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life, speed: c.speed }));
+        eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life }));
         
         eng.tornados = payload.tornados || [];
         eng.waves = payload.waves || [];
@@ -2001,36 +1995,21 @@ const handleResize = () => {
               else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
-                eng.enemies.push({ 
-                 x: ex, y: ey, r: t.r, 
-                 speed: t.speed + (eng.wave - 1) * 5, 
-                 hp: t.hp + (eng.wave - 1) * 10, 
-                 maxHp: t.hp + (eng.wave - 1) * 10, 
-                 dmg: t.dmg + Math.floor((eng.wave - 1) * 1.5), // LALAKAS ANG DAMAGE PER WAVE
-                 xp: t.xp + Math.floor((eng.wave - 1) * 3), // LALAKI ANG XP DROP PER WAVE (+3 XP per wave)
-                 color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-              });
+              eng.enemies.push({ x: ex, y: ey, r: t.r, speed: t.speed + (eng.wave - 1) * 5, hp: t.hp + (eng.wave - 1) * 10, maxHp: t.hp + (eng.wave - 1) * 10, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
             }
             if (eng.waveT >= eng.waveLen) {
               eng.waveT = 0;
               eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
-              // =========================================================
-              // 🟢 BOSS SPAWN LOGIC & STATS (NORMAL PROGRESSION)
-              // =========================================================
-
-              if (eng.wave >= 100 && eng.wave % 25 === 0) {
-                 // The Abyss (Starts exactly at 35k, scales every wave after 100)
-                 eng.enemies.push({ x: W/2, y: -60, r: 50, speed: 45, hp: 35000 + ((eng.wave - 100) * 300), maxHp: 35000 + ((eng.wave - 100) * 300), prevHpFrame: 35000 + ((eng.wave - 100) * 300), dmg: 200, xp: 10000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-              } else if (eng.wave >= 70 && eng.wave % 15 === 0) {
-                 // Primordial Demon (Starts exactly at 12k, scales every wave after 70)
-                 eng.enemies.push({ x: W/2, y: -50, r: 35, speed: 50, hp: 12000 + ((eng.wave - 70) * 200), maxHp: 12000 + ((eng.wave - 70) * 200), dmg: 120, xp: 3000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-              } else if (eng.wave >= 40 && eng.wave % 5 === 0) {
-                 // Archdemon (Starts exactly at 4k, scales every wave after 40)
-                 eng.enemies.push({ x: W/2, y: -45, r: 25, speed: 60, hp: 4000 + ((eng.wave - 40) * 100), maxHp: 4000 + ((eng.wave - 40) * 100), dmg: 70, xp: 1200, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-              } else if (eng.wave >= 30 && eng.wave % 3 === 0) {
-                 // Demon Knight (Starts exactly at 1.5k, scales every wave after 30)
-                 eng.enemies.push({ x: W/2, y: -40, r: 20, speed: 70, hp: 1500 + ((eng.wave - 30) * 50), maxHp: 1500 + ((eng.wave - 30) * 50), dmg: 40, xp: 500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+              
+              if (eng.wave >= 100 && eng.wave % 50 === 0) {
+                 eng.enemies.push({ x: W/2, y: -60, r: 50, speed: 45, hp: 35000 + eng.wave*300, maxHp: 35000 + eng.wave*300, prevHpFrame: 35000 + eng.wave*300, dmg: 200, xp: 10000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+              } else if (eng.wave >= 80 && eng.wave % 30 === 0) {
+                 eng.enemies.push({ x: W/2, y: -50, r: 35, speed: 50, hp: 12000 + eng.wave*200, maxHp: 12000 + eng.wave*200, dmg: 120, xp: 3000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+              } else if (eng.wave >= 40 && eng.wave % 10 === 0) {
+                 eng.enemies.push({ x: W/2, y: -45, r: 25, speed: 60, hp: 4000 + eng.wave*100, maxHp: 4000 + eng.wave*100, dmg: 70, xp: 1200, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+              } else if (eng.wave >= 30 && eng.wave % 5 === 0) {
+                 eng.enemies.push({ x: W/2, y: -40, r: 20, speed: 70, hp: 1500 + eng.wave*50, maxHp: 1500 + eng.wave*50, dmg: 40, xp: 500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
               } else if (eng.wave % 3 === 0) {
                  const t = ET[3];
                  eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
@@ -2038,7 +2017,7 @@ const handleResize = () => {
             }
           }
         }
-       
+
         if (eng.tornados) {
           for (let i = eng.tornados.length - 1; i >= 0; i--) {
             const t = eng.tornados[i];
@@ -2050,7 +2029,7 @@ const handleResize = () => {
             } else if (isHost || !isCoopActive) {
               for (const e of eng.enemies) {
                 if (Math.hypot(e.x - t.x, e.y - t.y) < t.r + e.r) {
-                  e.hp -= 10000;        // SPELL DAMAGE LOGIC
+                  e.hp -= 99999;
                   e.flash = 1.0;
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
@@ -2069,7 +2048,7 @@ const handleResize = () => {
             } else if (isHost || !isCoopActive) {
               for (const e of eng.enemies) {
                 if (e.x > w.x - w.width / 2 && e.x < w.x + w.width / 2) {
-                  e.hp -= 10000;      // SPELL DAMAGE LOGIC
+                  e.hp -= 99999;
                   e.flash = 1.0;
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
@@ -2139,43 +2118,34 @@ const handleResize = () => {
           if (playerObj.skills.lightningSurge?.cd > 0) playerObj.skills.lightningSurge.cd -= dt;
           if (playerObj.skills.iceStorm?.cd > 0) playerObj.skills.iceStorm.cd -= dt;
 
-          // 🔥 BUFF/FIX: ARCANE INSTINCT RAIN LOGIC
           if (playerObj.skills.arcaneInstinct?.duration > 0) {
             playerObj.skills.arcaneInstinct.duration -= dt;
-            
-            // Fix natin yung delay placement
             if (playerObj.skills.arcaneInstinct.autoTimer > 0) {
               playerObj.skills.arcaneInstinct.autoTimer -= dt;
-            } else {
-              // TAPOS NA ANG DELAY, FIRE EVERYTHING DITO NA!!!
               if (!playerObj.skills.arcaneInstinct.burstTick) playerObj.skills.arcaneInstinct.burstTick = 0;
               playerObj.skills.arcaneInstinct.burstTick += dt;
 
-              if (playerObj.skills.arcaneInstinct.burstTick >= 0.05) { // Faster burst tick!
+              if (playerObj.skills.arcaneInstinct.burstTick >= 0.15) {
                 playerObj.skills.arcaneInstinct.burstTick = 0;
-                
-                // RAIN STARS: Spawn 4 Shooting Stars everywhere!
-                for (let k = 0; k < 4; k++) {
-                  let targetX = playerObj.x + (Math.random() - 0.5) * 600; // Malapad na sakop
-                  let targetY = playerObj.y + (Math.random() - 0.5) * 600;
-                  if (eng.enemies.length > 0 && Math.random() > 0.3) {
-                    const randEnemy = eng.enemies[Math.floor(Math.random() * eng.enemies.length)];
-                    targetX = randEnemy.x; targetY = randEnemy.y;
-                  }
-                  if (!eng.stars) eng.stars = [];
-                  eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 400, targetY: targetY, progress: 0, radius: 95, p2: playerObj === eng.p2 });
+                let targetEnemy = null; let minDist = Infinity;
+                for (const e of eng.enemies) {
+                  const d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y);
+                  if (d < minDist) { minDist = d; targetEnemy = e; }
                 }
-
-                // RAIN SLASHES: Spawn 3 Vacuum Slashes in random directions!
-                for (let k = 0; k < 3; k++) {
-                   let angle = Math.random() * Math.PI * 2;
-                   if (!eng.slashes) eng.slashes = [];
-                   eng.slashes.push({ x: playerObj.x, y: playerObj.y, vx: Math.cos(angle) * 450, vy: Math.sin(angle) * 450, angle: angle, life: 1.5, hits: new Set(), p2: playerObj === eng.p2 });
+                let angle = -Math.PI / 2;
+                if (targetEnemy) angle = Math.atan2(targetEnemy.y - playerObj.y, targetEnemy.x - playerObj.x);
+                if (!eng.slashes) eng.slashes = [];
+                eng.slashes.push({ x: playerObj.x, y: playerObj.y, vx: Math.cos(angle) * 340, vy: Math.sin(angle) * 340, angle: angle, life: 1.2, hits: new Set(), p2: playerObj === eng.p2 });
+                let targetX = playerObj.x + (Math.random() - 0.5) * 220;
+                let targetY = playerObj.y + (Math.random() - 0.5) * 220;
+                if (eng.enemies.length > 0) {
+                  const randEnemy = eng.enemies[Math.floor(Math.random() * eng.enemies.length)];
+                  targetX = randEnemy.x; targetY = randEnemy.y;
                 }
-
-                // RANDOM CUBE BASHES sa buong screen
+                if (!eng.stars) eng.stars = [];
+                eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 300, targetY: targetY, progress: 0, radius: 85, p2: playerObj === eng.p2 });
                 if (!eng.cubeBashes) eng.cubeBashes = [];
-                eng.cubeBashes.push({ x: playerObj.x + (Math.random()-0.5)*400, y: playerObj.y + (Math.random()-0.5)*400, radius: 10, maxRadius: 160, speed: 450 });
+                eng.cubeBashes.push({ x: playerObj.x, y: playerObj.y, radius: 10, maxRadius: 120, speed: 320 });
               }
             }
           }
@@ -2271,7 +2241,7 @@ const handleResize = () => {
             tickPlayerSkillTrackers(eng.p);
             let calculatedSpeed = 200;
             if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45;
-            if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
+            if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 2.50; 
 
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * calculatedSpeed * dt));
             eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * calculatedSpeed * dt));
@@ -2281,7 +2251,7 @@ const handleResize = () => {
             tickPlayerSkillTrackers(eng.p2);
             let calculatedSpeedp2 = 200;
             if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
-            if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
+            if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 2.50;
 
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * calculatedSpeedp2 * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * calculatedSpeedp2 * dt));
@@ -2292,7 +2262,7 @@ const handleResize = () => {
             tickPlayerSkillTrackers(eng.p2);
             let calculatedSpeedp2 = 200;
             if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
-            if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
+            if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 2.50;
 
             eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * calculatedSpeedp2 * dt));
             eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * calculatedSpeedp2 * dt));
@@ -2355,24 +2325,23 @@ const handleResize = () => {
           let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0);
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
           if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 5.0); // 🔥 BUFF: Attack multiplier x5.0
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 2.50); 
 
           let currentDef = 0;
           if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
           if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500; // 🔥 BUFF: Def multiplier +500
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 250; 
 
           let currentCrit = 0;
           if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500; // 🔥 BUFF: Crit multiplier +500
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 250; 
 
           let currentSpd = 200;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 5.0); // 🔥 BUFF: Spd multiplier x5.0
-          
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 2.50);
           let currentCd = localTrackedObj.shootRate || 0.6;
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentCd *= 0.5;
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCd *= 0.15; // 🔥 BUFF: Fire rate multiplier x0.15
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCd *= 0.35; 
 
           if (statAtkRef.current) statAtkRef.current.textContent = currentAtk;
           if (statDefRef.current) statDefRef.current.textContent = `${currentDef}%`;
@@ -2394,7 +2363,7 @@ const handleResize = () => {
                 gems: eng.gems.map(g => ({ x: Math.round(g.x), y: Math.round(g.y), r: g.r, xp: g.xp, life: Math.round(g.life) })),
                 bullets: eng.bullets.map(b => ({ x: Math.round(b.x), y: Math.round(b.y), vx: Math.round(b.vx), vy: Math.round(b.vy), r: b.r, life: b.life, p2: b.p2, isEnemy: b.isEnemy, dmg: b.dmg })),
                 potions: (eng.potions || []).map(p => ({ x: Math.round(p.x), y: Math.round(p.y), r: p.r, type: p.type, life: p.life })),
-                collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life, speed: c.speed })),
+                collapses: (eng.collapses || []).map(c => ({ x: Math.round(c.x), y: Math.round(c.y), radius: Math.round(c.radius), maxRadius: c.maxRadius, life: c.life })),
                 
                 tornados: (eng.tornados || []).map(t => ({ x: Math.round(t.x), y: Math.round(t.y), vx: Math.round(t.vx || 0), vy: Math.round(t.vy || 0), r: t.r, life: t.life })),
                 waves: (eng.waves || []).map(w => ({ x: Math.round(w.x), y: Math.round(w.y), vx: Math.round(w.vx || 0), width: w.width, life: w.life })),
@@ -2457,7 +2426,7 @@ const handleResize = () => {
                   let baseSkillDmg = 42;
                   const shooterObj = sl.p2 ? eng.p2 : eng.p;
                   if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 5.0; // 🔥 BUFF: Skill dmg multiplier x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.5; 
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
                     baseSkillDmg *= 2;
@@ -2485,7 +2454,7 @@ const handleResize = () => {
                   let splashDmg = 70;
                   const shooterObj = star.p2 ? eng.p2 : eng.p;
                   if (shooterObj?.potBuffs?.power > 0) splashDmg *= 1.4;
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 5.0; // 🔥 BUFF: Splash dmg multiplier x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 2.5;
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
                     splashDmg *= 2;
@@ -2523,18 +2492,17 @@ const handleResize = () => {
             const col = eng.collapses[cIdx];
             col.life -= dt;
             col.pulseTimer += dt;
-            col.radius += col.speed * dt; // 🔥 FIX: Faster traveling wave
-            
-            if (col.pulseTimer >= 0.4 && col.pulseCount < 8) { // 🔥 BUFF: 8 pulses total, faster intervals
+            col.radius += 360 * dt;
+            if (col.pulseTimer >= 0.5 && col.pulseCount < 3) {
               col.pulseTimer = 0;
               col.pulseCount++;
-              eng.screenShake = 1.0;
+              eng.screenShake = 0.4;
 
               for (const enemy of eng.enemies) {
-                let colPulseDmg = 2500; // 🔥 BUFF: MASSIVE Pulse damage per tick
+                let colPulseDmg = 50;
                 if (enemy.instabTime > 0) colPulseDmg *= 1.5;
                 enemy.hp -= colPulseDmg;
-                enemy.flash = 0.35;
+                enemy.flash = 0.25;
                 if (enemy.hp <= 0) enemy.deadTrigger = true;
               }
             }
@@ -2599,7 +2567,7 @@ const handleResize = () => {
                 if (near) {
                   let activeRate = (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) ?
                     (eng.p.shootRate * 0.5) : eng.p.shootRate;
-                  if (eng.p.skills?.arcaneInstinct?.duration > 0) activeRate *= 0.15; // 🔥 BUFF: Fire rate boost x0.15
+                  if (eng.p.skills?.arcaneInstinct?.duration > 0) activeRate *= 0.35; 
 
                   eng.p.shootCd = activeRate;
                   const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
@@ -2623,7 +2591,7 @@ const handleResize = () => {
                 if (near) {
                   let activeRatep2 = (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) ?
                     (eng.p2.shootRate * 0.5) : eng.p2.shootRate;
-                  if (eng.p2.skills?.arcaneInstinct?.duration > 0) activeRatep2 *= 0.15; // 🔥 BUFF: Fire rate boost x0.15
+                  if (eng.p2.skills?.arcaneInstinct?.duration > 0) activeRatep2 *= 0.35;
 
                   eng.p2.shootCd = activeRatep2;
                   const ba = Math.atan2(near.y - eng.p2.y, near.x - eng.p2.x);
@@ -2682,7 +2650,7 @@ const handleResize = () => {
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
                   let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
                   if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); 
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 5.0); // 🔥 BUFF: Final bullet damage x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.50);
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
                   if (shooterObj?.potBuffs?.crit > 0 && Math.random() < 0.35) {
@@ -3230,35 +3198,22 @@ const handleResize = () => {
         }
       }
 
-      // 🔥 BUFF: HUGE VISUAL UPGRADE FOR ARCANE COLLAPSE
       if (eng.collapses) {
         for (const col of eng.collapses) {
-          if (col.radius < 0) continue; // For trailing waves delay
           ctx.save();
-          
-          // Outer thick ring
-          ctx.strokeStyle = `rgba(217, 70, 239, ${Math.max(0, col.life / 3.0)})`;
-          ctx.lineWidth = 12;
-          ctx.shadowBlur = 35;
+          ctx.strokeStyle = 'rgba(217, 70, 239, ' + Math.max(0, col.life / 2.2) + ')';
+          ctx.lineWidth = 5;
+          ctx.shadowBlur = 24;
           ctx.shadowColor = '#d946ef';
+          
           ctx.beginPath();
           ctx.arc(col.x, col.y, col.radius % col.maxRadius, 0, Math.PI * 2);
           ctx.stroke();
-          
-          // Inner bright white ring
-          ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0, col.life / 3.0)})`;
-          ctx.lineWidth = 4;
+          ctx.strokeStyle = 'rgba(168, 85, 247, ' + Math.max(0, col.life / 3) + ')';
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(col.x, col.y, (col.radius * 0.9) % col.maxRadius, 0, Math.PI * 2);
+          ctx.arc(col.x, col.y, (col.radius * 0.6) % col.maxRadius, 0, Math.PI * 2);
           ctx.stroke();
-
-          // Huge blurred background wave
-          ctx.strokeStyle = `rgba(168, 85, 247, ${Math.max(0, col.life / 4.0)})`;
-          ctx.lineWidth = 25;
-          ctx.beginPath();
-          ctx.arc(col.x, col.y, (col.radius * 1.1) % col.maxRadius, 0, Math.PI * 2);
-          ctx.stroke();
-          
           ctx.restore();
         }
       }
@@ -3684,7 +3639,7 @@ const handlePointerUp = () => {
           </button>
         )}
 
-        {screen === 'playing' && playerLevel >= 15 && (
+        {screen === 'playing' && playerLevel >= 8 && (
           <div className="elemental-sigils-container">
             <div className="sigil-btn sigil-fire" onClick={() => castElementalSigil('flareInferno')}>
               🔥
@@ -4079,10 +4034,10 @@ const handlePointerUp = () => {
                   onClick={() => castArcaneCollapseUltimate()}
                 >
                   <span>🌌 Arcane Collapse [Press 5]</span>
-                  <span className="skill-cd-text">25s CD</span>
+                  <span className="skill-cd-text">30s CD</span>
                 </button>
                 <div className="skill-node-desc" style={{ borderColor: '#d946ef' }}>
-                  Shatters reality! Casts Time Lock (8s freeze), Temporal Slow, Arcane Burn DoT, Void Exhaustion, and 50% extra skill damage vulnerability onto all targets.
+                  Shatters reality! Casts Time Lock (4s freeze), Temporal Slow, Arcane Burn DoT, Void Exhaustion, and 50% extra skill damage vulnerability onto all targets.
                 </div>
 
                 <button 
@@ -4091,10 +4046,10 @@ const handlePointerUp = () => {
                   onClick={() => castArcaneInstinctUltimate()}
                 >
                   <span>⚡ Arcane Instinct [Press 6]</span>
-                  <span className="skill-cd-text">40s CD</span>
+                  <span className="skill-cd-text">45s CD</span>
                 </button>
                 <div className="skill-node-desc" style={{ borderColor: '#e879f9' }}>
-                  Bypasses reality casting parameters! Freezes all screen targets (2s), triggers rapid consecutive offensive skills burst auto-casts (0.5s), and magnifies ALL hero stats by +500% (15s).
+                  Bypasses reality casting parameters! Freezes all screen targets (2s), triggers rapid consecutive offensive skills burst auto-casts (3s), and magnifies ALL hero stats by +250% (10s).
                 </div>
 
                 <button 
