@@ -3565,11 +3565,14 @@ const handleResize = () => {
     };
   }, [screen]);
 
-  const handlePointerDown = (e) => {
+const handlePointerDown = (e) => {
   if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
   const eng = engineRef.current;
-  if (e.clientX < window.innerWidth / 2) {
+  
+  // FIX: Track the pointerId and ensure joystick isn't already active
+  if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
     eng.joystick.active = true;
+    eng.joystick.pointerId = e.pointerId; // <-- We save the specific finger ID here
     eng.joystick.startX = e.clientX;
     eng.joystick.startY = e.clientY;
     eng.joystick.curX = e.clientX;
@@ -3579,7 +3582,9 @@ const handleResize = () => {
 
 const handlePointerMove = (e) => {
   const eng = engineRef.current;
-  if (!eng.joystick.active) return;
+  
+  // FIX: Ignore movement if the ID doesn't match the joystick finger
+  if (!eng.joystick.active || e.pointerId !== eng.joystick.pointerId) return;
 
   eng.joystick.curX = e.clientX;
   eng.joystick.curY = e.clientY;
@@ -3600,11 +3605,17 @@ const handlePointerMove = (e) => {
   }
 };
 
-const handlePointerUp = () => {
+// FIX: Make sure to pass the event (e) parameter here
+const handlePointerUp = (e) => {
   const eng = engineRef.current;
-  eng.joystick.active = false;
-  eng.joystick.mx = 0;
-  eng.joystick.my = 0;
+  
+  // FIX: Only stop the joystick if the lifted finger is the joystick finger
+  if (eng.joystick.active && e.pointerId === eng.joystick.pointerId) {
+    eng.joystick.active = false;
+    eng.joystick.pointerId = null;
+    eng.joystick.mx = 0;
+    eng.joystick.my = 0;
+  }
 };
 
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
