@@ -394,16 +394,16 @@ const focusStyles = `
     border-left: 2px solid #7c3aed;
   }
 
-  /* ELEMENTAL SIGILS CONTAINER */
+/* ELEMENTAL SIGILS CONTAINER */
   .elemental-sigils-container {
     position: absolute;
-    right: 12px; /* CHANGED: Moved to the right side */
+    right: 12px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     gap: 12px;
-    z-index: 55;
+    z-index: 45; /* CHANGED: Binabaan from 55 para matakpan ng menus */
     background: rgba(11, 8, 38, 0.8);
     padding: 10px 8px;
     border: 2px solid #38bdf8;
@@ -3529,7 +3529,7 @@ const handleResize = () => {
         //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
         //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
         //   if (target && !target.dead) {
-        //      target.level = Math.max(target.level, 12);
+        //      target.level = Math.max(target.level, 20);
         //      target.maxHp += 50000;
         //      target.hp = target.maxHp;
         //      target.dmg += 15000;
