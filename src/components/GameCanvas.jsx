@@ -5712,18 +5712,31 @@ const handlePointerDown = (e) => {
                         </button>
                         <span style={{ fontSize: '1.5rem' }}>{item.type === 'wand' ? '🪄' : item.type === 'robe' ? '🧙' : '👢'}</span>
                         
-                        {/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
+{/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
                         <div className="item-tooltip" style={{ 
-                          borderColor: RARITY_COLORS[item.rarity],
                           display: 'flex',
                           flexDirection: 'row',
-                          gap: '12px',
-                          maxWidth: equippedItem ? '400px' : '190px', // Expand if comparing
-                          width: 'max-content'
+                          gap: '8px', // Eto yung space sa gitna ng dalawang box
+                          maxWidth: equippedItem ? '450px' : '190px', 
+                          width: 'max-content',
+                          // I-o-override natin yung default CSS para maging invisible wrapper lang siya
+                          background: 'transparent', 
+                          border: 'none',
+                          padding: 0,
+                          boxShadow: 'none'
                         }}>
                           
-                          {/* COLUMN 1: The item in the inventory */}
-                          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '130px' }}>
+                          {/* COLUMN 1: The item in the inventory (Follows Inventory Item Rarity) */}
+                          <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            minWidth: '140px',
+                            background: '#09061a',
+                            border: `1px solid ${RARITY_COLORS[item.rarity]}`,
+                            borderRadius: '4px',
+                            padding: '8px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.7)'
+                          }}>
                             <div style={{ color: '#34d399', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(52, 211, 153, 0.4)', paddingBottom: '2px' }}>IN INVENTORY</div>
                             <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
@@ -5738,24 +5751,31 @@ const handlePointerDown = (e) => {
                             <div style={{ color: '#10b981', marginTop: '6px', fontSize: '0.55rem' }}>(Click to Equip)</div>
                           </div>
 
-                          {/* COLUMN 2: The currently equipped item (Only shows if something is equipped) */}
+                          {/* COLUMN 2: The currently equipped item (Follows Equipped Item Rarity) */}
                           {equippedItem && (
-                            <>
-                              <div style={{ width: '1px', background: 'rgba(139, 92, 246, 0.4)' }}></div>
-                              <div style={{ display: 'flex', flexDirection: 'column', minWidth: '130px', opacity: 0.85 }}>
-                                <div style={{ color: '#fef08a', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(254, 240, 138, 0.4)', paddingBottom: '2px' }}>CURRENTLY EQUIPPED</div>
-                                <div style={{ color: RARITY_COLORS[equippedItem.rarity], fontWeight: 'bold' }}>{equippedItem.name}</div>
-                                <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{equippedItem.rarity.toUpperCase()} {equippedItem.type.toUpperCase()}</div>
-                                {equippedItem.stats.atk && <div>+{equippedItem.stats.atk} Attack</div>}
-                                {equippedItem.stats.rate && <div>+{equippedItem.stats.rate} Atk Rate</div>}
-                                {equippedItem.stats.crit && <div>+{equippedItem.stats.crit}% Crit</div>}
-                                {equippedItem.stats.def && <div>+{equippedItem.stats.def} Defense</div>}
-                                {equippedItem.stats.hp && <div>+{equippedItem.stats.hp} HP</div>}
-                                {equippedItem.stats.speed && <div>+{equippedItem.stats.speed} Speed</div>}
-                                {equippedItem.stats.lifesteal && <div>+{equippedItem.stats.lifesteal} Lifesteal</div>}
-                                <div style={{ color: '#fbbf24', marginTop: '4px' }}>{equippedItem.desc}</div>
-                              </div>
-                            </>
+                            <div style={{ 
+                              display: 'flex', 
+                              flexDirection: 'column', 
+                              minWidth: '140px', 
+                              opacity: 0.9,
+                              background: '#09061a',
+                              border: `1px solid ${RARITY_COLORS[equippedItem.rarity]}`,
+                              borderRadius: '4px',
+                              padding: '8px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.7)'
+                            }}>
+                              <div style={{ color: '#fef08a', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(254, 240, 138, 0.4)', paddingBottom: '2px' }}>CURRENTLY EQUIPPED</div>
+                              <div style={{ color: RARITY_COLORS[equippedItem.rarity], fontWeight: 'bold' }}>{equippedItem.name}</div>
+                              <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{equippedItem.rarity.toUpperCase()} {equippedItem.type.toUpperCase()}</div>
+                              {equippedItem.stats.atk && <div>+{equippedItem.stats.atk} Attack</div>}
+                              {equippedItem.stats.rate && <div>+{equippedItem.stats.rate} Atk Rate</div>}
+                              {equippedItem.stats.crit && <div>+{equippedItem.stats.crit}% Crit</div>}
+                              {equippedItem.stats.def && <div>+{equippedItem.stats.def} Defense</div>}
+                              {equippedItem.stats.hp && <div>+{equippedItem.stats.hp} HP</div>}
+                              {equippedItem.stats.speed && <div>+{equippedItem.stats.speed} Speed</div>}
+                              {equippedItem.stats.lifesteal && <div>+{equippedItem.stats.lifesteal} Lifesteal</div>}
+                              <div style={{ color: '#fbbf24', marginTop: '4px' }}>{equippedItem.desc}</div>
+                            </div>
                           )}
 
                         </div>
