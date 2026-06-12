@@ -92,13 +92,13 @@ const W = 1280;
 const H = 720;
 const ET = [
   // 1. Normal Minion (Mas makunat at mas masakit na)
-  { r: 13, speed: 75,  hp: 80,  dmg: 25,  xp: 25,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
+  { r: 13, speed: 75,  hp: 70,  dmg: 25,  xp: 25,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
   // 2. Fast/Assassin Minion (Mabilis, mataas damage)
   { r: 11, speed: 120, hp: 50,  dmg: 40,  xp: 35,  color: '#fb923c', glow: '#f97316', boss: false },
   // 3. Tanky/Elite Minion (Sobrang kunat at masakit)
-  { r: 14, speed: 150, hp: 170,  dmg: 60,  xp: 50,  color: '#818cf8', glow: '#6366f1', boss: false },
+  { r: 14, speed: 150, hp: 150,  dmg: 60,  xp: 50,  color: '#818cf8', glow: '#6366f1', boss: false },
   // 4. Generic Mini-Boss (Sobrang laki ng tinaas ng HP at Damage)
-  { r: 27, speed: 65,  hp: 1000, dmg: 120, xp: 250, color: '#fbbf24', glow: '#f59e0b', boss: true },
+  { r: 27, speed: 65,  hp: 900, dmg: 120, xp: 250, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
 const RARITY_COLORS = {
