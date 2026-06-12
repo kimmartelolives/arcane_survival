@@ -1433,6 +1433,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
   const [invTrigger, setInvTrigger] = useState(0);
+  const lastInvAction = useRef(0);
 
   const getEquipmentStats = (playerObj) => {
   const totals = { atk: 0, rate: 0, crit: 0, def: 0, hp: 0, speed: 0, lifesteal: 0 };
@@ -1454,6 +1455,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
 
 // Equip logic
 const equipItem = (item, index) => {
+
+  if (Date.now() - lastInvAction.current < 400) return;
+  lastInvAction.current = Date.now();
   const eng = engineRef.current;
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || target.dead) return;
@@ -1501,6 +1505,8 @@ const unequipItem = (type) => {
 };
 
 const deleteItem = (index) => {
+
+  lastInvAction.current = Date.now();
   const eng = engineRef.current;
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || !target.inventory[index]) return;
@@ -5674,11 +5680,16 @@ const handlePointerDown = (e) => {
             </div>
 
             {/* Backpack Grid */}
+{/* Backpack Grid */}
             <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Backpack (Max 16)</div>
             <div className="inv-grid">
               {Array.from({ length: 16 }).map((_, i) => {
                 const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
                 const item = localTgt?.inventory?.[i];
+                
+                // 1. GET EQUIPPED ITEM OF THE SAME TYPE FOR COMPARISON
+                const equippedItem = item ? localTgt?.equipment?.[item.type] : null;
+
                 return (
                   <div 
                     key={i} 
@@ -5688,28 +5699,65 @@ const handlePointerDown = (e) => {
                   >
                     {item && (
                       <>
-                      <button 
-              className="delete-btn"
-              onPointerDown={(e) => { 
-                e.stopPropagation(); // Mahalaga para hindi ma-equip ang item
-                deleteItem(i); 
-              }}
-            >
-              ✕
-            </button>
+                        <button 
+                          className="delete-btn"
+                          onPointerDown={(e) => { 
+                            e.stopPropagation();
+                            deleteItem(i); 
+                          }}
+                          // 2. PREVENT CLICK BUBBLING TO STOP GHOST EQUIPS
+                          onClick={(e) => e.stopPropagation()} 
+                        >
+                          ✕
+                        </button>
                         <span style={{ fontSize: '1.5rem' }}>{item.type === 'wand' ? '🪄' : item.type === 'robe' ? '🧙' : '👢'}</span>
-                        <div className="item-tooltip" style={{ borderColor: RARITY_COLORS[item.rarity] }}>
-                          <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
-                          <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
-                          {item.stats.atk && <div>+{item.stats.atk} Attack</div>}
-                          {item.stats.rate && <div>+{item.stats.rate} Atk Rate</div>}
-                          {item.stats.crit && <div>+{item.stats.crit}% Crit</div>}
-                          {item.stats.def && <div>+{item.stats.def} Defense</div>}
-                          {item.stats.hp && <div>+{item.stats.hp} HP</div>}
-                          {item.stats.speed && <div>+{item.stats.speed} Speed</div>}
-                          {item.stats.lifesteal && <div>+{item.stats.lifesteal} Lifesteal</div>}
-                          <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
-                          <div style={{ color: '#10b981', marginTop: '4px', fontSize: '0.55rem' }}>(Click to Equip)</div>
+                        
+                        {/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
+                        <div className="item-tooltip" style={{ 
+                          borderColor: RARITY_COLORS[item.rarity],
+                          display: 'flex',
+                          flexDirection: 'row',
+                          gap: '12px',
+                          maxWidth: equippedItem ? '400px' : '190px', // Expand if comparing
+                          width: 'max-content'
+                        }}>
+                          
+                          {/* COLUMN 1: The item in the inventory */}
+                          <div style={{ display: 'flex', flexDirection: 'column', minWidth: '130px' }}>
+                            <div style={{ color: '#34d399', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(52, 211, 153, 0.4)', paddingBottom: '2px' }}>IN INVENTORY</div>
+                            <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
+                            {item.stats.atk && <div>+{item.stats.atk} Attack</div>}
+                            {item.stats.rate && <div>+{item.stats.rate} Atk Rate</div>}
+                            {item.stats.crit && <div>+{item.stats.crit}% Crit</div>}
+                            {item.stats.def && <div>+{item.stats.def} Defense</div>}
+                            {item.stats.hp && <div>+{item.stats.hp} HP</div>}
+                            {item.stats.speed && <div>+{item.stats.speed} Speed</div>}
+                            {item.stats.lifesteal && <div>+{item.stats.lifesteal} Lifesteal</div>}
+                            <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
+                            <div style={{ color: '#10b981', marginTop: '6px', fontSize: '0.55rem' }}>(Click to Equip)</div>
+                          </div>
+
+                          {/* COLUMN 2: The currently equipped item (Only shows if something is equipped) */}
+                          {equippedItem && (
+                            <>
+                              <div style={{ width: '1px', background: 'rgba(139, 92, 246, 0.4)' }}></div>
+                              <div style={{ display: 'flex', flexDirection: 'column', minWidth: '130px', opacity: 0.85 }}>
+                                <div style={{ color: '#fef08a', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(254, 240, 138, 0.4)', paddingBottom: '2px' }}>CURRENTLY EQUIPPED</div>
+                                <div style={{ color: RARITY_COLORS[equippedItem.rarity], fontWeight: 'bold' }}>{equippedItem.name}</div>
+                                <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{equippedItem.rarity.toUpperCase()} {equippedItem.type.toUpperCase()}</div>
+                                {equippedItem.stats.atk && <div>+{equippedItem.stats.atk} Attack</div>}
+                                {equippedItem.stats.rate && <div>+{equippedItem.stats.rate} Atk Rate</div>}
+                                {equippedItem.stats.crit && <div>+{equippedItem.stats.crit}% Crit</div>}
+                                {equippedItem.stats.def && <div>+{equippedItem.stats.def} Defense</div>}
+                                {equippedItem.stats.hp && <div>+{equippedItem.stats.hp} HP</div>}
+                                {equippedItem.stats.speed && <div>+{equippedItem.stats.speed} Speed</div>}
+                                {equippedItem.stats.lifesteal && <div>+{equippedItem.stats.lifesteal} Lifesteal</div>}
+                                <div style={{ color: '#fbbf24', marginTop: '4px' }}>{equippedItem.desc}</div>
+                              </div>
+                            </>
+                          )}
+
                         </div>
                       </>
                     )}
