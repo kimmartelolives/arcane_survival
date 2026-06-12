@@ -20,7 +20,8 @@ class SoundManager {
       freeze: [],
       nuke: [],
       equip: [],
-      unequip: []
+      unequip: [],
+      delete: []
     };
     this.unlocked = false;
 
@@ -37,7 +38,8 @@ class SoundManager {
       freeze: '/freeze.mp3',
       nuke: '/nuke.mp3',
       equip: '/equip.mp3',
-      unequip: '/unequip.mp3'
+      unequip: '/unequip.mp3',
+      delete: '/delete.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -1510,7 +1512,7 @@ const deleteItem = (index) => {
   setInvTrigger(prev => prev + 1);
   
   // Optional: Play a "delete/trash" sound if you have one, or reuse a sound
-  playSfx('collapse'); 
+  playSfx('delete'); 
 };
 
   const initSkills = () => ({
@@ -3337,6 +3339,11 @@ if (isHost || !isCoopActive) {
                      enemy.deadTrigger = true; 
                   } else {
                      enemy.hp -= 8000; 
+                     // 🔥 FIX: Wag hayaang mag-negative ang HP at patayin ang boss kung 0 na
+                     if (enemy.hp <= 0) {
+                         enemy.hp = 0;
+                         enemy.deadTrigger = true;
+                     }
                   }
                   enemy.flash = 1.0;
                 }
@@ -3554,33 +3561,51 @@ if (e.hp <= 0) {
                         life: 14.0
                       });
                     }
+                    
+                // --- 🎒 EQUIPMENT DROPS ---
+                const dropRollEq = Math.random();
+                let droppedRarity = null;
 
-                    // --- 🎒 EQUIPMENT DROPS ---
-                    const dropRollEq = Math.random();
-                    let droppedRarity = null;
+                // Tukuyin kung anong klaseng kalaban ang namatay
+                const isMajorBoss = ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type);
+                const isMiniBoss = e.boss && !isMajorBoss; // Boss siya pero wala sa 4 na major bosses
 
-                    if (e.boss) {
-                      if (dropRollEq < 0.05) droppedRarity = 'mythic';
-                      else if (dropRollEq < 0.20) droppedRarity = 'legendary';
-                    } else {
-                      if (eng.wave >= 31 && dropRollEq < 0.02) droppedRarity = 'epic';
-                      else if (eng.wave >= 16 && eng.wave <= 30 && dropRollEq < 0.03) droppedRarity = 'rare';
-                      else if (eng.wave <= 15 && dropRollEq < 0.04) droppedRarity = 'common';
-                    }
+                if (isMajorBoss) {
+                  // 1. MAJOR BOSSES: Mythic at Legendary (May konting Epic)
+                  // 100% Guaranteed Drop
+                  if (dropRollEq < 0.05) droppedRarity = 'mythic';         // 5% chance Mythic
+                  else if (dropRollEq < 0.30) droppedRarity = 'legendary'; // 25% chance Legendary
+                  else droppedRarity = 'epic';                             // 70% chance Epic
+                } 
+                else if (isMiniBoss) {
+                  // 2. YELLOW MINI BOSS: Minsan Legendary, madalas Epic pababa
+                  // 100% Guaranteed Drop
+                   if (dropRollEq < 0.02) droppedRarity = 'legendary';      // 2% chance Legendary (Swertehan talaga)
+                  else if (dropRollEq < 0.15) droppedRarity = 'epic';      // 13% chance Epic (0.15 - 0.02 = 13%)
+                  else if (dropRollEq < 0.60) droppedRarity = 'rare';      // 45% chance Rare (Standard Mini Boss Drop)
+                  else droppedRarity = 'common';                           // 40% chance Common
+                }
+                else {
+                  // 3. NORMAL MINIONS: Epic (sobrang bihira), Rare, at Common
+                  // Maliit lang ang total drop chance (4% overall) para hindi mapuno agad ang inventory
+                  if (dropRollEq < 0.002) droppedRarity = 'epic';          // 0.2% chance Epic
+                  else if (dropRollEq < 0.015) droppedRarity = 'rare';     // 1.3% chance Rare
+                  else if (dropRollEq < 0.040) droppedRarity = 'common';   // 2.5% chance Common
+                }
 
-                    if (droppedRarity) {
-                      const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
-                      if (pool.length > 0) {
-                        const selectedItem = pool[Math.floor(Math.random() * pool.length)];
-                        if (!eng.droppedItems) eng.droppedItems = []; 
-                        eng.droppedItems.push({
-                          x: e.x + (Math.random()-0.5)*20, 
-                          y: e.y + (Math.random()-0.5)*20, 
-                          item: selectedItem, 
-                          life: 45.0 // Lasts 45 seconds on the ground
-                        });
-                      }
-                    }
+                if (droppedRarity) {
+                  const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
+                  if (pool.length > 0) {
+                    const selectedItem = pool[Math.floor(Math.random() * pool.length)];
+                    if (!eng.droppedItems) eng.droppedItems = []; 
+                    eng.droppedItems.push({
+                      x: e.x + (Math.random()-0.5)*20, 
+                      y: e.y + (Math.random()-0.5)*20, 
+                      item: selectedItem, 
+                      life: 45.0 // Tatagal ng 45 seconds sa sahig
+                    });
+                  }
+                }
 
                     eng.enemies.splice(j, 1);
                   }
@@ -3696,17 +3721,35 @@ if (e.deadTrigger) {
                   });
                 }
 
-                // --- 🎒 EQUIPMENT DROPS ---
+                               // --- 🎒 EQUIPMENT DROPS ---
                 const dropRollEq = Math.random();
                 let droppedRarity = null;
 
-                if (e.boss) {
-                  if (dropRollEq < 0.05) droppedRarity = 'mythic';
-                  else if (dropRollEq < 0.20) droppedRarity = 'legendary';
-                } else {
-                  if (eng.wave >= 31 && dropRollEq < 0.02) droppedRarity = 'epic';
-                  else if (eng.wave >= 16 && eng.wave <= 30 && dropRollEq < 0.03) droppedRarity = 'rare';
-                  else if (eng.wave <= 15 && dropRollEq < 0.04) droppedRarity = 'common';
+                // Tukuyin kung anong klaseng kalaban ang namatay
+                const isMajorBoss = ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type);
+                const isMiniBoss = e.boss && !isMajorBoss; // Boss siya pero wala sa 4 na major bosses
+
+                if (isMajorBoss) {
+                  // 1. MAJOR BOSSES: Mythic at Legendary (May konting Epic)
+                  // 100% Guaranteed Drop
+                  if (dropRollEq < 0.05) droppedRarity = 'mythic';         // 5% chance Mythic
+                  else if (dropRollEq < 0.30) droppedRarity = 'legendary'; // 25% chance Legendary
+                  else droppedRarity = 'epic';                             // 70% chance Epic
+                } 
+                else if (isMiniBoss) {
+                  // 2. YELLOW MINI BOSS: Minsan Legendary, madalas Epic pababa
+                  // 100% Guaranteed Drop
+                   if (dropRollEq < 0.02) droppedRarity = 'legendary';      // 2% chance Legendary (Swertehan talaga)
+                  else if (dropRollEq < 0.15) droppedRarity = 'epic';      // 13% chance Epic (0.15 - 0.02 = 13%)
+                  else if (dropRollEq < 0.60) droppedRarity = 'rare';      // 45% chance Rare (Standard Mini Boss Drop)
+                  else droppedRarity = 'common';                           // 40% chance Common
+                }
+                else {
+                  // 3. NORMAL MINIONS: Epic (sobrang bihira), Rare, at Common
+                  // Maliit lang ang total drop chance (4% overall) para hindi mapuno agad ang inventory
+                  if (dropRollEq < 0.002) droppedRarity = 'epic';          // 0.2% chance Epic
+                  else if (dropRollEq < 0.015) droppedRarity = 'rare';     // 1.3% chance Rare
+                  else if (dropRollEq < 0.040) droppedRarity = 'common';   // 2.5% chance Common
                 }
 
                 if (droppedRarity) {
@@ -3718,7 +3761,7 @@ if (e.deadTrigger) {
                       x: e.x + (Math.random()-0.5)*20, 
                       y: e.y + (Math.random()-0.5)*20, 
                       item: selectedItem, 
-                      life: 45.0 // Lasts 45 seconds on the ground
+                      life: 45.0 // Tatagal ng 45 seconds sa sahig
                     });
                   }
                 }
@@ -3943,6 +3986,318 @@ if (localTarget) {
         const dy = (Math.random() - 0.5) * 9;
         ctx.translate(dx, dy);
       }
+
+      // ==========================================
+      // 🌟 DYNAMIC EQUIPMENT AURA LOGIC 🌟
+      // ==========================================
+      const getEquipCounts = (playerObj) => {
+        let mythic = 0, legendary = 0, epic = 0;
+        if (!playerObj || !playerObj.equipment) return { mythic, legendary };
+        
+        Object.values(playerObj.equipment).forEach(item => {
+          if (item) {
+            if (item.rarity === 'mythic') mythic++;
+            if (item.rarity === 'legendary') legendary++;
+            if (item.rarity === 'epic') epic++;
+          }
+        });
+        
+        return { mythic, legendary, epic };
+      };
+
+// =========================================================
+// ⚡ ORGANIC & CINEMATIC AURA LOGIC (v11 - Safe & Elegant)
+// =========================================================
+const drawEquipAura = (x, y, radius, counts) => {
+  // SAFE VARIABLES (Bawal ang "?." para walang syntax error sa luma mong setup)
+  console.log("Aura Counts:", counts);
+const eCount = (counts && counts.epic) ? counts.epic : 0;
+  const lCount = (counts && counts.legendary) ? counts.legendary : 0;
+  const mCount = (counts && counts.mythic) ? counts.mythic : 0;
+
+  // Kung walang suot, wag mag-draw
+  if (eCount === 0 && lCount === 0 && mCount === 0) return;
+
+  const time = performance.now();
+  ctx.save();
+  ctx.translate(x, y + 3);
+
+  const speedMult = 1 + (mCount * 0.2) + (lCount * 0.1) + (eCount * 0.05);
+  const breath = 0.75 + Math.sin(time * 0.002 * speedMult) * 0.25; 
+  
+  const mScale = 1 + (mCount * 0.25);
+  const lScale = 1 + (lCount * 0.25);
+
+  // 0. DEEP VOID BACKGROUND (Para mas lumitaw ang kulay)
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.beginPath();
+  ctx.arc(0, 0, radius + 5 + (mCount * 3) + (eCount * 1), 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(0, 0, 0, ${0.4 * breath})`;
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = 'black';
+  ctx.fill();
+
+ // =========================================================
+  // 1. EPIC: PROGRESSIVE INTENSITY AURA
+  // =========================================================
+  if (eCount > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    
+    // Intensity Multipliers (1x, 1.2x, 1.4x... depende sa dami)
+    const intensity = 1 + (eCount * 0.2); 
+    const speedMult = 1 + (eCount * 0.3);
+
+    // A. PULSING RADIAL GLOW (Lumalaki at humahaba ang glow habang dumadami)
+    const eRadius = (radius + 10) * intensity + (Math.sin(time * 0.002 * speedMult) * 5);
+    const gradient = ctx.createRadialGradient(0, 0, radius * 0.3, 0, 0, eRadius + (eCount * 8));
+    
+    gradient.addColorStop(0, `rgba(168, 85, 247, ${0.4 * breath * intensity})`); 
+    gradient.addColorStop(0.5, `rgba(192, 132, 252, ${0.2 * breath})`);
+    gradient.addColorStop(1, `rgba(236, 72, 153, 0)`);
+    
+    ctx.beginPath();
+    ctx.arc(0, 0, eRadius, 0, Math.PI * 2);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // B. ROTATING ENERGY RINGS (Lumilitaw lang pag 2 pataas ang Epic)
+    if (eCount >= 2) {
+        ctx.beginPath();
+        ctx.arc(0, 0, radius + 15 + (eCount * 5), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(236, 72, 153, ${0.2 * intensity})`;
+        ctx.lineWidth = 1 + (eCount * 0.5);
+        ctx.setLineDash([5, 10]); // Dashed effect
+        ctx.lineDashOffset = -time * 0.01 * speedMult;
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset
+    }
+
+    // C. DENSITY-BASED PARTICLES (Mas madami at mabilis habang dumadami)
+    const dustCount = 8 + (eCount * 6); 
+    for (let i = 0; i < dustCount; i++) {
+        const angle = (time * 0.0008 * speedMult) + (i * (Math.PI * 2 / dustCount));
+        const distance = (radius + 8) + (Math.sin(time * 0.001 * speedMult + i) * 10 * intensity);
+        
+        const dx = Math.cos(angle) * distance;
+        const dy = Math.sin(angle) * distance;
+        
+        // Twinkle flicker
+        const flicker = 0.5 + Math.sin(time * 0.005 + i) * 0.5;
+        
+        ctx.beginPath();
+        ctx.arc(dx, dy, (1.2 + (flicker * 0.8)) * intensity, 0, Math.PI * 2);
+        
+        const isPink = i % 2 === 0;
+        ctx.fillStyle = isPink ? `rgba(236, 72, 153, ${flicker})` : `rgba(192, 132, 252, ${flicker})`;
+        ctx.fill();
+    }
+    
+    ctx.restore();
+  }
+
+  // =========================================================
+  // 2. LEGENDARY: MORPHING PLASMA FIRE
+  // =========================================================
+  if (lCount > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const layers = 2 + Math.min(lCount, 3); 
+
+    for (let i = 0; i < layers; i++) {
+      ctx.beginPath();
+      const layerOffset = i * 1000; 
+      
+      for (let angle = 0; angle <= Math.PI * 2; angle += 0.1) {
+        const wave1 = Math.sin(angle * 4 + (time * 0.003) + layerOffset) * 8;
+        const wave2 = Math.cos(angle * 7 - (time * 0.002) + layerOffset) * 6;
+        const chaoticSpike = Math.sin(angle * 13 + time * 0.005) * (4 * lCount); 
+        
+        const currentRadius = radius + 8 + (wave1 + wave2 + chaoticSpike) * lScale * breath;
+        
+        const px = Math.cos(angle) * currentRadius;
+        const py = Math.sin(angle) * currentRadius;
+        
+        if (angle === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+
+      ctx.lineWidth = 2 + (lCount * 0.5);
+      const alpha = 0.3 + (i * 0.1) * breath;
+      ctx.strokeStyle = `rgba(255, ${100 + i * 40}, 0, ${alpha})`;
+      ctx.fillStyle = `rgba(255, 60, 0, ${0.1 * alpha})`;
+      ctx.shadowBlur = 20 + (lCount * 5);
+      ctx.shadowColor = '#ff6600';
+      ctx.stroke();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // =========================================================
+  // 3. MYTHIC: DEMONIC DARKFIRE, ORBS, ICICLES & LIGHTNING
+  // =========================================================
+  if (mCount > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-over'; 
+
+    const mAlpha = Math.min(0.4 + (mCount * 0.15), 0.95);
+
+    // A: VIOLENT DARKFIRE BURST
+    ctx.beginPath();
+    const spikes = 24 + (mCount * 6); 
+    for (let i = 0; i <= spikes; i++) {
+      const angle = (i / spikes) * Math.PI * 2;
+      
+      const isMajorSpike = i % 3 === 0;
+      const spikePower = isMajorSpike ? (10 + mCount * 10) : (5 + mCount * 4);
+      const violentJitter = Math.sin(time * 0.015 + i * 10) * (6 + mCount * 2); 
+      
+      const r = radius + 5 + (spikePower * breath) + violentJitter;
+      const px = Math.cos(angle - time * 0.002) * r; 
+      const py = Math.sin(angle - time * 0.002) * r;
+
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    ctx.fillStyle = `rgba(10, 0, 0, ${mAlpha * breath})`;
+    ctx.fill();
+
+    ctx.lineWidth = 2 + (mCount * 0.8);
+    ctx.strokeStyle = `rgba(255, 10, 10, ${mAlpha * breath})`;
+    ctx.shadowBlur = 15 + (mCount * 5);
+    ctx.shadowColor = '#ff0000';
+    ctx.stroke();
+
+    // B: ORBITING VOID ORBS
+    const orbCount = 1 + mCount; 
+    for (let i = 0; i < orbCount; i++) {
+      const orbAngle = time * 0.003 + (i * ((Math.PI * 2) / orbCount));
+      const orbRadius = radius + 30 + (mCount * 8) + Math.sin(time * 0.005 + i) * 10;
+      
+      const ox = Math.cos(orbAngle) * orbRadius;
+      const oy = Math.sin(orbAngle) * orbRadius;
+
+      ctx.beginPath();
+      ctx.arc(ox, oy, 3 + (mCount * 1.5), 0, Math.PI * 2);
+      
+      ctx.fillStyle = '#000000';
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ff0000'; 
+      ctx.fill();
+      
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = mCount > 2 ? '#ffffff' : '#ff4444'; 
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+    }
+
+    // C: FLOATING VOID ICICLES
+    const numIcicles = mCount; 
+    for (let i = 0; i < numIcicles; i++) {
+      const angle = -time * 0.0015 + (i * Math.PI * 2 / Math.max(1, numIcicles)); 
+      const floatY = Math.sin(time * 0.003 + i) * 6;
+      const r = radius + 20 + (mCount * 3);
+      const px = Math.cos(angle) * r;
+      const py = Math.sin(angle) * r + floatY;
+
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(angle + Math.PI / 2);
+
+      ctx.beginPath();
+      ctx.moveTo(0, -10 - (mCount * 2)); 
+      ctx.lineTo(3, 0);                  
+      ctx.lineTo(0, 5);                    
+      ctx.lineTo(-3, 0);                 
+      ctx.closePath();
+
+      ctx.fillStyle = 'rgba(20, 0, 0, 0.9)'; 
+      ctx.fill();
+      ctx.strokeStyle = '#ff3333';           
+      ctx.lineWidth = 1.5;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#ff0000';
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // D: CRIMSON LIGHTNING STRIKES
+    if (Math.random() < 0.02 + (mCount * 0.015)) {
+      ctx.save();
+      const startAngle = Math.random() * Math.PI * 2;
+      let lx = Math.cos(startAngle) * (radius);
+      let ly = Math.sin(startAngle) * (radius);
+
+      ctx.beginPath();
+      ctx.moveTo(lx, ly);
+
+      let currentAngle = startAngle;
+      const lightningSegments = 2 + Math.min(mCount, 4); 
+      for (let j = 0; j < lightningSegments; j++) {
+        currentAngle += (Math.random() - 0.5) * 2; 
+        const step = 5 + Math.random() * 10;
+        lx += Math.cos(currentAngle) * step;
+        ly += Math.sin(currentAngle) * step;
+        ctx.lineTo(lx, ly);
+      }
+      
+      ctx.strokeStyle = '#ffffff'; 
+      ctx.lineWidth = 1 + (Math.random() * 1.5);
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = '#ff0000'; 
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  // =========================================================
+  // 4. INTENSE GLOWING PARTICLES (Legendary/Mythic Only)
+  // =========================================================
+  if (lCount > 0 || mCount > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const particleCount = (lCount * 4) + (mCount * 6); 
+    
+    for (let i = 0; i < particleCount; i++) {
+      const pLife = (time * 0.001 + i * 0.2) % 1; 
+      const pRadius = radius + (pLife * 70 * speedMult); 
+      const pAngle = (i * 1.5) + Math.sin(time * 0.002 + i) * 0.5; 
+      
+      const px = Math.cos(pAngle) * pRadius;
+      const py = Math.sin(pAngle) * pRadius - (pLife * 50); 
+
+      const pSize = (2 + (Math.random() * 2.5)) * (1 - pLife); 
+      
+      ctx.beginPath();
+      ctx.arc(px, py, pSize, 0, Math.PI * 2);
+      
+      if (mCount > 0 && i % 2 === 0) {
+        ctx.fillStyle = `rgba(255, 30, 30, ${1 - pLife})`; 
+        ctx.shadowColor = '#ff0000';
+      } else {
+        ctx.fillStyle = `rgba(255, 200, 50, ${1 - pLife})`; 
+        ctx.shadowColor = '#ff9900';
+      }
+      
+      ctx.shadowBlur = 12;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  ctx.restore();
+};
+
+
+
+
+      // ==========================================
 
       ctx.fillStyle = '#030111';
       ctx.fillRect(0, 0, W, H);
@@ -4373,11 +4728,14 @@ if (eng.potions) {
         ctx.fillStyle = '#030111'; ctx.beginPath();
         ctx.arc(e.x - e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2);
         ctx.arc(e.x + e.r * 0.3, e.y - e.r * 0.05, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
-        if (e.hp < e.maxHp) {
+// FIX: I-check kung e.hp > 0 para hindi mag-render pag patay na o negative
+        if (e.hp < e.maxHp && e.hp > 0) {
           const bw = e.r * 2.5;
           const bh = 4; const bx = e.x - bw / 2; const by = e.y - e.r - 10;
           ctx.fillRect(bx, by, bw, bh);
-          ctx.fillStyle = e.boss ? '#fbbf24' : '#ef4444'; ctx.fillRect(bx, by, bw * (e.hp / e.maxHp), bh);
+          ctx.fillStyle = e.boss ? '#fbbf24' : '#ef4444'; 
+          // FIX: Gumamit ng Math.max(0, e.hp) para hindi maging negative width
+          ctx.fillRect(bx, by, bw * (Math.max(0, e.hp) / e.maxHp), bh);
         }
 
         if (e.nameTag) {
@@ -4437,6 +4795,9 @@ if (eng.potions) {
           }
           ctx.restore();
         }
+
+        const p1AuraCounts = getEquipCounts(eng.p);
+        drawEquipAura(p1X, p1Y, pr, p1AuraCounts);
 
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
         ctx.beginPath();
@@ -4498,6 +4859,9 @@ if (eng.potions) {
           ctx.restore();
         }
 
+        const p2AuraCounts = getEquipCounts(eng.p2);
+        drawEquipAura(p2X, p2Y, pr, p2AuraCounts);
+
         ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
         ctx.beginPath();
         ctx.arc(p2X, p2Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
@@ -4557,6 +4921,82 @@ if (eng.potions) {
         // ==========================================
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
+
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+             
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
+
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
+
+        if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             target.chatBubble = { text: "DEV: ERADICATION PROTOCOL!", life: 2.0 };
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
+
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
+          }
+        }
     if (e.key === '8') {
               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
