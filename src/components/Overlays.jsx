@@ -1093,13 +1093,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
               {loadingLb ? <div className="lb-loading" style={{ padding: '40px', color: '#a78bfa', fontFamily: 'Georgia', textAlign: 'center' }}>Summoning records from ancient scroll…</div> : (
                 <table className="witch-table">
                   <thead>
-                    <tr>
-                      <th style={{ textAlign: 'center', width: '60px' }}>#</th>
-                      <th style={{ textAlign: 'center' }}>Wizard</th> {/* 🔥 Naka-center na uli */}
-                      <th style={{ textAlign: 'center', width: '90px' }}>Level</th>
-                      <th style={{ textAlign: 'center', width: '90px' }}>Wave</th>
-                      <th style={{ textAlign: 'right', width: '130px' }}>Score</th>
-                    </tr>
+                    <tr><th style={{ textAlign: 'center', width: '60px' }}>#</th><th style={{ textAlign: 'center' }}>Wizard</th><th style={{ textAlign: 'center', width: '90px' }}>Level</th><th style={{ textAlign: 'center', width: '90px' }}>Wave</th><th style={{ textAlign: 'right', width: '130px' }}>Score</th></tr>
                   </thead>
                   <tbody>
                     {leaderboard.length === 0 ? (
@@ -1107,21 +1101,11 @@ const getUpgradeMeta = (rawString, wave = 1) => {
                     ) : (
                       leaderboard.map((row, idx) => (
                         <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
-                          <td style={{ fontWeight: 'bold', textAlign: 'center' }}>
-                            {idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}
-                          </td>
-                          <td style={{ fontWeight: 600, textAlign: 'center' }}> {/* 🔥 Naka-center na uli */}
-                            {row.name || 'Anonymous'}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {row.level || 1}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {row.wave || 1}
-                          </td>
-                          <td style={{ fontWeight: 'bold', textAlign: 'right' }}>
-                            {(row.score || 0).toLocaleString()}
-                          </td>
+                          <td style={{ fontWeight: 'bold', textAlign: 'center' }}>{idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}</td>
+                          <td style={{ fontWeight: 600, textAlign: 'center' }}>{row.name || 'Anonymous'}</td>
+                          <td style={{ textAlign: 'center' }}>{row.level || 1}</td>
+                          <td style={{ textAlign: 'center' }}>{row.wave || 1}</td>
+                          <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
                         </tr>
                       ))
                     )}
