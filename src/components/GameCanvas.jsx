@@ -16,7 +16,9 @@ class SoundManager {
       fissure: [],
       lightning: [],
       ice: [],
-      heal: []
+      heal: [],
+      freeze: [],
+      nuke: []
     };
     this.unlocked = false;
 
@@ -29,7 +31,9 @@ class SoundManager {
       fissure: '/fissure.mp3',
       lightning: '/lightning.mp3',
       ice: '/ice.mp3',
-      heal: '/heal.mp3'
+      heal: '/heal.mp3',
+      freeze: '/freeze.mp3',
+      nuke: '/nuke.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -1015,6 +1019,7 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const statCritRef = useRef(null);
   const statSpdRef = useRef(null);
   const statCdRef = useRef(null);
+  const statLifestealRef = useRef(null);
 
   const [hasStarted, setHasStarted] = useState(false);
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
@@ -1489,7 +1494,7 @@ const runUpgrade = (choice, forcedTarget = null) => {
     // 🔥 KUNIN ANG CURRENT WAVE AT I-COMPUTE ANG BOOST
     const currentWave = eng.wave || 1;
     const dmgBoost = 14 + Math.floor(currentWave * 1.5);
-    const hpBoost = 25 + Math.floor(currentWave * 2.5);
+    const hpBoost = 50 + Math.floor(currentWave * 4.0);
     const spdBoost = 10 + Math.floor(currentWave * 1.2);
     const critBoost = 5 + Math.floor(currentWave * 0.2);
     const defBoost = 4 + Math.floor(currentWave * 0.2);
@@ -1521,9 +1526,14 @@ const runUpgrade = (choice, forcedTarget = null) => {
       target.baseCrit = Math.min(MAX_CRIT, (target.baseCrit || 0) + critBoost);
     }
     else if (token.includes('def') || token.includes('armor') || token.includes('plating')) {
-      const MAX_DEF = 60;
+      const MAX_DEF = 100;
       target.baseDef = Math.min(MAX_DEF, (target.baseDef || 0) + defBoost);
     }
+    else if (token.includes('vampiric') || token.includes('aura')) {
+      const MAX_LIFESTEAL = 100;
+      target.lifeSteal = Math.min(MAX_LIFESTEAL, (target.lifeSteal || 0) + 3); 
+    }
+
   };
 
   useEffect(() => {
@@ -2041,9 +2051,10 @@ const handleResize = () => {
         // 👇 NEW CAPS CHECK
         if ((playerObj.baseCrit || 0) < 60) pool.push('Fatal Strike');
         if ((playerObj.baseDef || 0) < 60) pool.push('Iron Plating');
+        if ((playerObj.lifeSteal || 0) < 15) pool.push('Vampiric Aura');
       } else {
         // Fallback
-        pool.push('Rapid Fire', 'Gain Multi-Shot', 'Swift Stride', 'Fatal Strike', 'Iron Plating');
+        pool.push('Rapid Fire', 'Gain Multi-Shot', 'Swift Stride', 'Fatal Strike', 'Iron Plating', 'Vampiric Aura');
       }
 
       return pool.sort(() => 0.5 - Math.random()).slice(0, 3);
@@ -2145,37 +2156,113 @@ const handleResize = () => {
               else { ex = -30; ey = Math.random() * H; }
                 eng.enemies.push({ 
                  x: ex, y: ey, r: t.r, 
-                 speed: t.speed + (eng.wave - 1) * 5, 
+                //  speed: t.speed + (eng.wave - 1) * 5, 
+                // speed: Math.min(600, t.speed + (eng.wave - 1) * 4),
+                 speed: t.speed + Math.floor(Math.log(eng.wave) * 20),
                  hp: t.hp + (eng.wave - 1) * 10, 
                  maxHp: t.hp + (eng.wave - 1) * 10, 
-                 dmg: t.dmg + Math.floor((eng.wave - 1) * 1.5), // LALAKAS ANG DAMAGE PER WAVE
-                 xp: t.xp + Math.floor((eng.wave - 1) * 3), // LALAKI ANG XP DROP PER WAVE (+3 XP per wave)
+                 dmg: t.dmg + Math.floor((eng.wave - 1) * 0.7), // LALAKAS ANG DAMAGE PER WAVE
+                //  xp: t.xp + Math.floor((eng.wave - 1) * 3),
+                 xp: Math.floor(t.xp * Math.pow(1.08, eng.wave)),
                  color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
             }
-            if (eng.waveT >= eng.waveLen) {
+              if (eng.waveT >= eng.waveLen) {
               eng.waveT = 0;
               eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
               // =========================================================
-              // 🟢 BOSS SPAWN LOGIC & STATS (NORMAL PROGRESSION)
+              // 🟢 BOSS SPAWN LOGIC & STATS (DYNAMIC SPAWN COUNT)
               // =========================================================
 
               if (eng.wave >= 100 && eng.wave % 25 === 0) {
-                 // The Abyss (Starts exactly at 35k, scales every wave after 100)
-                 eng.enemies.push({ x: W/2, y: -60, r: 50, speed: 45, hp: 35000 + ((eng.wave - 100) * 300), maxHp: 35000 + ((eng.wave - 100) * 300), prevHpFrame: 35000 + ((eng.wave - 100) * 300), dmg: 200, xp: 10000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+                 // 1. The Abyss (LAGING ISA LANG)
+                 const scale = eng.wave - 100;
+                 const spawnCount = 1;
+                 
+                 for (let i = 0; i < spawnCount; i++) {
+                     eng.enemies.push({ 
+                         x: W/2, y: -60, r: 50, 
+                         speed: 45 + (scale * 0.1), 
+                         hp: 35000 + (scale * 300), 
+                         maxHp: 35000 + (scale * 300), 
+                         prevHpFrame: 35000 + (scale * 300), 
+                         dmg: 200 + (scale * 5), 
+                         xp: 10000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
+                         abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, 
+                         stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                 }
               } else if (eng.wave >= 70 && eng.wave % 15 === 0) {
-                 // Primordial Demon (Starts exactly at 12k, scales every wave after 70)
-                 eng.enemies.push({ x: W/2, y: -50, r: 35, speed: 50, hp: 12000 + ((eng.wave - 70) * 200), maxHp: 12000 + ((eng.wave - 70) * 200), dmg: 120, xp: 3000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+                 // 2. Primordial Demon (LAGING DALAWA)
+                 const scale = eng.wave - 70;
+                 const spawnCount = 2; // Fixed at 2
+                 
+                 for (let i = 0; i < spawnCount; i++) {
+                     // Dynamic Centering Formula
+                     const offsetX = (i - (spawnCount - 1) / 2) * 120;
+                     const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+                     
+                     eng.enemies.push({ 
+                         x: (W/2) + offsetX, y: -50 - offsetY, r: 35, 
+                         speed: 50 + (scale * 0.1), 
+                         hp: 12000 + (scale * 200), 
+                         maxHp: 12000 + (scale * 200), 
+                         dmg: 120 + (scale * 3), 
+                         xp: 3000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                 }
               } else if (eng.wave >= 40 && eng.wave % 5 === 0) {
-                 // Archdemon (Starts exactly at 4k, scales every wave after 40)
-                 eng.enemies.push({ x: W/2, y: -45, r: 25, speed: 60, hp: 4000 + ((eng.wave - 40) * 100), maxHp: 4000 + ((eng.wave - 40) * 100), dmg: 70, xp: 1200, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+                 // 3. Archdemon (START SA 1, +1 EVERY 10 WAVES)
+                 const scale = eng.wave - 40;
+                 const spawnCount = 1 + Math.floor((eng.wave - 40) / 10);
+                 
+                 for (let i = 0; i < spawnCount; i++) {
+                     const offsetX = (i - (spawnCount - 1) / 2) * 100;
+                     const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+                     
+                     eng.enemies.push({ 
+                         x: (W/2) + offsetX, y: -45 - offsetY, r: 25, 
+                         speed: 60 + (scale * 0.3), 
+                         hp: 4000 + (scale * 100), 
+                         maxHp: 4000 + (scale * 100), 
+                         dmg: 70 + (scale * 2), 
+                         xp: 1200, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                 }
               } else if (eng.wave >= 30 && eng.wave % 3 === 0) {
-                 // Demon Knight (Starts exactly at 1.5k, scales every wave after 30)
-                 eng.enemies.push({ x: W/2, y: -40, r: 20, speed: 70, hp: 1500 + ((eng.wave - 30) * 50), maxHp: 1500 + ((eng.wave - 30) * 50), dmg: 40, xp: 500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+                 // 4. Demon Knight (START SA 1, +1 EVERY 5 WAVES)
+                 const scale = eng.wave - 30;
+                 const spawnCount = 1 + Math.floor((eng.wave - 30) / 5);
+                 
+                 for (let i = 0; i < spawnCount; i++) {
+                     const offsetX = (i - (spawnCount - 1) / 2) * 80;
+                     const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+                     
+                     eng.enemies.push({ 
+                         x: (W/2) + offsetX, y: -40 - offsetY, r: 20, 
+                         speed: 70 + (scale * 0.35), 
+                         hp: 1500 + (scale * 50), 
+                         maxHp: 1500 + (scale * 50), 
+                         dmg: 40 + (scale * 1.5), 
+                         xp: 500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                 }
               } else if (eng.wave % 3 === 0) {
+                 // Generic Boss Fallback (LAGING ISA)
                  const t = ET[3];
-                 eng.enemies.push({ x: W/2, y: -40, r: t.r, speed: t.speed, hp: t.hp + eng.wave*20, maxHp: t.hp + eng.wave*20, dmg: t.dmg, xp: t.xp, color: t.color, glow: t.glow, boss: true, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
+                 eng.enemies.push({ 
+                     x: W/2, y: -40, r: t.r, 
+                     speed: t.speed + (eng.wave * 0.1), 
+                     hp: t.hp + eng.wave*20, 
+                     maxHp: t.hp + eng.wave*20, 
+                     dmg: t.dmg + (eng.wave * 0.5), 
+                     xp: t.xp, color: t.color, glow: t.glow, boss: true, 
+                     flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                 });
               }
             }
           }
@@ -2535,6 +2622,7 @@ if (isHost || !isCoopActive) {
           if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
           if (statSpdRef.current) statSpdRef.current.textContent = `${currentSpd} IPS`;
           if (statCdRef.current) statCdRef.current.textContent = `${currentCd.toFixed(2)}s`;
+          if (statLifestealRef.current) statLifestealRef.current.textContent = `${localTrackedObj.lifeSteal || 0} HP/Kill`;
         }
 
         if (isCoopActive && netRef.current.channel) {
@@ -2709,7 +2797,7 @@ if (isHost || !isCoopActive) {
           }
         }
 
-        if (eng.potions) {
+          if (eng.potions) {
           for (let pIdx = eng.potions.length - 1; pIdx >= 0; pIdx--) {
             const pot = eng.potions[pIdx];
             pot.life -= dt;
@@ -2740,13 +2828,46 @@ if (isHost || !isCoopActive) {
                 targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20);
               } else if (pot.type === 'regen') {
                 targetPlayer.potBuffs.regen = 10.0;
+              } else if (pot.type === 'freeze') {
+                // ❄️ CHRONO-CRYSTAL EFFECT
+                playSfx('freeze'); // 🔊 SOUND EFFECT DITO LANG PARA SA FREEZE
+                eng.screenShake = 1.0;
+                targetPlayer.chatBubble = { text: "TIME FREEZE!", life: 2.0 };
+                for (const enemy of eng.enemies) {
+                  enemy.stunnedTime = 8.0; 
+                  enemy.temporalSlowTime = 8.0;
+                  enemy.flash = 0.5;
+                }
+              } else if (pot.type === 'nuke') {
+                // ☢️ ARCANE NUKE EFFECT
+                playSfx('nuke'); // 🔊 AT DITO LANG PARA SA NUKE
+                eng.screenShake = 2.0;
+                targetPlayer.chatBubble = { text: "ARCANE NUKE!", life: 2.0 };
+                for (const enemy of eng.enemies) {
+                  if (!enemy.boss) {
+                     enemy.hp = 0;
+                     enemy.deadTrigger = true; 
+                  } else {
+                     enemy.hp -= 8000; 
+                  }
+                  enemy.flash = 1.0;
+                }
+                // Nuke explosion particles
+                for(let k=0; k<100; k++) {
+                   const pa = Math.random()*Math.PI*2;
+                   const ps = Math.random()*400+100;
+                   eng.particles.push({ x: pot.x, y: pot.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 1.0, ml: 1.0, r: Math.random()*4+2 });
+                }
               } else {
                 targetPlayer.potBuffs[pot.type] = 12.0;
               }
-
-              for(let k=0; k<8; k++) {
-                eng.particles.push({ x: pot.x, y: pot.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#f472b6', life: 0.25, ml: 0.25, r: 2 });
+              // Normal particles para sa regular potions (hindi nuke)
+              if (pot.type !== 'nuke') {
+                for(let k=0; k<8; k++) {
+                  eng.particles.push({ x: pot.x, y: pot.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#f472b6', life: 0.25, ml: 0.25, r: 2 });
+                }
               }
+              
               eng.potions.splice(pot.type === 'xp' ? eng.potions.indexOf(pot) : pIdx, 1);
             }
           }
@@ -2871,10 +2992,28 @@ if (isHost || !isCoopActive) {
                   }
                   eng.bullets.splice(i, 1);
                   hit = true;
-                  if (e.hp <= 0) {
+                    if (e.hp <= 0) {
                     eng.score += e.boss ? 1500 : 100;
+
+                    // --- 🩸 LIFESTEAL TRIGGER ---
+                    for (const pTarget of [eng.p, eng.p2]) {
+                      if (pTarget && !pTarget.dead && pTarget.lifeSteal > 0) {
+                        pTarget.hp = Math.min(pTarget.maxHp, pTarget.hp + pTarget.lifeSteal);
+                      }
+                    }
+
                     eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
-                    if (Math.random() < 0.22) {
+
+                    // --- 💎 UTILITY & NORMAL DROPS ---
+                    const dropRoll = Math.random();
+                    if (dropRoll < 0.03 || (e.boss && dropRoll < 0.50)) { 
+                      const rareTypes = ['freeze', 'nuke'];
+                      eng.potions.push({
+                        x: e.x, y: e.y, r: 14,
+                        type: rareTypes[Math.floor(Math.random() * rareTypes.length)],
+                        life: 20.0 
+                      });
+                    } else if (dropRoll < 0.22) { 
                       const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
                       eng.potions.push({
                         x: e.x, y: e.y, r: 8,
@@ -2966,10 +3105,28 @@ if (isHost || !isCoopActive) {
                 if (e.hp <= 0) e.deadTrigger = true;
               }
 
-              if (e.deadTrigger) {
+                if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
+
+                // --- 🩸 LIFESTEAL TRIGGER ---
+                for (const pTarget of [eng.p, eng.p2]) {
+                  if (pTarget && !pTarget.dead && pTarget.lifeSteal > 0) {
+                    pTarget.hp = Math.min(pTarget.maxHp, pTarget.hp + pTarget.lifeSteal);
+                  }
+                }
+
                 eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
-                if (Math.random() < 0.22) {
+
+                // --- 💎 UTILITY & NORMAL DROPS ---
+                const dropRoll = Math.random();
+                if (dropRoll < 0.03 || (e.boss && dropRoll < 0.50)) { 
+                  const rareTypes = ['freeze', 'nuke'];
+                  eng.potions.push({
+                    x: e.x, y: e.y, r: 14,
+                    type: rareTypes[Math.floor(Math.random() * rareTypes.length)],
+                    life: 20.0 
+                  });
+                } else if (dropRoll < 0.22) { 
                   const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
                   eng.potions.push({
                     x: e.x, y: e.y, r: 8,
@@ -3215,32 +3372,89 @@ if (localTarget) {
         ctx.lineTo(g.x, g.y + g.r); ctx.lineTo(g.x - g.r * 0.6, g.y); ctx.closePath(); ctx.fill(); ctx.restore();
       }
 
-      if (eng.potions) {
+if (eng.potions) {
         for (const pot of eng.potions) {
           ctx.save();
-          let color = '#ef4444';
-          if (pot.type === 'power') color = '#f97316';
-          if (pot.type === 'defense') color = '#3b82f6';
-          if (pot.type === 'crit') color = '#eab308';
-          if (pot.type === 'regen') color = '#22c55e';
-          if (pot.type === 'xp') color = '#a855f7';
 
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 14;
-          ctx.fillStyle = color;
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1.5;
+          // ✨ 1. RARE UTILITY DROPS (With Floating Name Tag)
+          if (pot.type === 'freeze' || pot.type === 'nuke') {
+            const time = performance.now() * 0.005;
+            const pulse = Math.abs(Math.sin(time)); // Oscillates between 0 and 1
+            const bounce = Math.sin(time) * 4; // Floating up and down
+            
+            const baseColor = pot.type === 'freeze' ? '#94a3b8' : '#fef08a'; 
+            const glowColor = pot.type === 'freeze' ? '#38bdf8' : '#fef08a'; // Cyan for Freeze, Gold for Nuke
+            
+            // A. Draw glowing outer aura
+            ctx.shadowColor = glowColor;
+            ctx.shadowBlur = 20 + (pulse * 25);
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + (pulse * 0.25)})`; // White/Gold pulse
+            ctx.beginPath();
+            ctx.arc(pot.x, pot.y, pot.r * (1.2 + (pulse * 0.4)), 0, Math.PI * 2);
+            ctx.fill();
 
-          ctx.beginPath();
-          ctx.moveTo(pot.x - pot.r * 0.4, pot.y - pot.r);
-          ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r);
-          ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r * 0.4);
-          ctx.lineTo(pot.x + pot.r, pot.y + pot.r);
-          ctx.lineTo(pot.x - pot.r, pot.y + pot.r);
-          ctx.lineTo(pot.x - pot.r * 0.4, pot.y - pot.r * 0.4);
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
+            // B. 🏷️ Draw Floating Name Tag (No spin, just bounce)
+            const label = pot.type === 'freeze' ? 'TIME FREEZE' : 'ARCANE NUKE';
+            ctx.font = 'bold 10px monospace';
+            ctx.textAlign = 'center';
+            ctx.shadowColor = '#000000'; // Dark shadow para mabasa kahit maliwanag ang background
+            ctx.shadowBlur = 6;
+            ctx.fillStyle = glowColor;
+            ctx.fillText(label, pot.x, pot.y - pot.r - 14 + bounce);
+
+            // C. Draw the Crystal/Gem shape (With Hover and Spin)
+            ctx.save(); // Save ulit para yung rotation ay sa crystal lang
+            ctx.translate(pot.x, pot.y + bounce); 
+            ctx.rotate(time * 0.4);
+
+            ctx.fillStyle = baseColor;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+            ctx.moveTo(0, -pot.r);
+            ctx.lineTo(pot.r * 0.7, 0);
+            ctx.lineTo(0, pot.r);
+            ctx.lineTo(-pot.r * 0.7, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Inner bright white core
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(0, 0, pot.r * 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore(); // Undo the rotation so it doesn't affect other items
+          } 
+          // 🔴 2. NORMAL POTION DROPS
+          else {
+            let color = '#ef4444';
+            if (pot.type === 'power') color = '#f97316';
+            if (pot.type === 'defense') color = '#3b82f6';
+            if (pot.type === 'crit') color = '#eab308';
+            if (pot.type === 'regen') color = '#22c55e';
+            if (pot.type === 'xp') color = '#a855f7';
+
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 14;
+            ctx.fillStyle = color;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+
+            ctx.beginPath();
+            ctx.moveTo(pot.x - pot.r * 0.4, pot.y - pot.r);
+            ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r);
+            ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r * 0.4);
+            ctx.lineTo(pot.x + pot.r, pot.y + pot.r);
+            ctx.lineTo(pot.x - pot.r, pot.y + pot.r);
+            ctx.lineTo(pot.x - pot.r * 0.4, pot.y - pot.r * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+
           ctx.restore();
         }
       }
@@ -4104,13 +4318,18 @@ const handlePointerDown = (e) => {
                   <span ref={statCdRef} className="stats-value">0.60s</span>
                 </div>
                 <div className="stats-row">
+                  <span className="stats-label">Crit Chance:</span>
+                  <span ref={statCritRef} className="stats-value">0%</span>
+                </div>
+                <div className="stats-row">
                   <span className="stats-label">Defense Block:</span>
                   <span ref={statDefRef} className="stats-value">0%</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Crit Chance:</span>
-                  <span ref={statCritRef} className="stats-value">0%</span>
+                  <span className="stats-label">Life Steal:</span>
+                  <span ref={statLifestealRef} className="stats-value" style={{ color: '#ef4444' }}>0 HP/Kill</span>
                 </div>
+
                 <div className="stats-row">
                   <span className="stats-label">Movement Speed:</span>
                   <span ref={statSpdRef} className="stats-value">200 IPS</span>

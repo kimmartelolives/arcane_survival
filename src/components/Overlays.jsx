@@ -274,7 +274,10 @@ const getUpgradeMeta = (rawString, wave = 1) => {
       return { icon: '🎯', title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
     }
     if (normalize.includes('def') || normalize.includes('armor') || normalize.includes('plating')) {
-      return { icon: '🛡️', title: 'IRON PLATING', desc: `DEFENSE BLOCK +${defBoost}% (CAP: 60%)` };
+      return { icon: '🛡️', title: 'IRON PLATING', desc: `DEFENSE BLOCK +${defBoost}% (CAP: 100%)` };
+    }
+    if (normalize.includes('vampiric') || normalize.includes('aura') || normalize.includes('life')) {
+      return { icon: '🦇', title: 'VAMPIRIC AURA', desc: 'HEAL 3 HP PER ENEMY KILLED (CAP: 100 HP/KILL)' };
     }
     return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
   };
