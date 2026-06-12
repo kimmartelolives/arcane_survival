@@ -91,10 +91,14 @@ const playSfx = (type) => window.ArcaneSoundManager.play(type);
 const W = 1280;
 const H = 720;
 const ET = [
-  { r: 13, speed: 65,  hp: 30,  dmg: 8,  xp: 15,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
-  { r: 11, speed: 105, hp: 20,  dmg: 12, xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
-  { r: 14, speed: 135, hp: 55,  dmg: 20, xp: 35,  color: '#818cf8', glow: '#6366f1', boss: false },
-  { r: 27, speed: 50,  hp: 260, dmg: 30, xp: 100, color: '#fbbf24', glow: '#f59e0b', boss: true },
+  // 1. Normal Minion (Mas makunat at mas masakit na)
+  { r: 13, speed: 75,  hp: 150,  dmg: 25,  xp: 25,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
+  // 2. Fast/Assassin Minion (Mabilis, mataas damage)
+  { r: 11, speed: 120, hp: 100,  dmg: 40,  xp: 35,  color: '#fb923c', glow: '#f97316', boss: false },
+  // 3. Tanky/Elite Minion (Sobrang kunat at masakit)
+  { r: 14, speed: 150, hp: 280,  dmg: 60,  xp: 50,  color: '#818cf8', glow: '#6366f1', boss: false },
+  // 4. Generic Mini-Boss (Sobrang laki ng tinaas ng HP at Damage)
+  { r: 27, speed: 65,  hp: 1500, dmg: 120, xp: 250, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
 const RARITY_COLORS = {
@@ -1292,6 +1296,52 @@ const focusStyles = `
   transform: scale(1.15) !important;
   background: #ef4444 !important;
 }
+
+/* CLEAR ALL BUTTON */
+  .backpack-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    width: 100%;
+    margin-top: 10px;
+    margin-bottom: 5px;
+  }
+
+  .clear-all-btn {
+    background: rgba(220, 38, 38, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.6);
+    color: #f87171;
+    font-family: monospace;
+    font-size: 0.65rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-weight: bold;
+  }
+
+  .clear-all-btn:hover {
+    background: #ef4444;
+    color: white;
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+
+  /* ITEM PLUS BADGE */
+  .item-plus-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #fbbf24; /* Gold/Yellow na kulay para litaw */
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 1px 4px;
+    border-radius: 3px;
+    pointer-events: none; /* Para hindi maka-istorbo sa pag-click ng item */
+    font-family: monospace;
+    z-index: 10;
+    text-shadow: 1px 1px 0 #000;
+  }
 /* =========================================================================
    📱 INTERACTIVE MOBILE LANDSCAPE CONFIGURATION (Fixed Tooltips)
    ========================================================================= */
@@ -1301,6 +1351,11 @@ const focusStyles = `
     font-size: 0.55rem;
     padding: 3px 8px;
   }
+
+  .clear-all-btn {
+      font-size: 0.5rem !important;
+      padding: 2px 5px !important;
+    }
 
   .inventory-modal {
     display: grid !important;
@@ -1520,6 +1575,24 @@ const deleteItem = (index) => {
   // Optional: Play a "delete/trash" sound if you have one, or reuse a sound
   playSfx('delete'); 
 };
+
+const clearAllInventory = () => {
+    lastInvAction.current = Date.now();
+    const eng = engineRef.current;
+    const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+    
+    // Check kung may laman ang inventory
+    if (!target || !target.inventory || target.inventory.length === 0) return;
+
+    // Tanggalin lahat ng item
+    target.inventory = [];
+    
+    // I-update ang UI
+    setInvTrigger(prev => prev + 1);
+    
+    // Play delete sound effect (reusing the delete sfx)
+    playSfx('delete'); 
+  };
 
   const initSkills = () => ({
     berserk: { learned: false, enabled: true, cd: 0, duration: 0 },
@@ -1769,7 +1842,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     }
   };
 
-  const castArcaneCollapseUltimate = (forcedTarget = null) => {
+const castArcaneCollapseUltimate = (forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng) return;
 
@@ -1787,25 +1860,27 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 
     playSfx('collapse');
 
-    target.skills.arcaneCollapse.cd = 25.0; // 🔥 BUFF: Cooldown reduced to 25s
-    eng.screenShake = 2.0; // 🔥 BUFF: MASSIVE SCREEN SHAKE FOR IMPACT
+    target.skills.arcaneCollapse.cd = 25.0; 
+    eng.screenShake = 2.0; 
     target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
 
     if (!eng.collapses) eng.collapses = [];
     
-    // 🔥 BUFF: SPAWN MULTIPLE FAST SHOCKWAVES WITH INSANE RADIUS AND SPEED
     eng.collapses.push(
       { x: target.x, y: target.y, radius: 10, maxRadius: 1500, life: 3.0, pulseTimer: 0, pulseCount: 0, speed: 2500 },
       { x: target.x, y: target.y, radius: -350, maxRadius: 1500, life: 3.0, pulseTimer: 0, pulseCount: 0, speed: 2500 }
     );
     
     for (const enemy of eng.enemies) {
-      let colPulseDmg = 3500; // 🔥 BUFF: Initial burst to 3500
+      // 🔥 DYNAMIC SCALED DPS: Arcane Collapse Initial Burst
+      let colPulseDmg = 3500 + ((eng?.wave || 1) * 500) + ((target.dmg || 0) * 20);
+      
       if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
-      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 5.0; // 🔥 BUFF: Instinct stat multiplier x5.0
+      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 5.0; 
       if (enemy.instabTime > 0) colPulseDmg *= 1.5;
 
-      if (target.potBuffs?.crit > 0 && Math.random() < 0.35) {
+      let totalCrit = (target.baseCrit || 0) + (target.potBuffs?.crit > 0 ? 35 : 0);
+      if (Math.random() < (totalCrit / 100)) {
         colPulseDmg *= 2;
         enemy.flash = 0.5;
       } else {
@@ -1814,7 +1889,6 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 
       enemy.hp -= colPulseDmg;
       
-      // 🔥 BUFF: All debuffs duration to 8.0s
       enemy.stunnedTime = 8.0;       
       enemy.temporalSlowTime = 8.0;  
       enemy.arcaneBurnTime = 8.0;
@@ -1824,7 +1898,6 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
       if (enemy.hp <= 0) enemy.deadTrigger = true;
     }
 
-    // 🔥 BUFF: 150 PARTICLES FOR EPIC EXPLOSION
     for (let k = 0; k < 150; k++) {
       const pa = Math.random() * Math.PI * 2;
       const ps = Math.random() * 400 + 100;
@@ -2109,6 +2182,13 @@ const handleResize = () => {
     } catch (e) {
     }
   };
+
+  // Awtomatikong isasara ang inventory kapag hindi 'playing' ang screen
+useEffect(() => {
+  if (screen !== 'playing') {
+    setIsInventoryOpen(false);
+  }
+}, [screen]);
 
   useEffect(() => {
     const handleBlur = () => {
@@ -2637,7 +2717,7 @@ if (eng.gameStarted) {
           eng.spawnT += dt;
 
           if (!isCoopActive || isHost) {
-            if (eng.spawnT >= eng.spawnRate) {
+          if (eng.spawnT >= eng.spawnRate) {
               eng.spawnT = 0;
               eng.spawnRate = Math.max(0.35, 2 - eng.wave * 0.12);
               const pool = eng.wave < 2 ? [0] : eng.wave < 4 ? [0, 1] : [0, 1, 2];
@@ -2647,13 +2727,23 @@ if (eng.gameStarted) {
               else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
+                
                 eng.enemies.push({ 
                  x: ex, y: ey, r: t.r, 
-                 speed: t.speed + Math.floor(Math.log(eng.wave) * 20),
-                 hp: t.hp + (eng.wave - 1) * 10, 
-                 maxHp: t.hp + (eng.wave - 1) * 10, 
-                 dmg: t.dmg + Math.floor((eng.wave - 1) * 0.7), // LALAKAS ANG DAMAGE PER WAVE
-                 xp: Math.floor(t.xp * Math.pow(1.08, eng.wave)),
+                 
+                 // 🔥 SPEED: Paunti-unting bibilis pero naka-cap para hindi mag-teleport (Max +180 speed)
+                 speed: t.speed + Math.min(180, eng.wave * 1.5),
+                 
+                 // 🔥 HP: Exponential scaling (Para hindi agad matunaw sa normal attack sa late game)
+                 hp: t.hp + (eng.wave * 60) + Math.floor(Math.pow(eng.wave, 1.6) * 5), 
+                 maxHp: t.hp + (eng.wave * 60) + Math.floor(Math.pow(eng.wave, 1.6) * 5), 
+                 
+                 // 🔥 DAMAGE: Mapanganib kapag napaligiran ka na (Exponential din ang paglakas)
+                 dmg: t.dmg + (eng.wave * 3) + Math.floor(eng.wave * eng.wave * 0.04), 
+                 
+                 // 🔥 XP: Tumaas ang multiplier sa 1.10 para mabilis ka mag-level up
+                 xp: Math.floor(t.xp * Math.pow(1.10, eng.wave)),
+                 
                  color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
             }
@@ -2672,27 +2762,26 @@ if (eng.gameStarted) {
               if (activeBosses < 4) {
 
                   if (eng.wave >= 100 && eng.wave % 25 === 0) {
-                     // 1. The Abyss (LAGING ISA LANG) - 🔥 BUFFED
+                     // 1. The Abyss (GOD TIER - HP: 450k, DMG: 1200)
                      const scale = eng.wave - 100;
                      const spawnCount = 1;
                      
                      for (let i = 0; i < spawnCount; i++) {
                          eng.enemies.push({ 
                              x: W/2, y: -60, r: 50, 
-                             speed: 60 + (scale * 0.2), 
-                             hp: 120000 + (scale * 1500), 
-                             maxHp: 120000 + (scale * 1500), 
-                             prevHpFrame: 120000 + (scale * 1500), 
-                             dmg: 500 + (scale * 15), 
-                             xp: 25000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
+                             speed: 65 + (scale * 0.3), 
+                             hp: 450000 + (scale * 15000), 
+                             maxHp: 450000 + (scale * 15000), 
+                             prevHpFrame: 450000 + (scale * 15000), 
+                             dmg: 1200 + (scale * 50), 
+                             xp: 50000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
                              abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, 
                              stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                          });
                      }
                   } else if (eng.wave >= 70 && eng.wave % 15 === 0) {
-                     // 2. Primordial Demon - 🔥 BUFFED
+                     // 2. Primordial Demon (MYTHIC TIER - HP: 180k, DMG: 600)
                      const scale = eng.wave - 70;
-                     // 🛑 HARD CAP: Max of 2 Primordial Demons
                      const spawnCount = Math.min(2, 2); 
                      
                      for (let i = 0; i < spawnCount; i++) {
@@ -2701,18 +2790,17 @@ if (eng.gameStarted) {
                          
                          eng.enemies.push({ 
                              x: (W/2) + offsetX, y: -50 - offsetY, r: 35, 
-                             speed: 75 + (scale * 0.25), 
-                             hp: 45000 + (scale * 600), 
-                             maxHp: 45000 + (scale * 600), 
-                             dmg: 250 + (scale * 8), 
-                             xp: 8000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
+                             speed: 85 + (scale * 0.35), 
+                             hp: 180000 + (scale * 8000), 
+                             maxHp: 180000 + (scale * 8000), 
+                             dmg: 600 + (scale * 25), 
+                             xp: 20000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
                              flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                          });
                      }
                   } else if (eng.wave >= 40 && eng.wave % 5 === 0) {
-                     // 3. Archdemon - 🔥 BUFFED
+                     // 3. Archdemon (LEGENDARY TIER - HP: 60k, DMG: 350)
                      const scale = eng.wave - 40;
-                     // 🛑 HARD CAP: Hanggang 3 lang ang pwedeng lumabas sabay-sabay
                      const spawnCount = Math.min(3, 1 + Math.floor((eng.wave - 40) / 10));
                      
                      for (let i = 0; i < spawnCount; i++) {
@@ -2721,18 +2809,17 @@ if (eng.gameStarted) {
                          
                          eng.enemies.push({ 
                              x: (W/2) + offsetX, y: -45 - offsetY, r: 25, 
-                             speed: 90 + (scale * 0.4), 
-                             hp: 15000 + (scale * 400), // Tinaasan ang scaling pambawi sa cap
-                             maxHp: 15000 + (scale * 400), 
-                             dmg: 150 + (scale * 5), 
-                             xp: 3500, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
+                             speed: 100 + (scale * 0.5), 
+                             hp: 60000 + (scale * 4000), 
+                             maxHp: 60000 + (scale * 4000), 
+                             dmg: 350 + (scale * 15), 
+                             xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
                              flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                          });
                      }
                   } else if (eng.wave >= 30 && eng.wave % 3 === 0) {
-                     // 4. Demon Knight - 🔥 BUFFED
+                     // 4. Demon Knight (EPIC TIER - HP: 25k, DMG: 200)
                      const scale = eng.wave - 30;
-                     // 🛑 HARD CAP: Hanggang 4 lang ang pwedeng lumabas sabay-sabay
                      const spawnCount = Math.min(4, 1 + Math.floor((eng.wave - 30) / 5));
                      
                      for (let i = 0; i < spawnCount; i++) {
@@ -2741,24 +2828,24 @@ if (eng.gameStarted) {
                          
                          eng.enemies.push({ 
                              x: (W/2) + offsetX, y: -40 - offsetY, r: 20, 
-                             speed: 105 + (scale * 0.5), 
-                             hp: 6000 + (scale * 200), // Tinaasan ang scaling pambawi sa cap
-                             maxHp: 6000 + (scale * 200), 
-                             dmg: 90 + (scale * 3), 
-                             xp: 1500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
+                             speed: 115 + (scale * 0.6), 
+                             hp: 25000 + (scale * 2000), 
+                             maxHp: 25000 + (scale * 2000), 
+                             dmg: 200 + (scale * 10), 
+                             xp: 4000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
                              flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                          });
                      }
                   } else if (eng.wave % 3 === 0) {
-                     // Generic Boss Fallback (LAGING ISA)
+                     // Generic Boss Fallback
                      const t = ET[3];
                      eng.enemies.push({ 
                          x: W/2, y: -40, r: t.r, 
-                         speed: t.speed + (eng.wave * 0.1), 
-                         hp: t.hp + eng.wave*30, 
-                         maxHp: t.hp + eng.wave*30, 
-                         dmg: t.dmg + (eng.wave * 0.5), 
-                         xp: t.xp, color: t.color, glow: t.glow, boss: true, 
+                         speed: t.speed + (eng.wave * 0.15), 
+                         hp: t.hp + (eng.wave * 300), 
+                         maxHp: t.hp + (eng.wave * 300), 
+                         dmg: t.dmg + (eng.wave * 1.5), 
+                         xp: t.xp * 2, color: t.color, glow: t.glow, boss: true, 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   }
@@ -2960,8 +3047,21 @@ if (eng.gameStarted) {
 
                 // RANDOM CUBE BASHES sa buong screen
                 if (!eng.cubeBashes) eng.cubeBashes = [];
-                eng.cubeBashes.push({ x: playerObj.x + (Math.random()-0.5)*400, y: playerObj.y + (Math.random()-0.5)*400, radius: 10, maxRadius: 160, speed: 450 });
-              }
+                let cbX = playerObj.x + (Math.random()-0.5)*400;
+                let cbY = playerObj.y + (Math.random()-0.5)*400;
+                eng.cubeBashes.push({ x: cbX, y: cbY, radius: 10, maxRadius: 160, speed: 450 });
+                
+                // 🔥 SCALING: Arcane Instinct Cube Bash
+                let cbDmg = 100 + ((eng.wave || 1) * 40) + ((playerObj.dmg || 0) * 1.5);
+                cbDmg *= 5.0; // Instinct Multiplier
+                for (const enemy of eng.enemies) {
+                  if (Math.hypot(enemy.x - cbX, enemy.y - cbY) <= 160) {
+                    enemy.stunnedTime = 1.6;
+                    enemy.hp -= cbDmg;
+                    if (enemy.hp <= 0) enemy.deadTrigger = true;
+                  }
+                }
+              } // <--- Dulo ng Arcane Instinct burstTick block
             }
           }
 
@@ -3013,7 +3113,7 @@ if (eng.gameStarted) {
             }
           }
 
-          if (playerObj.skills.cubeBash?.learned) {
+if (playerObj.skills.cubeBash?.learned) {
             if (playerObj.skills.cubeBash.cd === undefined) playerObj.skills.cubeBash.cd = 0;
             if (playerObj.skills.cubeBash.cd > 0) playerObj.skills.cubeBash.cd -= dt;
             
@@ -3021,9 +3121,27 @@ if (eng.gameStarted) {
               playerObj.skills.cubeBash.cd = 4.5;
               if (!eng.cubeBashes) eng.cubeBashes = [];
               eng.cubeBashes.push({ x: playerObj.x, y: playerObj.y, radius: 10, maxRadius: 135, speed: 260 });
+              
               for (const enemy of eng.enemies) {
                 if (Math.hypot(enemy.x - playerObj.x, enemy.y - playerObj.y) <= 135) {
                   enemy.stunnedTime = 1.6;
+                  
+                  // 🔥 DYNAMIC SCALED DPS: Cube Bash
+                  let cbDmg = 100 + ((eng?.wave || 1) * 40) + ((playerObj?.dmg || 0) * 1.5);
+                  if (playerObj?.potBuffs?.power > 0) cbDmg *= 1.4;
+                  if (playerObj?.skills?.arcaneInstinct?.duration > 0) cbDmg *= 5.0;
+                  if (enemy.instabTime > 0) cbDmg *= 1.5;
+                  
+                  let totalCrit = (playerObj?.baseCrit || 0) + (playerObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  if (Math.random() < (totalCrit / 100)) {
+                    cbDmg *= 2;
+                    enemy.flash = 0.5;
+                  } else {
+                    enemy.flash = 0.2;
+                  }
+                  
+                  enemy.hp -= cbDmg;
+                  if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
             }
@@ -3248,7 +3366,6 @@ if (isHost || !isCoopActive) {
             }
           }
         }
-
         if (eng.slashes) {
           for (let slIdx = eng.slashes.length - 1; slIdx >= 0; slIdx--) {
             const sl = eng.slashes[slIdx];
@@ -3259,15 +3376,20 @@ if (isHost || !isCoopActive) {
               eng.slashes.splice(slIdx, 1);
               continue;
             }
+            
+            // 🔥 Binalik natin ang nawalang loop at collision check!
             for (const enemy of eng.enemies) {
               if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 28) {
                 if (!sl.hits.has(enemy)) {
                   sl.hits.add(enemy);
-                  let baseSkillDmg = 42;
+                  
                   const shooterObj = sl.p2 ? eng.p2 : eng.p;
+                  
+                  let baseSkillDmg = 42 + ((eng?.wave || 1) * 25) + ((shooterObj?.dmg || 0) * 1.5);
                   if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 5.0; // 🔥 BUFF: Skill dmg multiplier x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 5.0; 
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
+                  
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
                   if (Math.random() < (totalCrit / 100)) {
                     baseSkillDmg *= 2;
@@ -3282,7 +3404,7 @@ if (isHost || !isCoopActive) {
               }
             }
           }
-        }
+        }   
 
         if (eng.stars) {
           for (let sIdx = eng.stars.length - 1; sIdx >= 0; sIdx--) {
@@ -3290,13 +3412,18 @@ if (isHost || !isCoopActive) {
             star.progress += dt * 2.5;
             star.currentY = star.targetY - 400 * (1 - star.progress);
             if (star.progress >= 1) {
-              for (const enemy of eng.enemies) {
+                for (const enemy of eng.enemies) {
                 if (Math.hypot(enemy.x - star.x, enemy.y - star.targetY) <= star.radius) {
-                  let splashDmg = 70;
+                  // Kunin muna kung sino ang nag-cast para magamit ang stats niya
                   const shooterObj = star.p2 ? eng.p2 : eng.p;
+                  
+                  // 🔥 DYNAMIC SCALED DPS: Shooting Star
+                  let splashDmg = 70 + ((eng?.wave || 1) * 40) + ((shooterObj?.dmg || 0) * 2.0);
+                  
                   if (shooterObj?.potBuffs?.power > 0) splashDmg *= 1.4;
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 5.0; // 🔥 BUFF: Splash dmg multiplier x5.0
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
+                  
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
                   if (Math.random() < (totalCrit / 100)) {
                     splashDmg *= 2;
@@ -3342,7 +3469,8 @@ if (isHost || !isCoopActive) {
               eng.screenShake = 1.0;
 
               for (const enemy of eng.enemies) {
-                let colPulseDmg = 2500; // 🔥 BUFF: MASSIVE Pulse damage per tick
+                // 🔥 SCALING: Arcane Collapse Pulses
+                let colPulseDmg = 2500 + ((eng.wave || 1) * 400) + ((eng.p?.dmg || 0) * 15);
                 if (enemy.instabTime > 0) colPulseDmg *= 1.5;
                 enemy.hp -= colPulseDmg;
                 enemy.flash = 0.35;
@@ -3604,7 +3732,7 @@ if (isHost || !isCoopActive) {
                   }
                   eng.bullets.splice(i, 1);
                   hit = true;
-if (e.hp <= 0) {
+                    if (e.hp <= 0) {
                     eng.score += e.boss ? 1500 : 100;
 
                     // --- 🩸 LIFESTEAL TRIGGER ---
@@ -3634,40 +3762,68 @@ if (e.hp <= 0) {
                       });
                     }
                     
-                      // --- 🎒 EQUIPMENT DROPS ---
-                      const dropRollEq = Math.random();
-                      let droppedRarity = null;
+                    // --- 🎒 EQUIPMENT DROPS ---
+                const dropRollEq = Math.random();
+                let droppedRarity = null;
 
-                      // Tukuyin kung Primordial o Abyss ang namatay
-                      const isMythicDropper = ['primordial', 'abyss'].includes(e.type);
+                if (['primordial', 'abyss'].includes(e.type)) {
+                  // 👑 THE ABYSS & PRIMORDIAL DEMON DROPS
+                  if (dropRollEq < 0.10) droppedRarity = 'mythic';               // 10% chance
+                  else if (dropRollEq < 0.25) droppedRarity = 'legendary';       // 15% chance (10% + 15%)
+                  else if (dropRollEq < 0.75) droppedRarity = 'epic';            // 50% chance (25% + 50%)
+                  
+                } else if (['demonKnight', 'archdemon'].includes(e.type)) {
+                  // 👿 DEMON KNIGHT & ARCHDEMON DROPS
+                  if (dropRollEq < 0.05) droppedRarity = 'legendary';            // 5% chance
+                  else if (dropRollEq < 0.25) droppedRarity = 'epic';            // 20% chance (5% + 20%)
+                  else if (dropRollEq < 0.75) droppedRarity = 'rare';            // 50% chance (25% + 50%)
+                  
+                } else {
+                  // 🟢 NORMAL MINIONS & MINI BOSSES (Yung mga bilog)
+                  if (dropRollEq < 0.005) droppedRarity = 'epic';                // 0.5% chance
+                  else if (dropRollEq < 0.015) droppedRarity = 'rare';           // 1% chance (0.5% + 1%)
+                  else if (dropRollEq < 0.035) droppedRarity = 'common';         // 2% chance (1.5% + 2%)
+                }
 
-                      if (isMythicDropper) {
-                        // Para sa Primordial at The Abyss LANG (Kasama Mythic at Legendary)
-                        if (dropRollEq < 0.00005) droppedRarity = 'mythic';               // 0.005% chance
-                        else if (dropRollEq < 0.00020) droppedRarity = 'legendary';       // 0.015% chance
-                        else if (dropRollEq < 0.00170) droppedRarity = 'epic';            // 0.15% chance
-                        else if (dropRollEq < 0.00670) droppedRarity = 'rare';            // 0.5% chance
-                        else if (dropRollEq < 0.05670) droppedRarity = 'common';          // 5% chance
-                      } else {
-                        // Para sa Archdemon, Demon Knight, Mini Bosses, at Normal Minions (Hanggang Epic lang)
-                        if (dropRollEq < 0.00150) droppedRarity = 'epic';                 // 0.15% chance
-                        else if (dropRollEq < 0.00650) droppedRarity = 'rare';            // 0.5% chance
-                        else if (dropRollEq < 0.05650) droppedRarity = 'common';          // 5% chance
-                      }
+                if (droppedRarity) {
+                  const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
+                  if (pool.length > 0) {
+                    const baseItem = pool[Math.floor(Math.random() * pool.length)];
+                    const scaledItem = JSON.parse(JSON.stringify(baseItem));
+                    
+                    // 🔥 DYNAMIC ITEM SCALING BASED ON WAVE
+                    const waveMult = Math.max(1, Math.floor((eng.wave || 1) / 5));
+                    
+                    if (scaledItem.stats.atk) scaledItem.stats.atk += Math.floor(waveMult * 3);
+                    if (scaledItem.stats.def) scaledItem.stats.def += Math.floor(waveMult * 2);
+                    if (scaledItem.stats.hp) scaledItem.stats.hp += Math.floor(waveMult * 15);
+                    if (scaledItem.stats.crit) scaledItem.stats.crit += Math.floor(waveMult * 0.5);
+                    
+                    // 🔥 STATS CAPS APPLIED HERE
+                    if (scaledItem.stats.lifesteal) {
+                        scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
+                        scaledItem.stats.lifesteal = Math.min(scaledItem.stats.lifesteal, 15); // Cap to 15
+                    }
+                    if (scaledItem.stats.speed) {
+                        scaledItem.stats.speed += Math.floor(waveMult * 5);
+                        scaledItem.stats.speed = Math.min(scaledItem.stats.speed, 80); // Cap to 80
+                    }
+                    if (scaledItem.stats.rate) {
+                        scaledItem.stats.rate += (waveMult * 0.02);
+                        scaledItem.stats.rate = Math.min(scaledItem.stats.rate, 0.4); // Cap to 0.4 reduction
+                    }
 
-                      if (droppedRarity) {
-                        const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
-                        if (pool.length > 0) {
-                          const selectedItem = pool[Math.floor(Math.random() * pool.length)];
-                          if (!eng.droppedItems) eng.droppedItems = []; 
-                          eng.droppedItems.push({
-                            x: e.x + (Math.random()-0.5)*20, 
-                            y: e.y + (Math.random()-0.5)*20, 
-                            item: selectedItem, 
-                            life: 25.0 // Tatagal ng 45 seconds sa sahig
-                          });
-                        }
-                      }
+                    scaledItem.name = scaledItem.name + (waveMult > 1 ? ` (+${waveMult})` : "");
+
+                    if (!eng.droppedItems) eng.droppedItems = []; 
+                    eng.droppedItems.push({
+                      x: e.x + (Math.random()-0.5)*20, 
+                      y: e.y + (Math.random()-0.5)*20, 
+                      item: scaledItem, 
+                      life: 25.0
+                    });
+                  }
+                }
 
                     eng.enemies.splice(j, 1);
                   }
@@ -3732,9 +3888,12 @@ if (e.hp <= 0) {
                 }
               }
 
-              if (e.stigmaTime > 0) {
+                if (e.stigmaTime > 0) {
                 e.stigmaTime -= dt;
-                e.hp -= 20 * dt; 
+                
+                // 🔥 DYNAMIC SCALED DPS: Body Cutter Stigma DoT
+                e.hp -= (20 + ((eng?.wave || 1) * 15)) * dt; 
+                
                 if (Math.random() < 0.15) {
                   eng.particles.push({ x: e.x + (Math.random() - 0.5) * 10, y: e.y + (Math.random() - 0.5) * 10, vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
                 }
@@ -3805,18 +3964,44 @@ if (e.deadTrigger) {
                 }
 
                 if (droppedRarity) {
-                  const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
-                  if (pool.length > 0) {
-                    const selectedItem = pool[Math.floor(Math.random() * pool.length)];
-                    if (!eng.droppedItems) eng.droppedItems = []; 
-                    eng.droppedItems.push({
-                      x: e.x + (Math.random()-0.5)*20, 
-                      y: e.y + (Math.random()-0.5)*20, 
-                      item: selectedItem, 
-                      life: 25.0 // Tatagal ng 45 seconds sa sahig
-                    });
-                  }
-                }
+                        const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
+                        if (pool.length > 0) {
+                          const baseItem = pool[Math.floor(Math.random() * pool.length)];
+                          const scaledItem = JSON.parse(JSON.stringify(baseItem));
+                          
+                          // 🔥 DYNAMIC ITEM SCALING BASED ON WAVE
+                          const waveMult = Math.max(1, Math.floor((eng.wave || 1) / 5));
+                          
+                          if (scaledItem.stats.atk) scaledItem.stats.atk += Math.floor(waveMult * 3);
+                          if (scaledItem.stats.def) scaledItem.stats.def += Math.floor(waveMult * 2);
+                          if (scaledItem.stats.hp) scaledItem.stats.hp += Math.floor(waveMult * 15);
+                          if (scaledItem.stats.crit) scaledItem.stats.crit += Math.floor(waveMult * 0.5);
+                          
+                          // 🔥 STATS CAPS APPLIED HERE
+                          if (scaledItem.stats.lifesteal) {
+                              scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
+                              scaledItem.stats.lifesteal = Math.min(scaledItem.stats.lifesteal, 15); // Cap to 15
+                          }
+                          if (scaledItem.stats.speed) {
+                              scaledItem.stats.speed += Math.floor(waveMult * 5);
+                              scaledItem.stats.speed = Math.min(scaledItem.stats.speed, 80); // Cap to 80
+                          }
+                          if (scaledItem.stats.rate) {
+                              scaledItem.stats.rate += (waveMult * 0.02);
+                              scaledItem.stats.rate = Math.min(scaledItem.stats.rate, 0.4); // Cap to 0.4 reduction
+                          }
+
+                          scaledItem.name = scaledItem.name + (waveMult > 1 ? ` (+${waveMult})` : "");
+
+                          if (!eng.droppedItems) eng.droppedItems = []; 
+                          eng.droppedItems.push({
+                            x: e.x + (Math.random()-0.5)*20, 
+                            y: e.y + (Math.random()-0.5)*20, 
+                            item: scaledItem, 
+                            life: 25.0
+                          });
+                        }
+                      }
 
                 eng.enemies.splice(j, 1);
                 continue;
@@ -4974,143 +5159,150 @@ if (eng.potions) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-    //     if (e.key === 'n' || e.key === 'N') {
-    //       const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-    //       let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-    //       if (target && !target.dead) {
-    //          eng.screenShake = 2.0;
-    //          target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-    //          // Play boss spawn sound effect
-    //          if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-    //          // Base coordinates (Sa paligid ng player mag-iispawn)
-    //          const startX = target.x;
-    //          const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-    //          // 1. The Abyss (Nasa taas)
-    //          eng.enemies.push({ 
-    //              x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-    //              dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-    //              nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-    //              flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-    //          });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-    //          // 2. Primordial Demon (Nasa kaliwa)
-    //          eng.enemies.push({ 
-    //              x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-    //              dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-    //              nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-    //          });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-    //          // 3. Archdemon (Nasa kanan)
-    //          eng.enemies.push({ 
-    //              x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-    //              dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-    //              nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-    //          });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-    //          // 4. Demon Knight (Nasa ibaba)
-    //          eng.enemies.push({ 
-    //              x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-    //              dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-    //              nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-    //          });
-    //       }
-    //     }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-    //     if (e.key === 'm' || e.key === 'M') {
-    //       const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-    //       let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-    //       if (target && !target.dead) {
-    //          // 1. Matinding Screen Shake at Sound
-    //          eng.screenShake = 3.0;
-    //          target.chatBubble = { text: "DEV: ERADICATION PROTOCOL!", life: 2.0 };
-    //          if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-    //          // 2. Patayin LAHAT ng kalaban agad-agad
-    //          for (const enemy of eng.enemies) {
-    //             enemy.hp = 0;
-    //             enemy.deadTrigger = true;
-    //             enemy.flash = 1.0;
-    //          }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-    //          // 3. Massive Red Particle Explosion sa buong map
-    //          for (let k = 0; k < 250; k++) {
-    //             const pa = Math.random() * Math.PI * 2;
-    //             const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-    //             eng.particles.push({ 
-    //               x: target.x, y: target.y, 
-    //               vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-    //               color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-    //             });
-    //          }
-    //       }
-    //     }
-    // if (e.key === '8') {
-    //           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-    //           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
+
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-    //           if (target && !target.dead) {
-    //             if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-    //             // I-loop ang BUONG database at i-drop lahat!
-    //             EQUIPMENT_DB.forEach((item) => {
-    //               eng.droppedItems.push({
-    //                 // Mas malapad na spread para hindi mag-umpukan ang 30 items
-    //                 x: target.x + (Math.random() - 0.5) * 300, 
-    //                 y: target.y + (Math.random() - 0.5) * 300,
-    //                 item: item,
-    //                 life: 60.0 // Tatagal ng 1 minute sa sahig
-    //               });
-    //             });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-    //             // Notification
-    //             target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-    //             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-    //           }
-    //         }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-    //     if (e.key === '9') {
-    //       const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-    //       let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-    //       if (target && !target.dead) {
-    //          target.level = Math.max(target.level, 20);
-    //          target.maxHp += 50000;
-    //          target.hp = target.maxHp;
-    //          target.dmg += 15000;
-    //          target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-    //          setPlayerLevel(target.level);
-    //       }
-    //     }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 50000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-    //     if (e.key === '0') {
-    //       const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-    //       let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-    //       if (target && !target.dead) {
-    //          // 1. Maximize Level
-    //          target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-    //          // 2. Godlike HP & Damage
-    //          target.maxHp = 999999;
-    //          target.hp = target.maxHp;
-    //          target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-    //          // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-    //          target.speed = 800;        // Max Movement Speed Cap
-    //          target.shootRate = 0.15;   // Max Rapid Fire Cap
-    //          target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-    //          // 4. Max out NEW STATS: Crit and Defense
-    //          target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-    //          target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-    //          target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-    //          setPlayerLevel(target.level);
-    //       }
-    //     }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 
@@ -5687,7 +5879,7 @@ const handlePointerDown = (e) => {
               <button onClick={() => setIsInventoryOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕</button>
             </div>
 
-            {/* Equipped Section */}
+           {/* Equipped Section */}
             <div className="equip-section">
               {['wand', 'robe', 'boots'].map(slot => {
                 const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
@@ -5699,11 +5891,24 @@ const handlePointerDown = (e) => {
                       className="inv-slot" 
                       data-rarity={item ? item.rarity : 'none'}
                       onClick={() => unequipItem(slot)}
-                      style={{ width: '60px' }}
+                      // 1. IDINAGDAG: position: 'relative' para hindi lumabas ang badge sa box
+                      style={{ width: '60px', position: 'relative' }} 
                     >
                       {item ? (
                         <>
                           <span style={{ fontSize: '1.5rem' }}>{slot === 'wand' ? '🪄' : slot === 'robe' ? '🧙' : '👢'}</span>
+                          
+                        
+                          {/* AUTO-DETECT: Plus Badge Indicator para sa nakasuot na item */}
+                          {(() => {
+                            let plusVal = item.plus || item.level || item.upgrade || 0;
+                            if (!plusVal && item.name) {
+                              const match = item.name.match(/\+(\d+)/);
+                              if (match) plusVal = parseInt(match[1]);
+                            }
+                            return plusVal > 0 ? <div className="item-plus-badge">+{plusVal}</div> : null;
+                          })()}
+
                           <div className="item-tooltip" style={{ borderColor: RARITY_COLORS[item.rarity] }}>
                             <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()}</div>
@@ -5725,9 +5930,22 @@ const handlePointerDown = (e) => {
               })}
             </div>
 
-            {/* Backpack Grid */}
-{/* Backpack Grid */}
-            <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Backpack (Max 16)</div>
+           {/* Backpack Grid */}
+            <div className="backpack-header">
+              <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Backpack (Max 16)</div>
+              <button 
+                className="clear-all-btn"
+                onPointerDown={(e) => { 
+                  e.stopPropagation();
+                  clearAllInventory(); 
+                }}
+                onClick={(e) => e.stopPropagation()}
+                title="Delete all items"
+              >
+                Clear All
+              </button>
+            </div>
+   {/* Backpack Grid */}
             <div className="inv-grid">
               {Array.from({ length: 16 }).map((_, i) => {
                 const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
@@ -5742,6 +5960,8 @@ const handlePointerDown = (e) => {
                     className="inv-slot" 
                     data-rarity={item ? item.rarity : 'none'}
                     onClick={() => item && equipItem(item, i)}
+                    // IDINAGDAG: position relative para hindi lumabas ang badge sa gilid ng box
+                    style={{ position: 'relative' }} 
                   >
                     {item && (
                       <>
@@ -5758,7 +5978,17 @@ const handlePointerDown = (e) => {
                         </button>
                         <span style={{ fontSize: '1.5rem' }}>{item.type === 'wand' ? '🪄' : item.type === 'robe' ? '🧙' : '👢'}</span>
                         
-{/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
+                        {/* AUTO-DETECT: Plus Badge Indicator para sa Backpack Items */}
+                        {(() => {
+                          let plusVal = item.plus || item.level || item.upgrade || 0;
+                          if (!plusVal && item.name) {
+                            const match = item.name.match(/\+(\d+)/);
+                            if (match) plusVal = parseInt(match[1]);
+                          }
+                          return plusVal > 0 ? <div className="item-plus-badge">+{plusVal}</div> : null;
+                        })()}
+                        
+                        {/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
                         <div className="item-tooltip" style={{ 
                           display: 'flex',
                           flexDirection: 'row',
