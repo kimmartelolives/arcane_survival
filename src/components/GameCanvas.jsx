@@ -18,7 +18,9 @@ class SoundManager {
       ice: [],
       heal: [],
       freeze: [],
-      nuke: []
+      nuke: [],
+      equip: [],
+      unequip: []
     };
     this.unlocked = false;
 
@@ -33,7 +35,9 @@ class SoundManager {
       ice: '/ice.mp3',
       heal: '/heal.mp3',
       freeze: '/freeze.mp3',
-      nuke: '/nuke.mp3'
+      nuke: '/nuke.mp3',
+      equip: '/equip.mp3',
+      unequip: '/unequip.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -89,6 +93,52 @@ const ET = [
   { r: 11, speed: 105, hp: 20,  dmg: 12, xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
   { r: 14, speed: 135, hp: 55,  dmg: 20, xp: 35,  color: '#818cf8', glow: '#6366f1', boss: false },
   { r: 27, speed: 50,  hp: 260, dmg: 30, xp: 100, color: '#fbbf24', glow: '#f59e0b', boss: true },
+];
+
+const RARITY_COLORS = {
+  common: '#e2e8f0',
+  rare: '#3b82f6',
+  epic: '#a855f7',
+  legendary: '#fbbf24',
+  mythic: '#ef4444'
+};
+
+const EQUIPMENT_DB = [
+  // WANDS
+  { id: 'w1', name: "Apprentice's Willow Wand", rarity: 'common', type: 'wand', stats: { atk: 3, rate: 0.1 }, desc: "Favored by novice spellcasters." },
+  { id: 'w2', name: "Emberwood Wand", rarity: 'common', type: 'wand', stats: { atk: 4, rate: 0.2 }, desc: "Infused with faint fire magic." },
+  { id: 'w3', name: "Arcane Scholar's Wand", rarity: 'rare', type: 'wand', stats: { atk: 7, rate: 0.3, crit: 1 }, desc: "Used by academy mages." },
+  { id: 'w4', name: "Crystal Focus Wand", rarity: 'rare', type: 'wand', stats: { atk: 8, rate: 0.2, crit: 2 }, desc: "Improves spell precision." },
+  { id: 'w5', name: "Stormcaller Wand", rarity: 'epic', type: 'wand', stats: { atk: 14, rate: 0.5, crit: 4, critDmg: 5 }, desc: "Enchant: Fatal Strike I" },
+  { id: 'w6', name: "Moonveil Wand", rarity: 'epic', type: 'wand', stats: { atk: 15, rate: 0.4, crit: 8 }, desc: "Enchant: Arcane Precision" },
+  { id: 'w7', name: "Celestial Sage Wand", rarity: 'legendary', type: 'wand', stats: { atk: 22, rate: 0.7, crit: 8, critDmg: 10 }, desc: "Legendary artifact of old." },
+  { id: 'w8', name: "Voidheart Wand", rarity: 'legendary', type: 'wand', stats: { atk: 39, rate: 0.6, crit: 10 }, desc: "Enchant: Arcane Overload" },
+  { id: 'w9', name: "Astral Dominion Wand", rarity: 'mythic', type: 'wand', stats: { atk: 35, rate: 1.0, crit: 15, critDmg: 20 }, desc: "Mythic: Astral Burst" },
+  { id: 'w10', name: "Eternity Nexus Wand", rarity: 'mythic', type: 'wand', stats: { atk: 63, rate: 0.8, crit: 18 }, desc: "Mythic: Infinite Manaflow" },
+
+  // ROBES
+  { id: 'r1', name: "Novice Mage Robe", rarity: 'common', type: 'robe', stats: { def: 8, hp: 10 }, desc: "Standard apprentice robes." },
+  { id: 'r2', name: "Arcane Cloth Robe", rarity: 'common', type: 'robe', stats: { def: 10, hp: 15 }, desc: "Woven with magical threads." },
+  { id: 'r3', name: "Runic Adept Robe", rarity: 'rare', type: 'robe', stats: { def: 18, hp: 25, lifesteal: 1 }, desc: "Embroidered with protective runes." },
+  { id: 'r4', name: "Mystic Silk Robe", rarity: 'rare', type: 'robe', stats: { def: 20, hp: 30, lifesteal: 2 }, desc: "Favored by traveling spellcasters." },
+  { id: 'r5', name: "Frostwoven Robe", rarity: 'epic', type: 'robe', stats: { def: 35, hp: 50, lifesteal: 3, dmgReduction: 3 }, desc: "Enchant: Iron Plating I" },
+  { id: 'r6', name: "Shadowweave Robe", rarity: 'epic', type: 'robe', stats: { def: 32, hp: 45, speed: 5 }, desc: "Enchant: Swift Stride I" },
+  { id: 'r7', name: "Archmage Robe", rarity: 'legendary', type: 'robe', stats: { def: 55, hp: 80, lifesteal: 5, dmgReduction: 8 }, desc: "Enchant: Iron Plating II" },
+  { id: 'r8', name: "Starforged Robe", rarity: 'legendary', type: 'robe', stats: { def: 75, hp: 90, lifesteal: 6 }, desc: "Enchant: Arcane Barrier" },
+  { id: 'r9', name: "Eternal Archon Robe", rarity: 'mythic', type: 'robe', stats: { def: 90, hp: 150, lifesteal: 10, dmgReduction: 15 }, desc: "Mythic: Mana Shield" },
+  { id: 'r10', name: "Cosmic Sovereign Robe", rarity: 'mythic', type: 'robe', stats: { def: 125, hp: 180, lifesteal: 12 }, desc: "Mythic: Arcane Rebirth" },
+
+  // BOOTS
+  { id: 'b1', name: "Wanderer's Boots", rarity: 'common', type: 'boots', stats: { speed: 12 }, desc: "Lightweight adventure boots." },
+  { id: 'b2', name: "Leather Mystic Boots", rarity: 'common', type: 'boots', stats: { speed: 15 }, desc: "Durable mobility boots." },
+  { id: 'b3', name: "Runebound Boots", rarity: 'rare', type: 'boots', stats: { speed: 22, crit: 1 }, desc: "Engraved with speed runes." },
+  { id: 'b4', name: "Windstep Boots", rarity: 'rare', type: 'boots', stats: { speed: 25, crit: 2 }, desc: "Enchanted with wind magic." },
+  { id: 'b5', name: "Swiftstride Boots", rarity: 'epic', type: 'boots', stats: { speed: 43, crit: 3 }, desc: "Enchant: Swift Stride I" },
+  { id: 'b6', name: "Thunderdash Boots", rarity: 'epic', type: 'boots', stats: { speed: 48, crit: 4 }, desc: "Enchant: Lightning Sprint" },
+  { id: 'b7', name: "Tempest Walker", rarity: 'legendary', type: 'boots', stats: { speed: 70, crit: 5 }, desc: "Enchant: Swift Stride II" },
+  { id: 'b8', name: "Voidrunner Boots", rarity: 'legendary', type: 'boots', stats: { speed: 80, crit: 6 }, desc: "Enchant: Phantom Step" },
+  { id: 'b9', name: "Chrono Walker", rarity: 'mythic', type: 'boots', stats: { speed: 110, crit: 8 }, desc: "Mythic: Blinkstep" },
+  { id: 'b10', name: "Celestial Ascension", rarity: 'mythic', type: 'boots', stats: { speed: 120, crit: 10 }, desc: "Mythic: Phase Walk" }
 ];
 
 const focusStyles = `
@@ -218,21 +268,22 @@ const focusStyles = `
     border-color: #c084fc;
     color: #fff;
   }
-  .rpg-stats-panel {
-    width: 260px;
-    background: rgba(11, 8, 38, 0.94);
-    border: 2px solid #8b5cf6;
-    border-radius: 6px;
-    padding: 10px;
-    color: #fff;
-    font-family: monospace;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
-    backdrop-filter: blur(4px);
-    pointer-events: auto;
-  }
+.rpg-stats-panel {
+  width: 260px;
+  background: rgba(11, 8, 38, 0.45) !important; /* Pinalabnaw na color */
+  backdrop-filter: blur(8px) !important;        /* Glass effect */
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 2px solid #8b5cf6;
+  border-radius: 6px;
+  padding: 10px;
+  color: #fff;
+  font-family: monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  pointer-events: auto;
+}
   .stats-header {
     font-size: 0.78rem;
     font-weight: bold;
@@ -282,48 +333,59 @@ const focusStyles = `
   .rpg-buff-badge.pot-xpBoost { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
   .rpg-buff-badge.skill-instinct { border-color: #e879f9; box-shadow: 0 0 12px rgba(232, 121, 249, 0.6); background: #3b0764; }
 
-  .skill-tree-toggle-btn {
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
-    background: #7c3aed;
-    border: 1px solid #a78bfa;
-    border-radius: 4px;
-    padding: 6px 12px;
-    color: #fff;
-    font-family: monospace;
-    font-size: 0.75rem;
-    font-weight: bold;
-    cursor: pointer;
-    z-index: 60;
-    box-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
-    transition: all 0.2s;
-  }
+.inventory-toggle-btn, .skill-tree-toggle-btn {
+  background: #0f0726;
+  border: 1px solid #eab308;
+  color: #fef08a;
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 0 12px;
+  height: 32px; /* Fixed height para hindi tabingi */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.2);
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.skill-tree-toggle-btn {
+  background: #7c3aed;
+  border-color: #a78bfa;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
+}
+
   .skill-tree-toggle-btn:hover {
     background: #6d28d9;
     transform: translateY(-2px);
   }
 
-  .skill-tree-container {
-    position: absolute;
-    bottom: 46px;
-    right: 12px;
-    background: rgba(11, 8, 38, 0.95);
-    border: 2px solid #7c3aed;
-    border-radius: 8px;
-    padding: 10px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    z-index: 50;
-    font-family: monospace;
-    color: #fff;
-    width: 250px;
-    max-height: 480px;
-    overflow-y: auto;
-    box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
-    backdrop-filter: blur(4px);
-  }
+.skill-tree-container {
+  position: absolute;
+  bottom: 46px;
+  right: 12px;
+  background: rgba(11, 8, 38, 0.45) !important; /* Pinalabnaw */
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 2px solid #7c3aed;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 50;
+  font-family: monospace;
+  color: #fff;
+  width: 250px;
+  max-height: 480px;
+  overflow-y: auto;
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+}
   .skill-tree-title-row {
     display: flex;
     justify-content: space-between;
@@ -400,24 +462,53 @@ const focusStyles = `
     border-left: 2px solid #7c3aed;
   }
 
-/* ELEMENTAL SIGILS CONTAINER */
-  .elemental-sigils-container {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    z-index: 45; /* CHANGED: Binabaan from 55 para matakpan ng menus */
-    background: rgba(11, 8, 38, 0.8);
-    padding: 10px 8px;
-    border: 2px solid #38bdf8;
-    border-radius: 8px;
-    box-shadow: 0 0 25px rgba(56, 189, 248, 0.3);
-    backdrop-filter: blur(4px);
-    pointer-events: auto;
+  /* MOBILE VIEW ADJUSTMENTS */
+@media (max-width: 840px) {
+.skill-tree-container {
+    width: 250px !important;     /* Ibalik sa fixed width para hindi masyadong malapad */
+    max-height: 50vh !important;
+    bottom: 80px !important;     
+    right: 12px !important;      /* Ibalik sa kanan gaya ng desktop */
+    left: auto !important;       /* Siguraduhing hindi ito naka-center */
+    transform: none !important;  /* Alisin yung centering */
+    padding: 10px !important;
   }
+
+  
+
+  .skill-tree-title {
+    font-size: 0.85rem !important; /* Konting lakihan para madaling basahin */
+  }
+
+  .skill-row-btn {
+    padding: 10px 8px !important;  /* Mas malaking touch target sa mobile */
+    font-size: 0.8rem !important;  /* Mas madaling basahin ang text */
+  }
+
+  .skill-node-desc {
+    font-size: 0.75rem !important; /* Konting linaw sa description */
+    padding: 6px 8px !important;
+  }
+}
+
+/* ELEMENTAL SIGILS CONTAINER */
+.elemental-sigils-container {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 45;
+  background: rgba(11, 8, 38, 0.8);
+  padding: 10px 8px;
+  border: 2px solid #38bdf8;
+  border-radius: 8px;
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.3);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
   .sigil-btn {
     position: relative;
     width: 52px;
@@ -476,23 +567,33 @@ const focusStyles = `
   }
   .sigil-btn:hover .sigil-title { opacity: 1; }
 
-  .mmo-hotbar-container {
-    position: absolute;
-    bottom: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(11, 8, 38, 0.9);
-    border: 2px solid #8b5cf6;
-    padding: 6px 14px;
-    border-radius: 8px;
-    box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
-    z-index: 55;
-    font-family: monospace;
-    backdrop-filter: blur(4px);
-  }
+.mmo-hotbar-container {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(11, 8, 38, 0.9);
+  border: 2px solid #8b5cf6;
+  padding: 6px 14px;
+  border-radius: 8px;
+  box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+  z-index: 55;
+  font-family: monospace;
+  backdrop-filter: blur(4px);
+  max-width: 65vw; 
+  overflow-x: auto;
+  white-space: nowrap;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* ADDED: Para itago ang visual scrollbar sa Chrome/Safari pero scrollable pa rin */
+.mmo-hotbar-container::-webkit-scrollbar {
+  display: none;
+}
 
   /* ADD THIS INSIDE focusStyles */
   .hp-vignette {
@@ -529,33 +630,48 @@ const focusStyles = `
   }
 
 @media (max-width: 840px) {
-    .mmo-hotbar-container {
-      gap: 6px;
-      padding: 4px 8px;
-      bottom: 6px;
-    }
-    .mmo-hotbar-slot {
-      width: 46px;
-      height: 46px;
-    }
-    .mmo-hotbar-ult-slot {
-      width: 54px;
-      height: 54px;
-    }
-    .hotbar-name {
-      display: none; 
-    }
-    .elemental-sigils-container {
-      gap: 6px;
-      padding: 6px 4px;
-      right: 4px; /* CHANGED: Mobile anchoring moved to the right */
-    }
-    .sigil-btn {
-      width: 38px;
-      height: 38px;
-      font-size: 1.2rem;
-    }
+  /* HOTBAR: Centered and scaled to fit between HP bar and right-side UI */
+  .mmo-hotbar-container {
+    position: absolute !important;
+    left: 50% !important;
+    bottom: 8px !important;
+    transform: translateX(-50%) scale(0.8) !important; /* Centers it and shrinks it to 80% */
+    transform-origin: bottom center !important;
+    gap: 6px;
+    padding: 4px 8px;
+    z-index: 55;
   }
+  .mmo-hotbar-slot {
+    width: 46px;
+    height: 46px;
+  }
+  .mmo-hotbar-ult-slot {
+    width: 54px;
+    height: 54px;
+  }
+  .hotbar-name {
+    display: none; 
+  }
+  
+  /* ELEMENTAL SIGILS: Anchored right and centered vertically */
+  .elemental-sigils-container {
+    position: absolute !important;
+    top: 50% !important;
+    right: 4px !important;
+    transform: translateY(-50%) scale(0.85) !important; /* Centers vertically and shrinks to 85% */
+    transform-origin: right center !important;
+    gap: 6px;
+    padding: 6px 4px;
+    z-index: 45;
+  }
+  .sigil-btn {
+    width: 38px;
+    height: 38px;
+    font-size: 1.2rem;
+  }
+}
+
+
   .mmo-hotbar-slot {
     position: relative;
     width: 58px;
@@ -891,6 +1007,12 @@ const focusStyles = `
     .game-hud-right-group div {
       font-size: 0.85rem !important;
     }
+
+    .inventory-toggle-btn, .skill-tree-toggle-btn {
+    font-size: 0.55rem !important;
+    padding: 0 8px !important;
+    height: 24px !important; /* Parehas liliit ang height */
+  }
   }
 
   @media (max-width: 840px) {
@@ -995,6 +1117,278 @@ const focusStyles = `
       padding: 3px 5px !important;
     }
   }
+/* =========================================================================
+   🔮 PREMIUM CYBER-FANTASY INVENTORY STYLES (PC & Mobile Ready)
+   ========================================================================= */
+
+.inventory-toggle-btn:hover { 
+  background: #2e1503; 
+  border-color: #fef08a;
+  box-shadow: 0 0 16px rgba(234, 179, 8, 0.4);
+}
+
+/* Inventory Window (Modal) */
+.inventory-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px; 
+  background: rgba(13, 9, 33, 0.45) !important; /* Pinalabnaw */
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border: 2px solid #8b5cf6;
+  border-radius: 12px;
+  padding: 16px;
+  z-index: 100;
+  color: white;
+  font-family: monospace;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(139, 92, 246, 0.2);
+  pointer-events: auto;
+}
+
+/* Header Row Custom Styling */
+.inventory-modal > div:first-child {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+  padding-bottom: 8px;
+  margin-bottom: 12px !important;
+}
+
+/* X Close Button Custom Style */
+.inventory-modal > div:first-child button {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border: 1px solid rgba(239, 68, 68, 0.4) !important;
+  color: #f87171 !important;
+  border-radius: 4px !important;
+  width: 22px !important;
+  height: 22px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: bold !important;
+  font-size: 0.75rem !important;
+  transition: all 0.15s ease !important;
+}
+.inventory-modal > div:first-child button:hover {
+  background: #ef4444 !important;
+  color: white !important;
+}
+
+/* Equipment Section Box */
+.equip-section {
+  display: flex;
+  justify-content: space-around;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  margin-bottom: 14px;
+}
+.equip-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.65rem;
+  color: #a78bfa;
+  font-weight: bold;
+}
+.equip-section .inv-slot {
+  width: 52px !important; /* Pinuwersa nating i-override ang inline 60px para maging pantay na parisukat */
+  height: 52px !important;
+}
+
+/* Backpack Text Header */
+.inventory-modal > div:nth-child(3) {
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  color: #94a3b8;
+}
+
+/* Main Items Grid */
+.inv-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+/* Individual Item Slots */
+.inv-slot {
+  aspect-ratio: 1 / 1;
+  background: rgba(20, 15, 45, 0.6) !important;
+  border: 1px solid #4c2d82 !important;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  box-shadow: inset 0 0 6px rgba(0,0,0,0.4);
+}
+.inv-slot:hover { 
+  transform: scale(1.05); 
+  z-index: 50; 
+  background: transparent !important;
+  border-color: #fef08a !important;
+  box-shadow: 0 0 10px rgba(254, 240, 138, 0.4) !important;
+}
+
+/* Rarity Color Accents */
+.inv-slot[data-rarity="common"] { border-color: #64748b !important; background: rgba(100, 116, 139, 0.05) !important; }
+.inv-slot[data-rarity="rare"] { border-color: #3b82f6 !important; box-shadow: inset 0 0 8px rgba(59, 130, 246, 0.2) !important; }
+.inv-slot[data-rarity="epic"] { border-color: #a855f7 !important; box-shadow: inset 0 0 8px rgba(168, 85, 247, 0.2) !important; }
+.inv-slot[data-rarity="legendary"] { border-color: #fbbf24 !important; box-shadow: inset 0 0 8px rgba(251, 191, 36, 0.2) !important; }
+.inv-slot[data-rarity="mythic"] { border-color: #ef4444 !important; box-shadow: inset 0 0 8px rgba(239, 68, 68, 0.3) !important; }
+
+/* Item Tooltips */
+.item-tooltip {
+  position: absolute;
+  bottom: 115%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #09061a;
+  border: 1px solid #8b5cf6;
+  padding: 8px;
+  width: max-content;
+  max-width: 190px;
+  font-size: 0.65rem;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.7);
+  border-radius: 4px;
+  transition: opacity 0.15s ease;
+}
+.inv-slot:hover .item-tooltip { opacity: 1; }
+
+/* Elegant Delete Button (Pulang X) */
+.delete-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px !important; 
+  height: 16px !important; 
+  font-size: 9px !important;
+  background: #dc2626 !important;
+  color: white !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  border: 1px solid #f87171 !important;
+  z-index: 25 !important; 
+  transition: all 0.1s ease;
+}
+.delete-btn:hover {
+  transform: scale(1.15) !important;
+  background: #ef4444 !important;
+}
+/* =========================================================================
+   📱 INTERACTIVE MOBILE LANDSCAPE CONFIGURATION (Fixed Tooltips)
+   ========================================================================= */
+@media (max-height: 550px), (max-width: 950px) and (orientation: landscape) {
+  
+  .inventory-toggle-btn {
+    font-size: 0.55rem;
+    padding: 3px 8px;
+  }
+
+  .inventory-modal {
+    display: grid !important;
+    grid-template-columns: 110px 1fr !important;
+    column-gap: 14px !important;
+    row-gap: 2px !important;
+    width: 395px !important;
+    max-width: 95vw !important;
+    max-height: 96vh !important;
+    padding: 10px 12px !important;
+    /* 1️⃣ BINALIK SA VISIBLE PARA HINDI MAPUTOL ANG TOOLTIP */
+    overflow: visible !important; 
+    align-items: center !important;
+  }
+
+  .inventory-modal > div:first-child {
+    grid-column: 1 / span 2 !important;
+    grid-row: 1 !important;
+    margin-bottom: 2px !important;
+    padding-bottom: 4px !important;
+  }
+  .inventory-modal span {
+    font-size: 0.65rem !important;
+  }
+
+  .equip-section {
+    grid-column: 1 !important;
+    grid-row: 2 / span 2 !important; 
+    display: flex !important;
+    flex-direction: column !important; 
+    justify-content: center !important;
+    gap: 5px !important;
+    margin-bottom: 0 !important;
+    padding: 6px !important;
+    height: 100% !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+  }
+
+  .equip-box {
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    font-size: 0.52rem !important;
+  }
+  
+  .equip-section .inv-slot {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .inventory-modal > div:nth-child(3) {
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    margin-bottom: 0 !important;
+    font-size: 0.6rem !important;
+  }
+
+  .inv-grid {
+    grid-column: 2 !important;
+    grid-row: 3 !important;
+    grid-template-columns: repeat(4, 38px) !important; 
+    gap: 4px !important;
+    margin-top: 0 !important;
+  }
+
+  .inv-grid .inv-slot {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 4px !important;
+  }
+
+  /* 2️⃣ INAYOS NA TOOLTIP POSITION PARA SA MOBILE (Tulad ng sa Desktop) */
+  .item-tooltip {
+    bottom: 115% !important;
+    top: auto !important;
+    left: 50% !important;
+    right: auto !important; 
+    transform: translateX(-50%) !important;
+    max-width: 150px !important;
+    z-index: 9999 !important; /* Para laging nasa ibabaw ng lahat */
+  }
+  
+  .delete-btn {
+    width: 12px !important;
+    height: 12px !important;
+    font-size: 8px !important;
+    top: -2px !important;
+    right: -2px !important;
+  }
+}
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
@@ -1033,6 +1427,91 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [guestExitedAlert, setGuestExitedAlert] = useState(false);
   const [hostExitedCountdown, setHostExitedCountdown] = useState(null);
   const exitTimerRef = useRef(null);
+  const [showInventory, setShowInventory] = useState(false);
+
+  const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [invTrigger, setInvTrigger] = useState(0);
+
+  const getEquipmentStats = (playerObj) => {
+  const totals = { atk: 0, rate: 0, crit: 0, def: 0, hp: 0, speed: 0, lifesteal: 0 };
+  if (!playerObj || !playerObj.equipment) return totals;
+
+  Object.values(playerObj.equipment).forEach(item => {
+    if (item && item.stats) {
+      totals.atk += item.stats.atk || 0;
+      totals.rate += item.stats.rate || 0;
+      totals.crit += item.stats.crit || 0;
+      totals.def += item.stats.def || 0;
+      totals.hp += item.stats.hp || 0;
+      totals.speed += item.stats.speed || 0;
+      totals.lifesteal += item.stats.lifesteal || 0;
+    }
+  });
+  return totals;
+};
+
+// Equip logic
+const equipItem = (item, index) => {
+  const eng = engineRef.current;
+  const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+  if (!target || target.dead) return;
+
+  const currentEquipped = target.equipment[item.type];
+  
+  // Swap HP logic safely so equipping HP doesn't heal you infinitely, but taking it off removes it
+  if (currentEquipped?.stats?.hp) {
+    target.maxHp -= currentEquipped.stats.hp;
+    target.hp = Math.min(target.hp, target.maxHp);
+  }
+  if (item.stats?.hp) {
+    target.maxHp += item.stats.hp;
+    target.hp += item.stats.hp; // Give them the current HP boost immediately
+  }
+
+  // Swap
+  target.equipment[item.type] = item;
+  target.inventory.splice(index, 1);
+  if (currentEquipped) {
+    target.inventory.push(currentEquipped);
+  }
+  
+  setInvTrigger(prev => prev + 1);
+  playSfx('equip'); // A nice 'equip' sound
+};
+
+const unequipItem = (type) => {
+  const eng = engineRef.current;
+  const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+  if (!target || target.dead || target.inventory.length >= 16) return;
+
+  const item = target.equipment[type];
+  if (!item) return;
+
+  if (item.stats?.hp) {
+    target.maxHp -= item.stats.hp;
+    target.hp = Math.min(target.hp, target.maxHp);
+  }
+
+  target.inventory.push(item);
+  target.equipment[type] = null;
+  setInvTrigger(prev => prev + 1);
+  playSfx('unequip'); // A nice 'unequip' sound
+};
+
+const deleteItem = (index) => {
+  const eng = engineRef.current;
+  const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
+  if (!target || !target.inventory[index]) return;
+
+  // Tanggalin ang item sa inventory
+  target.inventory.splice(index, 1);
+  
+  // Mag-force update ng UI
+  setInvTrigger(prev => prev + 1);
+  
+  // Optional: Play a "delete/trash" sound if you have one, or reuse a sound
+  playSfx('collapse'); 
+};
 
   const initSkills = () => ({
     berserk: { learned: false, enabled: true, cd: 0, duration: 0 },
@@ -1930,8 +2409,14 @@ const handleResize = () => {
       eng.tornados = []; eng.waves = []; eng.fissures = []; eng.lightnings = []; eng.iceStorms = [];
       eng.gameStarted = false; 
       setHasStarted(false);
-      eng.p = { x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
-      name: netRef.current?.isHost ? playerName : allyName
+      eng.droppedItems = [];
+      eng.p = { 
+      x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, 
+      skills: initSkills(), 
+      potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
+      name: netRef.current?.isHost ? playerName : allyName,
+      inventory: [],                                     // 🎒 ADDED THIS
+      equipment: { wand: null, robe: null, boots: null } // ⚔️ ADDED THIS
       };
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
@@ -2557,11 +3042,14 @@ if (isHost || !isCoopActive) {
         }
 
         const localTrackedObj = (isCoopActive && !isHost) ? eng.p2 : eng.p;
-        if (localTrackedObj) {
+          if (localTrackedObj) {
           setPlayerLevel(localTrackedObj.level);
           if (localTrackedObj.skills) {
             setSkillsState({ ...localTrackedObj.skills });
           }
+
+          // ⚠️ Fetches the total stats from equipped items
+          const equipBonuses = getEquipmentStats(localTrackedObj);
 
           const activeBuffs = [];
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) {
@@ -2586,43 +3074,43 @@ if (isHost || !isCoopActive) {
           }
           setActiveBuffsList(activeBuffs);
 
-          let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0);
+          // ✅ Fixed: Added equipBonuses.atk
+          let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0) + equipBonuses.atk;
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
           if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 5.0); // 🔥 BUFF: Attack multiplier x5.0
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 5.0);
 
-          // let currentDef = 0;
-          // if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
-          // if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
-          // if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500; // 🔥 BUFF: Def multiplier +500
-
-          let currentDef = localTrackedObj.baseDef || 0;
+          // ✅ Fixed: Added equipBonuses.def
+          let currentDef = (localTrackedObj.baseDef || 0) + equipBonuses.def;
           if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
           if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500;
 
-          // let currentCrit = 0;
-          // if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
-          // if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500; // 🔥 BUFF: Crit multiplier +500
-
-          let currentCrit = localTrackedObj.baseCrit || 0;
+          // ✅ Fixed: Added equipBonuses.crit
+          let currentCrit = (localTrackedObj.baseCrit || 0) + equipBonuses.crit;
           if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500;
 
-          let currentSpd = localTrackedObj.speed || 200;
+          // ✅ Fixed: Added equipBonuses.speed
+          let currentSpd = (localTrackedObj.speed || 200) + equipBonuses.speed;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 5.0); // 🔥 BUFF: Spd multiplier x5.0
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 5.0);
           
-          let currentCd = localTrackedObj.shootRate || 0.6;
+          let currentCd = (localTrackedObj.shootRate || 0.6) - equipBonuses.rate;
+          currentCd = Math.max(0.15, currentCd);
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentCd *= 0.5;
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCd *= 0.15; // 🔥 BUFF: Fire rate multiplier x0.15
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCd *= 0.15; 
+
+          let currentLifesteal = (localTrackedObj.lifeSteal || 0) + equipBonuses.lifesteal;
 
           if (statAtkRef.current) statAtkRef.current.textContent = currentAtk;
           if (statDefRef.current) statDefRef.current.textContent = `${currentDef}%`;
           if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
           if (statSpdRef.current) statSpdRef.current.textContent = `${currentSpd} IPS`;
           if (statCdRef.current) statCdRef.current.textContent = `${currentCd.toFixed(2)}s`;
-          if (statLifestealRef.current) statLifestealRef.current.textContent = `${localTrackedObj.lifeSteal || 0} HP/Kill`;
+          
+          // ✅ Fixed: Shows currentLifesteal calculation
+          if (statLifestealRef.current) statLifestealRef.current.textContent = `${currentLifesteal} HP/Kill`;
         }
 
         if (isCoopActive && netRef.current.channel) {
@@ -2872,6 +3360,51 @@ if (isHost || !isCoopActive) {
             }
           }
         }
+// 🎒 EQUIPMENT PICKUP LOGIC (NO MAGNET VERSION)
+        if (eng.droppedItems) {
+          for (let i = eng.droppedItems.length - 1; i >= 0; i--) {
+            const drop = eng.droppedItems[i];
+            drop.life -= dt;
+            if (drop.life <= 0) { 
+              eng.droppedItems.splice(i, 1); 
+              continue; 
+            }
+
+            // (Dito mo binura yung vacuum effect block)
+
+            // Pickup collision (Dito lang siya papulot pag tinapakan na ng player)
+            let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2; 
+            let targetPlayer = eng.p;
+            
+            // Check kung sino ang mas malapit sa item para sa pickup
+            if (isCoopActive && eng.p2 && !eng.p2.dead) {
+              const dP1 = eng.p ? Math.hypot(eng.p.x - drop.x, eng.p.y - drop.y) : Infinity;
+              if (Math.hypot(eng.p2.x - drop.x, eng.p2.y - drop.y) < dP1) {
+                targetPlayer = eng.p2;
+              }
+            }
+
+            if (!targetPlayer) continue;
+
+            // Collision check: Kailangan physical touch bago mapulot
+            if (!targetPlayer.dead && Math.hypot(targetPlayer.x - drop.x, targetPlayer.y - drop.y) < targetPlayer.r + 20) {
+              if (!targetPlayer.inventory) targetPlayer.inventory = [];
+              if (targetPlayer.inventory.length < 16) { 
+                targetPlayer.inventory.push(drop.item);
+                
+                // Notification bubble
+                targetPlayer.chatBubble = { text: `+ ${drop.item.name}`, life: 2.0 };
+                eng.droppedItems.splice(i, 1);
+                
+                // Update React UI
+                setInvTrigger(prev => prev + 1); 
+              } else {
+                 // Option: Pwede mong lagyan ng chat bubble kung puno na bag
+                 targetPlayer.chatBubble = { text: "Inventory Full!", life: 1.0 };
+              }
+            }
+          }
+        }
 
         if (eng.gameStarted) {
           if (eng.enemies.length > 0) {
@@ -2992,7 +3525,7 @@ if (isHost || !isCoopActive) {
                   }
                   eng.bullets.splice(i, 1);
                   hit = true;
-                    if (e.hp <= 0) {
+if (e.hp <= 0) {
                     eng.score += e.boss ? 1500 : 100;
 
                     // --- 🩸 LIFESTEAL TRIGGER ---
@@ -3021,6 +3554,34 @@ if (isHost || !isCoopActive) {
                         life: 14.0
                       });
                     }
+
+                    // --- 🎒 EQUIPMENT DROPS ---
+                    const dropRollEq = Math.random();
+                    let droppedRarity = null;
+
+                    if (e.boss) {
+                      if (dropRollEq < 0.05) droppedRarity = 'mythic';
+                      else if (dropRollEq < 0.20) droppedRarity = 'legendary';
+                    } else {
+                      if (eng.wave >= 31 && dropRollEq < 0.02) droppedRarity = 'epic';
+                      else if (eng.wave >= 16 && eng.wave <= 30 && dropRollEq < 0.03) droppedRarity = 'rare';
+                      else if (eng.wave <= 15 && dropRollEq < 0.04) droppedRarity = 'common';
+                    }
+
+                    if (droppedRarity) {
+                      const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
+                      if (pool.length > 0) {
+                        const selectedItem = pool[Math.floor(Math.random() * pool.length)];
+                        if (!eng.droppedItems) eng.droppedItems = []; 
+                        eng.droppedItems.push({
+                          x: e.x + (Math.random()-0.5)*20, 
+                          y: e.y + (Math.random()-0.5)*20, 
+                          item: selectedItem, 
+                          life: 45.0 // Lasts 45 seconds on the ground
+                        });
+                      }
+                    }
+
                     eng.enemies.splice(j, 1);
                   }
                   break;
@@ -3105,7 +3666,7 @@ if (isHost || !isCoopActive) {
                 if (e.hp <= 0) e.deadTrigger = true;
               }
 
-                if (e.deadTrigger) {
+if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
 
                 // --- 🩸 LIFESTEAL TRIGGER ---
@@ -3134,6 +3695,34 @@ if (isHost || !isCoopActive) {
                     life: 14.0
                   });
                 }
+
+                // --- 🎒 EQUIPMENT DROPS ---
+                const dropRollEq = Math.random();
+                let droppedRarity = null;
+
+                if (e.boss) {
+                  if (dropRollEq < 0.05) droppedRarity = 'mythic';
+                  else if (dropRollEq < 0.20) droppedRarity = 'legendary';
+                } else {
+                  if (eng.wave >= 31 && dropRollEq < 0.02) droppedRarity = 'epic';
+                  else if (eng.wave >= 16 && eng.wave <= 30 && dropRollEq < 0.03) droppedRarity = 'rare';
+                  else if (eng.wave <= 15 && dropRollEq < 0.04) droppedRarity = 'common';
+                }
+
+                if (droppedRarity) {
+                  const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
+                  if (pool.length > 0) {
+                    const selectedItem = pool[Math.floor(Math.random() * pool.length)];
+                    if (!eng.droppedItems) eng.droppedItems = []; 
+                    eng.droppedItems.push({
+                      x: e.x + (Math.random()-0.5)*20, 
+                      y: e.y + (Math.random()-0.5)*20, 
+                      item: selectedItem, 
+                      life: 45.0 // Lasts 45 seconds on the ground
+                    });
+                  }
+                }
+
                 eng.enemies.splice(j, 1);
                 continue;
               }
@@ -3458,6 +4047,46 @@ if (eng.potions) {
           ctx.restore();
         }
       }
+
+      // ==========================================
+      // 🎒 EQUIPMENT RENDER LOGIC
+      // ==========================================
+      if (eng.droppedItems) {
+        for (const drop of eng.droppedItems) {
+          ctx.save();
+          // Siguraduhing may RARITY_COLORS sa taas ng file mo
+          const color = RARITY_COLORS[drop.item.rarity] || '#ffffff';
+          const time = performance.now() * 0.005;
+          const bounce = Math.sin(time) * 5;
+
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 20 + Math.abs(Math.sin(time * 0.5)) * 10;
+          
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.moveTo(drop.x, drop.y - 8 + bounce);
+          ctx.lineTo(drop.x + 6, drop.y + bounce);
+          ctx.lineTo(drop.x, drop.y + 8 + bounce);
+          ctx.lineTo(drop.x - 6, drop.y + bounce);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(drop.x, drop.y + bounce, 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'center';
+          ctx.shadowColor = '#000000';
+          ctx.shadowBlur = 6;
+          ctx.fillStyle = color;
+          ctx.fillText(drop.item.name, drop.x, drop.y - 15 + bounce);
+
+          ctx.restore();
+        }
+      }
+      // ==========================================
 
       if (eng.tornados) {
         for (const t of eng.tornados) {
@@ -3918,49 +4547,83 @@ if (eng.potions) {
       if ((e.key === 'k' || e.key === 'K' || e.key === 't' || e.key === 'T') && screen === 'playing') {
         setIsTreeOpen(prev => !prev);
       }
+
+      if ((e.key === 'i' || e.key === 'I') && screen === 'playing') {
+        setIsInventoryOpen(prev => !prev); 
+      }
       
       if (screen === 'playing') {
 
-        // CHEAT CODES GOD MODE + INSTANT SKILL UNLOCKS
-        // if (e.key === '9') {
-        //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-        //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-        //   if (target && !target.dead) {
-        //      target.level = Math.max(target.level, 20);
-        //      target.maxHp += 50000;
-        //      target.hp = target.maxHp;
-        //      target.dmg += 15000;
-        //      target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-        //      setPlayerLevel(target.level);
-        //   }
-        // }
+        // ==========================================
+        // 🛠️ DEV CHEAT CODES: 
+        // ==========================================
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+              
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-        // if (e.key === '0') {
-        //   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-        //   let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-        //   if (target && !target.dead) {
-        //      // 1. Maximize Level
-        //      target.level = Math.max(target.level, 99); 
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
+
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
+
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 50000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
+
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-        //      // 2. Godlike HP & Damage
-        //      target.maxHp = 999999;
-        //      target.hp = target.maxHp;
-        //      target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-        //      // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-        //      target.speed = 800;        // Max Movement Speed Cap
-        //      target.shootRate = 0.15;   // Max Rapid Fire Cap
-        //      target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-        //      // 4. Max out NEW STATS: Crit and Defense
-        //      target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-        //      target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-        //      target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-        //      setPlayerLevel(target.level);
-        //   }
-        // }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
+        
         // END CHEAT CODES
+
+
+        
 
 
 
@@ -3973,6 +4636,8 @@ if (eng.potions) {
         if (e.key === '7') castArcaneResurrectionUltimate();
       }
     };
+
+    
 
     const up = (e) => { eng.keys[e.key] = false; };
     window.addEventListener('keydown', down);
@@ -4489,28 +5154,130 @@ const handlePointerDown = (e) => {
           </div>
         )}
 
-        {screen === 'playing' && playerLevel >= 5 && (
-        <button 
-          className="skill-tree-toggle-btn" 
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            setIsTreeOpen(prev => !prev);
-          }}
-        >
-          {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
-        </button>
+{/* ========================================== */}
+        {/* BOTTOM RIGHT MENUS: INVENTORY & SKILLS     */}
+        {/* ========================================== */}
+        {screen === 'playing' && (
+          <div style={{ position: 'absolute', bottom: '12px', right: '12px', display: 'flex', gap: '8px', zIndex: 60, alignItems: 'flex-end' }}>
+            
+            {/* INVENTORY BUTTON (Laging visible from Level 1) */}
+            <button 
+              className="inventory-toggle-btn" 
+              style={{ position: 'relative', bottom: 'auto', right: 'auto', margin: 0 }}
+              onPointerDown={(e) => { e.stopPropagation(); setIsInventoryOpen(prev => !prev); }}
+            >
+              🎒 {isInventoryOpen ? "Close Bag [I]" : "Inventory [I]"}
+            </button>
+
+            {/* SKILLS BUTTON (Lalabas lang pag Level 5+) */}
+            {playerLevel >= 5 && (
+              <button 
+                className="skill-tree-toggle-btn" 
+                style={{ position: 'relative', bottom: 'auto', right: 'auto', margin: 0 }} // Ino-override nito yung absolute positioning sa CSS mo
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  setIsTreeOpen(prev => !prev);
+                }}
+              >
+                {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
+              </button>
+            )}
+          </div>
         )}
 
-       {screen === 'playing' && playerLevel >= 5 && (
-        <button 
-          className="skill-tree-toggle-btn" 
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            setIsTreeOpen(prev => !prev);
-          }}
-        >
-          {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
-        </button>
+        {/* ========================================== */}
+        {/* THE INVENTORY MODAL (I-paste sa ilalim ng buttons) */}
+        {/* ========================================== */}
+        {screen === 'playing' && isInventoryOpen && (
+          <div className="inventory-modal" onPointerDown={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ fontWeight: 'bold', color: '#fef08a' }}>🎒 EQUIPMENT & INVENTORY</span>
+              <button onClick={() => setIsInventoryOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {/* Equipped Section */}
+            <div className="equip-section">
+              {['wand', 'robe', 'boots'].map(slot => {
+                const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
+                const item = localTgt?.equipment?.[slot];
+                return (
+                  <div className="equip-box" key={slot}>
+                    <span>{slot.toUpperCase()}</span>
+                    <div 
+                      className="inv-slot" 
+                      data-rarity={item ? item.rarity : 'none'}
+                      onClick={() => unequipItem(slot)}
+                      style={{ width: '60px' }}
+                    >
+                      {item ? (
+                        <>
+                          <span style={{ fontSize: '1.5rem' }}>{slot === 'wand' ? '🪄' : slot === 'robe' ? '🧙' : '👢'}</span>
+                          <div className="item-tooltip" style={{ borderColor: RARITY_COLORS[item.rarity] }}>
+                            <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
+                            <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()}</div>
+                            {item.stats.atk && <div>+{item.stats.atk} Attack</div>}
+                            {item.stats.rate && <div>+{item.stats.rate} Atk Rate</div>}
+                            {item.stats.crit && <div>+{item.stats.crit}% Crit</div>}
+                            {item.stats.def && <div>+{item.stats.def} Defense</div>}
+                            {item.stats.hp && <div>+{item.stats.hp} HP</div>}
+                            {item.stats.speed && <div>+{item.stats.speed} Speed</div>}
+                            {item.stats.lifesteal && <div>+{item.stats.lifesteal} Lifesteal</div>}
+                            <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
+                            <div style={{ color: '#ef4444', marginTop: '4px', fontSize: '0.55rem' }}>(Click to Unequip)</div>
+                          </div>
+                        </>
+                      ) : <span style={{ opacity: 0.3 }}>Empty</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Backpack Grid */}
+            <div style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>Backpack (Max 16)</div>
+            <div className="inv-grid">
+              {Array.from({ length: 16 }).map((_, i) => {
+                const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
+                const item = localTgt?.inventory?.[i];
+                return (
+                  <div 
+                    key={i} 
+                    className="inv-slot" 
+                    data-rarity={item ? item.rarity : 'none'}
+                    onClick={() => item && equipItem(item, i)}
+                  >
+                    {item && (
+                      <>
+                      <button 
+              className="delete-btn"
+              onPointerDown={(e) => { 
+                e.stopPropagation(); // Mahalaga para hindi ma-equip ang item
+                deleteItem(i); 
+              }}
+            >
+              ✕
+            </button>
+                        <span style={{ fontSize: '1.5rem' }}>{item.type === 'wand' ? '🪄' : item.type === 'robe' ? '🧙' : '👢'}</span>
+                        <div className="item-tooltip" style={{ borderColor: RARITY_COLORS[item.rarity] }}>
+                          <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
+                          <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
+                          {item.stats.atk && <div>+{item.stats.atk} Attack</div>}
+                          {item.stats.rate && <div>+{item.stats.rate} Atk Rate</div>}
+                          {item.stats.crit && <div>+{item.stats.crit}% Crit</div>}
+                          {item.stats.def && <div>+{item.stats.def} Defense</div>}
+                          {item.stats.hp && <div>+{item.stats.hp} HP</div>}
+                          {item.stats.speed && <div>+{item.stats.speed} Speed</div>}
+                          {item.stats.lifesteal && <div>+{item.stats.lifesteal} Lifesteal</div>}
+                          <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
+                          <div style={{ color: '#10b981', marginTop: '4px', fontSize: '0.55rem' }}>(Click to Equip)</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (

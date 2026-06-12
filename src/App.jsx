@@ -33,10 +33,10 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
   window.arcaneAudio.menuBgm.loop = true;
   window.arcaneAudio.gameBgm.loop = true;
 
-  window.arcaneAudio.menuBgm.volume = 0.3;
-  window.arcaneAudio.gameBgm.volume = 0.3;
-  window.arcaneAudio.levelUpSfx.volume = 0.5;       // Setup ang volume para sa SFX
-  window.arcaneAudio.selectUpgradeSfx.volume = 0.5;
+  window.arcaneAudio.menuBgm.volume = 0.2;
+  window.arcaneAudio.gameBgm.volume = 0.2;
+  window.arcaneAudio.levelUpSfx.volume = 0.4;       // Setup ang volume para sa SFX
+  window.arcaneAudio.selectUpgradeSfx.volume = 0.4;
   window.arcaneAudio.gameOverSfx.volume = 0.6;
 }
 
