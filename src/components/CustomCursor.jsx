@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import wandGif from '../assets/wand.gif'; 
+import wandGif from '../assets/wand.cur'; 
 
 export default function CustomCursor() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
