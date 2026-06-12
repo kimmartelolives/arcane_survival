@@ -4010,7 +4010,7 @@ if (localTarget) {
 // =========================================================
 const drawEquipAura = (x, y, radius, counts) => {
   // SAFE VARIABLES (Bawal ang "?." para walang syntax error sa luma mong setup)
-  console.log("Aura Counts:", counts);
+  // console.log("Aura Counts:", counts);
 const eCount = (counts && counts.epic) ? counts.epic : 0;
   const lCount = (counts && counts.legendary) ? counts.legendary : 0;
   const mCount = (counts && counts.mythic) ? counts.mythic : 0;
