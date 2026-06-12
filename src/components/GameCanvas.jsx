@@ -135,16 +135,16 @@ const EQUIPMENT_DB = [
   { id: 'r10', name: "Cosmic Sovereign Robe", rarity: 'mythic', type: 'robe', stats: { def: 125, hp: 180, lifesteal: 12 }, desc: "Mythic: Arcane Rebirth" },
 
   // BOOTS
-  { id: 'b1', name: "Wanderer's Boots", rarity: 'common', type: 'boots', stats: { speed: 12 }, desc: "Lightweight adventure boots." },
-  { id: 'b2', name: "Leather Mystic Boots", rarity: 'common', type: 'boots', stats: { speed: 15 }, desc: "Durable mobility boots." },
-  { id: 'b3', name: "Runebound Boots", rarity: 'rare', type: 'boots', stats: { speed: 22, crit: 1 }, desc: "Engraved with speed runes." },
-  { id: 'b4', name: "Windstep Boots", rarity: 'rare', type: 'boots', stats: { speed: 25, crit: 2 }, desc: "Enchanted with wind magic." },
-  { id: 'b5', name: "Swiftstride Boots", rarity: 'epic', type: 'boots', stats: { speed: 43, crit: 3 }, desc: "Enchant: Swift Stride I" },
-  { id: 'b6', name: "Thunderdash Boots", rarity: 'epic', type: 'boots', stats: { speed: 48, crit: 4 }, desc: "Enchant: Lightning Sprint" },
-  { id: 'b7', name: "Tempest Walker", rarity: 'legendary', type: 'boots', stats: { speed: 70, crit: 5 }, desc: "Enchant: Swift Stride II" },
-  { id: 'b8', name: "Voidrunner Boots", rarity: 'legendary', type: 'boots', stats: { speed: 80, crit: 6 }, desc: "Enchant: Phantom Step" },
-  { id: 'b9', name: "Chrono Walker", rarity: 'mythic', type: 'boots', stats: { speed: 110, crit: 8 }, desc: "Mythic: Blinkstep" },
-  { id: 'b10', name: "Celestial Ascension", rarity: 'mythic', type: 'boots', stats: { speed: 120, crit: 10 }, desc: "Mythic: Phase Walk" }
+  { id: 'b1', name: "Wanderer's Boots", rarity: 'common', type: 'boots', stats: { speed: 12, def: 1 }, desc: "Lightweight adventure boots." },
+  { id: 'b2', name: "Leather Mystic Boots", rarity: 'common', type: 'boots', stats: { speed: 15, def: 2 }, desc: "Durable mobility boots." },
+  { id: 'b3', name: "Runebound Boots", rarity: 'rare', type: 'boots', stats: { speed: 22, crit: 1, def: 4 }, desc: "Engraved with speed runes." },
+  { id: 'b4', name: "Windstep Boots", rarity: 'rare', type: 'boots', stats: { speed: 25, crit: 2, def: 6 }, desc: "Enchanted with wind magic." },
+  { id: 'b5', name: "Swiftstride Boots", rarity: 'epic', type: 'boots', stats: { speed: 43, crit: 3, def: 15 }, desc: "Enchant: Swift Stride I" },
+  { id: 'b6', name: "Thunderdash Boots", rarity: 'epic', type: 'boots', stats: { speed: 48, crit: 4, def: 12 }, desc: "Enchant: Lightning Sprint" },
+  { id: 'b7', name: "Tempest Walker", rarity: 'legendary', type: 'boots', stats: { speed: 70, crit: 5, def: 20 }, desc: "Enchant: Swift Stride II" },
+  { id: 'b8', name: "Voidrunner Boots", rarity: 'legendary', type: 'boots', stats: { speed: 80, crit: 6, def: 22 }, desc: "Enchant: Phantom Step" },
+  { id: 'b9', name: "Chrono Walker", rarity: 'mythic', type: 'boots', stats: { speed: 110, crit: 8, def: 25 }, desc: "Mythic: Blinkstep" },
+  { id: 'b10', name: "Celestial Ascension", rarity: 'mythic', type: 'boots', stats: { speed: 120, crit: 10, def: 24 }, desc: "Mythic: Phase Walk" }
 ];
 
 const focusStyles = `
@@ -2086,7 +2086,6 @@ const runUpgrade = (choice, forcedTarget = null) => {
       target.baseCrit = Math.min(MAX_CRIT, (target.baseCrit || 0) + critBoost);
     }
     else if (token.includes('def') || token.includes('armor') || token.includes('plating')) {
-      const MAX_DEF = 100;
       target.baseDef = Math.min(MAX_DEF, (target.baseDef || 0) + defBoost);
     }
     else if (token.includes('vampiric') || token.includes('aura')) {
@@ -3802,7 +3801,7 @@ if (isHost || !isCoopActive) {
                     // 🔥 STATS CAPS APPLIED HERE
                     if (scaledItem.stats.lifesteal) {
                         scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
-                        scaledItem.stats.lifesteal = Math.min(scaledItem.stats.lifesteal, 15); // Cap to 15
+                        scaledItem.stats.lifesteal = Math.min(scaledItem.stats.lifesteal, 80); // Cap to 15
                     }
                     if (scaledItem.stats.speed) {
                         scaledItem.stats.speed += Math.floor(waveMult * 5);
