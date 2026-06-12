@@ -2632,7 +2632,7 @@ const handleResize = () => {
           eng.screenShake -= dt;
         }
 
-        if (eng.gameStarted) {
+if (eng.gameStarted) {
           eng.waveT += dt;
           eng.spawnT += dt;
 
@@ -2649,13 +2649,10 @@ const handleResize = () => {
               else { ex = -30; ey = Math.random() * H; }
                 eng.enemies.push({ 
                  x: ex, y: ey, r: t.r, 
-                //  speed: t.speed + (eng.wave - 1) * 5, 
-                // speed: Math.min(600, t.speed + (eng.wave - 1) * 4),
                  speed: t.speed + Math.floor(Math.log(eng.wave) * 20),
                  hp: t.hp + (eng.wave - 1) * 10, 
                  maxHp: t.hp + (eng.wave - 1) * 10, 
                  dmg: t.dmg + Math.floor((eng.wave - 1) * 0.7), // LALAKAS ANG DAMAGE PER WAVE
-                //  xp: t.xp + Math.floor((eng.wave - 1) * 3),
                  xp: Math.floor(t.xp * Math.pow(1.08, eng.wave)),
                  color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
@@ -2668,99 +2665,148 @@ const handleResize = () => {
               // 🟢 BOSS SPAWN LOGIC & STATS (DYNAMIC SPAWN COUNT)
               // =========================================================
 
-              if (eng.wave >= 100 && eng.wave % 25 === 0) {
-                 // 1. The Abyss (LAGING ISA LANG)
-                 const scale = eng.wave - 100;
-                 const spawnCount = 1;
-                 
-                 for (let i = 0; i < spawnCount; i++) {
-                     eng.enemies.push({ 
-                         x: W/2, y: -60, r: 50, 
-                         speed: 45 + (scale * 0.1), 
-                         hp: 35000 + (scale * 300), 
-                         maxHp: 35000 + (scale * 300), 
-                         prevHpFrame: 35000 + (scale * 300), 
-                         dmg: 200 + (scale * 5), 
-                         xp: 10000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
-                         abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, 
-                         stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                     });
-                 }
-              } else if (eng.wave >= 70 && eng.wave % 15 === 0) {
-                 // 2. Primordial Demon (LAGING DALAWA)
-                 const scale = eng.wave - 70;
-                 const spawnCount = 2; // Fixed at 2
-                 
-                 for (let i = 0; i < spawnCount; i++) {
-                     // Dynamic Centering Formula
-                     const offsetX = (i - (spawnCount - 1) / 2) * 120;
-                     const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+              // 🛑 1. SCREEN CHECKER: Bilangin ang active bosses
+              const activeBosses = eng.enemies.filter(e => e.boss).length;
+
+              // Mag-i-spawn lang ng bagong boss kung hindi pa puno ang screen (Limit: 4 bosses max at a time)
+              if (activeBosses < 4) {
+
+                  if (eng.wave >= 100 && eng.wave % 25 === 0) {
+                     // 1. The Abyss (LAGING ISA LANG) - 🔥 BUFFED
+                     const scale = eng.wave - 100;
+                     const spawnCount = 1;
                      
+                     for (let i = 0; i < spawnCount; i++) {
+                         eng.enemies.push({ 
+                             x: W/2, y: -60, r: 50, 
+                             speed: 60 + (scale * 0.2), 
+                             hp: 120000 + (scale * 1500), 
+                             maxHp: 120000 + (scale * 1500), 
+                             prevHpFrame: 120000 + (scale * 1500), 
+                             dmg: 500 + (scale * 15), 
+                             xp: 25000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
+                             abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, 
+                             stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         });
+                     }
+                  } else if (eng.wave >= 70 && eng.wave % 15 === 0) {
+                     // 2. Primordial Demon - 🔥 BUFFED
+                     const scale = eng.wave - 70;
+                     // 🛑 HARD CAP: Max of 2 Primordial Demons
+                     const spawnCount = Math.min(2, 2); 
+                     
+                     for (let i = 0; i < spawnCount; i++) {
+                         const offsetX = (i - (spawnCount - 1) / 2) * 120;
+                         const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+                         
+                         eng.enemies.push({ 
+                             x: (W/2) + offsetX, y: -50 - offsetY, r: 35, 
+                             speed: 75 + (scale * 0.25), 
+                             hp: 45000 + (scale * 600), 
+                             maxHp: 45000 + (scale * 600), 
+                             dmg: 250 + (scale * 8), 
+                             xp: 8000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
+                             flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         });
+                     }
+                  } else if (eng.wave >= 40 && eng.wave % 5 === 0) {
+                     // 3. Archdemon - 🔥 BUFFED
+                     const scale = eng.wave - 40;
+                     // 🛑 HARD CAP: Hanggang 3 lang ang pwedeng lumabas sabay-sabay
+                     const spawnCount = Math.min(3, 1 + Math.floor((eng.wave - 40) / 10));
+                     
+                     for (let i = 0; i < spawnCount; i++) {
+                         const offsetX = (i - (spawnCount - 1) / 2) * 100;
+                         const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+                         
+                         eng.enemies.push({ 
+                             x: (W/2) + offsetX, y: -45 - offsetY, r: 25, 
+                             speed: 90 + (scale * 0.4), 
+                             hp: 15000 + (scale * 400), // Tinaasan ang scaling pambawi sa cap
+                             maxHp: 15000 + (scale * 400), 
+                             dmg: 150 + (scale * 5), 
+                             xp: 3500, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
+                             flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         });
+                     }
+                  } else if (eng.wave >= 30 && eng.wave % 3 === 0) {
+                     // 4. Demon Knight - 🔥 BUFFED
+                     const scale = eng.wave - 30;
+                     // 🛑 HARD CAP: Hanggang 4 lang ang pwedeng lumabas sabay-sabay
+                     const spawnCount = Math.min(4, 1 + Math.floor((eng.wave - 30) / 5));
+                     
+                     for (let i = 0; i < spawnCount; i++) {
+                         const offsetX = (i - (spawnCount - 1) / 2) * 80;
+                         const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
+                         
+                         eng.enemies.push({ 
+                             x: (W/2) + offsetX, y: -40 - offsetY, r: 20, 
+                             speed: 105 + (scale * 0.5), 
+                             hp: 6000 + (scale * 200), // Tinaasan ang scaling pambawi sa cap
+                             maxHp: 6000 + (scale * 200), 
+                             dmg: 90 + (scale * 3), 
+                             xp: 1500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
+                             flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         });
+                     }
+                  } else if (eng.wave % 3 === 0) {
+                     // Generic Boss Fallback (LAGING ISA)
+                     const t = ET[3];
                      eng.enemies.push({ 
-                         x: (W/2) + offsetX, y: -50 - offsetY, r: 35, 
-                         speed: 50 + (scale * 0.1), 
-                         hp: 12000 + (scale * 200), 
-                         maxHp: 12000 + (scale * 200), 
-                         dmg: 120 + (scale * 3), 
-                         xp: 3000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
+                         x: W/2, y: -40, r: t.r, 
+                         speed: t.speed + (eng.wave * 0.1), 
+                         hp: t.hp + eng.wave*30, 
+                         maxHp: t.hp + eng.wave*30, 
+                         dmg: t.dmg + (eng.wave * 0.5), 
+                         xp: t.xp, color: t.color, glow: t.glow, boss: true, 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
-                 }
-              } else if (eng.wave >= 40 && eng.wave % 5 === 0) {
-                 // 3. Archdemon (START SA 1, +1 EVERY 10 WAVES)
-                 const scale = eng.wave - 40;
-                 const spawnCount = 1 + Math.floor((eng.wave - 40) / 10);
-                 
-                 for (let i = 0; i < spawnCount; i++) {
-                     const offsetX = (i - (spawnCount - 1) / 2) * 100;
-                     const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
-                     
-                     eng.enemies.push({ 
-                         x: (W/2) + offsetX, y: -45 - offsetY, r: 25, 
-                         speed: 60 + (scale * 0.3), 
-                         hp: 4000 + (scale * 100), 
-                         maxHp: 4000 + (scale * 100), 
-                         dmg: 70 + (scale * 2), 
-                         xp: 1200, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
-                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                     });
-                 }
-              } else if (eng.wave >= 30 && eng.wave % 3 === 0) {
-                 // 4. Demon Knight (START SA 1, +1 EVERY 5 WAVES)
-                 const scale = eng.wave - 30;
-                 const spawnCount = 1 + Math.floor((eng.wave - 30) / 5);
-                 
-                 for (let i = 0; i < spawnCount; i++) {
-                     const offsetX = (i - (spawnCount - 1) / 2) * 80;
-                     const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
-                     
-                     eng.enemies.push({ 
-                         x: (W/2) + offsetX, y: -40 - offsetY, r: 20, 
-                         speed: 70 + (scale * 0.35), 
-                         hp: 1500 + (scale * 50), 
-                         maxHp: 1500 + (scale * 50), 
-                         dmg: 40 + (scale * 1.5), 
-                         xp: 500, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
-                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                     });
-                 }
-              } else if (eng.wave % 3 === 0) {
-                 // Generic Boss Fallback (LAGING ISA)
-                 const t = ET[3];
-                 eng.enemies.push({ 
-                     x: W/2, y: -40, r: t.r, 
-                     speed: t.speed + (eng.wave * 0.1), 
-                     hp: t.hp + eng.wave*20, 
-                     maxHp: t.hp + eng.wave*20, 
-                     dmg: t.dmg + (eng.wave * 0.5), 
-                     xp: t.xp, color: t.color, glow: t.glow, boss: true, 
-                     flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                 });
-              }
+                  }
+
+              } // End of activeBosses < 4 check
             }
           }
         }
        
+        // if (eng.tornados) {
+        //   for (let i = eng.tornados.length - 1; i >= 0; i--) {
+        //     const t = eng.tornados[i];
+        //     t.life -= dt;
+        //     t.x += (t.vx || 0) * dt; 
+        //     t.y += (t.vy || 0) * dt; 
+        //     if (t.life <= 0) {
+        //       eng.tornados.splice(i, 1);
+        //     } else if (isHost || !isCoopActive) {
+        //       for (const e of eng.enemies) {
+        //         if (Math.hypot(e.x - t.x, e.y - t.y) < t.r + e.r) {
+        //           e.hp -= 10000;        // SPELL DAMAGE LOGIC
+        //           e.flash = 1.0;
+        //           if (e.hp <= 0) e.deadTrigger = true;
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
+
+        // if (eng.waves) {
+        //   for (let i = eng.waves.length - 1; i >= 0; i--) {
+        //     const w = eng.waves[i];
+        //     w.life -= dt;
+        //     w.x += (w.vx || 0) * dt; 
+        //     if (w.life <= 0) {
+        //       eng.waves.splice(i, 1);
+        //     } else if (isHost || !isCoopActive) {
+        //       for (const e of eng.enemies) {
+        //         if (e.x > w.x - w.width / 2 && e.x < w.x + w.width / 2) {
+        //           e.hp -= 10000;      // SPELL DAMAGE LOGIC
+        //           e.flash = 1.0;
+        //           if (e.hp <= 0) e.deadTrigger = true;
+        //         }
+        //       }
+        //     }
+        //   }
+        // }
+
         if (eng.tornados) {
           for (let i = eng.tornados.length - 1; i >= 0; i--) {
             const t = eng.tornados[i];
@@ -2770,10 +2816,17 @@ const handleResize = () => {
             if (t.life <= 0) {
               eng.tornados.splice(i, 1);
             } else if (isHost || !isCoopActive) {
+              
+              // 🟢 DYNAMIC SCALED DPS: Flare Inferno
+              const dynamicBaseDmg = 1000 + (eng.wave * 100); 
+              const casterDmg = eng.boltDmg + (eng.p?.dmg || 0);
+              const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
+
               for (const e of eng.enemies) {
                 if (Math.hypot(e.x - t.x, e.y - t.y) < t.r + e.r) {
-                  e.hp -= 10000;        // SPELL DAMAGE LOGIC
-                  e.flash = 1.0;
+                  e.hp -= tornadoDps * dt;        
+                  e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
+                  if (Math.random() < 0.15) e.flash = 0.5;
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
               }
@@ -2789,10 +2842,18 @@ const handleResize = () => {
             if (w.life <= 0) {
               eng.waves.splice(i, 1);
             } else if (isHost || !isCoopActive) {
+
+              // 🟢 DYNAMIC SCALED DPS: Tidal Wave
+              const dynamicBaseDmg = 1000 + (eng.wave * 100); 
+              const casterDmg = eng.boltDmg + (eng.p?.dmg || 0);
+              const waveDps = (dynamicBaseDmg * 1.5) + (casterDmg * 20); 
+
               for (const e of eng.enemies) {
                 if (e.x > w.x - w.width / 2 && e.x < w.x + w.width / 2) {
-                  e.hp -= 10000;      // SPELL DAMAGE LOGIC
-                  e.flash = 1.0;
+                  e.hp -= waveDps * dt;      
+                  if (!e.boss) e.x += (w.vx * 0.4) * dt; 
+                  e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 2.0);
+                  if (Math.random() < 0.15) e.flash = 0.5;
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
               }
@@ -3334,25 +3395,30 @@ if (isHost || !isCoopActive) {
                   enemy.temporalSlowTime = 8.0;
                   enemy.flash = 0.5;
                 }
-              } else if (pot.type === 'nuke') {
-                // ☢️ ARCANE NUKE EFFECT
-                playSfx('nuke'); // 🔊 AT DITO LANG PARA SA NUKE
+                } else if (pot.type === 'nuke') {
+                // ☢️ ARCANE NUKE EFFECT - BALANCED PERCENTAGE
+                playSfx('nuke'); 
                 eng.screenShake = 2.0;
                 targetPlayer.chatBubble = { text: "ARCANE NUKE!", life: 2.0 };
+                
                 for (const enemy of eng.enemies) {
                   if (!enemy.boss) {
-                     enemy.hp = 0;
-                     enemy.deadTrigger = true; 
+                     // Normal minions: Bawas 80% ng Max HP nila (Hindi na guaranteed insta-kill kung full HP pa sila)
+                     enemy.hp -= (enemy.maxHp * 0.80);
                   } else {
-                     enemy.hp -= 8000; 
-                     // 🔥 FIX: Wag hayaang mag-negative ang HP at patayin ang boss kung 0 na
-                     if (enemy.hp <= 0) {
-                         enemy.hp = 0;
-                         enemy.deadTrigger = true;
-                     }
+                     // Bosses: Bawas 15% ng Max HP
+                     enemy.hp -= (enemy.maxHp * 0.15); 
                   }
+                  
+                  // Siguraduhing mamatay kung sumagad sa 0 ang HP
+                  if (enemy.hp <= 0) {
+                      enemy.hp = 0;
+                      enemy.deadTrigger = true;
+                  }
+                  
                   enemy.flash = 1.0;
                 }
+                
                 // Nuke explosion particles
                 for(let k=0; k<100; k++) {
                    const pa = Math.random()*Math.PI*2;
@@ -3568,50 +3634,40 @@ if (e.hp <= 0) {
                       });
                     }
                     
-                // --- 🎒 EQUIPMENT DROPS ---
-                const dropRollEq = Math.random();
-                let droppedRarity = null;
+                      // --- 🎒 EQUIPMENT DROPS ---
+                      const dropRollEq = Math.random();
+                      let droppedRarity = null;
 
-                // Tukuyin kung anong klaseng kalaban ang namatay
-                const isMajorBoss = ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type);
-                const isMiniBoss = e.boss && !isMajorBoss; // Boss siya pero wala sa 4 na major bosses
+                      // Tukuyin kung Primordial o Abyss ang namatay
+                      const isMythicDropper = ['primordial', 'abyss'].includes(e.type);
 
-                if (isMajorBoss) {
-                  // 1. MAJOR BOSSES: Mythic at Legendary (May konting Epic)
-                  // 100% Guaranteed Drop
-                  if (dropRollEq < 0.05) droppedRarity = 'mythic';         // 5% chance Mythic
-                  else if (dropRollEq < 0.30) droppedRarity = 'legendary'; // 25% chance Legendary
-                  else droppedRarity = 'epic';                             // 70% chance Epic
-                } 
-                else if (isMiniBoss) {
-                  // 2. YELLOW MINI BOSS: Minsan Legendary, madalas Epic pababa
-                  // 100% Guaranteed Drop
-                   if (dropRollEq < 0.02) droppedRarity = 'legendary';      // 2% chance Legendary (Swertehan talaga)
-                  else if (dropRollEq < 0.15) droppedRarity = 'epic';      // 13% chance Epic (0.15 - 0.02 = 13%)
-                  else if (dropRollEq < 0.60) droppedRarity = 'rare';      // 45% chance Rare (Standard Mini Boss Drop)
-                  else droppedRarity = 'common';                           // 40% chance Common
-                }
-                else {
-                  // 3. NORMAL MINIONS: Epic (sobrang bihira), Rare, at Common
-                  // Maliit lang ang total drop chance (4% overall) para hindi mapuno agad ang inventory
-                  if (dropRollEq < 0.002) droppedRarity = 'epic';          // 0.2% chance Epic
-                  else if (dropRollEq < 0.015) droppedRarity = 'rare';     // 1.3% chance Rare
-                  else if (dropRollEq < 0.040) droppedRarity = 'common';   // 2.5% chance Common
-                }
+                      if (isMythicDropper) {
+                        // Para sa Primordial at The Abyss LANG (Kasama Mythic at Legendary)
+                        if (dropRollEq < 0.00005) droppedRarity = 'mythic';               // 0.005% chance
+                        else if (dropRollEq < 0.00020) droppedRarity = 'legendary';       // 0.015% chance
+                        else if (dropRollEq < 0.00170) droppedRarity = 'epic';            // 0.15% chance
+                        else if (dropRollEq < 0.00670) droppedRarity = 'rare';            // 0.5% chance
+                        else if (dropRollEq < 0.05670) droppedRarity = 'common';          // 5% chance
+                      } else {
+                        // Para sa Archdemon, Demon Knight, Mini Bosses, at Normal Minions (Hanggang Epic lang)
+                        if (dropRollEq < 0.00150) droppedRarity = 'epic';                 // 0.15% chance
+                        else if (dropRollEq < 0.00650) droppedRarity = 'rare';            // 0.5% chance
+                        else if (dropRollEq < 0.05650) droppedRarity = 'common';          // 5% chance
+                      }
 
-                if (droppedRarity) {
-                  const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
-                  if (pool.length > 0) {
-                    const selectedItem = pool[Math.floor(Math.random() * pool.length)];
-                    if (!eng.droppedItems) eng.droppedItems = []; 
-                    eng.droppedItems.push({
-                      x: e.x + (Math.random()-0.5)*20, 
-                      y: e.y + (Math.random()-0.5)*20, 
-                      item: selectedItem, 
-                      life: 45.0 // Tatagal ng 45 seconds sa sahig
-                    });
-                  }
-                }
+                      if (droppedRarity) {
+                        const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
+                        if (pool.length > 0) {
+                          const selectedItem = pool[Math.floor(Math.random() * pool.length)];
+                          if (!eng.droppedItems) eng.droppedItems = []; 
+                          eng.droppedItems.push({
+                            x: e.x + (Math.random()-0.5)*20, 
+                            y: e.y + (Math.random()-0.5)*20, 
+                            item: selectedItem, 
+                            life: 25.0 // Tatagal ng 45 seconds sa sahig
+                          });
+                        }
+                      }
 
                     eng.enemies.splice(j, 1);
                   }
@@ -3727,35 +3783,25 @@ if (e.deadTrigger) {
                   });
                 }
 
-                               // --- 🎒 EQUIPMENT DROPS ---
+                // --- 🎒 EQUIPMENT DROPS ---
                 const dropRollEq = Math.random();
                 let droppedRarity = null;
 
-                // Tukuyin kung anong klaseng kalaban ang namatay
-                const isMajorBoss = ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type);
-                const isMiniBoss = e.boss && !isMajorBoss; // Boss siya pero wala sa 4 na major bosses
+                // Tukuyin kung Primordial o Abyss ang namatay
+                const isMythicDropper = ['primordial', 'abyss'].includes(e.type);
 
-                if (isMajorBoss) {
-                  // 1. MAJOR BOSSES: Mythic at Legendary (May konting Epic)
-                  // 100% Guaranteed Drop
-                  if (dropRollEq < 0.05) droppedRarity = 'mythic';         // 5% chance Mythic
-                  else if (dropRollEq < 0.30) droppedRarity = 'legendary'; // 25% chance Legendary
-                  else droppedRarity = 'epic';                             // 70% chance Epic
-                } 
-                else if (isMiniBoss) {
-                  // 2. YELLOW MINI BOSS: Minsan Legendary, madalas Epic pababa
-                  // 100% Guaranteed Drop
-                   if (dropRollEq < 0.02) droppedRarity = 'legendary';      // 2% chance Legendary (Swertehan talaga)
-                  else if (dropRollEq < 0.15) droppedRarity = 'epic';      // 13% chance Epic (0.15 - 0.02 = 13%)
-                  else if (dropRollEq < 0.60) droppedRarity = 'rare';      // 45% chance Rare (Standard Mini Boss Drop)
-                  else droppedRarity = 'common';                           // 40% chance Common
-                }
-                else {
-                  // 3. NORMAL MINIONS: Epic (sobrang bihira), Rare, at Common
-                  // Maliit lang ang total drop chance (4% overall) para hindi mapuno agad ang inventory
-                  if (dropRollEq < 0.002) droppedRarity = 'epic';          // 0.2% chance Epic
-                  else if (dropRollEq < 0.015) droppedRarity = 'rare';     // 1.3% chance Rare
-                  else if (dropRollEq < 0.040) droppedRarity = 'common';   // 2.5% chance Common
+                if (isMythicDropper) {
+                  // Para sa Primordial at The Abyss LANG (Kasama Mythic at Legendary)
+                  if (dropRollEq < 0.00005) droppedRarity = 'mythic';               // 0.005% chance
+                  else if (dropRollEq < 0.00020) droppedRarity = 'legendary';       // 0.015% chance
+                  else if (dropRollEq < 0.00170) droppedRarity = 'epic';            // 0.15% chance
+                  else if (dropRollEq < 0.00670) droppedRarity = 'rare';            // 0.5% chance
+                  else if (dropRollEq < 0.05670) droppedRarity = 'common';          // 5% chance
+                } else {
+                  // Para sa Archdemon, Demon Knight, Mini Bosses, at Normal Minions (Hanggang Epic lang)
+                  if (dropRollEq < 0.00150) droppedRarity = 'epic';                 // 0.15% chance
+                  else if (dropRollEq < 0.00650) droppedRarity = 'rare';            // 0.5% chance
+                  else if (dropRollEq < 0.05650) droppedRarity = 'common';          // 5% chance
                 }
 
                 if (droppedRarity) {
@@ -3767,7 +3813,7 @@ if (e.deadTrigger) {
                       x: e.x + (Math.random()-0.5)*20, 
                       y: e.y + (Math.random()-0.5)*20, 
                       item: selectedItem, 
-                      life: 45.0 // Tatagal ng 45 seconds sa sahig
+                      life: 25.0 // Tatagal ng 45 seconds sa sahig
                     });
                   }
                 }
