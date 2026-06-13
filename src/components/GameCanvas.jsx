@@ -1877,7 +1877,7 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
       let colPulseDmg = 3500 + ((eng?.wave || 1) * 500) + ((target.dmg || 0) * 20);
       
       if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
-      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 5.0; 
+      if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 2.0;
       if (enemy.instabTime > 0) colPulseDmg *= 1.5;
 
       let totalCrit = (target.baseCrit || 0) + (target.potBuffs?.crit > 0 ? 35 : 0);
@@ -1890,8 +1890,8 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
 
       enemy.hp -= colPulseDmg;
       
-      enemy.stunnedTime = 8.0;       
-      enemy.temporalSlowTime = 8.0;  
+      enemy.stunnedTime = enemy.boss ? 1.5 : 8.0;       
+      enemy.temporalSlowTime = enemy.boss ? 2.0 : 8.0; 
       enemy.arcaneBurnTime = 8.0;
       enemy.voidExhaustTime = 8.0;   
       enemy.instabTime = 8.0;        
@@ -2758,106 +2758,72 @@ if (eng.gameStarted) {
               eng.waveT = 0;
               eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
-              // =========================================================
-              // 🟢 BOSS SPAWN LOGIC & STATS (DYNAMIC SPAWN COUNT)
-              // =========================================================
 
-              // 🛑 1. SCREEN CHECKER: Bilangin ang active bosses
+                // =========================================================
+              // 🟢 ADVANCED PROGRESSIVE BOSS SPAWN SYSTEM (V2)
+              // =========================================================
               const activeBosses = eng.enemies.filter(e => e.boss).length;
 
-              // Mag-i-spawn lang ng bagong boss kung hindi pa puno ang screen (Limit: 4 bosses max at a time)
               if (activeBosses < 4) {
+                  const currentWave = eng.wave || 1;
 
-                  if (eng.wave >= 100 && eng.wave % 25 === 0) {
-                     // 1. The Abyss (GOD TIER - HP: 450k, DMG: 1200)
-                     const scale = eng.wave - 100;
-                     const spawnCount = 1;
+                  // 1. END-GAME COVENANT RAID (Wave 100+ Every 20 Waves: Magkasamang Bababa ang Dalawang Diyos!)
+                  if (currentWave >= 100 && currentWave % 20 === 0) {
+                     eng.screenShake = 2.5;
                      
-                     for (let i = 0; i < spawnCount; i++) {
-                         eng.enemies.push({ 
-                             x: W/2, y: -60, r: 50, 
-                             speed: 65 + (scale * 0.3), 
-                             hp: 450000 + (scale * 15000), 
-                             maxHp: 450000 + (scale * 15000), 
-                             prevHpFrame: 450000 + (scale * 15000), 
-                             dmg: 1200 + (scale * 50), 
-                             xp: 50000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
-                             abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, 
-                             stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                         });
-                     }
-                  } else if (eng.wave >= 70 && eng.wave % 15 === 0) {
-                     // 2. Primordial Demon (MYTHIC TIER - HP: 180k, DMG: 600)
-                     const scale = eng.wave - 70;
-                     const spawnCount = Math.min(2, 2); 
+                     // Ipakita ang babala sa player
+                     if (eng.p) eng.p.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
+                     if (eng.p2) eng.p2.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
                      
-                     for (let i = 0; i < spawnCount; i++) {
-                         const offsetX = (i - (spawnCount - 1) / 2) * 120;
-                         const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
-                         
-                         eng.enemies.push({ 
-                             x: (W/2) + offsetX, y: -50 - offsetY, r: 35, 
-                             speed: 85 + (scale * 0.35), 
-                             hp: 180000 + (scale * 8000), 
-                             maxHp: 180000 + (scale * 8000), 
-                             dmg: 600 + (scale * 25), 
-                             xp: 20000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
-                             flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                         });
-                     }
-                  } else if (eng.wave >= 40 && eng.wave % 5 === 0) {
-                     // 3. Archdemon (LEGENDARY TIER - HP: 60k, DMG: 350)
-                     const scale = eng.wave - 40;
-                     const spawnCount = Math.min(3, 1 + Math.floor((eng.wave - 40) / 10));
-                     
-                     for (let i = 0; i < spawnCount; i++) {
-                         const offsetX = (i - (spawnCount - 1) / 2) * 100;
-                         const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
-                         
-                         eng.enemies.push({ 
-                             x: (W/2) + offsetX, y: -45 - offsetY, r: 25, 
-                             speed: 100 + (scale * 0.5), 
-                             hp: 60000 + (scale * 4000), 
-                             maxHp: 60000 + (scale * 4000), 
-                             dmg: 350 + (scale * 15), 
-                             xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
-                             flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                         });
-                     }
-                  } else if (eng.wave >= 30 && eng.wave % 3 === 0) {
-                     // 4. Demon Knight (EPIC TIER - HP: 25k, DMG: 200)
-                     const scale = eng.wave - 30;
-                     const spawnCount = Math.min(4, 1 + Math.floor((eng.wave - 30) / 5));
-                     
-                     for (let i = 0; i < spawnCount; i++) {
-                         const offsetX = (i - (spawnCount - 1) / 2) * 80;
-                         const offsetY = Math.abs(i - (spawnCount - 1) / 2) * 30;
-                         
-                         eng.enemies.push({ 
-                             x: (W/2) + offsetX, y: -40 - offsetY, r: 20, 
-                             speed: 115 + (scale * 0.6), 
-                             hp: 25000 + (scale * 2000), 
-                             maxHp: 25000 + (scale * 2000), 
-                             dmg: 200 + (scale * 10), 
-                             xp: 4000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
-                             flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                         });
-                     }
-                  } else if (eng.wave % 3 === 0) {
-                     // Generic Boss Fallback
-                     const t = ET[3];
+                     // Spawn The Abyss (God Form)
                      eng.enemies.push({ 
-                         x: W/2, y: -40, r: t.r, 
-                         speed: t.speed + (eng.wave * 0.15), 
-                         hp: t.hp + (eng.wave * 300), 
-                         maxHp: t.hp + (eng.wave * 300), 
-                         dmg: t.dmg + (eng.wave * 1.5), 
-                         xp: t.xp * 2, color: t.color, glow: t.glow, boss: true, 
+                         x: W/2 - 150, y: -60, r: 50, speed: 65, 
+                         hp: 500000 + (currentWave * 2000), maxHp: 500000 + (currentWave * 2000), prevHpFrame: 500000 + (currentWave * 2000),
+                         dmg: 1200 + (currentWave * 5), xp: 60000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss (V2)', 
+                         abyssShieldTimer: 0, abyssShieldCd: 6, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                     // Spawn Primordial Demon bilang Guard
+                     eng.enemies.push({ 
+                         x: W/2 + 150, y: -90, r: 35, speed: 85, 
+                         hp: 250000 + (currentWave * 1000), maxHp: 250000 + (currentWave * 1000),
+                         dmg: 650 + (currentWave * 3), xp: 30000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Void', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                  } 
+                  // 2. THE ULTIMATE BOSS ENCOUNTER (Wave 75 - Unang labas ni The Abyss)
+                  else if (currentWave === 75) {
+                     eng.screenShake = 2.0;
+                     eng.enemies.push({ 
+                         x: W/2, y: -60, r: 50, speed: 65, hp: 450000, maxHp: 450000, prevHpFrame: 450000, dmg: 1200, 
+                         xp: 50000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
+                         abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                  } 
+                  // 3. MID-LATE GATEKEEPER (Wave 50 - Unang labas ni Primordial)
+                  else if (currentWave === 50) {
+                     eng.enemies.push({ 
+                         x: W/2, y: -50, r: 35, speed: 85, hp: 180000, maxHp: 180000, dmg: 600, 
+                         xp: 20000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                  } 
+                  // 4. MID GAME WALL (Wave 30 - Archdemon)
+                  else if (currentWave === 30) {
+                     eng.enemies.push({ 
+                         x: W/2, y: -45, r: 25, speed: 100, hp: 60000, maxHp: 60000, dmg: 350, 
+                         xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                  } 
+                  // 5. EARLY GAME BOSS CHECK (Wave 15 - Demon Knight)
+                  else if (currentWave === 15) {
+                     eng.enemies.push({ 
+                         x: W/2, y: -40, r: 20, speed: 115, hp: 25000, maxHp: 25000, dmg: 200, 
+                         xp: 4000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   }
-
-              } // End of activeBosses < 4 check
+              }
             }
           }
         }
@@ -3030,7 +2996,7 @@ if (eng.gameStarted) {
               if (!playerObj.skills.arcaneInstinct.burstTick) playerObj.skills.arcaneInstinct.burstTick = 0;
               playerObj.skills.arcaneInstinct.burstTick += dt;
 
-              if (playerObj.skills.arcaneInstinct.burstTick >= 0.05) { // Faster burst tick!
+              if (playerObj.skills.arcaneInstinct.burstTick >= 0.35) { // Faster burst tick!
                 playerObj.skills.arcaneInstinct.burstTick = 0;
                 
                 // RAIN STARS: Spawn 4 Shooting Stars everywhere!
@@ -3060,7 +3026,7 @@ if (eng.gameStarted) {
                 
                 // 🔥 SCALING: Arcane Instinct Cube Bash
                 let cbDmg = 100 + ((eng.wave || 1) * 40) + ((playerObj.dmg || 0) * 1.5);
-                cbDmg *= 5.0; // Instinct Multiplier
+                cbDmg *= 2.0; // Instinct Multiplier
                 for (const enemy of eng.enemies) {
                   if (Math.hypot(enemy.x - cbX, enemy.y - cbY) <= 160) {
                     enemy.stunnedTime = 1.6;
@@ -3136,7 +3102,7 @@ if (playerObj.skills.cubeBash?.learned) {
                   // 🔥 DYNAMIC SCALED DPS: Cube Bash
                   let cbDmg = 100 + ((eng?.wave || 1) * 40) + ((playerObj?.dmg || 0) * 1.5);
                   if (playerObj?.potBuffs?.power > 0) cbDmg *= 1.4;
-                  if (playerObj?.skills?.arcaneInstinct?.duration > 0) cbDmg *= 5.0;
+                  if (playerObj?.skills?.arcaneInstinct?.duration > 0) cbDmg *= 2.0;
                   if (enemy.instabTime > 0) cbDmg *= 1.5;
                   
                   let totalCrit = (playerObj?.baseCrit || 0) + (playerObj?.potBuffs?.crit > 0 ? 35 : 0);
@@ -3182,7 +3148,7 @@ if (isHost || !isCoopActive) {
             // 👇 Updated to read dynamic speed
             let calculatedSpeed = eng.p.speed || 200;
             if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45;
-            if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
+            if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 1.8; // 🔥 BUFF: Speed multiplier x5.0
 
             eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * calculatedSpeed * dt));
             eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * calculatedSpeed * dt));
@@ -3272,7 +3238,8 @@ if (isHost || !isCoopActive) {
           let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0) + equipBonuses.atk;
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
           if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 5.0);
+          // 🔥 BALANCED UI: x2.0 na lang ang damage display para tugma sa totoong damage output
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 2.0);
 
           // ✅ Fixed: Added equipBonuses.def
           let currentDef = (localTrackedObj.baseDef || 0) + equipBonuses.def;
@@ -3288,7 +3255,8 @@ if (isHost || !isCoopActive) {
           // ✅ Fixed: Added equipBonuses.speed
           let currentSpd = (localTrackedObj.speed || 200) + equipBonuses.speed;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 5.0);
+          // 🔥 BALANCED UI: x2.0 speed para tugma sa request mo at sa totoong movement speed
+          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 2.0);
           
           let currentCd = (localTrackedObj.shootRate || 0.6) - equipBonuses.rate;
           currentCd = Math.max(0.15, currentCd);
@@ -3397,7 +3365,7 @@ if (isHost || !isCoopActive) {
                   
                   let baseSkillDmg = 42 + ((eng?.wave || 1) * 25) + ((shooterObj?.dmg || 0) * 1.5);
                   if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 5.0; 
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.0; 
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
                   
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
@@ -3431,7 +3399,7 @@ if (isHost || !isCoopActive) {
                   let splashDmg = 70 + ((eng?.wave || 1) * 40) + ((shooterObj?.dmg || 0) * 2.0);
                   
                   if (shooterObj?.potBuffs?.power > 0) splashDmg *= 1.4;
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 5.0; // 🔥 BUFF: Splash dmg multiplier x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) splashDmg *= 2.0; // 🔥 BUFF: Splash dmg multiplier x5.0
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
                   
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
@@ -3721,7 +3689,7 @@ if (isHost || !isCoopActive) {
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
                   let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
                   if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); 
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 5.0); // 🔥 BUFF: Final bullet damage x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.0); // 🔥 BUFF: Final bullet damage x5.0
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
@@ -3773,27 +3741,47 @@ if (isHost || !isCoopActive) {
                       });
                     }
                     
-                    // --- 🎒 EQUIPMENT DROPS ---
+                // --- 🎒 ALGORITHMIC ENDLESS DROP LOGIC (FOR CONTINUOUS SPAWNS) ---
                 const dropRollEq = Math.random();
                 let droppedRarity = null;
+                const currentWave = eng.wave || 1;
 
-                if (['primordial', 'abyss'].includes(e.type)) {
-                  // 👑 THE ABYSS & PRIMORDIAL DEMON DROPS
-                  if (dropRollEq < 0.10) droppedRarity = 'mythic';               // 10% chance
-                  else if (dropRollEq < 0.25) droppedRarity = 'legendary';       // 15% chance (10% + 15%)
-                  else if (dropRollEq < 0.75) droppedRarity = 'epic';            // 50% chance (25% + 50%)
+                // 📈 WAVE MULTIPLIER: Tumataas ang swerte tuwing nakakalampas ng 20 waves ang laro
+                // Wave 75 = 0% bonus | Wave 100 = +12.5% | Wave 120 = +22.5% 
+                const endlessBonus = Math.min(0.60, Math.max(0, (currentWave - 75) * 0.005));
+
+                if (e.type === 'abyss') {
+                  // Sasagad ito sa max na 80% Mythic Chance kapag sobrang late game!
+                  const finalMythicChance = Math.min(0.80, 0.20 + endlessBonus);
+                  
+                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
+                  else droppedRarity = 'legendary'; // Laging Legendary ang fallback, walang tapon!
+                  
+                } else if (e.type === 'primordial') {
+                  // Base 15% Mythic sa simula, sasagad sa max na 60%
+                  const finalMythicChance = Math.min(0.60, 0.15 + endlessBonus);
+                  const finalLegendaryChance = 0.50; // Fixed 50% chance spread para sa Legendary
+                  
+                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
+                  else if (dropRollEq < finalMythicChance + finalLegendaryChance) droppedRarity = 'legendary';       
+                  else droppedRarity = 'epic';                                   
                   
                 } else if (['demonKnight', 'archdemon'].includes(e.type)) {
-                  // 👿 DEMON KNIGHT & ARCHDEMON DROPS
-                  if (dropRollEq < 0.05) droppedRarity = 'legendary';            // 5% chance
-                  else if (dropRollEq < 0.25) droppedRarity = 'epic';            // 20% chance (5% + 20%)
-                  else if (dropRollEq < 0.75) droppedRarity = 'rare';            // 50% chance (25% + 50%)
+                  // Ang mga mid-tier bosses ay nagkakaroon din ng pakonti-konting Mythic chance sa late game (Max 15%)
+                  const finalMythicChance = Math.min(0.15, endlessBonus * 0.2);
+                  const finalLegendaryChance = Math.min(0.40, 0.05 + endlessBonus);
+                  
+                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';
+                  else if (dropRollEq < finalMythicChance + finalLegendaryChance) droppedRarity = 'legendary';            
+                  else if (dropRollEq < 0.85) droppedRarity = 'epic';            
+                  else droppedRarity = 'rare';
                   
                 } else {
-                  // 🟢 NORMAL MINIONS & MINI BOSSES (Yung mga bilog)
-                  if (dropRollEq < 0.005) droppedRarity = 'epic';                // 0.5% chance
-                  else if (dropRollEq < 0.015) droppedRarity = 'rare';           // 1% chance (0.5% + 1%)
-                  else if (dropRollEq < 0.035) droppedRarity = 'common';         // 2% chance (1.5% + 2%)
+                  // Normal Mobs & Mini Bosses (May swerte scaling din ng konti sa Epic at Rare)
+                  const normalBonus = Math.min(0.02, endlessBonus * 0.1);
+                  if (dropRollEq < 0.005 + normalBonus) droppedRarity = 'epic';                
+                  else if (dropRollEq < 0.025 + normalBonus) droppedRarity = 'rare';           
+                  else if (dropRollEq < 0.085) droppedRarity = 'common';         
                 }
 
                 if (droppedRarity) {
@@ -3953,24 +3941,50 @@ if (e.deadTrigger) {
                   });
                 }
 
-                // --- 🎒 EQUIPMENT DROPS ---
+                // --- 🎒 ALGORITHMIC ENDLESS DROP LOGIC (FOR CONTINUOUS SPAWNS) ---
                 const dropRollEq = Math.random();
                 let droppedRarity = null;
+                const currentWave = eng.wave || 1;
 
-                // 🔥 PINAG-ISA ANG DROP RATES PARA PATAS KAHIT SPELL ANG NAKAPATAY
-                if (['primordial', 'abyss'].includes(e.type)) {
-                  if (dropRollEq < 0.10) droppedRarity = 'mythic';               // 10% chance
-                  else if (dropRollEq < 0.25) droppedRarity = 'legendary';       // 15% chance (10% + 15%)
-                  else if (dropRollEq < 0.75) droppedRarity = 'epic';            // 50% chance (25% + 50%)
+                // 📈 WAVE MULTIPLIER: Tumataas ang swerte tuwing nakakalampas ng 20 waves ang laro
+                // Wave 75 = 0% bonus | Wave 100 = +12.5% | Wave 120 = +22.5% 
+                const endlessBonus = Math.min(0.60, Math.max(0, (currentWave - 75) * 0.005));
+
+                if (e.type === 'abyss') {
+                  // Sasagad ito sa max na 80% Mythic Chance kapag sobrang late game!
+                  const finalMythicChance = Math.min(0.80, 0.20 + endlessBonus);
+                  
+                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
+                  else droppedRarity = 'legendary'; // Laging Legendary ang fallback, walang tapon!
+                  
+                } else if (e.type === 'primordial') {
+                  // Base 15% Mythic sa simula, sasagad sa max na 60%
+                  const finalMythicChance = Math.min(0.60, 0.15 + endlessBonus);
+                  const finalLegendaryChance = 0.50; // Fixed 50% chance spread para sa Legendary
+                  
+                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
+                  else if (dropRollEq < finalMythicChance + finalLegendaryChance) droppedRarity = 'legendary';       
+                  else droppedRarity = 'epic';                                   
+                  
                 } else if (['demonKnight', 'archdemon'].includes(e.type)) {
-                  if (dropRollEq < 0.05) droppedRarity = 'legendary';            // 5% chance
-                  else if (dropRollEq < 0.25) droppedRarity = 'epic';            // 20% chance (5% + 20%)
-                  else if (dropRollEq < 0.75) droppedRarity = 'rare';            // 50% chance (25% + 50%)
+                  // Ang mga mid-tier bosses ay nagkakaroon din ng pakonti-konting Mythic chance sa late game (Max 15%)
+                  const finalMythicChance = Math.min(0.15, endlessBonus * 0.2);
+                  const finalLegendaryChance = Math.min(0.40, 0.05 + endlessBonus);
+                  
+                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';
+                  else if (dropRollEq < finalMythicChance + finalLegendaryChance) droppedRarity = 'legendary';            
+                  else if (dropRollEq < 0.85) droppedRarity = 'epic';            
+                  else droppedRarity = 'rare';
+                  
                 } else {
-                  if (dropRollEq < 0.005) droppedRarity = 'epic';                // 0.5% chance
-                  else if (dropRollEq < 0.015) droppedRarity = 'rare';           // 1% chance (0.5% + 1%)
-                  else if (dropRollEq < 0.035) droppedRarity = 'common';         // 2% chance (1.5% + 2%)
+                  // Normal Mobs & Mini Bosses (May swerte scaling din ng konti sa Epic at Rare)
+                  const normalBonus = Math.min(0.02, endlessBonus * 0.1);
+                  if (dropRollEq < 0.005 + normalBonus) droppedRarity = 'epic';                
+                  else if (dropRollEq < 0.025 + normalBonus) droppedRarity = 'rare';           
+                  else if (dropRollEq < 0.085) droppedRarity = 'common';         
                 }
+
+
                 if (droppedRarity) {
                         const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
                         if (pool.length > 0) {
