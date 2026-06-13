@@ -5334,150 +5334,150 @@ if (eng.potions) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-        if (e.key === 'n' || e.key === 'N') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//         if (e.key === 'n' || e.key === 'N') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-          if (target && !target.dead) {
-             eng.screenShake = 2.0;
-             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+//           if (target && !target.dead) {
+//              eng.screenShake = 2.0;
+//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-             // Play boss spawn sound effect
-             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+//              // Play boss spawn sound effect
+//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-             // Base coordinates (Sa paligid ng player mag-iispawn)
-             const startX = target.x;
-             const startY = target.y - 150;
+//              // Base coordinates (Sa paligid ng player mag-iispawn)
+//              const startX = target.x;
+//              const startY = target.y - 150;
 
-             // 1. The Abyss (Nasa taas)
-             eng.enemies.push({ 
-                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
+//              // 1. The Abyss (Nasa taas)
+//              eng.enemies.push({ 
+//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
 
-             // 2. Primordial Demon (Nasa kaliwa)
-             eng.enemies.push({ 
-                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
+//              // 2. Primordial Demon (Nasa kaliwa)
+//              eng.enemies.push({ 
+//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
 
-             // 3. Archdemon (Nasa kanan)
-             eng.enemies.push({ 
-                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
+//              // 3. Archdemon (Nasa kanan)
+//              eng.enemies.push({ 
+//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
 
-             // 4. Demon Knight (Nasa ibaba)
-             eng.enemies.push({ 
-                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
-          }
-        }
+//              // 4. Demon Knight (Nasa ibaba)
+//              eng.enemies.push({ 
+//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
+//           }
+//         }
 
-if (e.key === 'm' || e.key === 'M') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+// if (e.key === 'm' || e.key === 'M') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-          if (target && !target.dead) {
-             // 1. Matinding Screen Shake at Sound
-             eng.screenShake = 3.0;
-             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+//           if (target && !target.dead) {
+//              // 1. Matinding Screen Shake at Sound
+//              eng.screenShake = 3.0;
+//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-             // 2. Patayin LAHAT ng kalaban agad-agad
-             for (const enemy of eng.enemies) {
-                enemy.hp = 0;
-                enemy.deadTrigger = true;
-                enemy.flash = 1.0;
-             }
+//              // 2. Patayin LAHAT ng kalaban agad-agad
+//              for (const enemy of eng.enemies) {
+//                 enemy.hp = 0;
+//                 enemy.deadTrigger = true;
+//                 enemy.flash = 1.0;
+//              }
 
-             // 3. Massive Red Particle Explosion sa buong map
-             for (let k = 0; k < 250; k++) {
-                const pa = Math.random() * Math.PI * 2;
-                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-                eng.particles.push({ 
-                  x: target.x, y: target.y, 
-                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-                });
-             }
+//              // 3. Massive Red Particle Explosion sa buong map
+//              for (let k = 0; k < 250; k++) {
+//                 const pa = Math.random() * Math.PI * 2;
+//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+//                 eng.particles.push({ 
+//                   x: target.x, y: target.y, 
+//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+//                 });
+//              }
 
-             // 4. WAVE SKIP LOGIC (+1 Wave)
-             eng.wave++;
-             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+//              // 4. WAVE SKIP LOGIC (+1 Wave)
+//              eng.wave++;
+//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-             // Update Chat Bubble para makita kung anong wave na
-             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-          }
-        }
-    if (e.key === '8') {
-              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//              // Update Chat Bubble para makita kung anong wave na
+//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+//           }
+//         }
+//     if (e.key === '8') {
+//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-              if (target && !target.dead) {
-                if (!eng.droppedItems) eng.droppedItems = [];
+//               if (target && !target.dead) {
+//                 if (!eng.droppedItems) eng.droppedItems = [];
 
-                // I-loop ang BUONG database at i-drop lahat!
-                EQUIPMENT_DB.forEach((item) => {
-                  eng.droppedItems.push({
-                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
-                    x: target.x + (Math.random() - 0.5) * 300, 
-                    y: target.y + (Math.random() - 0.5) * 300,
-                    item: item,
-                    life: 60.0 // Tatagal ng 1 minute sa sahig
-                  });
-                });
+//                 // I-loop ang BUONG database at i-drop lahat!
+//                 EQUIPMENT_DB.forEach((item) => {
+//                   eng.droppedItems.push({
+//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
+//                     x: target.x + (Math.random() - 0.5) * 300, 
+//                     y: target.y + (Math.random() - 0.5) * 300,
+//                     item: item,
+//                     life: 60.0 // Tatagal ng 1 minute sa sahig
+//                   });
+//                 });
 
-                // Notification
-                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-              }
-            }
+//                 // Notification
+//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+//               }
+//             }
 
-        if (e.key === '9') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             target.level = Math.max(target.level, 20);
-             target.maxHp += 50000;
-             target.hp = target.maxHp;
-             target.dmg += 15000;
-             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+//         if (e.key === '9') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//           if (target && !target.dead) {
+//              target.level = Math.max(target.level, 20);
+//              target.maxHp += 50000;
+//              target.hp = target.maxHp;
+//              target.dmg += 15000;
+//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+//              setPlayerLevel(target.level);
+//           }
+//         }
 
-        if (e.key === '0') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             // 1. Maximize Level
-             target.level = Math.max(target.level, 99); 
+//         if (e.key === '0') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//           if (target && !target.dead) {
+//              // 1. Maximize Level
+//              target.level = Math.max(target.level, 99); 
              
-             // 2. Godlike HP & Damage
-             target.maxHp = 999999;
-             target.hp = target.maxHp;
-             target.dmg = 999999; 
+//              // 2. Godlike HP & Damage
+//              target.maxHp = 999999;
+//              target.hp = target.maxHp;
+//              target.dmg = 999999; 
              
-             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-             target.speed = 800;        // Max Movement Speed Cap
-             target.shootRate = 0.15;   // Max Rapid Fire Cap
-             target.multiShot = 20;     // Max Split Bolt Cap
+//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+//              target.speed = 800;        // Max Movement Speed Cap
+//              target.shootRate = 0.15;   // Max Rapid Fire Cap
+//              target.multiShot = 20;     // Max Split Bolt Cap
 
-             // 4. Max out NEW STATS: Crit and Defense
-             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-             target.baseDef = 60;       // Max Defense Block Cap (60%)
+//              // 4. Max out NEW STATS: Crit and Defense
+//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+//              target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+//              setPlayerLevel(target.level);
+//           }
+//         }
         
         // END CHEAT CODES
 
