@@ -247,8 +247,8 @@ const getUpgradeMeta = (rawString, wave = 1) => {
     
     // 🔥 DYNAMIC SCALING FORMULAS
     const dmgBoost = 14 + Math.floor(wave * 1.5); 
-    const hpBoost = 25 + Math.floor(wave * 2.5);  
-    const spdBoost = 10 + Math.floor(wave * 1.2); 
+    const hpBoost = 50 + Math.floor(wave * 4.0);  // <-- Itinama para pumarehas sa totoong bigay ng GameCanvas
+    const spdBoost = 10 + Math.floor(wave * 1.2);
     
     // 👇 BAGONG FORMULAS PARA SA CRIT AT DEFENSE (+5% base, pataas nang pataas)
     const critBoost = 5 + Math.floor(wave * 0.2);
@@ -274,7 +274,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
       return { icon: '🎯', title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
     }
     if (normalize.includes('def') || normalize.includes('armor') || normalize.includes('plating')) {
-      return { icon: '🛡️', title: 'IRON PLATING', desc: `DEFENSE BLOCK +${defBoost}%` };
+      return { icon: '🛡️', title: 'IRON PLATING', desc: `ARMOR RATING +${defBoost}` };
     }
     if (normalize.includes('vampiric') || normalize.includes('aura') || normalize.includes('life')) {
       return { icon: '🦇', title: 'VAMPIRIC AURA', desc: 'HEAL 3 HP PER ENEMY KILLED (CAP: 100 HP/KILL)' };

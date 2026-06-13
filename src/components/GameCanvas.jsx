@@ -90,15 +90,16 @@ const playSfx = (type) => window.ArcaneSoundManager.play(type);
 
 const W = 1280;
 const H = 720;
+
 const ET = [
-  // 1. Normal Minion (Mas makunat at mas masakit na)
-  { r: 13, speed: 75,  hp: 70,  dmg: 25,  xp: 25,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
-  // 2. Fast/Assassin Minion (Mabilis, mataas damage)
-  { r: 11, speed: 120, hp: 50,  dmg: 40,  xp: 35,  color: '#fb923c', glow: '#f97316', boss: false },
-  // 3. Tanky/Elite Minion (Sobrang kunat at masakit)
-  { r: 14, speed: 150, hp: 150,  dmg: 60,  xp: 50,  color: '#818cf8', glow: '#6366f1', boss: false },
-  // 4. Generic Mini-Boss (Sobrang laki ng tinaas ng HP at Damage)
-  { r: 27, speed: 65,  hp: 900, dmg: 120, xp: 250, color: '#fbbf24', glow: '#f59e0b', boss: true },
+  // 1. Normal Minion (Mas malambot sa early game para madaling patayin)
+  { r: 13, speed: 65,  hp: 35,  dmg: 15,  xp: 15,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
+  // 2. Fast/Assassin Minion (Mabilis pero sobrang lambot)
+  { r: 11, speed: 115, hp: 20,  dmg: 25,  xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
+  // 3. Tanky/Elite Minion (Makunat pero MABAGAL na para pwedeng takbuhan)
+  { r: 15, speed: 55,  hp: 120, dmg: 35,  xp: 40,  color: '#818cf8', glow: '#6366f1', boss: false },
+  // 4. Generic Mini-Boss (Balanced entry stats)
+  { r: 27, speed: 60,  hp: 600, dmg: 80, xp: 150, color: '#fbbf24', glow: '#f59e0b', boss: true },
 ];
 
 const RARITY_COLORS = {
@@ -2061,23 +2062,20 @@ const runUpgrade = (choice, forcedTarget = null) => {
 
     const token = String(choice || '').toLowerCase().trim();
     if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
-      target.maxHp += hpBoost; // Ginamit ang dynamic hpBoost
+      target.maxHp += hpBoost; 
       target.hp = target.maxHp;
     }
     else if (token.includes('damage') || token.includes('might') || token.includes('increase')) {
-      target.dmg = (target.dmg || 0) + dmgBoost; // Ginamit ang dynamic dmgBoost
+      target.dmg = (target.dmg || 0) + dmgBoost; 
     }
     else if (token.includes('swift') || token.includes('speed') || token.includes('stride')) {
-      // 👇 IA-APPLY ANG NEW SPEED HANGGANG SA CAP NA 800
       const MAX_SPEED = 800;
       target.speed = Math.min(MAX_SPEED, (target.speed || 200) + spdBoost);
     }
     else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
-      // ✅ Nakasiguro na hindi bababa sa 0.15 seconds ang cooldown
       target.shootRate = Math.max(0.15, (target.shootRate || 0.6) - 0.1); 
     }
     else if (token.includes('multi') || token.includes('shot') || token.includes('split')) {
-      // 👇 IDINAGDAG ANG HARD CAP NA 7 PROJECTILES
       const MAX_PROJECTILES = 20;
       target.multiShot = Math.min(MAX_PROJECTILES, (target.multiShot || 1) + 1);
     }
@@ -2086,13 +2084,20 @@ const runUpgrade = (choice, forcedTarget = null) => {
       target.baseCrit = Math.min(MAX_CRIT, (target.baseCrit || 0) + critBoost);
     }
     else if (token.includes('def') || token.includes('armor') || token.includes('plating')) {
-      target.baseDef = Math.min(MAX_DEF, (target.baseDef || 0) + defBoost);
+      // 🔥 TINANGGAL ANG CAP (UNLIMITED SCALING ARMOR)
+      target.baseDef = (target.baseDef || 0) + defBoost; 
     }
     else if (token.includes('vampiric') || token.includes('aura')) {
       const MAX_LIFESTEAL = 100;
       target.lifeSteal = Math.min(MAX_LIFESTEAL, (target.lifeSteal || 0) + 3); 
     }
 
+    // 🔥 FIX: I-reset lang ang flag, hahayaan na natin ang Global Loop ang mag-trigger sa susunod na level up
+    if (forcedTarget === 'p2' && isCoopActive && netRef.current.isHost) {
+        target.isLevelingUp = false;
+    } else if (target === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
+        target.isLevelingUp = false;
+    }
   };
 
   useEffect(() => {
@@ -2727,21 +2732,24 @@ if (eng.gameStarted) {
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
                 
+                // 🔥 TRUE SCALING: Ang Wave 1 ay walang bonus (base stats lang). Magsisimula ang hirap sa Wave 2+.
+                const waveScale = Math.max(0, eng.wave - 1); 
+
                 eng.enemies.push({ 
                  x: ex, y: ey, r: t.r, 
                  
-                 // 🔥 SPEED: Paunti-unting bibilis pero naka-cap para hindi mag-teleport (Max +180 speed)
-                 speed: t.speed + Math.min(180, eng.wave * 1.5),
+                 // 🔥 SPEED: Paunti-unting bibilis pero naka-cap sa +150
+                 speed: t.speed + Math.min(170, waveScale * 2.0),
                  
-                 // 🔥 HP: Exponential scaling (Para hindi agad matunaw sa normal attack sa late game)
-                 hp: t.hp + (eng.wave * 60) + Math.floor(Math.pow(eng.wave, 1.6) * 5), 
-                 maxHp: t.hp + (eng.wave * 60) + Math.floor(Math.pow(eng.wave, 1.6) * 5), 
+                 // 🔥 HP: Smooth scaling. Mahina sa early, pero exponential ang kunat pagdating ng Wave 20+
+                 hp: t.hp + (waveScale * 25) + Math.floor(Math.pow(waveScale, 1.5) * 4), 
+                 maxHp: t.hp + (waveScale * 25) + Math.floor(Math.pow(waveScale, 1.5) * 4), 
                  
-                 // 🔥 DAMAGE: Mapanganib kapag napaligiran ka na (Exponential din ang paglakas)
-                 dmg: t.dmg + (eng.wave * 3) + Math.floor(eng.wave * eng.wave * 0.04), 
+                 // 🔥 DAMAGE: Katamtamang sakit sa early, nakakamatay sa late game
+                 dmg: t.dmg + (waveScale * 2) + Math.floor(waveScale * waveScale * 0.03), 
                  
-                 // 🔥 XP: Tumaas ang multiplier sa 1.10 para mabilis ka mag-level up
-                 xp: Math.floor(t.xp * Math.pow(1.10, eng.wave)),
+                 // 🔥 XP: Mas mabilis mag-level up ang player early game (+12% XP per wave)
+                 xp: Math.floor(t.xp * Math.pow(1.12, waveScale)),
                  
                  color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
@@ -3290,7 +3298,10 @@ if (isHost || !isCoopActive) {
           let currentLifesteal = (localTrackedObj.lifeSteal || 0) + equipBonuses.lifesteal;
 
           if (statAtkRef.current) statAtkRef.current.textContent = currentAtk;
-          if (statDefRef.current) statDefRef.current.textContent = `${currentDef}%`;
+          if (statDefRef.current) {
+            const damageBlockedPct = ((currentDef / (100 + currentDef)) * 100).toFixed(1);
+            statDefRef.current.textContent = `${currentDef} (${damageBlockedPct}% Block)`;
+          }
           if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
           if (statSpdRef.current) statSpdRef.current.textContent = `${currentSpd} IPS`;
           if (statCdRef.current) statCdRef.current.textContent = `${currentCd.toFixed(2)}s`;
@@ -3676,7 +3687,8 @@ if (isHost || !isCoopActive) {
                 for (const pTarget of [eng.p, isCoopActive ? eng.p2 : null]) {
                   if (pTarget && !pTarget.dead && pTarget.inv <= 0 && Math.hypot(b.x - pTarget.x, b.y - pTarget.y) < b.r + pTarget.r) {
                     let damageTaken = b.dmg;
-                    if (eng.p.baseDef > 0) damageTaken *= (1 - (eng.p.baseDef / 100));
+                    const defStat = pTarget.baseDef || 0;
+                    damageTaken *= (100 / (100 + defStat));
                     if (pTarget.potBuffs?.defense > 0) damageTaken *= 0.65;
                     if (pTarget.skills?.shield?.duration > 0 && pTarget.skills?.shield?.enabled !== false) {
                       damageTaken = 0;
@@ -3945,23 +3957,20 @@ if (e.deadTrigger) {
                 const dropRollEq = Math.random();
                 let droppedRarity = null;
 
-                // Tukuyin kung Primordial o Abyss ang namatay
-                const isMythicDropper = ['primordial', 'abyss'].includes(e.type);
-
-                if (isMythicDropper) {
-                  // Para sa Primordial at The Abyss LANG (Kasama Mythic at Legendary)
-                  if (dropRollEq < 0.00005) droppedRarity = 'mythic';               // 0.005% chance
-                  else if (dropRollEq < 0.00020) droppedRarity = 'legendary';       // 0.015% chance
-                  else if (dropRollEq < 0.00170) droppedRarity = 'epic';            // 0.15% chance
-                  else if (dropRollEq < 0.00670) droppedRarity = 'rare';            // 0.5% chance
-                  else if (dropRollEq < 0.05670) droppedRarity = 'common';          // 5% chance
+                // 🔥 PINAG-ISA ANG DROP RATES PARA PATAS KAHIT SPELL ANG NAKAPATAY
+                if (['primordial', 'abyss'].includes(e.type)) {
+                  if (dropRollEq < 0.10) droppedRarity = 'mythic';               // 10% chance
+                  else if (dropRollEq < 0.25) droppedRarity = 'legendary';       // 15% chance (10% + 15%)
+                  else if (dropRollEq < 0.75) droppedRarity = 'epic';            // 50% chance (25% + 50%)
+                } else if (['demonKnight', 'archdemon'].includes(e.type)) {
+                  if (dropRollEq < 0.05) droppedRarity = 'legendary';            // 5% chance
+                  else if (dropRollEq < 0.25) droppedRarity = 'epic';            // 20% chance (5% + 20%)
+                  else if (dropRollEq < 0.75) droppedRarity = 'rare';            // 50% chance (25% + 50%)
                 } else {
-                  // Para sa Archdemon, Demon Knight, Mini Bosses, at Normal Minions (Hanggang Epic lang)
-                  if (dropRollEq < 0.00150) droppedRarity = 'epic';                 // 0.15% chance
-                  else if (dropRollEq < 0.00650) droppedRarity = 'rare';            // 0.5% chance
-                  else if (dropRollEq < 0.05650) droppedRarity = 'common';          // 5% chance
+                  if (dropRollEq < 0.005) droppedRarity = 'epic';                // 0.5% chance
+                  else if (dropRollEq < 0.015) droppedRarity = 'rare';           // 1% chance (0.5% + 1%)
+                  else if (dropRollEq < 0.035) droppedRarity = 'common';         // 2% chance (1.5% + 2%)
                 }
-
                 if (droppedRarity) {
                         const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
                         if (pool.length > 0) {
@@ -4026,7 +4035,8 @@ if (e.deadTrigger) {
               
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
                 let damageTaken = e.dmg;
-                if (eng.p.baseDef > 0) damageTaken *= (1 - (eng.p.baseDef / 100));
+                const defStatP1 = eng.p.baseDef || 0;
+                damageTaken *= (100 / (100 + defStatP1));
                 if (e.voidExhaustTime > 0) damageTaken *= 0.5; 
                 if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65;
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
@@ -4047,6 +4057,8 @@ if (e.deadTrigger) {
               }
               if (isCoopActive && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
                 let damageTakenp2 = e.dmg;
+                const defStatP2 = eng.p2.baseDef || 0;
+                damageTakenp2 *= (100 / (100 + defStatP2)); // 🔥 MOBA STYLE ARMOR P2
                 if (e.voidExhaustTime > 0) damageTakenp2 *= 0.5;
                 if (eng.p2.potBuffs?.defense > 0) damageTakenp2 *= 0.65;
                 if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
@@ -4089,22 +4101,22 @@ if (e.deadTrigger) {
 
                 if (isCoopActive && targetPlayer === eng.p2) {
                   eng.p2.xp += distributedXp;
-                  if (eng.p2.xp >= eng.p2.xpNext) {
+                  while (eng.p2.xp >= eng.p2.xpNext) {
                     eng.p2.xp -= eng.p2.xpNext;
-                    eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); eng.p2.level++;
-                    netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions(eng.p2) });
+                    eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); 
+                    eng.p2.level++;
+                    eng.p2.pendingLevelUps = (eng.p2.pendingLevelUps || 0) + 1;
                   }
                 } else if (eng.p) {
                   eng.p.xp += distributedXp;
-                  if (eng.p.xp >= eng.p.xpNext) {
+                  while (eng.p.xp >= eng.p.xpNext) {
                     eng.p.xp -= eng.p.xpNext;
-                    eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); eng.p.level++;
-                    onLevelUpOffer(rollUpgradeOptions(eng.p)); 
-                    if (screen === 'playing') {
-                      setScreen('levelup');
-                    }
+                    eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); 
+                    eng.p.level++;
+                    eng.p.pendingLevelUps = (eng.p.pendingLevelUps || 0) + 1;
                   }
                 }
+                
                 eng.gems.splice(i, 1);
               }
             }
@@ -4120,6 +4132,22 @@ if (e.deadTrigger) {
             }
           }
         }
+
+        // =========================================================================
+        // 🔥 STEP 5: GLOBAL LEVEL UP QUEUE HANDLER (Ilagay dito)
+        // =========================================================================
+        if (eng.p && !eng.p.dead && eng.p.pendingLevelUps > 0 && screen === 'playing' && !eng.p.isLevelingUp) {
+            eng.p.isLevelingUp = true;
+            eng.p.pendingLevelUps--;
+            onLevelUpOffer(rollUpgradeOptions(eng.p));
+            setScreen('levelup');
+        }
+        if (isHost && isCoopActive && eng.p2 && !eng.p2.dead && eng.p2.pendingLevelUps > 0 && !eng.p2.isLevelingUp) {
+            eng.p2.isLevelingUp = true;
+            eng.p2.pendingLevelUps--;
+            netRef.current.channel.send('offer_levelup', { ups: rollUpgradeOptions(eng.p2) });
+        }
+        // =========================================================================
 
         const localTarget = (isCoopActive && !isHost) ? eng.p2 : eng.p;
         if (localTarget) {
@@ -4639,40 +4667,188 @@ if (eng.potions) {
         }
       }
 
-      // ==========================================
-      // 🎒 EQUIPMENT RENDER LOGIC
+
+// ==========================================
+      // 🎒 EQUIPMENT RENDER LOGIC (MAANGAS EFFECTS: MYTHIC, LEGENDARY, EPIC)
       // ==========================================
       if (eng.droppedItems) {
         for (const drop of eng.droppedItems) {
           ctx.save();
-          // Siguraduhing may RARITY_COLORS sa taas ng file mo
-          const color = RARITY_COLORS[drop.item.rarity] || '#ffffff';
+          const rarity = drop.item.rarity;
+          const color = RARITY_COLORS[rarity] || '#ffffff';
           const time = performance.now() * 0.005;
           const bounce = Math.sin(time) * 5;
+          const cx = drop.x;
+          const cy = drop.y + bounce;
 
+          // ✨ 1. LEGENDARY EFFECT: DIVINE RINGS & STAR FLARE
+          if (rarity === 'legendary') {
+            ctx.globalCompositeOperation = 'lighter';
+            const slowPulse = Math.sin(time * 2) * 0.5 + 0.5;
+
+            // -- Spinning Magical Rings (Runes on the ground) --
+            ctx.shadowColor = '#fbbf24';
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = `rgba(251, 191, 36, ${0.4 + slowPulse * 0.4})`;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); 
+            ctx.ellipse(cx, cy + 5, 22 + slowPulse * 3, 7 + slowPulse, time * 0.5, 0, Math.PI * 2); 
+            ctx.stroke();
+            
+            ctx.strokeStyle = `rgba(254, 240, 138, ${0.3 + slowPulse * 0.3})`;
+            ctx.beginPath(); 
+            ctx.ellipse(cx, cy + 5, 14, 4, -time * 0.8, 0, Math.PI * 2); 
+            ctx.stroke();
+
+            // -- Cross Star Flare (Lens Flare effect) --
+            const flareLen = 35 + slowPulse * 15;
+            const flareWidth = 1.5;
+            ctx.fillStyle = `rgba(254, 240, 138, ${0.6 + slowPulse * 0.4})`;
+            ctx.shadowBlur = 20;
+            ctx.beginPath(); ctx.ellipse(cx, cy, flareWidth, flareLen, 0, 0, Math.PI*2); ctx.fill(); // Vertical
+            ctx.beginPath(); ctx.ellipse(cx, cy, flareWidth, flareLen, Math.PI/2, 0, Math.PI*2); ctx.fill(); // Horizontal
+
+            // -- Floating Light Orbs --
+            for (let k = 0; k < 6; k++) {
+              const pTime = (time * 0.8 + k * 1.5) % 3;
+              const progress = pTime / 3;
+              const px = cx + Math.sin(time + k) * 18; // Slow sway
+              const py = cy - progress * 45;
+              ctx.fillStyle = `rgba(255, 255, 255, ${1 - progress})`;
+              ctx.shadowBlur = 10;
+              ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI*2); ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+          }
+
+          // 👹 2. MYTHIC EFFECT: UNSTABLE BLOOD AURA & LIGHTNING
+          if (rarity === 'mythic') {
+            ctx.globalCompositeOperation = 'lighter';
+            const fastPulse = Math.sin(time * 8) * 0.5 + 0.5;
+
+            // -- Jagged Energy Burst (Sumasabog na aura) --
+            ctx.shadowColor = '#ef4444';
+            ctx.shadowBlur = 25;
+            ctx.fillStyle = `rgba(220, 38, 38, ${0.3 + fastPulse * 0.3})`;
+            ctx.beginPath();
+            for (let i = 0; i < 14; i++) {
+                const angle = (i / 14) * Math.PI * 2 + (time * 1.5);
+                const spikeLen = 18 + Math.random() * 12 * fastPulse; 
+                ctx.lineTo(cx + Math.cos(angle) * spikeLen, cy + Math.sin(angle) * spikeLen);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // -- Inner Core Glow --
+            ctx.fillStyle = `rgba(252, 165, 165, ${0.4 + fastPulse * 0.4})`;
+            ctx.beginPath(); ctx.arc(cx, cy, 10, 0, Math.PI*2); ctx.fill();
+
+            // -- Shooting Embers (Mabilis na sparks pataas) --
+            for (let k = 0; k < 8; k++) {
+              const pTime = (time * 2.5 + k) % 1.5; 
+              const progress = pTime / 1.5;
+              const px = cx + (Math.sin(k * 10) * 20); 
+              const py = cy - progress * 55;
+              
+              ctx.strokeStyle = `rgba(252, 165, 165, ${1 - progress})`;
+              ctx.lineWidth = 1.5;
+              ctx.shadowBlur = 5;
+              ctx.beginPath(); 
+              ctx.moveTo(px, py); 
+              ctx.lineTo(px, py - 8); 
+              ctx.stroke();
+            }
+
+            // -- Chaotic Sharp Lightning --
+            if (Math.random() < 0.45) {
+              ctx.strokeStyle = Math.random() > 0.6 ? '#ffffff' : '#fca5a5';
+              ctx.lineWidth = 1.5 + Math.random() * 1.5;
+              ctx.shadowColor = '#dc2626';
+              ctx.shadowBlur = 15;
+              ctx.beginPath();
+              
+              let lx = cx, ly = cy;
+              ctx.moveTo(lx, ly);
+              
+              let lAngle = -Math.PI / 2 + (Math.random() - 0.5) * 2; 
+              for(let j = 0; j < 5; j++) {
+                  lAngle += (Math.random() - 0.5) * 1.8; 
+                  lx += Math.cos(lAngle) * (8 + Math.random() * 12);
+                  ly += Math.sin(lAngle) * (8 + Math.random() * 12);
+                  ctx.lineTo(lx, ly);
+              }
+              ctx.stroke();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+          }
+
+          // 🌌 3. EPIC EFFECT: ARCANE GEOMETRY & ORBITING WISPS
+          if (rarity === 'epic') {
+            ctx.globalCompositeOperation = 'lighter';
+            const medPulse = Math.sin(time * 4) * 0.5 + 0.5;
+
+            // -- Expanding Geometric Base (Rotating Squares) --
+            ctx.shadowColor = '#a855f7'; // Purple glow
+            ctx.shadowBlur = 15;
+            ctx.strokeStyle = `rgba(168, 85, 247, ${0.4 + medPulse * 0.4})`;
+            ctx.lineWidth = 1.5;
+            
+            ctx.save();
+            ctx.translate(cx, cy + 5);
+            ctx.scale(1, 0.4); // Flatten out sa lapag para mukhang 3D
+            
+            // Unang umiikot na parisukat
+            ctx.rotate(time * 1.2);
+            ctx.strokeRect(-12 - medPulse * 2, -12 - medPulse * 2, 24 + medPulse * 4, 24 + medPulse * 4);
+            
+            // Pangalawang umiikot na parisukat (Paatras)
+            ctx.rotate(-time * 2.5);
+            ctx.strokeStyle = `rgba(216, 180, 254, ${0.5 + medPulse * 0.3})`; // Lighter purple
+            ctx.strokeRect(-8, -8, 16, 16);
+            ctx.restore();
+
+            // -- Orbiting Magic Wisps (Umiikot at umaakyat na bola ng energy) --
+            for (let k = 0; k < 3; k++) {
+              const orbitTime = time * 3.5 + (k * ((Math.PI * 2) / 3)); 
+              const progress = (time * 1.2 + k) % 2; // Pataas from 0 to 2 seconds
+              
+              const radius = 16 - progress * 6; // Lumiliit ang ikot habang umaakyat
+              const px = cx + Math.cos(orbitTime) * radius; 
+              const py = cy + 5 - (progress * 25) + Math.sin(orbitTime) * 3; // Helix motion
+              
+              ctx.fillStyle = `rgba(216, 180, 254, ${1 - (progress / 2)})`;
+              ctx.shadowBlur = 12;
+              ctx.shadowColor = '#c084fc';
+              ctx.beginPath(); ctx.arc(px, py, 2.5 + medPulse, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+          }
+
+          // 💎 4. BASE ITEM SHAPE RENDERING (Diamond)
           ctx.shadowColor = color;
           ctx.shadowBlur = 20 + Math.abs(Math.sin(time * 0.5)) * 10;
           
           ctx.fillStyle = color;
           ctx.beginPath();
-          ctx.moveTo(drop.x, drop.y - 8 + bounce);
-          ctx.lineTo(drop.x + 6, drop.y + bounce);
-          ctx.lineTo(drop.x, drop.y + 8 + bounce);
-          ctx.lineTo(drop.x - 6, drop.y + bounce);
+          ctx.moveTo(cx, cy - 8);
+          ctx.lineTo(cx + 6, cy);
+          ctx.lineTo(cx, cy + 8);
+          ctx.lineTo(cx - 6, cy);
           ctx.closePath();
           ctx.fill();
 
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(drop.x, drop.y + bounce, 2, 0, Math.PI * 2);
+          ctx.arc(cx, cy, 2, 0, Math.PI * 2);
           ctx.fill();
 
+          // 🏷️ 5. NAME TAG RENDERING
           ctx.font = 'bold 10px monospace';
           ctx.textAlign = 'center';
           ctx.shadowColor = '#000000';
           ctx.shadowBlur = 6;
           ctx.fillStyle = color;
-          ctx.fillText(drop.item.name, drop.x, drop.y - 15 + bounce);
+          ctx.fillText(drop.item.name, cx, cy - 18); 
 
           ctx.restore();
         }
@@ -5158,150 +5334,150 @@ if (eng.potions) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 50000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 50000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 
@@ -5309,14 +5485,18 @@ if (eng.potions) {
         
 
 
-
+       if (playerLevel >= 10) {
         if (e.key === '1') learnSkillTreeTech('bodyCutter');
         if (e.key === '2') learnSkillTreeTech('shootingStar');
         if (e.key === '3') learnSkillTreeTech('cubeBash');
         if (e.key === '4') learnSkillTreeTech('vacuumSlash');
-        if (e.key === '5') castArcaneCollapseUltimate();
-        if (e.key === '6') castArcaneInstinctUltimate(); 
-        if (e.key === '7') castArcaneResurrectionUltimate();
+       }
+
+        if (playerLevel >= 12) {
+            if (e.key === '5') castArcaneCollapseUltimate();
+            if (e.key === '6') castArcaneInstinctUltimate(); 
+            if (e.key === '7') castArcaneResurrectionUltimate();
+        }
       }
     };
 
@@ -5670,8 +5850,8 @@ const handlePointerDown = (e) => {
                   <span ref={statCritRef} className="stats-value">0%</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Defense Block:</span>
-                  <span ref={statDefRef} className="stats-value">0%</span>
+                  <span className="stats-label">Armor Rating:</span>
+                  <span ref={statDefRef} className="stats-value">0 (0% Block)</span>
                 </div>
                 <div className="stats-row">
                   <span className="stats-label">Life Steal:</span>
