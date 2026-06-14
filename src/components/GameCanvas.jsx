@@ -2512,6 +2512,16 @@ useEffect(() => {
         return;
       }
 
+      if (event === 'sync_void_crystals' && !net.isHost) {
+        const currentBank = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
+        localStorage.setItem('arcane_void_crystals', currentBank + payload.amount);
+        
+        const eng = engineRef.current;
+        if (eng && eng.p2) {
+           eng.p2.voidCrystals = (eng.p2.voidCrystals || 0) + payload.amount;
+        }
+      }
+
       if (event === 'state_sync' && !net.isHost) {
         if (payload.gameStarted !== undefined) {
           eng.gameStarted = payload.gameStarted;
@@ -2743,9 +2753,29 @@ useEffect(() => {
       eng.gameStarted = false; 
       setHasStarted(false);
 
+      // 🟢 ADD THIS BEFORE eng.p = { ... }
+      const metaUpgrades = JSON.parse(localStorage.getItem('arcane_upgrades') || '{}');
+      const myEquippedSkin = localStorage.getItem('arcane_equipped_skin') || 'default';
+      const bonusHp = (metaUpgrades.hp || 0) * 15;
+      const bonusDmg = (metaUpgrades.dmg || 0) * 3;
+      const bonusDef = (metaUpgrades.def || 0) * 2;
+      const bonusCrit = (metaUpgrades.crit || 0) * 1;
+      const bonusSpeed = (metaUpgrades.speed || 0) * 5;
+
       eng.droppedItems = [];
       eng.p = { 
-      x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, 
+      // 🟢 UPDATE THESE VALUES IN YOUR eng.p INITIALIZATION
+      x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, 
+      skin: myEquippedSkin,
+      speed: 200 + bonusSpeed,                // <-- Updated
+      hp: 100 + bonusHp,                      // <-- Updated
+      maxHp: 100 + bonusHp,                   // <-- Updated
+      xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, 
+      dmg: 0 + bonusDmg,                      // <-- Updated
+      baseDef: 0 + bonusDef,                  // <-- Added
+      baseCrit: 0 + bonusCrit,                // <-- Added
+      voidCrystals: 0,                        // <-- Added tracker
+      chatBubble: null, 
       dashCd: 0, isDashing: false, dashTimer: 0, dashAngle: 0, // 💨 DINAGDAG PARA SA DASH
       skills: initSkills(), 
       potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
@@ -4022,6 +4052,13 @@ if (playerObj.skills.cubeBash?.learned) {
                     pTarget.inv = 0.7;
                     if (pTarget.hp <= 0) {
                       pTarget.dead = true;
+
+                      if (pTarget.voidCrystals > 0) {
+                        const currentBank = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
+                        localStorage.setItem('arcane_void_crystals', currentBank + pTarget.voidCrystals);
+                        pTarget.voidCrystals = 0; // Reset to avoid double saving
+                      }
+
                       if (!isCoopActive || (isCoopActive && eng.p && eng.p.dead && eng.p2 && eng.p2.dead)) {
                         // 🔥 FIX: I-check muna kung active ang co-op bago mag-send ng network signal!
                         if (isCoopActive && netRef.current?.channel) {
@@ -4284,6 +4321,39 @@ if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.typ
 
               if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
+
+          if (e.boss) {
+                  let crystalYield = 0;
+                  if (e.type === 'demonKnight') crystalYield = 10 + Math.floor(Math.random() * 10);
+                  else if (e.type === 'archdemon') crystalYield = 25 + Math.floor(Math.random() * 25);
+                  else if (e.type === 'primordial') crystalYield = 100 + Math.floor(Math.random() * 50);
+                  else if (e.type === 'abyss') crystalYield = 300 + Math.floor(Math.random() * 200);
+
+                  for (const pTarget of [eng.p, eng.p2]) {
+                    if (pTarget && !pTarget.dead) {
+                      pTarget.voidCrystals = (pTarget.voidCrystals || 0) + crystalYield;
+                      pTarget.chatBubble = { text: `+${crystalYield} Void Crystals!`, life: 2.5 };
+                    }
+                  }
+
+                  // 🟢 BULLETPROOF AUTO-BANK LOGIC
+                  const net = netRef.current || {};
+                  const isCoopActive = Boolean(net.channel);
+                  const isHost = Boolean(net.isHost) || !isCoopActive;
+                  
+                  // I-save agad sa LocalStorage ng Host 
+                  if (isHost && eng.p && !eng.p.dead) {
+                      const currentBank = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
+                      localStorage.setItem('arcane_void_crystals', currentBank + crystalYield);
+                  }
+                  
+                  // I-sync sa Player 2 (Guest) para mai-save din sa sarili nilang phone/PC
+                  if (isHost && isCoopActive && net.channel && eng.p2 && !eng.p2.dead) {
+                      net.channel.send('sync_void_crystals', { amount: crystalYield });
+                  }
+                }
+
+                
 
                 // --- 🩸 LIFESTEAL TRIGGER ---
                 for (const pTarget of [eng.p, eng.p2]) {
@@ -5619,8 +5689,473 @@ for (const p of eng.particles) {
         ctx.restore();
       }
 
-      const p1Color = '#8b5cf6'; 
-      const p2Color = '#f97316'; 
+   // 🟢 SKIN AESTHETICS HELPER (Nagpapalit ng kulay ng damit, sumbrero at glow)
+      const getSkinAesthetics = (skinId, isP2) => {
+          // Shadow Mage = Dark Red Assassin Mage
+          if (skinId === 'shadow') return { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d', glow: '#ef4444', aura: true };
+          if (skinId === 'pyro') return { c: '#ef4444', robe: '#7f1d1d', brim: '#fca5a5', glow: '#f97316', aura: true };
+          if (skinId === 'archmage') return { c: '#fef08a', robe: '#b45309', brim: '#fef9c3', glow: '#fbbf24', aura: true };
+          if (skinId === 'sakura') return { 
+              c: '#f472b6',    // Hat/Main Hat Body (Soft Strawberry Pink)
+              robe: '#ec4899', // Robe Color (Deep but cute pink)
+              brim: '#fdf2f8', // Hat Brim (Pastel Pink/White blend)
+              glow: '#f472b6', // Aura Core (Matching Main Pink)
+              aura: true 
+          };
+
+          if (skinId === 'pink_wings') return { 
+              c: '#fb7185',    // Hat/Main Hat Body (Soft Strawberry Pink)
+              robe: '#f472b6', // Robe Color (Deep but cute pink)
+              brim: '#fff5fa', // Hat Brim (Pastel Pink/White blend)
+              glow: '#fb7185', // Aura Core (Matching Main Pink)
+              aura: true 
+          };
+          return isP2 
+              ? { c: '#f97316', robe: '#c2410c', brim: '#ffedd5', glow: 'rgba(249, 115, 22, 0.6)', aura: false } 
+              : { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd', glow: 'rgba(168, 85, 247, 0.6)', aura: false };
+      };
+
+// 💥 APOCALYPSE TIER: TERRIFYING, EPIC, LIGHTNING & SMOKE EFFECTS
+      const drawAdvancedSkinAura = (x, y, radius, skinId) => {
+          if (!skinId || skinId === 'default') return;
+          const time = performance.now();
+          const eng = engineRef.current;
+          ctx.save();
+          
+          // --- HELPER 1: DYNAMIC LIGHTNING GENERATOR ---
+          const drawLightning = (startX, startY, endX, endY, color, glowColor, segments = 5, branches = false) => {
+              ctx.strokeStyle = color; ctx.shadowBlur = 15; ctx.shadowColor = glowColor; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(startX, startY);
+              let currX = startX, currY = startY;
+              for (let i = 1; i <= segments; i++) {
+                  const progress = i / segments;
+                  const targetX = startX + (endX - startX) * progress;
+                  const targetY = startY + (endY - startY) * progress;
+                  const jitterX = (Math.random() - 0.5) * 20;
+                  const jitterY = (Math.random() - 0.5) * 20;
+                  currX = targetX + jitterX; currY = targetY + jitterY;
+                  ctx.lineTo(currX, currY);
+                  
+                  // Branching lightning (kidlat na sumasanga)
+                  if (branches && Math.random() < 0.3) {
+                      const bx = currX + (Math.random() - 0.5) * 30;
+                      const by = currY + (Math.random() - 0.5) * 30;
+                      ctx.moveTo(currX, currY); ctx.lineTo(bx, by); ctx.moveTo(currX, currY);
+                  }
+              }
+              ctx.stroke();
+          };
+
+          // --- HELPER 2: SHATTERED MAGIC SEAL ---
+          const drawShatteredSeal = (cx, cy, r, rotation, color) => {
+              ctx.save(); ctx.translate(cx, cy + 5); ctx.scale(1, 0.35); ctx.rotate(rotation);
+              ctx.strokeStyle = color; ctx.shadowBlur = 20; ctx.shadowColor = color; ctx.lineWidth = 3;
+              // Broken outer ring
+              for(let i=0; i<8; i++) {
+                  if (Math.random() > 0.2) {
+                      ctx.beginPath(); ctx.arc(0, 0, r, (i*Math.PI)/4, ((i+0.8)*Math.PI)/4); ctx.stroke();
+                  }
+              }
+              ctx.setLineDash([15, 10, 5, 20]); ctx.lineWidth = 1.5;
+              ctx.beginPath(); ctx.arc(0, 0, r * 0.8, 0, Math.PI*2); ctx.stroke();
+              ctx.restore();
+          };
+
+          // 🩸 SHADOW MAGE (NIGHTMARE TIER - As requested, left as is)
+          if (skinId === 'shadow') {
+              ctx.globalCompositeOperation = 'source-over';
+              const twitch = Math.random() > 0.8 ? 5 : 0; 
+              const grad = ctx.createRadialGradient(x, y+3, 0, x, y+3, radius*3 + twitch);
+              grad.addColorStop(0, '#000000'); grad.addColorStop(0.3, 'rgba(100, 0, 0, 0.9)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y+3, radius*3.5, 0, Math.PI*2); ctx.fill();
+
+              ctx.fillStyle = 'rgba(10, 0, 0, 0.8)';
+              for(let i=0; i<6; i++) {
+                  const clawAng = time*0.001 + (i * Math.PI/3) + Math.sin(time*0.005+i)*0.5;
+                  ctx.beginPath(); ctx.moveTo(x, y+5);
+                  ctx.quadraticCurveTo(x + Math.cos(clawAng+0.5)*radius*3, y+5 + Math.sin(clawAng+0.5)*radius*1.5, x + Math.cos(clawAng)*radius*5, y+5 + Math.sin(clawAng)*radius*2.5);
+                  ctx.quadraticCurveTo(x + Math.cos(clawAng-0.2)*radius*2, y+5 + Math.sin(clawAng-0.2)*radius*1, x, y+5);
+                  ctx.fill();
+              }
+
+              if (!eng.demonEyes) eng.demonEyes = [];
+              if (Math.random() < 0.1 && eng.demonEyes.length < 5) eng.demonEyes.push({ox: (Math.random()-0.5)*100, oy: (Math.random()-0.5)*80 - 20, life: 1, blink: 0});
+              eng.demonEyes.forEach((eye, i) => {
+                  eye.life -= 0.02; eye.blink += 0.2;
+                  if (eye.life <= 0) { eng.demonEyes.splice(i, 1); return; }
+                  ctx.save(); ctx.translate(x + eye.ox, y + eye.oy);
+                  const eyeOpen = Math.abs(Math.sin(eye.blink)) * 6; 
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#ff0000';
+                  ctx.fillStyle = `rgba(180, 0, 0, ${eye.life})`; ctx.beginPath(); ctx.ellipse(0, 0, 10, eyeOpen, 0, 0, Math.PI*2); ctx.fill();
+                  ctx.fillStyle = `rgba(0, 0, 0, ${eye.life})`; ctx.beginPath(); ctx.ellipse(0, 0, 2, eyeOpen*0.8, 0, 0, Math.PI*2); ctx.fill();
+                  ctx.restore();
+              });
+
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+              for(let i=0; i<8; i++) {
+                  if(Math.random() > 0.5) ctx.fillRect(x + (Math.random()-0.5)*radius*5, y + (Math.random()-0.5)*radius*6, Math.random()*15, Math.random()*3);
+              }
+          }
+
+          // 🔥 PYROMANCER (DEMON OF THE ASHEN FLARE - Smoke, Red Lightning, Lava)
+          else if (skinId === 'pyro') {
+              ctx.globalCompositeOperation = 'source-over'; // Allow thick dark smoke
+              
+              // 1. Apocalyptic Lava Floor & Red Lightning
+              drawShatteredSeal(x, y, radius * 5, time * 0.001, '#ff0000');
+              if (Math.random() < 0.2) {
+                  // Random red lightning striking the ground
+                  const lx = x + (Math.random()-0.5)*radius*8;
+                  const ly = y + 10 + (Math.random()-0.5)*radius*4;
+                  drawLightning(x, y-radius*2, lx, ly, '#ffffff', '#ff0000', 4, true);
+                  drawLightning(x, y-radius*2, lx, ly, '#ff0000', '#ff0000', 4, false); // double layer for intensity
+              }
+
+              // 2. Thick Choking Dark Ash & Smoke Particle System
+              if (!eng.pyroSmoke) eng.pyroSmoke = [];
+              if (eng.pyroSmoke.length < 25) {
+                  eng.pyroSmoke.push({
+                      ox: (Math.random()-0.5)*60, oy: 10 + Math.random()*10,
+                      vy: 1 + Math.random()*2, size: 15 + Math.random()*20, life: 1, 
+                      isFire: Math.random() > 0.6 // Some are fire, some are black smoke
+                  });
+              }
+              eng.pyroSmoke.forEach((s, i) => {
+                  s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i); s.life -= 0.015; s.size += 0.2;
+                  if (s.life <= 0) { eng.pyroSmoke.splice(i, 1); return; }
+                  
+                  ctx.beginPath(); ctx.arc(x + s.ox, y + s.oy, s.size, 0, Math.PI*2);
+                  if (s.isFire) {
+                      ctx.fillStyle = `rgba(255, 50, 0, ${s.life * 0.6})`;
+                      ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
+                  } else {
+                      ctx.fillStyle = `rgba(10, 5, 5, ${s.life * 0.8})`; // Thick black smoke
+                      ctx.shadowBlur = 10; ctx.shadowColor = '#000000';
+                  }
+                  ctx.fill();
+              });
+
+              ctx.globalCompositeOperation = 'lighter'; // Glow for the inner aura
+
+              // 3. Demonic Core Glow & Roaring Heat Waves
+              const heatGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
+              heatGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+              heatGrad.addColorStop(0.2, 'rgba(255, 50, 0, 0.6)');
+              heatGrad.addColorStop(1, 'rgba(255, 0, 0, 0)');
+              ctx.fillStyle = heatGrad; ctx.beginPath(); ctx.arc(x, y, radius*4, 0, Math.PI*2); ctx.fill();
+
+              // 4. Violent Glowing Embers (Dust)
+              ctx.fillStyle = '#ffaa00'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffaa00';
+              for(let i=0; i<10; i++) {
+                  const ex = x + Math.sin(time*0.01 + i)*radius*4;
+                  const ey = y - (time*0.1 + i*20)%80;
+                  ctx.beginPath(); ctx.arc(ex, ey, Math.random()*3, 0, Math.PI*2); ctx.fill();
+              }
+          }
+
+          // ⚡ ARCHMAGE (VOID STORM SOVEREIGN - Raging Storm, Cyan/Purple Lightning)
+          else if (skinId === 'archmage') {
+              ctx.globalCompositeOperation = 'source-over'; // Mix for dark clouds
+              
+              // 1. Swirling Void Storm (Dark purple/black clouds wrapping the player)
+              if (!eng.stormClouds) eng.stormClouds = [];
+              if (eng.stormClouds.length < 20) {
+                  eng.stormClouds.push({
+                      ang: Math.random() * Math.PI * 2, dist: radius + Math.random()*radius*4,
+                      size: 20 + Math.random()*25, speed: 0.02 + Math.random()*0.03, life: 1,
+                      yOff: (Math.random()-0.5)*60
+                  });
+              }
+              eng.stormClouds.forEach((cloud, i) => {
+                  cloud.ang += cloud.speed; cloud.life -= 0.01;
+                  if (cloud.life <= 0) { eng.stormClouds.splice(i, 1); return; }
+                  
+                  const cx = x + Math.cos(cloud.ang) * cloud.dist;
+                  const cy = y + cloud.yOff + Math.sin(time*0.002 + i)*10;
+                  
+                  // Swirling dark nebula clouds
+                  const cloudGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cloud.size);
+                  cloudGrad.addColorStop(0, `rgba(20, 0, 40, ${cloud.life * 0.9})`); // Pitch black/purple
+                  cloudGrad.addColorStop(0.5, `rgba(70, 0, 150, ${cloud.life * 0.5})`); // Deep violet
+                  cloudGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                  
+                  ctx.fillStyle = cloudGrad; ctx.shadowBlur = 0;
+                  ctx.beginPath(); ctx.arc(cx, cy, cloud.size, 0, Math.PI*2); ctx.fill();
+              });
+
+              ctx.globalCompositeOperation = 'lighter'; // Blinding lights
+
+              // 2. Glitching Dimensional Floor
+              drawShatteredSeal(x, y, radius * 5.5, time * -0.002, '#00ffff');
+              drawShatteredSeal(x, y, radius * 3.5, time * 0.003, '#c084fc');
+
+              // 3. Raging Chaotic Lightning (Constant strikes all around)
+              const lightningColors = [
+                  { c: '#ffffff', g: '#00ffff' }, // Cyan lightning
+                  { c: '#ffffff', g: '#c084fc' }  // Purple lightning
+              ];
+              for(let i=0; i<2; i++) {
+                  if (Math.random() < 0.6) { // 60% chance EVERY FRAME to strike
+                      const startX = x + (Math.random()-0.5)*radius*2;
+                      const startY = y - radius*3 + (Math.random()-0.5)*radius*2;
+                      const endX = x + (Math.random()-0.5)*radius*10;
+                      const endY = y + 15 + (Math.random()-0.5)*radius*4;
+                      const theme = lightningColors[Math.floor(Math.random()*lightningColors.length)];
+                      drawLightning(startX, startY, endX, endY, theme.c, theme.g, 5, true);
+                  }
+              }
+
+              // 4. Overwhelming Core Aura & Floating Power Prisms
+              const stormCore = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
+              stormCore.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+              stormCore.addColorStop(0.3, 'rgba(0, 255, 255, 0.4)');
+              stormCore.addColorStop(1, 'rgba(168, 85, 247, 0)');
+              ctx.fillStyle = stormCore; ctx.beginPath(); ctx.arc(x, y, radius*4, 0, Math.PI*2); ctx.fill();
+
+              // Shattered floating glass prisms that generate the lightning
+              for(let i=0; i<4; i++) {
+                  const ang = time * 0.004 + (i * Math.PI/2);
+                  const px = x + Math.cos(ang) * radius * 4.5;
+                  const py = y - radius + Math.sin(ang * 2) * 15;
+                  
+                  ctx.save(); ctx.translate(px, py); ctx.rotate(time*0.01 + i);
+                  ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 20; ctx.shadowColor = '#00ffff';
+                  ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.fill();
+                  ctx.restore();
+                  
+                  // Small lightning tether connecting to player
+                  if (Math.random() > 0.5) drawLightning(x, y, px, py, '#ffffff', '#00ffff', 2, false);
+              }
+          }
+          // ... (sa ilalim ng } ng archmage skinId block) ...
+
+          // 🌸 SAKURA SORCERESS (ULTRA KAWAII OVERLOAD - Pink Smoke, Sakura Petals, HEARTS)
+          else if (skinId === 'sakura') {
+              ctx.globalCompositeOperation = 'lighter'; // Soft beautiful bloom glow
+              const pulse = Math.sin(time * 0.003);
+
+              // 1. Sakura Magic Seal sa lapag (Flower Pattern)
+              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.4); ctx.rotate(time * 0.0005);
+              ctx.strokeStyle = `rgba(236, 72, 153, ${0.6 + pulse * 0.2})`; // Deep Pink
+              ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 15; ctx.lineWidth = 3;
+              // Draw an 8-petaled flower shape for the seal
+              ctx.beginPath();
+              for (let i = 0; i < 8; i++) {
+                  ctx.rotate(Math.PI / 4);
+                  ctx.quadraticCurveTo(radius * 3, radius * 3, radius * 6, 0);
+                  ctx.quadraticCurveTo(radius * 3, -radius * 3, 0, 0);
+              }
+              ctx.stroke(); ctx.restore();
+
+              // 2. Pink Mystical Smoke & Fairy Dust Aura
+              ctx.globalCompositeOperation = 'source-over'; // Para magmukhang fluffy yung usok
+              if (!eng.pinkSmoke) eng.pinkSmoke = [];
+              if (eng.pinkSmoke.length < 15 && Math.random() < 0.2) {
+                  eng.pinkSmoke.push({
+                      ox: (Math.random()-0.5)*radius*6, oy: (Math.random()-0.5)*radius*3,
+                      vy: 0.3 + Math.random()*0.7, size: 10 + Math.random()*15, life: 1
+                  });
+              }
+              eng.pinkSmoke.forEach((s, i) => {
+                  s.oy -= s.vy; s.ox += Math.sin(time*0.002 + i)*0.5; s.life -= 0.01; s.size += 0.2;
+                  if (s.life <= 0) { eng.pinkSmoke.splice(i, 1); return; }
+                  
+                  const smokeGrad = ctx.createRadialGradient(x+s.ox, y+s.oy, 0, x+s.ox, y+s.oy, s.size);
+                  smokeGrad.addColorStop(0, `rgba(253, 164, 175, ${s.life * 0.6})`); // Rose pink smoke
+                  smokeGrad.addColorStop(1, 'rgba(255, 228, 230, 0)');
+                  
+                  ctx.fillStyle = smokeGrad; ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
+              });
+
+              ctx.globalCompositeOperation = 'lighter'; // Ibalik sa glowing mode
+
+              // 3. Gentle Sakura Petal Particle System (Floating Down)
+              if (!eng.sakuraParticles) eng.sakuraParticles = [];
+              if (eng.sakuraParticles.length < 20 && Math.random() < 0.1) {
+                  eng.sakuraParticles.push({
+                      ox: (Math.random() - 0.5) * 60, y: -60, // Start above
+                      vy: 0.5 + Math.random() * 1.0, rot: Math.random() * Math.PI * 2, rs: (Math.random() - 0.5) * 0.05,
+                      size: 2 + Math.random() * 3, life: 1
+                  });
+              }
+              eng.sakuraParticles.forEach((p, i) => {
+                  p.y += p.vy; p.rot += p.rs; p.life -= 0.008;
+                  if (p.life <= 0 || p.y > 10) { eng.sakuraParticles.splice(i, 1); return; }
+
+                  ctx.save(); ctx.translate(x + p.ox, y + p.y); ctx.rotate(p.rot);
+                  ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`; // Light Pink petal
+                  ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 2, 0, 0, Math.PI * 2); ctx.fill();
+                  ctx.restore();
+              });
+
+              // 4. MASSIVE FLOATING HEARTS Overload (Rising Gentley)
+              if (!eng.sakuraHearts) eng.sakuraHearts = [];
+              // Pinarami natin ang limit at probability para "Siksik" sa hearts
+              if (eng.sakuraHearts.length < 25 && Math.random() < 0.2) {
+                  eng.sakuraHearts.push({
+                      ox: (Math.random() - 0.5) * radius * 3.5, y: radius, 
+                      vy: 0.5 + Math.random() * 0.8, // Slow gentle rising
+                      size: 3 + Math.random() * 5, life: 1,
+                      rot: Math.random() * Math.PI, rs: (Math.random()-0.5)*0.02 // added rotation to hearts
+                  });
+              }
+              eng.sakuraHearts.forEach((h, i) => {
+                  h.y -= h.vy; h.life -= 0.005; h.rot += h.rs;
+                  if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
+
+                  ctx.save(); ctx.translate(x + h.ox, y + h.y); ctx.rotate(h.rot);
+                  // Bubbly pulsing effect
+                  const hSize = h.size * (1 + Math.sin(time * 0.005 + i) * 0.2); 
+                  const hColor = `rgba(236, 72, 153, ${h.life * 0.9})`; // Hot Pink
+
+                  // Heart shape Bezier formula (Polished)
+                  ctx.beginPath(); ctx.moveTo(0, -hSize * 0.3);
+                  ctx.bezierCurveTo(-hSize * 0.5, -hSize * 0.8, -hSize * 1.0, -hSize * 0.3, 0, hSize * 1.0); 
+                  ctx.bezierCurveTo(hSize * 1.0, -hSize * 0.3, hSize * 0.5, -hSize * 0.8, 0, -hSize * 0.3);
+                  ctx.fillStyle = hColor; ctx.shadowBlur = 15; ctx.shadowColor = '#ec4899';
+                  ctx.fill(); ctx.restore();
+              });
+
+              // 5. Blinding Fairy Dust Sprinkles
+              ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 10; ctx.shadowColor = '#fdf2f8';
+              for(let i=0; i<10; i++) {
+                  if(Math.random()>0.5) {
+                      const ex = x + Math.sin(time*0.01 + i)*radius*3;
+                      const ey = y - (time*0.05 + i*20)%100;
+                      ctx.beginPath(); ctx.arc(ex, ey, 1+Math.random()*2, 0, Math.PI*2); ctx.fill();
+                  }
+              }
+
+              // 6. Sweet Soft Core Bloom (Pink Inner Aura)
+              const pinkGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3.5);
+              pinkGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // White hot center
+              pinkGrad.addColorStop(0.3, 'rgba(251, 207, 232, 0.5)'); // Light pink
+              pinkGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');     
+              ctx.fillStyle = pinkGrad; ctx.beginPath(); ctx.arc(x, y, radius * 3.5, 0, Math.PI * 2); ctx.fill();
+          }
+
+          // 🌸 SAKURA SORCERESS (PREMIUM MAGICAL GIRL TIER - Glossy 3D Hearts & Crest)
+          else if (skinId === 'pink_wings') {
+              ctx.globalCompositeOperation = 'lighter';
+              const pulse = Math.sin(time * 0.003);
+
+              // 1. THE FLOOR: MAGICAL GIRL SAKURA CREST (Intricate, Rotating, 3D Perspective)
+              ctx.save(); 
+              ctx.translate(x, y + 5); 
+              ctx.scale(1, 0.35); // 3D Floor Perspective
+              ctx.rotate(time * 0.0005);
+              
+              // Soft Glowing Pool (Lace-like base)
+              const poolGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 5);
+              poolGrad.addColorStop(0, 'rgba(251, 207, 232, 0.6)');
+              poolGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');
+              ctx.fillStyle = poolGrad; ctx.beginPath(); ctx.arc(0, 0, radius*5, 0, Math.PI*2); ctx.fill();
+
+              // Outer White Lace Ring
+              ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + pulse * 0.2})`;
+              ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 15; ctx.lineWidth = 4;
+              ctx.setLineDash([15, 10, 5, 10]); 
+              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([]);
+
+              // Giant Inner Pink Heart Crest
+              ctx.rotate(time * -0.001);
+              ctx.strokeStyle = '#f472b6'; ctx.lineWidth = 3;
+              ctx.fillStyle = `rgba(244, 114, 182, 0.3)`;
+              ctx.beginPath();
+              const hs = radius * 2.5;
+              ctx.moveTo(0, -hs * 0.3);
+              ctx.bezierCurveTo(-hs * 0.5, -hs * 0.8, -hs * 1.0, -hs * 0.3, 0, hs * 1.0); 
+              ctx.bezierCurveTo(hs * 1.0, -hs * 0.3, hs * 0.5, -hs * 0.8, 0, -hs * 0.3);
+              ctx.fill(); ctx.stroke();
+              
+              // Inner Magical Star
+              ctx.rotate(time * 0.002);
+              ctx.fillStyle = 'rgba(253, 224, 71, 0.8)';
+              ctx.shadowColor = '#fde047'; ctx.beginPath();
+              for(let i=0; i<5; i++) {
+                  ctx.lineTo(Math.cos((18+i*72)*Math.PI/180)*radius*1.5, -Math.sin((18+i*72)*Math.PI/180)*radius*1.5);
+                  ctx.lineTo(Math.cos((54+i*72)*Math.PI/180)*radius*0.6, -Math.sin((54+i*72)*Math.PI/180)*radius*0.6);
+              }
+              ctx.closePath(); ctx.fill();
+              ctx.restore();
+
+              // 2. PINK & WHITE FLAPPING WINGS (Flapping Animation)
+              for (let w = -1; w <= 1; w += 2) {
+                  ctx.save(); ctx.translate(x, y - radius); ctx.scale(w, 1);
+                  const flap = Math.sin(time * 0.005) * 0.25 + 0.1;
+                  ctx.rotate(flap);
+
+                  const wingGrad = ctx.createLinearGradient(0, 0, radius*6, -radius*4);
+                  wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+                  wingGrad.addColorStop(0.5, 'rgba(251, 207, 232, 0.8)');
+                  wingGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');
+
+                  ctx.fillStyle = wingGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#f472b6';
+                  ctx.beginPath();
+                  ctx.moveTo(radius, 0);
+                  ctx.bezierCurveTo(radius*2, -radius*4, radius*5, -radius*3, radius*6 + Math.sin(time*0.005)*5, -radius*1);
+                  ctx.quadraticCurveTo(radius*4, -radius*0.5, radius*5, radius*1);
+                  ctx.quadraticCurveTo(radius*3, radius*0.5, radius*4, radius*2);
+                  ctx.quadraticCurveTo(radius*2, radius*1, radius, radius*0.5);
+                  ctx.fill();
+                  ctx.restore();
+              }
+
+              // 3. GLOSSY 3D CANDY HEARTS (Pina-glossy ang reflection)
+              if (!eng.sakuraHearts) eng.sakuraHearts = [];
+              if (eng.sakuraHearts.length < 20 && Math.random() < 0.2) {
+                  eng.sakuraHearts.push({
+                      ox: (Math.random() - 0.5) * radius * 4, oy: radius, 
+                      vy: 0.7 + Math.random(), size: 5 + Math.random() * 5, life: 1, rot: Math.random() * Math.PI
+                  });
+              }
+              eng.sakuraHearts.forEach((h, i) => {
+                  h.oy -= h.vy; h.life -= 0.005;
+                  if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
+                  ctx.save(); ctx.translate(x + h.ox, y + h.oy);
+                  const hSize = h.size;
+                  
+                  // Heart Shape
+                  ctx.beginPath(); ctx.moveTo(0, -hSize * 0.3);
+                  ctx.bezierCurveTo(-hSize * 0.6, -hSize, -hSize * 1.2, -hSize * 0.3, 0, hSize * 1.2); 
+                  ctx.bezierCurveTo(hSize * 1.2, -hSize * 0.3, hSize * 0.6, -hSize, 0, -hSize * 0.3);
+                  ctx.fillStyle = `rgba(236, 72, 153, ${h.life})`; ctx.shadowBlur = 10; ctx.shadowColor = '#ec4899';
+                  ctx.fill();
+
+                  // WHITE GLOSS SHEEN (Nagpapamukhang mamahalin/glossy)
+                  ctx.fillStyle = `rgba(255, 255, 255, ${h.life * 0.8})`;
+                  ctx.beginPath(); ctx.ellipse(-hSize*0.3, -hSize*0.3, hSize*0.2, hSize*0.3, Math.PI/4, 0, Math.PI*2); ctx.fill();
+                  ctx.restore();
+              });
+
+              // 4. SAKURA PETALS & DUST
+              if (!eng.sakuraParticles) eng.sakuraParticles = [];
+              if (eng.sakuraParticles.length < 20 && Math.random() < 0.2) {
+                  eng.sakuraParticles.push({ ox: (Math.random()-0.5)*70, y: -70, vy: 0.5+Math.random(), size: 3+Math.random()*2, life: 1 });
+              }
+              eng.sakuraParticles.forEach((p, i) => {
+                  p.y += p.vy; p.life -= 0.005;
+                  ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`;
+                  ctx.beginPath(); ctx.ellipse(x+p.ox, y+p.y, p.size, p.size*1.5, 0, 0, Math.PI*2); ctx.fill();
+              });
+
+              // 5. INNER CORE BLOOM
+              const pinkGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3);
+              pinkGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); 
+              pinkGrad.addColorStop(0.3, 'rgba(244, 114, 182, 0.4)'); 
+              pinkGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');     
+              ctx.fillStyle = pinkGrad; ctx.beginPath(); ctx.arc(x, y, radius * 3, 0, Math.PI * 2); ctx.fill();
+          }
+
+          ctx.restore();
+      };
+
+      const p1Aes = getSkinAesthetics(eng.p?.skin, false);
+      const p2Aes = getSkinAesthetics(eng.p2?.skin, true);
+
+      const p1Color = p1Aes.c; 
+      const p2Color = p2Aes.c; 
 
       const net = netRef.current || {};
       const isCoopActive = Boolean(net.channel);
@@ -5630,6 +6165,8 @@ for (const p of eng.particles) {
       const p1Y = isHost ? (eng.p ? eng.p.y : H/2) : eng.p1Render.y;
       const p2X = (isCoopActive && !isHost && eng.p2Render) ? eng.p2Render.x : (eng.p2 ? eng.p2.x : W*2/3);
       const p2Y = (isCoopActive && !isHost && eng.p2Render) ? eng.p2Render.y : (eng.p2 ? eng.p2.y : H/2);
+      
+      // --- DRAW PLAYER 1 ---
       if (eng.p && !eng.p.dead) {
         ctx.save();
         const fl = eng.p.inv > 0 && Math.sin(eng.p.inv * 25) > 0;
@@ -5658,12 +6195,16 @@ for (const p of eng.particles) {
           ctx.restore();
         }
 
+        drawAdvancedSkinAura(p1X, p1Y, pr, eng.p.skin);
+
         const p1AuraCounts = getEquipCounts(eng.p);
         drawEquipAura(p1X, p1Y, pr, p1AuraCounts);
 
-        ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
+        ctx.shadowColor = fl ? '#fff' : p1Aes.glow; 
+        ctx.shadowBlur = 22; ctx.fillStyle = c;
         ctx.beginPath();
         ctx.arc(p1X, p1Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        
         if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
@@ -5676,21 +6217,26 @@ for (const p of eng.particles) {
           ctx.arc(p1X, p1Y + 3, pr + 5, 0, Math.PI * 2); ctx.stroke();
         }
 
-        ctx.fillStyle = fl ? '#b91c1c' : '#5b21b6';
+        // Custom Wizard Robe at Hat
+        ctx.fillStyle = fl ? '#b91c1c' : p1Aes.robe; 
         ctx.beginPath();
         ctx.moveTo(p1X, p1Y - pr * 1.8); ctx.lineTo(p1X + pr * 0.9, p1Y - pr * 0.2);
         ctx.lineTo(p1X - pr * 0.9, p1Y - pr * 0.2); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = fl ? '#fca5a5' : '#c4b5fd';
+        
+        ctx.fillStyle = fl ? '#fca5a5' : p1Aes.brim; 
         ctx.beginPath();
         ctx.ellipse(p1X, p1Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p1X - pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2);
         ctx.arc(p1X + pr * 0.32, p1Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+        
         if (eng.p.chatBubble && eng.p.chatBubble.life > 0) {
           renderRpgChatBubble(p1X, p1Y, eng.p.chatBubble.text);
         }
       }
 
+      // --- DRAW PLAYER 2 ---
       if (isCoopActive && eng.p2 && !eng.p2.dead) {
         ctx.save();
         const fl = eng.p2.inv > 0 && Math.sin(eng.p2.inv * 25) > 0;
@@ -5714,19 +6260,21 @@ for (const p of eng.particles) {
               if (angleDeg === 0) ctx.moveTo(fx, fy);
               else ctx.lineTo(fx, fy);
             }
-
-            
             ctx.stroke();
           }
           ctx.restore();
         }
 
+        drawAdvancedSkinAura(p2X, p2Y, pr, eng.p2.skin);
+
         const p2AuraCounts = getEquipCounts(eng.p2);
         drawEquipAura(p2X, p2Y, pr, p2AuraCounts);
 
-        ctx.shadowColor = c; ctx.shadowBlur = 22; ctx.fillStyle = c;
+        ctx.shadowColor = fl ? '#fff' : p2Aes.glow; 
+        ctx.shadowBlur = 22; ctx.fillStyle = c;
         ctx.beginPath();
         ctx.arc(p2X, p2Y + 3, pr, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+        
         if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
           ctx.strokeStyle = '#38bdf8';
           ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
@@ -5739,21 +6287,24 @@ for (const p of eng.particles) {
           ctx.arc(p2X, p2Y + 3, pr + 5, 0, Math.PI * 2); ctx.stroke();
         }
 
-        ctx.fillStyle = fl ? '#b91c1c' : '#c2410c';
+        // Custom Wizard Robe at Hat (P2)
+        ctx.fillStyle = fl ? '#b91c1c' : p2Aes.robe; 
         ctx.beginPath();
         ctx.moveTo(p2X, p2Y - pr * 1.8); ctx.lineTo(p2X + pr * 0.9, p2Y - pr * 0.2);
         ctx.lineTo(p2X - pr * 0.9, p2Y - pr * 0.2); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = fl ? '#fca5a5' : '#ffedd5';
+        
+        ctx.fillStyle = fl ? '#fca5a5' : p2Aes.brim; 
         ctx.beginPath();
         ctx.ellipse(p2X, p2Y - pr * 0.2, pr * 1.15, pr * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+        
         ctx.fillStyle = '#030111'; ctx.beginPath(); ctx.arc(p2X - pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2);
         ctx.arc(p2X + pr * 0.32, p2Y + 2, pr * 0.18, 0, Math.PI * 2); ctx.fill();
         ctx.restore();
+        
         if (eng.p2.chatBubble && eng.p2.chatBubble.life > 0) {
           renderRpgChatBubble(p2X, p2Y, eng.p2.chatBubble.text);
         }
       }
-
 // ==============================================================================
       // 🔥 UPDATED STEP 4: INTENSE & SCARY CINEMATIC BOSS INTRO EFFECTS
       // ==============================================================================
@@ -5900,150 +6451,150 @@ for (const p of eng.particles) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 

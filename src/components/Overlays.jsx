@@ -914,6 +914,10 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             <button className="btn wizard-btn" onClick={() => setScreen('leaderboard')}>
               <span className="btn-icon">🏆</span><span className="btn-label">Arcane Tombstones</span>
             </button>
+
+            <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => setScreen('metashop')}>
+              <span className="btn-icon">🌌</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Void Sanctum (Upgrades)</span>
+            </button>
             
             <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
               <button 
@@ -1172,6 +1176,13 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             <div style={{ fontSize: '.88rem', color: '#cbd5e1', marginBottom: '18px', fontFamily: 'monospace', textAlign: 'center' }}>
               Survived to Wave {hudData?.wave || 1}
             </div>
+
+            {hudData?.p?.voidCrystals > 0 && (
+               <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)' }}>
+                 💎 +{hudData.p.voidCrystals} Void Crystals Retrieved
+               </div>
+            )}
+
             {isCoop && (
               <div style={{ fontSize: '.85rem', color: '#fca5a5', marginBottom: '10px', fontStyle: 'italic', textAlign: 'center' }}>
                 {restartVotes} / 2 voted to restart the game

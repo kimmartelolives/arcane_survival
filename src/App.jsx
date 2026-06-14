@@ -6,6 +6,7 @@ import Toast from './components/Toast';
 import AdminPortal from './components/AdminPortal';
 import { sbRealtime } from './services/supabase';
 import './index.css';
+import MetaShop from './components/MetaShop';
 
 // 1. I-import ang custom cursor components at styles
 import CustomCursor from './components/CustomCursor'; 
@@ -404,6 +405,11 @@ useEffect(() => {
         levelUpOptions={levelUpOptions} 
         onSelectUpgrade={handleSelectUpgrade}
         onAction={handleAction}
+      />
+
+      <MetaShop 
+        screen={screen} 
+        setScreen={setScreen} 
       />
 
       <PartyChat enabled={coop.isEnabled} channel={netRef.current.channel} localName={wizardName} />
