@@ -409,7 +409,14 @@ const focusStyles = `
   max-height: 480px;
   overflow-y: auto;
   box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
+
+  touch-action: pan-y !important;
 }
+
+.skill-tree-container .skill-row-btn {
+  touch-action: pan-y !important;
+}
+
   .skill-tree-title-row {
     display: flex;
     justify-content: space-between;
@@ -1643,18 +1650,41 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   return totals;
 };
 
+
+// 1. Helper function para makuha ang total value ng stats ng isang item (e.g., hp + dmg)
+  const getStatTotal = (item) => {
+    if (!item || !item.stats) return 0;
+    // Pinag-a-add nito lahat ng stats (halimbawa kung may hp: 10, dmg: 5 = 15 total)
+    return Object.values(item.stats).reduce((sum, val) => sum + (Number(val) || 0), 0);
+  };
+
+  // 2. Logic para malaman kung ang item ay ang "Best in Slot"
+  const isItemBiS = (invItem, playerTarget) => {
+    if (!playerTarget || !invItem) return false;
+    
+    const itemStat = getStatTotal(invItem);
+    const equippedItem = playerTarget.equipment[invItem.type];
+    const equippedStat = getStatTotal(equippedItem);
+
+    // Kapag parehas lang o mas mababa ang stats sa naka-equip, hindi lalabas ang BiS
+    if (itemStat <= equippedStat) return false;
+
+    // I-check kung may iba pa bang item sa inventory na mas malakas pa kaysa dito
+    const hasBetterInInventory = playerTarget.inventory.some(otherItem => {
+      if (otherItem.type !== invItem.type) return false;
+      return getStatTotal(otherItem) > itemStat;
+    });
+
+    // Kung walang mas mataas na item sa inventory, siya ang tunay na BiS!
+    return !hasBetterInInventory;
+  };
+
 // Equip logic
 const equipItem = (item, index) => {
 
   if (Date.now() - lastInvAction.current < 400) return;
   lastInvAction.current = Date.now();
   const eng = engineRef.current;
-
-  if (eng.joystick) {
-    eng.joystick.active = false;
-    eng.joystick.mx = 0;
-    eng.joystick.my = 0;
-  }
 
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || target.dead) return;
@@ -1685,12 +1715,6 @@ const equipItem = (item, index) => {
 const unequipItem = (type) => {
   const eng = engineRef.current;
 
-  if (eng.joystick) {
-    eng.joystick.active = false;
-    eng.joystick.mx = 0;
-    eng.joystick.my = 0;
-  }
-
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || target.dead || target.inventory.length >= 16) return;
 
@@ -1713,13 +1737,6 @@ const deleteItem = (index) => {
   lastInvAction.current = Date.now();
   const eng = engineRef.current;
 
-
-  if (eng.joystick) {
-    eng.joystick.active = false;
-    eng.joystick.mx = 0;
-    eng.joystick.my = 0;
-  }
-
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || !target.inventory[index]) return;
 
@@ -1736,12 +1753,6 @@ const deleteItem = (index) => {
 const clearAllInventory = () => {
     lastInvAction.current = Date.now();
     const eng = engineRef.current;
-
-    if (eng.joystick) {
-    eng.joystick.active = false;
-    eng.joystick.mx = 0;
-    eng.joystick.my = 0;
-  }
 
     const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
     
@@ -5757,150 +5768,150 @@ for (const p of eng.particles) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 
@@ -6547,19 +6558,26 @@ const renderTooltipStats = (item) => {
         )}
 
         {/* ========================================== */}
-        {/* THE INVENTORY MODAL (I-paste sa ilalim ng buttons) */}
+        {/* THE INVENTORY MODAL */}
         {/* ========================================== */}
         {screen === 'playing' && isInventoryOpen && (
-          // <div className="inventory-modal" onPointerDown={e => e.stopPropagation()}>
-            <div 
-    className="inventory-modal" 
-    onPointerDown={e => e.stopPropagation()} 
-    onTouchStart={e => e.stopPropagation()}
-  >
+          <div 
+            className="inventory-modal" 
+            onPointerDown={e => e.stopPropagation()} 
+            onPointerUp={e => e.stopPropagation()} 
+            onTouchStart={e => e.stopPropagation()}
+            onTouchEnd={e => e.stopPropagation()}
+            onTouchMove={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()} // 🔥 Dagdag na pangharang para sa React Synthetic Clicks
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-            
               <span style={{ fontWeight: 'bold', color: '#fef08a' }}>🎒 EQUIPMENT & INVENTORY</span>
-              <button onClick={() => setIsInventoryOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕</button>
+              <button 
+                onPointerDown={(e) => { e.stopPropagation(); setIsInventoryOpen(false); }} 
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
             </div>
 
            {/* Equipped Section */}
@@ -6573,16 +6591,17 @@ const renderTooltipStats = (item) => {
                     <div 
                       className="inv-slot" 
                       data-rarity={item ? item.rarity : 'none'}
-                      onClick={() => unequipItem(slot)}
-                      // 1. IDINAGDAG: position: 'relative' para hindi lumabas ang badge sa box
+                      onPointerDown={(e) => { 
+                        e.stopPropagation(); // 🔥 Ito ang pipigil sa joystick na huminto!
+                        unequipItem(slot); 
+                      }}
                       style={{ width: '60px', position: 'relative' }} 
                     >
                       {item ? (
                         <>
                           <span style={{ fontSize: '1.5rem' }}>{slot === 'wand' ? '🪄' : slot === 'robe' ? '🧙' : '👢'}</span>
                           
-                        
-                          {/* AUTO-DETECT: Plus Badge Indicator para sa nakasuot na item */}
+                          {/* AUTO-DETECT: Plus Badge Indicator */}
                           {(() => {
                             let plusVal = item.plus || item.level || item.upgrade || 0;
                             if (!plusVal && item.name) {
@@ -6622,13 +6641,11 @@ const renderTooltipStats = (item) => {
                 Clear All
               </button>
             </div>
-   {/* Backpack Grid */}
+
             <div className="inv-grid">
               {Array.from({ length: 16 }).map((_, i) => {
                 const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
                 const item = localTgt?.inventory?.[i];
-                
-                // 1. GET EQUIPPED ITEM OF THE SAME TYPE FOR COMPARISON
                 const equippedItem = item ? localTgt?.equipment?.[item.type] : null;
 
                 return (
@@ -6636,8 +6653,10 @@ const renderTooltipStats = (item) => {
                     key={i} 
                     className="inv-slot" 
                     data-rarity={item ? item.rarity : 'none'}
-                    onClick={() => item && equipItem(item, i)}
-                    // IDINAGDAG: position relative para hindi lumabas ang badge sa gilid ng box
+                    onPointerDown={(e) => { 
+                      e.stopPropagation(); // 🔥 Ito ang pipigil sa joystick na huminto!
+                      if (item) equipItem(item, i); 
+                    }}
                     style={{ position: 'relative' }} 
                   >
                     {item && (
@@ -6648,14 +6667,14 @@ const renderTooltipStats = (item) => {
                             e.stopPropagation();
                             deleteItem(i); 
                           }}
-                          // 2. PREVENT CLICK BUBBLING TO STOP GHOST EQUIPS
                           onClick={(e) => e.stopPropagation()} 
                         >
                           ✕
                         </button>
+                        
                         <span style={{ fontSize: '1.5rem' }}>{item.type === 'wand' ? '🪄' : item.type === 'robe' ? '🧙' : '👢'}</span>
                         
-                        {/* AUTO-DETECT: Plus Badge Indicator para sa Backpack Items */}
+                        {/* AUTO-DETECT: Plus Badge Indicator */}
                         {(() => {
                           let plusVal = item.plus || item.level || item.upgrade || 0;
                           if (!plusVal && item.name) {
@@ -6664,22 +6683,43 @@ const renderTooltipStats = (item) => {
                           }
                           return plusVal > 0 ? <div className="item-plus-badge">+{plusVal}</div> : null;
                         })()}
+
+                        {/* 🔥 BiS BADGE UI (Nakalagay sa upper-left para hindi mag-overlap sa delete button) */}
+                        {isItemBiS(item, localTgt) && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '-6px',
+                            left: '-6px',
+                            backgroundColor: '#22c55e',
+                            color: 'white',
+                            fontSize: '8px',
+                            fontWeight: 'bold',
+                            padding: '2px 4px',
+                            borderRadius: '4px',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                            pointerEvents: 'none',
+                            zIndex: 10,
+                            textTransform: 'uppercase',
+                            fontFamily: 'monospace'
+                          }}>
+                            BiS 🡅
+                          </div>
+                        )}
                         
                         {/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
                         <div className="item-tooltip" style={{ 
                           display: 'flex',
                           flexDirection: 'row',
-                          gap: '8px', // Eto yung space sa gitna ng dalawang box
+                          gap: '8px',
                           maxWidth: equippedItem ? '450px' : '190px', 
                           width: 'max-content',
-                          // I-o-override natin yung default CSS para maging invisible wrapper lang siya
                           background: 'transparent', 
                           border: 'none',
                           padding: 0,
                           boxShadow: 'none'
                         }}>
                           
-                          {/* COLUMN 1: The item in the inventory (Follows Inventory Item Rarity) */}
+                          {/* COLUMN 1: In Inventory */}
                           <div style={{ 
                             display: 'flex', 
                             flexDirection: 'column', 
@@ -6698,7 +6738,7 @@ const renderTooltipStats = (item) => {
                             <div style={{ color: '#10b981', marginTop: '6px', fontSize: '0.55rem' }}>(Click to Equip)</div>
                           </div>
 
-                          {/* COLUMN 2: The currently equipped item (Follows Equipped Item Rarity) */}
+                          {/* COLUMN 2: Equipped */}
                           {equippedItem && (
                             <div style={{ 
                               display: 'flex', 
@@ -6714,17 +6754,10 @@ const renderTooltipStats = (item) => {
                               <div style={{ color: '#fef08a', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(254, 240, 138, 0.4)', paddingBottom: '2px' }}>CURRENTLY EQUIPPED</div>
                               <div style={{ color: RARITY_COLORS[equippedItem.rarity], fontWeight: 'bold' }}>{equippedItem.name}</div>
                               <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{equippedItem.rarity.toUpperCase()} {equippedItem.type.toUpperCase()}</div>
-                              {equippedItem.stats.atk && <div>+{equippedItem.stats.atk} Attack</div>}
-                              {equippedItem.stats.rate && <div>+{equippedItem.stats.rate} Atk Rate</div>}
-                              {equippedItem.stats.crit && <div>+{equippedItem.stats.crit}% Crit</div>}
-                              {equippedItem.stats.def && <div>+{equippedItem.stats.def} Defense</div>}
-                              {equippedItem.stats.hp && <div>+{equippedItem.stats.hp} HP</div>}
-                              {equippedItem.stats.speed && <div>+{equippedItem.stats.speed} Speed</div>}
-                              {equippedItem.stats.lifesteal && <div>+{equippedItem.stats.lifesteal} Lifesteal</div>}
+                              {renderTooltipStats(equippedItem)}
                               <div style={{ color: '#fbbf24', marginTop: '4px' }}>{equippedItem.desc}</div>
                             </div>
                           )}
-
                         </div>
                       </>
                     )}
@@ -6735,8 +6768,18 @@ const renderTooltipStats = (item) => {
           </div>
         )}
 
-        {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
-          <div className="skill-tree-container">
+            {screen === 'playing' && playerLevel >= 5 && isTreeOpen && (
+              <div 
+                className="skill-tree-container"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerMove={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                onTouchMove={(e) => e.stopPropagation()}
+                onTouchEnd={(e) => e.stopPropagation()}
+                onWheel={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
             <div className="skill-tree-title-row">
               <span className="skill-tree-title">✨ DEFENSIVE SPELLS (LV 5+)</span>
               <button 
