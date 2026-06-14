@@ -93,11 +93,23 @@ const playSfx = (type) => window.ArcaneSoundManager.play(type);
 const W = 1280;
 const H = 720;
 
+const formatLargeNumber = (num) => {
+  if (!num) return "0";
+  if (num >= 1e21) return (num / 1e21).toFixed(2) + 'Sx'; // Sextillion
+  if (num >= 1e18) return (num / 1e18).toFixed(2) + 'Qi'; // Quintillion
+  if (num >= 1e15) return (num / 1e15).toFixed(2) + 'Qa'; // Quadrillion
+  if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';  // Trillion
+  if (num >= 1e9)  return (num / 1e9).toFixed(2) + 'B';   // Billion
+  if (num >= 1e6)  return (num / 1e6).toFixed(2) + 'M';   // Million
+  if (num >= 1e3)  return (num / 1e3).toFixed(2) + 'K';   // Thousand
+  return Math.floor(num).toLocaleString();
+};
+
 const ET = [
   // 1. Normal Minion (Mas malambot sa early game para madaling patayin)
-  { r: 13, speed: 65,  hp: 35,  dmg: 15,  xp: 15,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
+  { r: 13, speed: 65,  hp: 25,  dmg: 15,  xp: 15,  color: '#e2e8f0', glow: '#94a3b8', boss: false },
   // 2. Fast/Assassin Minion (Mabilis pero sobrang lambot)
-  { r: 11, speed: 115, hp: 20,  dmg: 25,  xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
+  { r: 11, speed: 115, hp: 15,  dmg: 25,  xp: 20,  color: '#fb923c', glow: '#f97316', boss: false },
   // 3. Tanky/Elite Minion (Makunat pero MABAGAL na para pwedeng takbuhan)
   { r: 15, speed: 55,  hp: 120, dmg: 35,  xp: 40,  color: '#818cf8', glow: '#6366f1', boss: false },
   // 4. Generic Mini-Boss (Balanced entry stats)
@@ -243,7 +255,8 @@ const focusStyles = `
     width: 100%;
     transition: width 0.1s linear;
   }
-  .hud-bar-text {
+
+.hud-bar-text {
     position: absolute;
     top: 0;
     left: 0;
@@ -255,6 +268,8 @@ const focusStyles = `
     color: #fff;
     font-weight: bold;
     text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    white-space: nowrap;
+    overflow: hidden;
   }
 
   .stats-toggle-btn {
@@ -1570,6 +1585,45 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [invTrigger, setInvTrigger] = useState(0);
   const lastInvAction = useRef(0);
 
+
+  // BLOCK INSPECT ELEMENT & KEYBOARD SHORTCUTS
+  useEffect(() => {
+    const blockKeys = (e) => {
+      if (
+        e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) || 
+        (e.ctrlKey && e.key === 'U')
+      ) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', blockKeys);
+    return () => window.removeEventListener('keydown', blockKeys);
+  }, []);
+
+
+  // 🔥 GLOBAL JOYSTICK RESET: Para hindi ma-stuck kapag nag-slide palabas ng phone screen
+  useEffect(() => {
+    const globalPointerUp = (e) => {
+      const eng = engineRef.current;
+      if (eng && eng.joystick && eng.joystick.active) {
+        if (e.pointerId === eng.joystick.pointerId) {
+          eng.joystick.active = false;
+          eng.joystick.mx = 0;
+          eng.joystick.my = 0;
+          if (joyBaseRef.current) joyBaseRef.current.style.display = 'none';
+          if (joyKnobRef.current) joyKnobRef.current.style.display = 'none';
+        }
+      }
+    };
+    window.addEventListener('pointerup', globalPointerUp);
+    window.addEventListener('pointercancel', globalPointerUp);
+    return () => {
+      window.removeEventListener('pointerup', globalPointerUp);
+      window.removeEventListener('pointercancel', globalPointerUp);
+    };
+  }, []);
+
   const getEquipmentStats = (playerObj) => {
   const totals = { atk: 0, rate: 0, crit: 0, def: 0, hp: 0, speed: 0, lifesteal: 0 };
   if (!playerObj || !playerObj.equipment) return totals;
@@ -1595,6 +1649,13 @@ const equipItem = (item, index) => {
   if (Date.now() - lastInvAction.current < 400) return;
   lastInvAction.current = Date.now();
   const eng = engineRef.current;
+
+  if (eng.joystick) {
+    eng.joystick.active = false;
+    eng.joystick.mx = 0;
+    eng.joystick.my = 0;
+  }
+
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || target.dead) return;
 
@@ -1623,6 +1684,13 @@ const equipItem = (item, index) => {
 
 const unequipItem = (type) => {
   const eng = engineRef.current;
+
+  if (eng.joystick) {
+    eng.joystick.active = false;
+    eng.joystick.mx = 0;
+    eng.joystick.my = 0;
+  }
+
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || target.dead || target.inventory.length >= 16) return;
 
@@ -1644,6 +1712,14 @@ const deleteItem = (index) => {
 
   lastInvAction.current = Date.now();
   const eng = engineRef.current;
+
+
+  if (eng.joystick) {
+    eng.joystick.active = false;
+    eng.joystick.mx = 0;
+    eng.joystick.my = 0;
+  }
+
   const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
   if (!target || !target.inventory[index]) return;
 
@@ -1660,6 +1736,13 @@ const deleteItem = (index) => {
 const clearAllInventory = () => {
     lastInvAction.current = Date.now();
     const eng = engineRef.current;
+
+    if (eng.joystick) {
+    eng.joystick.active = false;
+    eng.joystick.mx = 0;
+    eng.joystick.my = 0;
+  }
+
     const target = (isCoop && !netRef.current.isHost) ? eng.p2 : eng.p;
     
     // Check kung may laman ang inventory
@@ -1698,7 +1781,7 @@ const clearAllInventory = () => {
   const [skillsState, setSkillsState] = useState(initSkills());
 
 const engineRef = useRef({
-    score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
+    score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 0.9, boltDmg: 22,
     gameStarted: false, screenShake: 0,
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
@@ -1818,17 +1901,24 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
       } else if (sigilType === 'tidalWave') {
         target.chatBubble = { text: "TIDAL WAVE!", life: 1.5 };
         currentEng.waves.push({ x: -200, y: H/2, vx: 450, life: 5.0, width: 300 });
+
       } else if (sigilType === 'fissureSlam') {
         target.chatBubble = { text: "FISSURE SLAM!", life: 1.5 };
         const angle = Math.random() * Math.PI * 2;
         currentEng.fissures.push({ x: target.x, y: target.y, angle, length: W, life: 1.5 });
         const cos = Math.cos(angle), sin = Math.sin(angle);
+        
+        // 🔥 SCALED DAMAGE: Base + Wave Scaling + (Player Dmg * 5)
+        // const fissureDmg = 1500 + ((currentEng.wave || 1) * 200) + ((target.dmg || 0) * 5);
+        // 🔥 BALANCED SCALED DAMAGE: Base 150 + (Wave * 15) + (Player Dmg * 3.0)
+           const fissureDmg = 150 + ((currentEng.wave || 1) * 15) + ((target.dmg || 0) * 3.0);
+
         for (const e of currentEng.enemies) {
           const dx = e.x - target.x, dy = e.y - target.y;
           const proj = dx * cos + dy * sin;
           const perp = Math.abs(dx * sin - dy * cos); 
           if (proj > 0 && perp < 60) {
-             e.hp -= 80;
+             e.hp -= fissureDmg; // <--- Gumagamit na ng Scaled Damage
              e.stunnedTime = 5.0;
              e.flash = 0.5;
              if(e.hp <= 0) e.deadTrigger = true;
@@ -1839,6 +1929,12 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
         let pts = [{x: target.x, y: target.y}];
         let current = target;
         let hits = new Set();
+        
+        // 🔥 SCALED DAMAGE: Mas mataas ang damage kasi nag-ba-bounce per target
+        // const lightningDmg = 2500 + ((currentEng.wave || 1) * 350) + ((target.dmg || 0) * 8);
+        // 🔥 BALANCED SCALED DAMAGE: Base 200 + (Wave * 20) + (Player Dmg * 3.5)
+        const lightningDmg = 200 + ((currentEng.wave || 1) * 20) + ((target.dmg || 0) * 3.5);
+
         for (let i = 0; i < 8; i++) {
           let best = null, minDist = 400;
           for (const e of currentEng.enemies) {
@@ -1851,14 +1947,16 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
             hits.add(best);
             pts.push({x: best.x, y: best.y});
             current = best;
-            best.hp -= 200;
+            best.hp -= lightningDmg; // <--- Gumagamit na ng Scaled Damage
             best.stunnedTime = 1.0;
             best.flash = 0.5;
             if (best.hp <= 0) best.deadTrigger = true;
           } else break;
         }
         if (pts.length > 1) currentEng.lightnings.push({ pts, life: 0.6 });
-      } else if (sigilType === 'iceStorm') {
+      }
+      
+      else if (sigilType === 'iceStorm') {
         target.chatBubble = { text: "ICE STORM!", life: 1.5 };
         currentEng.iceStorms.push({ x: target.x, y: target.y, radius: 250, life: 6.0 });
       }
@@ -1888,8 +1986,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     if (!target.skills.natureRecovery) target.skills.natureRecovery = { learned: true, enabled: true, cd: 0 };
     if (target.skills.natureRecovery.cd > 0) return;
 
-    // Set Cooldown (e.g., 45 seconds)
-    target.skills.natureRecovery.cd = 40.0;
+    target.skills.natureRecovery.cd = 75.0;
 
     playSfx('heal');
     target.chatBubble = { text: "NATURE'S RECOVERY!", life: 1.5 };
@@ -1942,7 +2039,7 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
 
     playSfx('collapse');
 
-    target.skills.arcaneCollapse.cd = 25.0; 
+    target.skills.arcaneCollapse.cd = 50.0; 
     eng.screenShake = 2.0; 
     target.chatBubble = { text: "ARCANE COLLAPSE!!!", life: 1.8 };
 
@@ -1955,7 +2052,9 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
     
     for (const enemy of eng.enemies) {
       // 🔥 DYNAMIC SCALED DPS: Arcane Collapse Initial Burst
-      let colPulseDmg = 3500 + ((eng?.wave || 1) * 500) + ((target.dmg || 0) * 20);
+      // let colPulseDmg = 3500 + ((eng?.wave || 1) * 500) + ((target.dmg || 0) * 20);
+      // 🔥 BALANCED DYNAMIC DPS: Arcane Collapse Initial Burst
+      let colPulseDmg = 400 + ((eng?.wave || 1) * 35) + ((target.dmg || 0) * 5.0);
       
       if (target.potBuffs?.power > 0) colPulseDmg *= 1.4; 
       if (target.skills?.arcaneInstinct?.duration > 0) colPulseDmg *= 2.0;
@@ -2018,7 +2117,7 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
 
     playSfx('instinct');
 
-    target.skills.arcaneInstinct.cd = 40.0; // 🔥 BUFF: Cooldown reduced to 40s
+    target.skills.arcaneInstinct.cd = 85.0; // 🔥 BUFF: Cooldown reduced to 40s
     target.skills.arcaneInstinct.duration = 15.0; // 🔥 BUFF: Duration increased to 15s
     target.skills.arcaneInstinct.autoTimer = 0.5; // 🔥 BUFF: Auto-cast delay reduced to 0.5s
     eng.screenShake = 1.2; 
@@ -2621,7 +2720,7 @@ useEffect(() => {
 
       const isCoopActive = Boolean(netRef.current && netRef.current.channel);
       
-      eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 2; eng.boltDmg = 22; eng.screenShake = 0;
+      eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 0.9; eng.boltDmg = 22; eng.screenShake = 0;
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
       eng.tornados = []; eng.waves = []; eng.fissures = []; eng.lightnings = []; eng.iceStorms = [];
@@ -2828,109 +2927,141 @@ if (eng.gameStarted) {
           eng.spawnT += dt;
 
           if (!isCoopActive || isHost) {
-          if (eng.spawnT >= eng.spawnRate) {
+
+// 🔥 MEMORY PROTECTION: Bawal mag-spawn ng normal minion kung lagpas 120 na ang kalaban sa screen
+          if (eng.spawnT >= eng.spawnRate && eng.enemies.length < 120) {
               eng.spawnT = 0;
-              eng.spawnRate = Math.max(0.35, 2 - eng.wave * 0.12);
-              const pool = eng.wave < 2 ? [0] : eng.wave < 4 ? [0, 1] : [0, 1, 2];
+              
+              // 🔥 PACED SWARM SCALING: Dahan-dahang bibilis hanggang Wave 45 (0.20s extreme cap)
+              eng.spawnRate = Math.max(0.20, 2 - (eng.wave * 0.04));
+              
+              // 🔥 MINI-BOSS INCLUSION: Paunti-unting idadagdag ang mga malalakas na minions
+              let pool = [0];
+              if (eng.wave >= 2) pool = [0, 1];               
+              if (eng.wave >= 4) pool = [0, 1, 2];            
+              if (eng.wave >= 10) pool = [0, 1, 2, 2];        
+              if (eng.wave >= 15) pool = [0, 1, 2, 2, 3];     
+              
               const ti = pool[Math.floor(Math.random() * pool.length)];
-              const t = ET[ti]; const side = Math.floor(Math.random() * 4); let ex, ey;
+              const t = ET[ti]; 
+              
+              const side = Math.floor(Math.random() * 4); 
+              let ex, ey;
               if (side === 0) { ex = Math.random() * W; ey = -30; }
               else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
                 
-                // 🔥 TRUE SCALING: Ang Wave 1 ay walang bonus (base stats lang). Magsisimula ang hirap sa Wave 2+.
-                const waveScale = Math.max(0, eng.wave - 1); 
+              const waveScale = Math.max(0, eng.wave - 1); 
+              const diffScale = Math.pow(1.025, Math.max(0, eng.wave - 30));
 
-                eng.enemies.push({ 
+              // 🔥 LATE GAME MATH: (Base + Scaling) * Exponential DiffScale
+              const calculatedHp = Math.floor((t.hp + (waveScale * 35) + Math.pow(waveScale, 1.5) * 5) * diffScale);
+              const calculatedDmg = Math.floor((t.dmg + (waveScale * 3) + (waveScale * waveScale * 0.05)) * diffScale);
+
+              eng.enemies.push({ 
                  x: ex, y: ey, r: t.r, 
-                 
-                 // 🔥 SPEED: Paunti-unting bibilis pero naka-cap sa +150
-                 speed: t.speed + Math.min(170, waveScale * 2.0),
-                 
-                 // 🔥 HP: Smooth scaling. Mahina sa early, pero exponential ang kunat pagdating ng Wave 20+
-                 hp: t.hp + (waveScale * 25) + Math.floor(Math.pow(waveScale, 1.5) * 4), 
-                 maxHp: t.hp + (waveScale * 25) + Math.floor(Math.pow(waveScale, 1.5) * 4), 
-                 
-                 // 🔥 DAMAGE: Katamtamang sakit sa early, nakakamatay sa late game
-                 dmg: t.dmg + (waveScale * 2) + Math.floor(waveScale * waveScale * 0.03), 
-                 
-                 // 🔥 XP: Mas mabilis mag-level up ang player early game (+12% XP per wave)
-                 xp: Math.floor(t.xp * Math.pow(1.12, waveScale)),
-                 
+                 speed: t.speed + Math.min(250, waveScale * 2.5),
+                 hp: calculatedHp, 
+                 maxHp: calculatedHp, 
+                 dmg: calculatedDmg, 
+                 xp: Math.floor(t.xp * Math.pow(1.08, waveScale)),
                  color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
-            }
+          }
+
               if (eng.waveT >= eng.waveLen) {
               eng.waveT = 0;
               eng.wave++;
               eng.waveLen = Math.max(15, 30 - eng.wave * 0.8);
 
-                // =========================================================
-              // 🟢 ADVANCED PROGRESSIVE BOSS SPAWN SYSTEM (V2)
+// =========================================================
+              // 🟢 ADVANCED PROGRESSIVE BOSS SPAWN SYSTEM (V3 - NIGHTMARE SCALING)
               // =========================================================
+              // Increased cap to 5 to ensure multi-boss raids spawn correctly
               const activeBosses = eng.enemies.filter(e => e.boss).length;
 
-              if (activeBosses < 4) {
+              if (activeBosses < 5) {
                   const currentWave = eng.wave || 1;
+                  
+                  // 🔥 EXPONENTIAL MULTIPLIER: Starts scaling past Wave 30.
+                  // 1.025^10 = 1.28x | 1.025^40 = 2.68x | 1.025^70 = 5.6x 
+                  // This ensures their HP outpaces the player's late-game item combinations.
+                  const diffScale = Math.pow(1.025, Math.max(0, currentWave - 30)); 
 
                   // 1. END-GAME COVENANT RAID (Wave 100+ Every 20 Waves: Magkasamang Bababa ang Dalawang Diyos!)
                   if (currentWave >= 100 && currentWave % 20 === 0) {
-                     eng.screenShake = 2.5;
+                     eng.screenShake = 3.5;
                      
-                     // Ipakita ang babala sa player
                      if (eng.p) eng.p.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
                      if (eng.p2) eng.p2.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
                      
-                     // Spawn The Abyss (God Form)
+                     const abyssHp = Math.floor((1500000 + (currentWave * 30000)) * diffScale);
+                     const primHp = Math.floor((600000 + (currentWave * 12000)) * diffScale);
+
+                     // Spawn The Abyss (Awakened God Form)
                      eng.enemies.push({ 
-                         x: W/2 - 150, y: -60, r: 50, speed: 65, 
-                         hp: 500000 + (currentWave * 2000), maxHp: 500000 + (currentWave * 2000), prevHpFrame: 500000 + (currentWave * 2000),
-                         dmg: 1200 + (currentWave * 5), xp: 60000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss (V2)', 
-                         abyssShieldTimer: 0, abyssShieldCd: 6, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         x: W/2, y: -60, r: 60, speed: 75, 
+                         hp: abyssHp, maxHp: abyssHp, prevHpFrame: abyssHp,
+                         dmg: Math.floor(2500 * diffScale), xp: 150000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss (Awakened)', 
+                         abyssShieldTimer: 0, abyssShieldCd: 5, abyssAttackTimer: 3, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
-                     // Spawn Primordial Demon bilang Guard
+                     
+                     // Spawn TWO Primordial Demon Guards instead of one
                      eng.enemies.push({ 
-                         x: W/2 + 150, y: -90, r: 35, speed: 85, 
-                         hp: 250000 + (currentWave * 1000), maxHp: 250000 + (currentWave * 1000),
-                         dmg: 650 + (currentWave * 3), xp: 30000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Void', 
+                         x: W/2 - 200, y: -90, r: 40, speed: 95, 
+                         hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Void Guard', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
+                     eng.enemies.push({ 
+                         x: W/2 + 200, y: -90, r: 40, speed: 95, 
+                         hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Void Guard', 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   } 
-                  // 2. THE ULTIMATE BOSS ENCOUNTER (Wave 75 - Unang labas ni The Abyss)
-                  else if (currentWave === 75) {
-                     eng.screenShake = 2.0;
+                  // 2. THE ULTIMATE BOSS ENCOUNTER (Wave 75+, every 25 waves)
+                  else if (currentWave >= 75 && currentWave % 25 === 0) {
+                     eng.screenShake = 2.5;
+                     const hpScale = Math.floor((1000000 + (currentWave * 15000)) * diffScale);
                      eng.enemies.push({ 
-                         x: W/2, y: -60, r: 50, speed: 65, hp: 450000, maxHp: 450000, prevHpFrame: 450000, dmg: 1200, 
-                         xp: 50000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
-                         abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         x: W/2, y: -60, r: 55, speed: 70, hp: hpScale, maxHp: hpScale, prevHpFrame: hpScale, dmg: Math.floor(1800 * diffScale), 
+                         xp: 80000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
+                         abyssShieldTimer: 0, abyssShieldCd: 7, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   } 
-                  // 3. MID-LATE GATEKEEPER (Wave 50 - Unang labas ni Primordial)
-                  else if (currentWave === 50) {
+                  // 3. MID-LATE GATEKEEPER (Wave 50+, every 20 waves kapag walang Abyss/Covenant)
+                  else if (currentWave >= 50 && currentWave % 20 === 0) {
+                     const hpScale = Math.floor((350000 + (currentWave * 8000)) * diffScale);
                      eng.enemies.push({ 
-                         x: W/2, y: -50, r: 35, speed: 85, hp: 180000, maxHp: 180000, dmg: 600, 
-                         xp: 20000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
+                         x: W/2, y: -50, r: 40, speed: 95, hp: hpScale, maxHp: hpScale, dmg: Math.floor(1000 * diffScale), 
+                         xp: 40000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   } 
-                  // 4. MID GAME WALL (Wave 30 - Archdemon)
-                  else if (currentWave === 30) {
+                  // 4. MID GAME WALL (Wave 30+, every 10 waves)
+                  else if (currentWave >= 30 && currentWave % 10 === 0) {
+                     const hpScale = Math.floor((120000 + (currentWave * 3000)) * diffScale);
                      eng.enemies.push({ 
-                         x: W/2, y: -45, r: 25, speed: 100, hp: 60000, maxHp: 60000, dmg: 350, 
-                         xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
+                         x: W/2, y: -45, r: 30, speed: 110, hp: hpScale, maxHp: hpScale, dmg: Math.floor(600 * diffScale), 
+                         xp: 15000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   } 
-                  // 5. EARLY GAME BOSS CHECK (Wave 15 - Demon Knight)
-                  else if (currentWave === 15) {
+                  // 5. EARLY GAME BOSS CHECK (Wave 15+, every 5 waves kapag walang ibang boss)
+                  else if (currentWave >= 15 && currentWave % 5 === 0) {
+                     const baseHp = 45000 + (currentWave * 1500);
+                     // Allow early bosses to scale slightly if they spawn extremely late (e.g., Wave 115)
+                     const hpScale = Math.floor(baseHp * (currentWave > 40 ? diffScale * 0.5 : 1)); 
+                     
                      eng.enemies.push({ 
-                         x: W/2, y: -40, r: 20, speed: 115, hp: 25000, maxHp: 25000, dmg: 200, 
-                         xp: 4000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
+                         x: W/2, y: -40, r: 25, speed: 125, hp: hpScale, maxHp: hpScale, dmg: 350 + (currentWave * 5), 
+                         xp: 6000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
                   }
               }
+
+
             }
           }
         }
@@ -3049,9 +3180,13 @@ if (eng.gameStarted) {
             if (s.life <= 0) {
               eng.iceStorms.splice(i, 1);
             } else if (isHost || !isCoopActive) {
+              
+              // 🔥 SCALED DPS: Base DPS + Wave Scaling + (Player Dmg * 4)
+              const iceDps = 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4);
+
               for (const e of eng.enemies) {
                 if (Math.hypot(e.x - s.x, e.y - s.y) < s.radius + e.r) {
-                  e.hp -= 200 * dt; 
+                  e.hp -= iceDps * dt; // <--- Gumagamit na ng Scaled DPS
                   e.stigmaTime = 1.0; 
                   e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0); 
                   if (Math.random() < 0.1) e.flash = 0.5;
@@ -3074,9 +3209,12 @@ if (eng.gameStarted) {
           if (playerObj.potBuffs.defense > 0) playerObj.potBuffs.defense -= dt;
           if (playerObj.potBuffs.crit > 0) playerObj.potBuffs.crit -= dt;
           if (playerObj.potBuffs.xpBoost > 0) playerObj.potBuffs.xpBoost -= dt;
+
           if (playerObj.potBuffs.regen > 0) {
             playerObj.potBuffs.regen -= dt;
-            playerObj.hp = Math.min(playerObj.maxHp, playerObj.hp + 3.5 * dt); 
+            // 🔥 PERCENTAGE REGEN: 2.5% ng Max HP per second para ramdam kahit gaano kataas ang buhay
+            const regenAmount = playerObj.maxHp * 0.025 * dt;
+            playerObj.hp = Math.min(playerObj.maxHp, playerObj.hp + regenAmount); 
           }
 
           if (playerObj.skills.arcaneCollapse?.cd > 0) playerObj.skills.arcaneCollapse.cd -= dt;
@@ -3439,7 +3577,7 @@ if (playerObj.skills.cubeBash?.learned) {
 
           let currentLifesteal = (localTrackedObj.lifeSteal || 0) + equipBonuses.lifesteal;
 
-          if (statAtkRef.current) statAtkRef.current.textContent = currentAtk;
+           if (statAtkRef.current) statAtkRef.current.textContent = formatLargeNumber(currentAtk);
           if (statDefRef.current) {
             const damageBlockedPct = ((currentDef / (100 + currentDef)) * 100).toFixed(1);
             statDefRef.current.textContent = `${currentDef} (${damageBlockedPct}% Block)`;
@@ -3622,7 +3760,9 @@ if (playerObj.skills.cubeBash?.learned) {
 
               for (const enemy of eng.enemies) {
                 // 🔥 SCALING: Arcane Collapse Pulses
-                let colPulseDmg = 2500 + ((eng.wave || 1) * 400) + ((eng.p?.dmg || 0) * 15);
+                // let colPulseDmg = 2500 + ((eng.wave || 1) * 400) + ((eng.p?.dmg || 0) * 15);
+                // 🔥 BALANCED SCALING: Arcane Collapse Pulses (Mas mahina ang pulse kaysa sa initial burst)
+                let colPulseDmg = 200 + ((eng.wave || 1) * 25) + ((eng.p?.dmg || 0) * 3.5);
                 if (enemy.instabTime > 0) colPulseDmg *= 1.5;
                 enemy.hp -= colPulseDmg;
                 enemy.flash = 0.35;
@@ -3662,8 +3802,9 @@ if (playerObj.skills.cubeBash?.learned) {
               }
 
               if (pot.type === 'health') {
-                targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + 20);
-              } else if (pot.type === 'regen') {
+                  // 🔥 PERCENTAGE HEAL: Maghe-heal ng 25% ng Max HP ng nakapulot
+                  targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + (targetPlayer.maxHp * 0.25));
+                } else if (pot.type === 'regen') {
                 targetPlayer.potBuffs.regen = 10.0;
               } else if (pot.type === 'freeze') {
                 // ❄️ CHRONO-CRYSTAL EFFECT
@@ -3686,8 +3827,9 @@ if (playerObj.skills.cubeBash?.learned) {
                      // Normal minions: Bawas 80% ng Max HP nila (Hindi na guaranteed insta-kill kung full HP pa sila)
                      enemy.hp -= (enemy.maxHp * 0.80);
                   } else {
-                     // Bosses: Bawas 15% ng Max HP
-                     enemy.hp -= (enemy.maxHp * 0.15); 
+                    // Bosses: Bawas 15% ng Max HP, capped based on current wave to prevent late-game exploits
+                     const maxBossNukeDmg = 5000 + ((eng.wave || 1) * 1500);
+                     enemy.hp -= Math.min(enemy.maxHp * 0.15, maxBossNukeDmg);
                   }
                   
                   // Siguraduhing mamatay kung sumagad sa 0 ang HP
@@ -4103,7 +4245,7 @@ if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.typ
                 if (e.hp <= 0) e.deadTrigger = true;
               }
 
-if (e.deadTrigger) {
+              if (e.deadTrigger) {
                 eng.score += e.boss ? 1500 : 100;
 
                 // --- 🩸 LIFESTEAL TRIGGER ---
@@ -4295,21 +4437,45 @@ if (e.deadTrigger) {
                   ty = eng.p2.y; targetPlayer = eng.p2;
                 }
               }
+
               if (!targetPlayer) continue;
               const gd = Math.hypot(tx - g.x, ty - g.y);
-              if (gd < 110) {
+              
+              // 🔥 CO-OP AUTO-VACUUM SYSTEM (WITH SMOOTH ACCELERATION ANIMATION)
+              const isWaveEnding = (eng.waveLen - eng.waveT) <= 2.0;
+              const pullRadius = isWaveEnding ? 5000 : 150; 
+              
+              if (gd < pullRadius) {
+                // Mag-i-inject tayo ng sariling speed multiplier bawat gem para sa animation
+                if (g.pullSpeed === undefined) g.pullSpeed = 0;
+                
+                // Dahan-dahang nag-a-accelerate (Mas mabilis ang acceleration kapag end-wave na)
+                const accelRate = isWaveEnding ? 4000 : 900;
+                g.pullSpeed += accelRate * dt;
+                
+                // Limitahan ang maximum speed para hindi lumagpas sa screen ang physics
+                const maxSpeed = isWaveEnding ? 3000 : 550;
+                g.pullSpeed = Math.min(g.pullSpeed, maxSpeed);
+
                 const ga = Math.atan2(ty - g.y, tx - g.x);
-                g.x += Math.cos(ga) * 260 * dt; g.y += Math.sin(ga) * 260 * dt;
+                g.x += Math.cos(ga) * g.pullSpeed * dt; 
+                g.y += Math.sin(ga) * g.pullSpeed * dt;
+              } else {
+                // I-reset ang speed kapag nakalabas sa higop range (para smooth din ang tigil)
+                g.pullSpeed = 0; 
               }
+
               if (!targetPlayer.dead && Math.hypot(targetPlayer.x - g.x, targetPlayer.y - g.y) < targetPlayer.r + g.r) {
                 let distributedXp = g.xp;
                 if (targetPlayer.potBuffs?.xpBoost > 0) distributedXp = Math.ceil(distributedXp * 1.5); 
 
-                if (isCoopActive && targetPlayer === eng.p2) {
+
+              if (isCoopActive && targetPlayer === eng.p2) {
                   eng.p2.xp += distributedXp;
                   while (eng.p2.xp >= eng.p2.xpNext) {
                     eng.p2.xp -= eng.p2.xpNext;
-                    eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.45); 
+                    // 🔥 BALANCED XP SCALING: Para posibleng umabot ng Level 100+
+                    eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.18) + 150; 
                     eng.p2.level++;
                     eng.p2.pendingLevelUps = (eng.p2.pendingLevelUps || 0) + 1;
                   }
@@ -4317,7 +4483,8 @@ if (e.deadTrigger) {
                   eng.p.xp += distributedXp;
                   while (eng.p.xp >= eng.p.xpNext) {
                     eng.p.xp -= eng.p.xpNext;
-                    eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.45); 
+                    // 🔥 BALANCED XP SCALING: Para posibleng umabot ng Level 100+
+                    eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.18) + 150; 
                     eng.p.level++;
                     eng.p.pendingLevelUps = (eng.p.pendingLevelUps || 0) + 1;
                   }
@@ -4364,7 +4531,7 @@ if (e.deadTrigger) {
           };
         }
 
-        if (scoreValueRef.current) scoreValueRef.current.textContent = eng.score;
+        if (scoreValueRef.current) scoreValueRef.current.textContent = formatLargeNumber(eng.score);
         if (waveValueRef.current) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
           waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
@@ -4382,11 +4549,11 @@ if (e.deadTrigger) {
 if (localTarget) {
           const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
           if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
-          if (hpTextRef.current) hpTextRef.current.textContent = `HP ${Math.max(0, Math.ceil(localTarget.hp))}/${localTarget.maxHp}`;
+          if (hpTextRef.current) hpTextRef.current.textContent = `HP ${formatLargeNumber(Math.max(0, localTarget.hp))}/${formatLargeNumber(localTarget.maxHp)}`;
           
           const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
           if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
-          if (xpTextRef.current) xpTextRef.current.textContent = `LV${localTarget.level} XP ${localTarget.xp}/${localTarget.xpNext}`;
+          if (xpTextRef.current) xpTextRef.current.textContent = `LV${localTarget.level} XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
 
           // 👇 IDAGDAG ANG BUONG BLOCK NA ITO PARA SA VIGNETTE GLOW
           if (vignetteRef.current) {
@@ -4401,6 +4568,11 @@ if (localTarget) {
           }
           // 👆 HANGGANG DITO
         }
+      }
+
+    // 🔥 ANTI-LAG SYSTEM: I-cap ang particles sa 300 para hindi mag-crash ang browser sa late game
+      if (eng.particles.length > 300) {
+         eng.particles.splice(0, eng.particles.length - 300); 
       }
 
       for (let i = eng.particles.length - 1; i >= 0; i--) {
@@ -5585,150 +5757,150 @@ for (const p of eng.particles) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-        if (e.key === 'n' || e.key === 'N') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//         if (e.key === 'n' || e.key === 'N') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-          if (target && !target.dead) {
-             eng.screenShake = 2.0;
-             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+//           if (target && !target.dead) {
+//              eng.screenShake = 2.0;
+//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-             // Play boss spawn sound effect
-             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+//              // Play boss spawn sound effect
+//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-             // Base coordinates (Sa paligid ng player mag-iispawn)
-             const startX = target.x;
-             const startY = target.y - 150;
+//              // Base coordinates (Sa paligid ng player mag-iispawn)
+//              const startX = target.x;
+//              const startY = target.y - 150;
 
-             // 1. The Abyss (Nasa taas)
-             eng.enemies.push({ 
-                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
+//              // 1. The Abyss (Nasa taas)
+//              eng.enemies.push({ 
+//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
 
-             // 2. Primordial Demon (Nasa kaliwa)
-             eng.enemies.push({ 
-                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
+//              // 2. Primordial Demon (Nasa kaliwa)
+//              eng.enemies.push({ 
+//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
 
-             // 3. Archdemon (Nasa kanan)
-             eng.enemies.push({ 
-                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
+//              // 3. Archdemon (Nasa kanan)
+//              eng.enemies.push({ 
+//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
 
-             // 4. Demon Knight (Nasa ibaba)
-             eng.enemies.push({ 
-                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-             });
-          }
-        }
+//              // 4. Demon Knight (Nasa ibaba)
+//              eng.enemies.push({ 
+//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+//              });
+//           }
+//         }
 
-if (e.key === 'm' || e.key === 'M') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+// if (e.key === 'm' || e.key === 'M') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-          if (target && !target.dead) {
-             // 1. Matinding Screen Shake at Sound
-             eng.screenShake = 3.0;
-             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+//           if (target && !target.dead) {
+//              // 1. Matinding Screen Shake at Sound
+//              eng.screenShake = 3.0;
+//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-             // 2. Patayin LAHAT ng kalaban agad-agad
-             for (const enemy of eng.enemies) {
-                enemy.hp = 0;
-                enemy.deadTrigger = true;
-                enemy.flash = 1.0;
-             }
+//              // 2. Patayin LAHAT ng kalaban agad-agad
+//              for (const enemy of eng.enemies) {
+//                 enemy.hp = 0;
+//                 enemy.deadTrigger = true;
+//                 enemy.flash = 1.0;
+//              }
 
-             // 3. Massive Red Particle Explosion sa buong map
-             for (let k = 0; k < 250; k++) {
-                const pa = Math.random() * Math.PI * 2;
-                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-                eng.particles.push({ 
-                  x: target.x, y: target.y, 
-                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-                });
-             }
+//              // 3. Massive Red Particle Explosion sa buong map
+//              for (let k = 0; k < 250; k++) {
+//                 const pa = Math.random() * Math.PI * 2;
+//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+//                 eng.particles.push({ 
+//                   x: target.x, y: target.y, 
+//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+//                 });
+//              }
 
-             // 4. WAVE SKIP LOGIC (+1 Wave)
-             eng.wave++;
-             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+//              // 4. WAVE SKIP LOGIC (+1 Wave)
+//              eng.wave++;
+//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-             // Update Chat Bubble para makita kung anong wave na
-             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-          }
-        }
-    if (e.key === '8') {
-              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//              // Update Chat Bubble para makita kung anong wave na
+//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+//           }
+//         }
+//     if (e.key === '8') {
+//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-              if (target && !target.dead) {
-                if (!eng.droppedItems) eng.droppedItems = [];
+//               if (target && !target.dead) {
+//                 if (!eng.droppedItems) eng.droppedItems = [];
 
-                // I-loop ang BUONG database at i-drop lahat!
-                EQUIPMENT_DB.forEach((item) => {
-                  eng.droppedItems.push({
-                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
-                    x: target.x + (Math.random() - 0.5) * 300, 
-                    y: target.y + (Math.random() - 0.5) * 300,
-                    item: item,
-                    life: 60.0 // Tatagal ng 1 minute sa sahig
-                  });
-                });
+//                 // I-loop ang BUONG database at i-drop lahat!
+//                 EQUIPMENT_DB.forEach((item) => {
+//                   eng.droppedItems.push({
+//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
+//                     x: target.x + (Math.random() - 0.5) * 300, 
+//                     y: target.y + (Math.random() - 0.5) * 300,
+//                     item: item,
+//                     life: 60.0 // Tatagal ng 1 minute sa sahig
+//                   });
+//                 });
 
-                // Notification
-                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-              }
-            }
+//                 // Notification
+//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+//               }
+//             }
 
-        if (e.key === '9') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             target.level = Math.max(target.level, 20);
-             target.maxHp += 50000;
-             target.hp = target.maxHp;
-             target.dmg += 15000;
-             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+//         if (e.key === '9') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//           if (target && !target.dead) {
+//              target.level = Math.max(target.level, 20);
+//              target.maxHp += 999999950000;
+//              target.hp = target.maxHp;
+//              target.dmg += 15000;
+//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+//              setPlayerLevel(target.level);
+//           }
+//         }
 
-        if (e.key === '0') {
-          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-          if (target && !target.dead) {
-             // 1. Maximize Level
-             target.level = Math.max(target.level, 99); 
+//         if (e.key === '0') {
+//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+//           if (target && !target.dead) {
+//              // 1. Maximize Level
+//              target.level = Math.max(target.level, 99); 
              
-             // 2. Godlike HP & Damage
-             target.maxHp = 999999;
-             target.hp = target.maxHp;
-             target.dmg = 999999; 
+//              // 2. Godlike HP & Damage
+//              target.maxHp = 999999;
+//              target.hp = target.maxHp;
+//              target.dmg = 999999; 
              
-             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-             target.speed = 800;        // Max Movement Speed Cap
-             target.shootRate = 0.15;   // Max Rapid Fire Cap
-             target.multiShot = 20;     // Max Split Bolt Cap
+//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+//              target.speed = 800;        // Max Movement Speed Cap
+//              target.shootRate = 0.15;   // Max Rapid Fire Cap
+//              target.multiShot = 20;     // Max Split Bolt Cap
 
-             // 4. Max out NEW STATS: Crit and Defense
-             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-             target.baseDef = 60;       // Max Defense Block Cap (60%)
+//              // 4. Max out NEW STATS: Crit and Defense
+//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+//              target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-             setPlayerLevel(target.level);
-          }
-        }
+//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+//              setPlayerLevel(target.level);
+//           }
+//         }
         
         // END CHEAT CODES
 
@@ -5773,13 +5945,13 @@ const handlePointerDown = (e) => {
     
     if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
       eng.joystick.active = true;
-      eng.joystick.pointerId = e.pointerId ?? 'touch'; 
+      // 🔥 STRICT POINTER ID: Tatandaan kung aling daliri lang ang nag-activate ng joystick
+      eng.joystick.pointerId = e.pointerId; 
       eng.joystick.startX = e.clientX;
       eng.joystick.startY = e.clientY;
       eng.joystick.curX = e.clientX;
       eng.joystick.curY = e.clientY;
       
-      // 🟢 IPAKITA ANG VISUAL JOYSTICK KUNG SAAN PUMINDOT
       if (joyBaseRef.current && joyKnobRef.current) {
         joyBaseRef.current.style.display = 'block';
         joyBaseRef.current.style.left = `${e.clientX}px`;
@@ -5798,8 +5970,8 @@ const handlePointerDown = (e) => {
     const eng = engineRef.current;
     if (!eng.joystick.active) return;
     
-    const currentId = e.pointerId ?? 'touch';
-    if (eng.joystick.pointerId !== 'touch' && currentId !== eng.joystick.pointerId) return;
+    // 🔥 IGNORE OTHER FINGERS: Kung hindi ito yung daliri sa joystick, wag pansinin!
+    if (e.pointerId !== eng.joystick.pointerId) return;
 
     eng.joystick.curX = e.clientX;
     eng.joystick.curY = e.clientY;
@@ -5821,14 +5993,12 @@ const handlePointerDown = (e) => {
       eng.joystick.mx = Math.cos(angle) * intensity;
       eng.joystick.my = Math.sin(angle) * intensity;
       
-      // 🟢 PIGILAN ANG KNOB NA LUMABAS SA BILOG (Clamp)
       if (dist > maxRadius) {
         knobX = eng.joystick.startX + Math.cos(angle) * maxRadius;
         knobY = eng.joystick.startY + Math.sin(angle) * maxRadius;
       }
     }
 
-    // 🟢 PAGALAWIN ANG JOYSTICK KNOB
     if (joyKnobRef.current) {
       joyKnobRef.current.style.left = `${knobX}px`;
       joyKnobRef.current.style.top = `${knobY}px`;
@@ -5839,18 +6009,31 @@ const handlePointerDown = (e) => {
     const eng = engineRef.current;
     if (!eng.joystick.active) return;
 
-    const currentId = e?.pointerId ?? 'touch';
-    if (eng.joystick.pointerId === 'touch' || currentId === eng.joystick.pointerId) {
+    if (e.pointerId === eng.joystick.pointerId) {
       eng.joystick.active = false;
       eng.joystick.pointerId = null;
       eng.joystick.mx = 0;
       eng.joystick.my = 0;
       
-      // 🟢 ITAGO ANG JOYSTICK PAG INANGAT ANG DALIRI
       if (joyBaseRef.current) joyBaseRef.current.style.display = 'none';
       if (joyKnobRef.current) joyKnobRef.current.style.display = 'none';
 
       try { e.currentTarget.releasePointerCapture(e.pointerId); } catch(err) {}
+    }
+  };
+
+  // 🔥 100% SAFETY FALLBACK: Kapag inangat na lahat ng daliri, force stop ang joystick
+  const handleTouchEndFallback = (e) => {
+    if (e.touches && e.touches.length === 0) {
+      const eng = engineRef.current;
+      if (eng && eng.joystick.active) {
+        eng.joystick.active = false;
+        eng.joystick.pointerId = null;
+        eng.joystick.mx = 0;
+        eng.joystick.my = 0;
+        if (joyBaseRef.current) joyBaseRef.current.style.display = 'none';
+        if (joyKnobRef.current) joyKnobRef.current.style.display = 'none';
+      }
     }
   };
 
@@ -5915,7 +6098,10 @@ const renderTooltipStats = (item) => {
   onPointerDown={handlePointerDown}
   onPointerMove={handlePointerMove}
   onPointerUp={handlePointerUp}
-  onPointerCancel={handlePointerUp} /* Super important ito sa iPad! */
+  onPointerCancel={handlePointerUp}
+  onTouchEnd={handleTouchEndFallback}
+  onTouchCancel={handleTouchEndFallback}
+  onContextMenu={(e) => e.preventDefault()}
   style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} 
 >
       <style>{focusStyles}</style>
@@ -6364,8 +6550,14 @@ const renderTooltipStats = (item) => {
         {/* THE INVENTORY MODAL (I-paste sa ilalim ng buttons) */}
         {/* ========================================== */}
         {screen === 'playing' && isInventoryOpen && (
-          <div className="inventory-modal" onPointerDown={e => e.stopPropagation()}>
+          // <div className="inventory-modal" onPointerDown={e => e.stopPropagation()}>
+            <div 
+    className="inventory-modal" 
+    onPointerDown={e => e.stopPropagation()} 
+    onTouchStart={e => e.stopPropagation()}
+  >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+            
               <span style={{ fontWeight: 'bold', color: '#fef08a' }}>🎒 EQUIPMENT & INVENTORY</span>
               <button onClick={() => setIsInventoryOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>✕</button>
             </div>
