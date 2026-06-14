@@ -1583,6 +1583,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
       totals.lifesteal += item.stats.lifesteal || 0;
     }
   });
+  totals.rate = Math.round(totals.rate * 100) / 100;
+  
   return totals;
 };
 
@@ -2804,28 +2806,6 @@ useEffect(() => {
         if (eng.keys['ArrowDown'] || eng.keys['s'] || eng.keys['S']) my += 1;
         const ml = Math.hypot(mx, my);
         if (ml > 1) { mx /= ml; my /= ml; }
-
-
-        //DEV MODE: INSTANTLY START GAME AND SPAWN BOSSES FOR TESTING
-         // 🔥 DEV MODE: SPAWN ALL 4 BOSSES IMMEDIATELY CHEAT CODE
-        // if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
-        //   if (isHost) {
-        //     eng.gameStarted = true;
-        //     setHasStarted(true);
-        //     activateAudioKeepAlive();
-
-           
-        //     const startY = -150;
-        //     // 1. The Abyss
-        //     eng.enemies.push({ x: W/2 - 300, y: startY, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-        //     // 2. Primordial Demon
-        //     eng.enemies.push({ x: W/2 - 100, y: startY - 50, r: 35, speed: 65, hp: 150000, maxHp: 150000, dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-        //     // 3. Archdemon
-        //     eng.enemies.push({ x: W/2 + 100, y: startY - 50, r: 25, speed: 75, hp: 40000, maxHp: 40000, dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-        //     // 4. Demon Knight
-        //     eng.enemies.push({ x: W/2 + 300, y: startY, r: 20, speed: 85, hp: 15000, maxHp: 15000, dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 });
-        //   }
-        // }
 
         // NORMAL SPAWN LOGIC (UNCOMMENT BELOW TO ENABLE NORMAL SPAWNING)
         if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
@@ -5871,6 +5851,58 @@ const handlePointerDown = (e) => {
     }
   };
 
+  // ==========================================
+  // 🗡️ RPG STATS BREAKDOWN RENDERER
+  // ==========================================
+  const renderStatBreakdown = (item, statKey, label, isPercent = false, isRate = false) => {
+    if (!item || !item.stats || item.stats[statKey] === undefined) return null;
+    
+    const curVal = item.stats[statKey];
+    const baseItem = EQUIPMENT_DB.find(b => b.id === item.id);
+    const baseVal = baseItem?.stats[statKey] || 0;
+    const bonus = curVal - baseVal;
+
+    const formatVal = (v) => isPercent ? `${Math.round(v)}%` : (isRate ? v.toFixed(2) : Math.round(v));
+    const formatBonus = (v) => {
+      const sign = v > 0 ? '+' : '';
+      return isPercent ? `${sign}${Math.round(v)}%` : (isRate ? `${sign}${v.toFixed(2)}` : `${sign}${Math.round(v)}`);
+    };
+
+    if (Math.abs(bonus) > 0.001) {
+      return (
+        <div key={statKey} style={{ display: 'flex', alignItems: 'center', gap: '5px', margin: '3px 0', fontSize: '0.65rem', fontFamily: 'monospace' }}>
+           <span style={{ color: '#94a3b8' }}>{formatVal(baseVal)}</span>
+           <span style={{ color: '#34d399' }}>({formatBonus(bonus)})</span>
+           <span style={{ color: '#64748b' }}>➔</span>
+           <span style={{ color: '#fef08a', fontWeight: 'bold' }}>{formatVal(curVal)}</span>
+           <span style={{ color: '#e2e8f0' }}>{label}</span>
+        </div>
+      );
+    } else {
+      return (
+        <div key={statKey} style={{ display: 'flex', alignItems: 'center', gap: '5px', margin: '3px 0', fontSize: '0.65rem', fontFamily: 'monospace' }}>
+           <span style={{ color: '#fef08a', fontWeight: 'bold' }}>+{formatVal(curVal)}</span>
+           <span style={{ color: '#e2e8f0' }}>{label}</span>
+        </div>
+      );
+    }
+  };
+
+const renderTooltipStats = (item) => {
+    if (!item) return null;
+    return (
+      <div style={{ margin: '6px 0', padding: '6px', background: 'rgba(0,0,0,0.3)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
+        {renderStatBreakdown(item, 'atk', 'Attack Power')}
+        {renderStatBreakdown(item, 'rate', 'Attack Rate', false, true)}
+        {renderStatBreakdown(item, 'crit', 'Crit Chance', true)}
+        {renderStatBreakdown(item, 'def', 'Armor Defense')}
+        {renderStatBreakdown(item, 'hp', 'Max HP')}
+        {renderStatBreakdown(item, 'speed', 'Move Speed')}
+        {renderStatBreakdown(item, 'lifesteal', 'HP/Kill', false)}
+      </div>
+    );
+};
+
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
   //
@@ -6368,13 +6400,7 @@ const handlePointerDown = (e) => {
                           <div className="item-tooltip" style={{ borderColor: RARITY_COLORS[item.rarity] }}>
                             <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()}</div>
-                            {item.stats.atk && <div>+{item.stats.atk} Attack</div>}
-                            {item.stats.rate && <div>+{item.stats.rate} Atk Rate</div>}
-                            {item.stats.crit && <div>+{item.stats.crit}% Crit</div>}
-                            {item.stats.def && <div>+{item.stats.def} Defense</div>}
-                            {item.stats.hp && <div>+{item.stats.hp} HP</div>}
-                            {item.stats.speed && <div>+{item.stats.speed} Speed</div>}
-                            {item.stats.lifesteal && <div>+{item.stats.lifesteal} Lifesteal</div>}
+                            {renderTooltipStats(item)}
                             <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
                             <div style={{ color: '#ef4444', marginTop: '4px', fontSize: '0.55rem' }}>(Click to Unequip)</div>
                           </div>
@@ -6472,13 +6498,7 @@ const handlePointerDown = (e) => {
                             <div style={{ color: '#34d399', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(52, 211, 153, 0.4)', paddingBottom: '2px' }}>IN INVENTORY</div>
                             <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
                             <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
-                            {item.stats.atk && <div>+{item.stats.atk} Attack</div>}
-                            {item.stats.rate && <div>+{item.stats.rate} Atk Rate</div>}
-                            {item.stats.crit && <div>+{item.stats.crit}% Crit</div>}
-                            {item.stats.def && <div>+{item.stats.def} Defense</div>}
-                            {item.stats.hp && <div>+{item.stats.hp} HP</div>}
-                            {item.stats.speed && <div>+{item.stats.speed} Speed</div>}
-                            {item.stats.lifesteal && <div>+{item.stats.lifesteal} Lifesteal</div>}
+                            {renderTooltipStats(item)}
                             <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
                             <div style={{ color: '#10b981', marginTop: '6px', fontSize: '0.55rem' }}>(Click to Equip)</div>
                           </div>
