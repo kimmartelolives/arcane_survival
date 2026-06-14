@@ -21,7 +21,8 @@ class SoundManager {
       nuke: [],
       equip: [],
       unequip: [],
-      delete: []
+      delete: [],
+      dash:[]
     };
     this.unlocked = false;
 
@@ -39,7 +40,8 @@ class SoundManager {
       nuke: '/nuke.mp3',
       equip: '/equip.mp3',
       unequip: '/unequip.mp3',
-      delete: '/delete.mp3'
+      delete: '/delete.mp3',
+      dash: '/dash.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -2211,7 +2213,7 @@ const runUpgrade = (choice, forcedTarget = null) => {
     target.dashAngle = Math.atan2(my, mx);
 
     // Audio Cue
-    playSfx('wave'); // Re-use the wind-like sound
+    playSfx('dash'); // Re-use the wind-like sound
 
     // Sync sa Co-op
     if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
