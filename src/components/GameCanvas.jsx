@@ -1584,7 +1584,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
     }
   });
   totals.rate = Math.round(totals.rate * 100) / 100;
-  
   return totals;
 };
 
@@ -2153,7 +2152,9 @@ const runUpgrade = (choice, forcedTarget = null) => {
       target.speed = Math.min(MAX_SPEED, (target.speed || 200) + spdBoost);
     }
     else if (token.includes('rate') || token.includes('rapid') || token.includes('fire')) {
-      target.shootRate = Math.max(0.15, (target.shootRate || 0.6) - 0.1); 
+      let newRate = (target.shootRate || 0.6) - 0.1;
+      newRate = Math.round(newRate * 10) / 10;
+      target.shootRate = Math.max(0.15, newRate);
     }
     else if (token.includes('multi') || token.includes('shot') || token.includes('split')) {
       const MAX_PROJECTILES = 20;
