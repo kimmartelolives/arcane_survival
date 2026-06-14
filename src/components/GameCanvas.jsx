@@ -5506,7 +5506,7 @@ if (eng.potions) {
         if (e.key === '4') learnSkillTreeTech('vacuumSlash');
        }
 
-        if (playerLevel >= 12) {
+        if (playerLevel >= 16) {
             if (e.key === '5') castArcaneCollapseUltimate();
             if (e.key === '6') castArcaneInstinctUltimate(); 
             if (e.key === '7') castArcaneResurrectionUltimate();
