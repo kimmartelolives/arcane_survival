@@ -516,6 +516,86 @@ const focusStyles = `
   backdrop-filter: blur(4px);
   pointer-events: auto;
 }
+
+/* 💨 DASH BUTTON (PRO MOBA STYLE) */
+  .dash-btn-container {
+    position: absolute;
+    bottom: 75px; /* Spacing sa taas ng menu buttons sa desktop */
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    /* Mas madilim na background para litaw ang text/icon */
+    background: radial-gradient(circle, rgba(16, 12, 54, 0.9) 0%, rgba(10, 8, 38, 0.95) 100%);
+    /* Mas manipis na bright teal border */
+    border: 1.5px solid #2dd4bf;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    /* ✅ PERFECT CENTER LOGIC */
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 65;
+    /* Mas malambot, diffused glow */
+    box-shadow: 0 0 20px rgba(45, 212, 191, 0.25), inset 0 0 10px rgba(45, 212, 191, 0.1);
+    user-select: none;
+    touch-action: none;
+    transition: transform 0.1s, box-shadow 0.2s;
+  }
+  
+  .dash-btn-container:active {
+    transform: scale(0.9);
+    box-shadow: 0 0 10px rgba(45, 212, 191, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.5);
+    background: #0d092b;
+  }
+  
+  .dash-icon { 
+    font-size: 1.4rem; /* ✅ Binabaan para may hingahan (dating 1.6) */
+    line-height: 1;
+    margin-top: 2px; /* ✅ Balanse para sa icon+text stacking */
+  }
+  
+  .dash-label { 
+    font-size: 0.5rem; /* ✅ Pinalaki ng konti para mabasang mabuti (dating 0.45) */
+    color: #ccfbf1; /* Mas maputing teal para sa readability */
+    font-family: 'Avenir Next', 'Roboto', sans-serif; /* Mas modernong font fallback */
+    font-weight: 700; /* Bolder para sa mobile */
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    /* ✅ Dagdag breathing room sa ilalim ng icon */
+    margin-top: 1px; 
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5); /* Dagdag contrast */
+  }
+  
+  .dash-cd-overlay {
+    position: absolute; inset: -1px; background: rgba(0,0,0,0.8); border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    color: #fef08a; font-size: 1.1rem; font-weight: bold; font-family: monospace;
+    border: 1.5px solid rgba(45, 212, 191, 0.3); /* Naka-fade na border habang CD */
+  }
+
+  /* 📱 MOBILE VIEW: THE MOBA THUMB ZONE FIXED */
+  @media (max-width: 840px) {
+    .dash-btn-container {
+      width: 58px; /* ✅ Tamang-tamang laki para sa thumb (dating 56) */
+      height: 58px; 
+      /* Lulutang nang perfect sa taas ng Inventory/Skills (K, L) */
+      bottom: 60px; 
+      right: 12px;
+      /* Mas makapal na shadow effect sa mobile para mas tactile */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 15px rgba(45, 212, 191, 0.2);
+    }
+    .dash-icon { font-size: 1.5rem; margin-top: 3px; }
+    /* ✅ Ipapakita na natin ang label pero AAYUSIN NATIN ANG ITSURA */
+    .dash-label { 
+      display: block; 
+      font-size: 0.55rem; /* Sakto sa mobile */
+      margin-top: 0;
+      letter-spacing: 0.5px;
+    }
+    .dash-cd-overlay { font-size: 1rem; }
+  }
+
   .sigil-btn {
     position: relative;
     width: 52px;
@@ -1465,6 +1545,9 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const hpTextRef = useRef(null);
   const xpFillRef = useRef(null);
   const xpTextRef = useRef(null);
+
+  const dashCdRef = useRef(null);
+
   const audioCtxRef = useRef(null);
   const statAtkRef = useRef(null);
   const statDefRef = useRef(null);
@@ -1617,13 +1700,14 @@ const clearAllInventory = () => {
 
   const [skillsState, setSkillsState] = useState(initSkills());
 
-  const engineRef = useRef({
+const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 2, boltDmg: 22,
     gameStarted: false, screenShake: 0,
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
-    tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [],
+    tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [], aoeZones: [], // 🔥 DINAGDAG: aoeZones
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
+
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p1Render: { x: 300, y: 280 },
@@ -2100,7 +2184,46 @@ const runUpgrade = (choice, forcedTarget = null) => {
     }
   };
 
+  const triggerDash = (forcedTarget = null) => {
+    const eng = engineRef.current;
+    if (!eng || !eng.gameStarted) return;
+    const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+    let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+    if (forcedTarget === 'p2') target = eng.p2;
+    if (forcedTarget === 'p1') target = eng.p;
+    if (!target || target.dead || target.dashCd > 0) return;
+
+    // 💨 Trigger Dash State at I-Frames
+    target.isDashing = true;
+    target.dashTimer = 0.2; // 200ms dash duration
+    target.dashCd = 3.5;    // 3.5s cooldown
+    target.inv = 0.3;       // 300ms Invincibility Frame (I-frames)
+
+    let mx = 0, my = 0;
+    if (target === eng.p) {
+       if (eng.joystick.active) { mx = eng.joystick.mx; my = eng.joystick.my; }
+       if (eng.keys['ArrowLeft'] || eng.keys['a'] || eng.keys['A']) mx -= 1;
+       if (eng.keys['ArrowRight'] || eng.keys['d'] || eng.keys['D']) mx += 1;
+       if (eng.keys['ArrowUp'] || eng.keys['w'] || eng.keys['W']) my -= 1;
+       if (eng.keys['ArrowDown'] || eng.keys['s'] || eng.keys['S']) my += 1;
+    } else if (target === eng.p2 && isCoopActive && netRef.current.isHost) {
+       mx = eng.p2Input.x; my = eng.p2Input.y;
+    }
+
+    if (mx === 0 && my === 0) mx = 1; // Kung nakatayo, mag-dash pakanan
+    target.dashAngle = Math.atan2(my, mx);
+
+    // Audio Cue
+    playSfx('wave'); // Re-use the wind-like sound
+
+    // Sync sa Co-op
+    if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
+      netRef.current.channel.send('guest_dash', {});
+    }
+  };
+
   useEffect(() => {
+    window.triggerDash = triggerDash;
     window.learnSkillTreeTech = learnSkillTreeTech;
     window.castArcaneCollapseUltimate = castArcaneCollapseUltimate;
     window.castArcaneInstinctUltimate = castArcaneInstinctUltimate;
@@ -2410,6 +2533,10 @@ useEffect(() => {
         eng.p2Input = payload || { x: 0, y: 0 };
       }
 
+      if (event === 'guest_dash' && net.isHost) {
+        if (window.triggerDash) window.triggerDash('p2');
+      }
+
       if (event === 'guest_levelup_choice' && net.isHost) {
         runUpgrade(payload.choice, 'p2');
       }
@@ -2501,15 +2628,18 @@ useEffect(() => {
       eng.tornados = []; eng.waves = []; eng.fissures = []; eng.lightnings = []; eng.iceStorms = [];
       eng.gameStarted = false; 
       setHasStarted(false);
+
       eng.droppedItems = [];
       eng.p = { 
       x: isCoopActive ? W / 3 : W / 2, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, 
+      dashCd: 0, isDashing: false, dashTimer: 0, dashAngle: 0, // 💨 DINAGDAG PARA SA DASH
       skills: initSkills(), 
       potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
       name: netRef.current?.isHost ? playerName : allyName,
-      inventory: [],                                     // 🎒 ADDED THIS
-      equipment: { wand: null, robe: null, boots: null } // ⚔️ ADDED THIS
+      inventory: [],
+      equipment: { wand: null, robe: null, boots: null }
       };
+
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
@@ -3142,64 +3272,131 @@ if (playerObj.skills.cubeBash?.learned) {
           }
         };
 
-if (isHost || !isCoopActive) {
-          if (eng.p && !eng.p.dead) {
-            tickPlayerSkillTrackers(eng.p);
-            // 👇 Updated to read dynamic speed
-            let calculatedSpeed = eng.p.speed || 200;
-            if (eng.p.skills?.haste?.duration > 0 && eng.p.skills?.haste?.enabled !== false) calculatedSpeed *= 1.45;
-            if (eng.p.skills?.arcaneInstinct?.duration > 0) calculatedSpeed *= 1.8; // 🔥 BUFF: Speed multiplier x5.0
 
-            eng.p.x = Math.max(eng.p.r, Math.min(W - eng.p.r, eng.p.x + mx * calculatedSpeed * dt));
-            eng.p.y = Math.max(eng.p.r, Math.min(H - eng.p.r, eng.p.y + my * calculatedSpeed * dt));
-            if (eng.p.inv > 0) eng.p.inv -= dt;
-          }
-          if (isCoopActive && eng.p2 && !eng.p2.dead && eng.gameStarted) {
-            tickPlayerSkillTrackers(eng.p2);
-            // 👇 Updated to read dynamic speed for Player 2 (Host side)
-            let calculatedSpeedp2 = eng.p2.speed || 200;
-            if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
-            if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
 
-            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + eng.p2Input.x * calculatedSpeedp2 * dt));
-            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + eng.p2Input.y * calculatedSpeedp2 * dt));
-            if (eng.p2.inv > 0) eng.p2.inv -= dt;
-          }
-        } else {
-          if (eng.p2 && !eng.p2.dead) {
-            tickPlayerSkillTrackers(eng.p2);
-            // 👇 Updated to read dynamic speed for Player 2 (Guest side)
-            let calculatedSpeedp2 = eng.p2.speed || 200;
-            if (eng.p2.skills?.haste?.duration > 0 && eng.p2.skills?.haste?.enabled !== false) calculatedSpeedp2 *= 1.45;
-            if (eng.p2.skills?.arcaneInstinct?.duration > 0) calculatedSpeedp2 *= 5.0; // 🔥 BUFF: Speed multiplier x5.0
-
-            eng.p2.x = Math.max(eng.p2.r, Math.min(W - eng.p2.r, eng.p2.x + mx * calculatedSpeedp2 * dt));
-            eng.p2.y = Math.max(eng.p2.r, Math.min(H - eng.p2.r, eng.p2.y + my * calculatedSpeedp2 * dt));
-            if (eng.p2.inv > 0) eng.p2.inv -= dt;
-            const predFactor = Math.min(1, dt * 18);
-            eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
-            eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
-
-            if (eng.p2Target) {
-              const reconcileFactor = 0.15;
-              const dx = eng.p2Target.x - eng.p2Render.x;
-              const dy = eng.p2Target.y - eng.p2Render.y;
-              const dist = Math.hypot(dx, dy);
-              if (dist > 60) {
-                const lerpFactor = 0.15;
-                eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * lerpFactor;
-                eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * lerpFactor;
-              } else {
-                eng.p2Render.x += dx * reconcileFactor;
-                eng.p2Render.y += dy * reconcileFactor;
-              }
+// 🔥 RED ZONES (AOE ATTACKS) LOGIC & FAST MATH COLLISION 🔥
+          if (eng.aoeZones && (isHost || !isCoopActive)) {
+            for (let i = eng.aoeZones.length - 1; i >= 0; i--) {
+                const aoe = eng.aoeZones[i];
+                aoe.timer -= dt;
+                if (aoe.timer <= 0) {
+                    eng.screenShake = Math.max(eng.screenShake, 1.5);
+                    for (const pTarget of [eng.p, isCoopActive ? eng.p2 : null]) {
+                        if (pTarget && !pTarget.dead && pTarget.inv <= 0) {
+                            // 🚀 FAST MATH: Walang Math.hypot() para sobrang bilis ng collision!
+                            const dx = pTarget.x - aoe.x;
+                            const dy = pTarget.y - aoe.y;
+                            const safeDistance = aoe.radius + pTarget.r;
+                            if ((dx * dx + dy * dy) < (safeDistance * safeDistance)) {
+                                let damageTaken = aoe.dmg;
+                                const defStat = pTarget.baseDef || 0;
+                                damageTaken *= (100 / (100 + defStat));
+                                if (pTarget.potBuffs?.defense > 0) damageTaken *= 0.65;
+                                if (pTarget.skills?.shield?.duration > 0 && pTarget.skills?.shield?.enabled !== false) {
+                                    damageTaken = 0;
+                                } else if (pTarget.skills?.fortify?.learned && pTarget.skills?.fortify?.enabled !== false) {
+                                    damageTaken *= 0.75;
+                                }
+                                pTarget.hp -= damageTaken;
+                                pTarget.inv = 0.7;
+                                if (pTarget.hp <= 0) {
+                                    pTarget.dead = true;
+                                    if (!isCoopActive || (eng.p?.dead && eng.p2?.dead)) {
+                                        if (isCoopActive) netRef.current.channel.send('game_over', {});
+                                        setScreen('gameover');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Visual explosion (Red blast)
+                    for(let k=0; k<35; k++) {
+                        const pa = Math.random()*Math.PI*2;
+                        const ps = Math.random()*aoe.radius*1.5;
+                        eng.particles.push({ x: aoe.x, y: aoe.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#ef4444', life: 0.5, ml: 0.5, r: Math.random()*4+2 });
+                    }
+                    eng.aoeZones.splice(i, 1);
+                }
             }
           }
-          if (eng.p) tickPlayerSkillTrackers(eng.p);
-          const f = Math.min(1, dt * 14);
-          eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
-          eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
-        }
+          // I-sync ang animation speed ng guest sa host
+          if (eng.aoeZones && !isHost && isCoopActive) {
+              for (let i = eng.aoeZones.length - 1; i >= 0; i--) {
+                  eng.aoeZones[i].timer -= dt;
+                  if(eng.aoeZones[i].timer <= 0) eng.aoeZones.splice(i, 1);
+              }
+          }
+
+          // 💨 SHARED DASH & MOVEMENT LOGIC
+          const applyPlayerDashAndMovement = (pObj, inX, inY, isP2) => {
+            tickPlayerSkillTrackers(pObj);
+            let calcSpeed = pObj.speed || 200;
+            if (pObj.skills?.haste?.duration > 0 && pObj.skills?.haste?.enabled !== false) calcSpeed *= 1.45;
+            if (pObj.skills?.arcaneInstinct?.duration > 0) calcSpeed *= 2.0;
+
+            // Safe fallback para iwas undefined error sa newly joined guest players
+            if (pObj.dashCd === undefined) { pObj.dashCd = 0; pObj.isDashing = false; pObj.dashTimer = 0; pObj.dashAngle = 0; }
+            if (pObj.dashCd > 0) pObj.dashCd -= dt;
+
+            // 💨 DASH LOGIC
+            if (pObj.isDashing) {
+                pObj.x += Math.cos(pObj.dashAngle) * 1200 * dt; // Super speed!
+                pObj.y += Math.sin(pObj.dashAngle) * 1200 * dt;
+                
+                // Mag-iwan ng Ghost Trail
+                eng.particles.push({ x: pObj.x, y: pObj.y, vx: 0, vy: 0, color: isP2 ? '#f97316' : '#8b5cf6', life: 0.15, ml: 0.15, r: pObj.r, isGhost: true });
+                
+                pObj.dashTimer -= dt;
+                if (pObj.dashTimer <= 0) pObj.isDashing = false;
+            } else {
+                pObj.x += inX * calcSpeed * dt;
+                pObj.y += inY * calcSpeed * dt;
+            }
+            
+            pObj.x = Math.max(pObj.r, Math.min(W - pObj.r, pObj.x));
+            pObj.y = Math.max(pObj.r, Math.min(H - pObj.r, pObj.y));
+            if (pObj.inv > 0) pObj.inv -= dt;
+          };
+
+          // ==========================================
+          // APPLY HOST MOVEMENT
+          // ==========================================
+          if (isHost || !isCoopActive) {
+            if (eng.p && !eng.p.dead) applyPlayerDashAndMovement(eng.p, mx, my, false);
+            if (isCoopActive && eng.p2 && !eng.p2.dead && eng.gameStarted) {
+                applyPlayerDashAndMovement(eng.p2, eng.p2Input.x, eng.p2Input.y, true);
+            }
+          } 
+          // ==========================================
+          // APPLY GUEST MOVEMENT
+          // ==========================================
+          else {
+            if (eng.p2 && !eng.p2.dead) {
+              applyPlayerDashAndMovement(eng.p2, mx, my, true);
+              const predFactor = Math.min(1, dt * 18);
+              eng.p2Render.x += (eng.p2.x - eng.p2Render.x) * predFactor;
+              eng.p2Render.y += (eng.p2.y - eng.p2Render.y) * predFactor;
+
+              if (eng.p2Target) {
+                const reconcileFactor = 0.15;
+                const dx = eng.p2Target.x - eng.p2Render.x;
+                const dy = eng.p2Target.y - eng.p2Render.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 60) {
+                  const lerpFactor = 0.15;
+                  eng.p2Render.x += (eng.p2Target.x - eng.p2Render.x) * lerpFactor;
+                  eng.p2Render.y += (eng.p2Target.y - eng.p2Render.y) * lerpFactor;
+                } else {
+                  eng.p2Render.x += dx * reconcileFactor;
+                  eng.p2Render.y += dy * reconcileFactor;
+                }
+              }
+            }
+            if (eng.p) tickPlayerSkillTrackers(eng.p);
+            const f = Math.min(1, dt * 14);
+            eng.p1Render.x += (eng.p1Target.x - eng.p1Render.x) * f;
+            eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
+          }
 
         const localTrackedObj = (isCoopActive && !isHost) ? eng.p2 : eng.p;
           if (localTrackedObj) {
@@ -3837,7 +4034,7 @@ if (isHost || !isCoopActive) {
               
               if (e.flash > 0) e.flash -= dt;
 
-              if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type)) {
+if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type)) {
                 
                 if (e.skillTimer === undefined) e.skillTimer = 2.0;
                 e.skillTimer -= dt;
@@ -3853,26 +4050,44 @@ if (isHost || !isCoopActive) {
                   }
                   const baseAngle = Math.atan2(ty - e.y, tx - e.x);
 
-                  if (e.type === 'abyss') {
-                    for (let k = 0; k < 24; k++) {
-                      const angle = (Math.PI * 2 / 24) * k + (Math.random() * 0.2);
-                      eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*300, vy: Math.sin(angle)*300, r: 10, life: 6, isEnemy: true, dmg: 150 });
-                    }
-                  } else if (e.type === 'primordial') {
-                    for (let k = 0; k < 12; k++) {
-                      const angle = (Math.PI * 2 / 12) * k;
-                      eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*250, vy: Math.sin(angle)*250, r: 8, life: 5, isEnemy: true, dmg: 80 });
-                    }
-                  } else if (e.type === 'archdemon') {
-                    for (let k = -1; k <= 1; k++) {
-                      const angle = baseAngle + (k * 0.3);
-                      eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*350, vy: Math.sin(angle)*350, r: 6, life: 4, isEnemy: true, dmg: 50 });
-                    }
-                  } else if (e.type === 'demonKnight') {
-                    eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(baseAngle)*450, vy: Math.sin(baseAngle)*450, r: 7, life: 4, isEnemy: true, dmg: 35 });
+                  // 🔥 DANGER RED ZONE CHANCE! (35% for Abyss, 20% for Primordial)
+                  if ((e.type === 'abyss' || e.type === 'primordial') && Math.random() < (e.type === 'abyss' ? 0.35 : 0.20)) {
+                      if (!eng.aoeZones) eng.aoeZones = [];
+                      
+                      eng.aoeZones.push({ 
+                          x: tx, y: ty, // Tinarget ang mismong paa ng player
+                          radius: e.type === 'abyss' ? 180 : 130, 
+                          timer: 1.5, maxTimer: 1.5, 
+                          dmg: e.type === 'abyss' ? 1500 : 800 
+                      });
+                      
+                      // Mag-taunt ang The Abyss kapag nag-cast ng AoE
+                      if (e.type === 'abyss') e.chatBubble = { text: "PERISH IN THE VOID!", life: 1.5 };
+                      
+                  } else {
+                      // 🔫 NORMAL BULLET SPREADS (Kung hindi nag-cast ng Red Zone)
+                      if (e.type === 'abyss') {
+                        for (let k = 0; k < 24; k++) {
+                          const angle = (Math.PI * 2 / 24) * k + (Math.random() * 0.2);
+                          eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*300, vy: Math.sin(angle)*300, r: 10, life: 6, isEnemy: true, dmg: 150 });
+                        }
+                      } else if (e.type === 'primordial') {
+                        for (let k = 0; k < 12; k++) {
+                          const angle = (Math.PI * 2 / 12) * k;
+                          eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*250, vy: Math.sin(angle)*250, r: 8, life: 5, isEnemy: true, dmg: 80 });
+                        }
+                      } else if (e.type === 'archdemon') {
+                        for (let k = -1; k <= 1; k++) {
+                          const angle = baseAngle + (k * 0.3);
+                          eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*350, vy: Math.sin(angle)*350, r: 6, life: 4, isEnemy: true, dmg: 50 });
+                        }
+                      } else if (e.type === 'demonKnight') {
+                        eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(baseAngle)*450, vy: Math.sin(baseAngle)*450, r: 7, life: 4, isEnemy: true, dmg: 35 });
+                      }
                   }
                 }
 
+                // 🛡️ THE ABYSS SHIELD LOGIC
                 if (e.type === 'abyss') {
                   if (e.abyssShieldCd > 0) e.abyssShieldCd -= dt;
                   if (e.abyssShieldCd <= 0) {
@@ -4177,6 +4392,16 @@ if (e.deadTrigger) {
           const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
           waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
         }
+
+        if (dashCdRef.current && localTarget) {
+            if (localTarget.dashCd > 0) {
+                dashCdRef.current.style.display = 'flex';
+                dashCdRef.current.textContent = localTarget.dashCd.toFixed(1) + 's';
+            } else {
+                dashCdRef.current.style.display = 'none';
+            }
+        }
+
 if (localTarget) {
           const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
           if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
@@ -5070,6 +5295,25 @@ if (eng.potions) {
         }
       }
 
+      if (eng.aoeZones) {
+          for (const aoe of eng.aoeZones) {
+              ctx.save();
+              const progress = Math.min(1, Math.max(0, 1 - (aoe.timer / aoe.maxTimer)));
+              
+              // Outer thick red line
+              ctx.strokeStyle = `rgba(239, 68, 68, ${0.4 + progress * 0.5})`;
+              ctx.lineWidth = 3;
+              ctx.setLineDash([10, 5]);
+              ctx.lineDashOffset = -performance.now() * 0.05;
+              ctx.beginPath(); ctx.arc(aoe.x, aoe.y, aoe.radius, 0, Math.PI*2); ctx.stroke();
+              
+              // Inner filling red blood zone
+              ctx.fillStyle = `rgba(239, 68, 68, ${0.1 + progress * 0.35})`;
+              ctx.beginPath(); ctx.arc(aoe.x, aoe.y, aoe.radius * progress, 0, Math.PI*2); ctx.fill();
+              ctx.restore();
+          }
+      }
+
       for (const e of eng.enemies) {
         ctx.save();
         ctx.fillStyle = e.flash > 0 ? '#fff' : e.color; 
@@ -5177,10 +5421,17 @@ if (eng.potions) {
         ctx.restore();
       }
 
-      for (const p of eng.particles) {
+for (const p of eng.particles) {
         ctx.save();
-        ctx.globalAlpha = p.life / p.ml; ctx.fillStyle = p.color;
-        ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); ctx.restore();
+        ctx.globalAlpha = p.life / p.ml; 
+        ctx.fillStyle = p.color;
+        if (p.isGhost) {
+           // 💨 Ghost Player Trail
+           ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+        } else {
+           ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); 
+        }
+        ctx.restore();
       }
 
       const p1Color = '#8b5cf6'; 
@@ -5322,9 +5573,18 @@ if (eng.potions) {
       renderAnimId = requestAnimationFrame(renderLoop);
     };
     renderAnimId = requestAnimationFrame(renderLoop);
+
     const down = (e) => { 
+
+
       if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
       eng.keys[e.key] = true;
+
+      if (e.key === ' ' && screen === 'playing') {
+        e.preventDefault(); // Iwas scroll sa browser
+        window.triggerDash();
+      }
+
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && screen === 'playing') {
         const isCoopActive = Boolean(netRef.current && netRef.current.channel);
         if (!isCoopActive || netRef.current.isHost) {
@@ -6028,6 +6288,15 @@ const handlePointerDown = (e) => {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* 💨 THE DASH BUTTON (MOBA STYLE PLACEMENT) */}
+        {screen === 'playing' && hasStarted && (
+          <div className="dash-btn-container" onPointerDown={(e) => { e.stopPropagation(); window.triggerDash(); }}>
+            <div className="dash-icon">💨</div>
+            <div className="dash-label">DASH</div>
+            <div ref={dashCdRef} className="dash-cd-overlay"></div>
           </div>
         )}
 
