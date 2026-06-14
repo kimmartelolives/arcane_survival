@@ -3820,7 +3820,7 @@ if (playerObj.skills.cubeBash?.learned) {
               } else if (pot.type === 'freeze') {
                 // ❄️ CHRONO-CRYSTAL EFFECT
                 playSfx('freeze'); // 🔊 SOUND EFFECT DITO LANG PARA SA FREEZE
-                eng.screenShake = 1.0;
+                // eng.screenShake = 1.0;
                 targetPlayer.chatBubble = { text: "TIME FREEZE!", life: 2.0 };
                 for (const enemy of eng.enemies) {
                   enemy.stunnedTime = 8.0; 
@@ -3830,7 +3830,7 @@ if (playerObj.skills.cubeBash?.learned) {
                 } else if (pot.type === 'nuke') {
                 // ☢️ ARCANE NUKE EFFECT - BALANCED PERCENTAGE
                 playSfx('nuke'); 
-                eng.screenShake = 2.0;
+                eng.screenShake = 1.0;
                 targetPlayer.chatBubble = { text: "ARCANE NUKE!", life: 2.0 };
                 
                 for (const enemy of eng.enemies) {
