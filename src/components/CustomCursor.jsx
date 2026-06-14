@@ -1,18 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import wandGif from '../assets/wand.cur'; 
+import wandGif from '../assets/wand.gif'; // ⚠️ PALITAN ITO NG .png o .gif PARA WALANG BLACK BACKGROUND
 
 export default function CustomCursor() {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [particles, setParticles] = useState([]);
-  
-  // ─── 1. DAGDAG: STATE PARA SA CLICKABLE DETECTION ───
   const [isClickable, setIsClickable] = useState(false);
+  
+  // ─── 1. DAGDAG: STATE PARA SA MOBILE DETECTION ───
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
 
   useEffect(() => {
+    // I-check kung touch screen ang device (Mobile/Tablet)
+    if (window.matchMedia("(pointer: coarse)").matches) {
+      setIsTouchDevice(true);
+      return; // Wag nang ituloy ang mouse listeners kung mobile
+    }
+
     const handleMouseMove = (e) => {
       setPosition({ x: e.clientX, y: e.clientY });
 
-      // Regular Trail (Gold, Silver, White) habang gumagalaw ang mouse
       const trailColors = ['#ffd700', '#ffffff', '#e5e7eb'];
       const newParticles = Array.from({ length: 2 }).map(() => ({
         id: Math.random() + Date.now(),
@@ -21,13 +27,12 @@ export default function CustomCursor() {
         size: Math.random() * 5 + 3, 
         color: trailColors[Math.floor(Math.random() * trailColors.length)],
         createdAt: Date.now(),
-        type: 'glitter-particle' // Regular styling
+        type: 'glitter-particle' 
       }));
 
       setParticles((prev) => [...prev.slice(-50), ...newParticles]);
     };
 
-    // ─── 2. DAGDAG: EVENT LISTENER PARA SA HOVER SA BUTTONS ───
     const handleMouseOver = (e) => {
       const target = e.target;
       if (target.closest('button, a, input, [role="button"], .clickable')) {
@@ -46,70 +51,77 @@ export default function CustomCursor() {
     };
   }, []);
 
-  // ─── 3. DAGDAG: LOOP TIMER PARA SA SPARKLES KAPAG STATIONARY O NAKATUTOK LANG ───
   useEffect(() => {
-    if (!isClickable) return;
+    if (!isClickable || isTouchDevice) return;
 
-    // Magpapakawala ng sparks bawat 80ms kahit hindi gumagalaw ang mouse
     const sparkLoop = setInterval(() => {
-      const sparksColors = ['#ffd700', '#ffffff', '#fff5a5']; // Gold at White lang
+      const sparksColors = ['#ffd700', '#ffffff', '#fff5a5']; 
       
       const loopSparks = Array.from({ length: 3 }).map(() => ({
         id: Math.random() + Date.now(),
-        x: position.x + (Math.random() * 24 - 12), // Mas malawak na sabog ng kislap
+        x: position.x + (Math.random() * 24 - 12), 
         y: position.y + (Math.random() * 24 - 12),
-        size: Math.random() * 7 + 4, // Mas malalaking sparks
+        size: Math.random() * 7 + 4, 
         color: sparksColors[Math.floor(Math.random() * sparksColors.length)],
         createdAt: Date.now(),
-        type: 'clickable-spark' // Clickable styling
+        type: 'clickable-spark' 
       }));
 
       setParticles((prev) => [...prev.slice(-60), ...loopSparks]);
-    }, 80); // Bilis ng loop (80ms). Pwedeng liitan kung gusto mo mas siksik pa ang sparks.
+    }, 80); 
 
     return () => clearInterval(sparkLoop);
-  }, [isClickable, position]); // Tatakbo kapag naka-hover o kapag nagbago ang pwesto ng mouse
+  }, [isClickable, position, isTouchDevice]); 
 
-  // Timer para sa kusang pagbura ng mga lumang kislap (pampaluwag ng memory)
   useEffect(() => {
+    if (isTouchDevice) return;
     const interval = setInterval(() => {
       const now = Date.now();
       setParticles((prev) => prev.filter((p) => now - p.createdAt < 350));
     }, 30);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isTouchDevice]);
+
+  // ─── 2. DAGDAG: WAG I-RENDER KUNG MOBILE DEVICE ───
+  if (isTouchDevice) {
+    return null; 
+  }
 
   return (
     <>
-      {/* Dynamic Gold, Silver, & Spark Particles */}
       {particles.map((p) => (
         <div
           key={p.id}
-          className={p.type} // Awtomatikong magpapalit ng class base sa type nito
+          className={p.type} 
           style={{
             left: `${p.x}px`,
             top: `${p.y}px`,
             width: `${p.size}px`,
             height: `${p.size}px`,
             backgroundColor: p.color,
-            // Mas matinding glow-effect para sa clickable sparks
             boxShadow: p.type === 'clickable-spark' 
               ? `0 0 8px #ffffff, 0 0 16px ${p.color}, 0 0 24px ${p.color}` 
-              : `0 0 6px ${p.color}, 0 0 12px ${p.color}, 0 0 20px #ffffff`
+              : `0 0 6px ${p.color}, 0 0 12px ${p.color}, 0 0 20px #ffffff`,
+            position: 'fixed', // Make sure absolute/fixed positioning is correct
+            pointerEvents: 'none',
+            zIndex: 9999
           }}
         />
       ))}
 
-      {/* Ang orihinal mong Wand Cursor */}
       <div 
         className="animated-wand-cursor"
         style={{ 
+          position: 'fixed',
           left: `${position.x}px`, 
-          top: `${position.y}px` 
+          top: `${position.y}px`,
+          pointerEvents: 'none', // Prevents the image from blocking clicks
+          zIndex: 10000,
+          background: 'transparent' // Ensures no background color is applied
         }}
       >
-        <img src={wandGif} alt="Wand Cursor" />
+        <img src={wandGif} alt="Wand Cursor" style={{ background: 'transparent' }} />
       </div>
     </>
   );
