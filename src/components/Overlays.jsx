@@ -253,6 +253,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
     // 👇 BAGONG FORMULAS PARA SA CRIT AT DEFENSE (+5% base, pataas nang pataas)
     const critBoost = 5 + Math.floor(wave * 0.2);
     const defBoost = 4 + Math.floor(wave * 0.2);
+    const lifestealBoost = 5 + Math.floor(wave * 0.2);
 
     if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
       return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s (CAP: 0.15s)' };
@@ -277,7 +278,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
       return { icon: '🛡️', title: 'IRON PLATING', desc: `ARMOR RATING +${defBoost}` };
     }
     if (normalize.includes('vampiric') || normalize.includes('aura') || normalize.includes('life')) {
-      return { icon: '🦇', title: 'VAMPIRIC AURA', desc: 'HEAL 3 HP PER ENEMY KILLED (CAP: 100 HP/KILL)' };
+      return { icon: '🦇', title: 'VAMPIRIC AURA', desc: `HEAL ${lifestealBoost} HP PER ENEMY KILLED` };
     }
     return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
   };

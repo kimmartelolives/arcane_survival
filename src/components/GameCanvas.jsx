@@ -1798,7 +1798,12 @@ const engineRef = useRef({
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
     tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [], aoeZones: [], // 🔥 DINAGDAG: aoeZones
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
-
+    bossIntro: {
+        active: false,
+        timer: 0,
+        maxDuration: 180, // Kung 60fps ang laro mo, 180 = 3 seconds
+        bossName: ""
+      },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p2Target: { x: 600, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
     p1Render: { x: 300, y: 280 },
@@ -2250,6 +2255,7 @@ const runUpgrade = (choice, forcedTarget = null) => {
     const spdBoost = 10 + Math.floor(currentWave * 1.2);
     const critBoost = 5 + Math.floor(currentWave * 0.2);
     const defBoost = 4 + Math.floor(currentWave * 0.2);
+    const lifestealBoost = 5 + Math.floor(currentWave * 0.2);
 
     const token = String(choice || '').toLowerCase().trim();
     if (token.includes('hp') || token.includes('vitality') || token.includes('max')) {
@@ -2281,8 +2287,7 @@ const runUpgrade = (choice, forcedTarget = null) => {
       target.baseDef = (target.baseDef || 0) + defBoost; 
     }
     else if (token.includes('vampiric') || token.includes('aura')) {
-      const MAX_LIFESTEAL = 100;
-      target.lifeSteal = Math.min(MAX_LIFESTEAL, (target.lifeSteal || 0) + 3); 
+      target.lifeSteal = (target.lifeSteal || 0) + lifestealBoost; 
     }
 
     // 🔥 FIX: I-reset lang ang flag, hahayaan na natin ang Global Loop ang mag-trigger sa susunod na level up
@@ -2867,7 +2872,6 @@ useEffect(() => {
         // 👇 NEW CAPS CHECK
         if ((playerObj.baseCrit || 0) < 60) pool.push('Fatal Strike');
         if ((playerObj.baseDef || 0) < 60) pool.push('Iron Plating');
-        if ((playerObj.lifeSteal || 0) < 15) pool.push('Vampiric Aura');
       } else {
         // Fallback
         pool.push('Rapid Fire', 'Gain Multi-Shot', 'Swift Stride', 'Fatal Strike', 'Iron Plating', 'Vampiric Aura');
@@ -2903,6 +2907,12 @@ useEffect(() => {
       
       if (screen === 'pause') {
         return;
+      }
+
+      if (eng.bossIntro && eng.bossIntro.active) {
+        eng.bossIntro.timer--;
+        if (eng.bossIntro.timer <= 0) eng.bossIntro.active = false;
+        return; // Hihinto ang game loop dito para walang gumalaw!
       }
 
       if (screen === 'playing' || screen === 'levelup') {
@@ -2992,7 +3002,7 @@ if (eng.gameStarted) {
               // Increased cap to 5 to ensure multi-boss raids spawn correctly
               const activeBosses = eng.enemies.filter(e => e.boss).length;
 
-              if (activeBosses < 5) {
+if (activeBosses < 5) {
                   const currentWave = eng.wave || 1;
                   
                   // 🔥 EXPONENTIAL MULTIPLIER: Starts scaling past Wave 30.
@@ -3003,6 +3013,14 @@ if (eng.gameStarted) {
                   // 1. END-GAME COVENANT RAID (Wave 100+ Every 20 Waves: Magkasamang Bababa ang Dalawang Diyos!)
                   if (currentWave >= 100 && currentWave % 20 === 0) {
                      eng.screenShake = 3.5;
+
+                     // 🔥 STEP 2: TRIGGER CINEMATIC INTRO PARA KAY AWAKENED ABYSS
+                     eng.bossIntro = {
+                         active: true,
+                         timer: 180,
+                         maxDuration: 180,
+                         bossName: "THE ABYSS (AWAKENED)"
+                     };
                      
                      if (eng.p) eng.p.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
                      if (eng.p2) eng.p2.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
@@ -3033,6 +3051,15 @@ if (eng.gameStarted) {
                   // 2. THE ULTIMATE BOSS ENCOUNTER (Wave 75+, every 25 waves)
                   else if (currentWave >= 75 && currentWave % 25 === 0) {
                      eng.screenShake = 2.5;
+
+                     // 🔥 STEP 2: TRIGGER CINEMATIC INTRO PARA SA NORMAL ABYSS
+                     eng.bossIntro = {
+                         active: true,
+                         timer: 180,
+                         maxDuration: 180,
+                         bossName: "THE ABYSS"
+                     };
+
                      const hpScale = Math.floor((1000000 + (currentWave * 15000)) * diffScale);
                      eng.enemies.push({ 
                          x: W/2, y: -60, r: 55, speed: 70, hp: hpScale, maxHp: hpScale, prevHpFrame: hpScale, dmg: Math.floor(1800 * diffScale), 
@@ -4127,9 +4154,8 @@ if (playerObj.skills.cubeBash?.learned) {
                     
                     // 🔥 STATS CAPS APPLIED HERE
                     if (scaledItem.stats.lifesteal) {
-                        scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
-                        scaledItem.stats.lifesteal = Math.min(scaledItem.stats.lifesteal, 80); // Cap to 15
-                    }
+                              scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
+                          }
                     if (scaledItem.stats.speed) {
                         scaledItem.stats.speed += Math.floor(waveMult * 5);
                         scaledItem.stats.speed = Math.min(scaledItem.stats.speed, 80); // Cap to 80
@@ -4347,7 +4373,6 @@ if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.typ
                           // 🔥 STATS CAPS APPLIED HERE
                           if (scaledItem.stats.lifesteal) {
                               scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
-                              scaledItem.stats.lifesteal = Math.min(scaledItem.stats.lifesteal, 15); // Cap to 15
                           }
                           if (scaledItem.stats.speed) {
                               scaledItem.stats.speed += Math.floor(waveMult * 5);
@@ -5729,6 +5754,113 @@ for (const p of eng.particles) {
         }
       }
 
+// ==============================================================================
+      // 🔥 UPDATED STEP 4: INTENSE & SCARY CINEMATIC BOSS INTRO EFFECTS
+      // ==============================================================================
+      if (eng.bossIntro && eng.bossIntro.active) {
+        const t = eng.bossIntro.timer;
+        const maxT = eng.bossIntro.maxDuration;
+        const ctx = canvasRef.current.getContext('2d');
+        const W = canvasRef.current.width;
+        const H = canvasRef.current.height;
+
+        ctx.save();
+        
+        // --- PHASE 1: THE INVASION OF DARKNESS (t > 70% of maxDuration) ---
+        // Sa umpisa, didilim ang buong screen maliban sa bars.
+        if (t > maxT * 0.7) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+          ctx.fillRect(0, 0, W, H);
+        }
+
+        // 1. INTENSE SCREEN SHAKE (Heavy vibration)
+        // Mas malakas ang yugyog kesa dati
+        const shakeIntensity = Math.min(25, t / 8); 
+        const offsetX = (Math.random() - 0.5) * shakeIntensity;
+        const offsetY = (Math.random() - 0.5) * shakeIntensity;
+        ctx.translate(offsetX, offsetY);
+
+        // --- PHASE 2: THE VOID CLOSES IN (t <= 70% of maxDuration) ---
+        if (t <= maxT * 0.7) {
+          // 2. HEAVY ABYSS VIGNETTE (Claustrophobic pulse)
+          // Mas madilim at mas makapal ang awra sa gilid
+          const pulse = Math.abs(Math.sin(t * 0.08)); // Faster pulse
+          const gradient = ctx.createRadialGradient(W/2, H/2, H * 0.2, W/2, H/2, W * 0.8);
+          gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+          gradient.addColorStop(0.5, `rgba(40, 0, 0, ${0.3 + pulse * 0.2})`); // Crimson pulse
+          gradient.addColorStop(1, 'rgba(10, 0, 0, 1)'); // Crushing black
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, W, H);
+
+          // 3. Spawning VOID PARTICLES (Temporary effect)
+          // Gumawa tayo ng ilang particles kada frame habang active ang vignette
+          ctx.fillStyle = 'rgba(255, 30, 30, 0.6)';
+          for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.arc(W/2 + (Math.random()-0.5)*W, H/2 + (Math.random()-0.5)*H, Math.random()*4, 0, Math.PI*2);
+            ctx.fill();
+          }
+        }
+
+        // 4. CINEMATIC BLACK BARS (Letterbox)
+        // Mas makapal ng konti para mas claustrophobic
+        const barHeight = H * 0.15; 
+        ctx.fillStyle = "#020202";
+        ctx.fillRect(0, 0, W, barHeight);
+        ctx.fillRect(0, H - barHeight, W, barHeight);
+
+        // --- PHASE 3: THE ANNOUNCEMENT (t <= 50% of maxDuration) ---
+        if (t <= maxT * 0.5) {
+          ctx.save();
+          
+          // 5. CHROMATIC ABERRATION TEXT GLITCH
+          // Ida-draw natin ang text ng tatlong beses na may magkakaibang kulay at kaunting offset.
+          const glitchInt = 2 + Math.random() * 4;
+          const textX = W / 2;
+          const textY = H / 2;
+          const fontStyle = "bold 84px Georgia, serif"; // Mas malaki at aggressive
+
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = fontStyle;
+
+          // Red Channel (Offset Left)
+          ctx.fillStyle = "rgba(255, 0, 0, 0.9)";
+          ctx.fillText(eng.bossIntro.bossName, textX - glitchInt, textY + (Math.random()-0.5)*2);
+
+          // Cyan Channel (Offset Right)
+          ctx.fillStyle = "rgba(0, 255, 255, 0.8)";
+          ctx.fillText(eng.bossIntro.bossName, textX + glitchInt, textY + (Math.random()-0.5)*2);
+
+          // White Main Text (Centered, Glaring)
+          ctx.shadowColor = "#ff1a1a";
+          ctx.shadowBlur = 30 + Math.random() * 15;
+          ctx.fillStyle = "#ffffff";
+          ctx.fillText(eng.bossIntro.bossName, textX, textY);
+          
+          ctx.restore();
+
+          // 6. Subtitle with Heavy Shadow
+          ctx.shadowColor = "#000";
+          ctx.shadowBlur = 8;
+          ctx.fillStyle = "#fecaca"; // Stark light red
+          ctx.font = "italic 28px Georgia, serif";
+
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("THE ABYSS HAS AWOKEN. PREPARE TO DIE.", W / 2, H / 2 + 85);
+        }
+
+        // --- PHASE 4: FINAL VOID FLASH (t <= 5 frames) ---
+        // Biglaang flash bago matapos ang intro para sa shock factor.
+        if (t <= 5) {
+          ctx.fillStyle = 'white'; // Opsyonal: 'rgba(255, 0, 0, 0.8)' kung gusto mo ng pulang flash
+          ctx.fillRect(0, 0, W, H);
+        }
+        
+        ctx.restore();
+      }
+      // ==============================================================================
       ctx.restore(); 
       renderAnimId = requestAnimationFrame(renderLoop);
     };
