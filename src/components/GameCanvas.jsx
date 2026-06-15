@@ -5710,6 +5710,65 @@ for (const p of eng.particles) {
               glow: '#fb7185', // Aura Core (Matching Main Pink)
               aura: true 
           };
+
+          if (skinId === 'igris') return { 
+              c: '#262626',    // Dark grey metallic face mask / visor
+              robe: '#0a0a0a', // Pitch black heavy armor
+              brim: '#171717', // Black helmet brim
+              glow: '#dc2626', // Blood red energy glow
+              aura: true 
+          };
+
+          if (skinId === 'emperor') return { 
+              c: '#171717',    // Heavy Metallic Dark Grey
+              robe: '#0a0a0a', // Pitch Black Armor
+              brim: '#050505', // Vantablack Helmet Visor
+              glow: '#dc2626', // Crimson Blood Glow
+              aura: true 
+          };
+
+          if (skinId === 'empress') return { 
+              c: '#ffe4e6',    // Rose-white skin/hair base
+              robe: '#ffffff', // Pure white luxurious silk robe
+              brim: '#fda4af', // Rose-gold hat brim/accents
+              glow: '#f43f5e', // Radiant Rose-Pink glow
+              aura: true 
+          };
+
+          // 👑 INFERNAL ECLIPSE SOVEREIGN (Obsidian, Crimson, & Violet)
+          if (skinId === 'infernal') return { 
+              c: '#1f101a',    // Dark obsidian face/core
+              robe: '#09050e', // Abyssal black armor
+              brim: '#1f0510', // Dark scarlet accents
+              glow: '#e11d48', // Infernal Scarlet glow
+              aura: true 
+          };
+
+          if (skinId === 'leviathan') return { 
+              c: '#e0f2fe',    // Celestial Silver / Aqua white base
+              robe: '#ffffff', // Royal white water-silk armor
+              brim: '#0284c7', // Ocean Sapphire blue accents
+              glow: '#38bdf8', // Divine Aqua glow
+              aura: true 
+          };
+
+          // 🌌✨ ETERNAL REMEMBRANCE (Frieren Theme)
+          if (skinId === 'remembrance') return { 
+              c: '#f8fafc',    // Silver-white elven hair/base
+              robe: '#1e1b4b', // Royal Midnight Blue gown
+              brim: '#e0f2fe', // Celestial silver accents
+              glow: '#60a5fa', // Forget-Me-Not Blue glow
+              aura: true 
+          };
+
+          if (skinId === 'frieren') return { 
+              c: '#f8fafc',    // Silver-white starlight hair/skin
+              robe: '#0f172a', // Royal Midnight Void
+              brim: '#e0f2fe', // Crystal white accents
+              glow: '#60a5fa', // Forget-Me-Not Celestial Blue
+              aura: true 
+          };
+
           return isP2 
               ? { c: '#f97316', robe: '#c2410c', brim: '#ffedd5', glow: 'rgba(249, 115, 22, 0.6)', aura: false } 
               : { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd', glow: 'rgba(168, 85, 247, 0.6)', aura: false };
@@ -6146,6 +6205,1040 @@ for (const p of eng.particles) {
               pinkGrad.addColorStop(0.3, 'rgba(244, 114, 182, 0.4)'); 
               pinkGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');     
               ctx.fillStyle = pinkGrad; ctx.beginPath(); ctx.arc(x, y, radius * 3, 0, Math.PI * 2); ctx.fill();
+          }
+
+          // 🗡️ CRIMSON SHADOW KNIGHT (SOLO LEVELING IGRIS TIER - Dark Armor, Red Plume, Crimson Cape)
+          else if (skinId === 'igris') {
+              ctx.globalCompositeOperation = 'source-over';
+              const pulse = Math.sin(time * 0.004);
+
+              // 1. Sovereign's Shadow Seal (Throne-like magic circle on the floor)
+              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.35); ctx.rotate(time * -0.0005);
+              ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + pulse * 0.2})`; // Blood Red
+              ctx.shadowColor = '#dc2626'; ctx.shadowBlur = 20; ctx.lineWidth = 4;
+              
+              // Outer Ring
+              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              
+              // Inner Jagged Crown / Sword points (Intimidating geometry)
+              ctx.beginPath();
+              for(let i=0; i<8; i++) {
+                  ctx.rotate(Math.PI / 4);
+                  ctx.moveTo(0, radius*2);
+                  ctx.lineTo(radius*1.5, radius*4.5);
+                  ctx.lineTo(-radius*1.5, radius*4.5);
+              }
+              ctx.stroke(); ctx.restore();
+
+              // 2. The Flowing Crimson Cape (Majestic & Intimidating at the back)
+              ctx.save(); ctx.translate(x, y - radius);
+              const capeSway = Math.sin(time * 0.003) * 15;
+              const capeRipple = Math.cos(time * 0.005) * 8;
+              
+              const capeGrad = ctx.createLinearGradient(0, 0, 0, radius*6);
+              capeGrad.addColorStop(0, '#991b1b'); // Dark red top
+              capeGrad.addColorStop(0.5, '#7f1d1d');
+              capeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Fades into shadow abyss
+              
+              ctx.fillStyle = capeGrad; ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
+              ctx.beginPath();
+              ctx.moveTo(-radius*1.5, 0); // Left shoulder attachment
+              ctx.quadraticCurveTo(-radius*4, radius*3 + capeRipple, -radius*2 + capeSway, radius*6.5); // Left flowing edge
+              ctx.quadraticCurveTo(capeSway/2, radius*7, radius*2 + capeSway, radius*6.5); // Bottom torn edge
+              ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0); // Right flowing edge
+              ctx.fill();
+              
+              // Cape Torn Details (Vertical cuts at the bottom to look battle-worn)
+              ctx.globalCompositeOperation = 'destination-out';
+              ctx.beginPath();
+              ctx.moveTo(-radius + capeSway, radius*6.5);
+              ctx.lineTo(-radius*0.5 + capeSway, radius*4.5);
+              ctx.lineTo(capeSway, radius*6.8);
+              ctx.fill();
+              ctx.globalCompositeOperation = 'source-over';
+              ctx.restore();
+
+              // 3. Helmet Blood Plume (The iconic red flowing hair/plume from the helmet)
+              ctx.save(); ctx.translate(x, y - radius*1.5);
+              ctx.strokeStyle = 'rgba(220, 38, 38, 0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+              ctx.shadowBlur = 15; ctx.shadowColor = '#ff0000';
+              ctx.beginPath();
+              for(let i=0; i<6; i++) {
+                  ctx.moveTo(0,0);
+                  const swayX = Math.cos(time*0.003 + i)*15;
+                  const swayY = Math.sin(time*0.004 + i)*10;
+                  ctx.quadraticCurveTo(radius + swayX, -radius*2 - i*2, radius*2.5 + swayX, -radius*0.5 + swayY);
+              }
+              ctx.stroke(); ctx.restore();
+
+              // 4. Shadow Aura Particles (Dark matter rising from the ground)
+              if (!eng.igrisSmoke) eng.igrisSmoke = [];
+              if (eng.igrisSmoke.length < 20 && Math.random() < 0.4) {
+                  eng.igrisSmoke.push({
+                      ox: (Math.random()-0.5)*radius*6, oy: radius + Math.random()*5,
+                      vy: 0.5 + Math.random(), size: 6 + Math.random()*8, life: 1,
+                      isRed: Math.random() > 0.7
+                  });
+              }
+              eng.igrisSmoke.forEach((s, i) => {
+                  s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
+                  if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
+                  
+                  ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life*0.6})` : `rgba(10, 10, 10, ${s.life*0.8})`;
+                  ctx.shadowBlur = s.isRed ? 15 : 0; ctx.shadowColor = '#dc2626';
+                  ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
+              });
+
+              // 5. Crimson Lightning / Killing Intent (Sharp striking red bolts)
+              ctx.globalCompositeOperation = 'lighter';
+              if (Math.random() < 0.25) {
+                  const lx = x + (Math.random()-0.5)*radius*10;
+                  const ly = y - radius*3 + (Math.random()-0.5)*radius*8;
+                  ctx.strokeStyle = `rgba(255, 50, 50, ${0.5 + Math.random()*0.5})`; 
+                  ctx.lineWidth = 2 + Math.random()*2; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
+                  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(lx, ly); ctx.stroke();
+                  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.stroke(); // Flash core
+              }
+
+              // 6. Blood-Red Core Overdrive (Bleeds through the dark armor like glowing eyes)
+              const coreGrad = ctx.createRadialGradient(x, y-2, 0, x, y-2, radius*3.5);
+              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); // White-hot intense core
+              coreGrad.addColorStop(0.2, 'rgba(220, 38, 38, 0.8)'); // Crimson glow
+              coreGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
+              ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(x, y-2, radius*3.5, 0, Math.PI*2); ctx.fill();
+          }
+
+        // 🗡️ 5. IGRIS (Mythic Translucent Shadow Sovereign)
+          else if (skinId === 'emperor') {
+              ctx.globalCompositeOperation = 'source-over'; 
+              const pulse = Math.sin(time * 0.004);
+
+              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.35); 
+              const poolGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6);
+              poolGrad.addColorStop(0, 'rgba(10, 0, 0, 0.9)'); poolGrad.addColorStop(0.6, 'rgba(127, 29, 29, 0.2)'); poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = poolGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6, 0, Math.PI*2); ctx.fill();
+
+              const shockRadius = (time * 0.15) % (radius * 8); 
+              ctx.strokeStyle = `rgba(220, 38, 38, ${1 - (shockRadius / (radius * 8))})`; 
+              ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
+              ctx.beginPath(); ctx.arc(0, 0, shockRadius, 0, Math.PI * 2); ctx.stroke();
+
+              ctx.rotate(time * -0.001); ctx.strokeStyle = `rgba(153, 27, 27, ${0.5 + pulse * 0.3})`; ctx.lineWidth = 2.5; ctx.setLineDash([10, 5]);
+              ctx.beginPath();
+              for(let i=0; i<12; i++) {
+                  const ang = (i * Math.PI*2)/12;
+                  ctx.moveTo(Math.cos(ang)*radius*3.5, Math.sin(ang)*radius*3.5); ctx.lineTo(Math.cos(ang)*radius*5.5, Math.sin(ang)*radius*5.5);
+              }
+              ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+
+              ctx.save(); ctx.translate(x, y - radius);
+              const capeSway = Math.sin(time * 0.003) * 20; const capeRipple = Math.cos(time * 0.006) * 10;
+              const capeGrad = ctx.createLinearGradient(0, 0, 0, radius*8);
+              capeGrad.addColorStop(0, `rgba(153, 27, 27, ${0.6 + pulse * 0.1})`); capeGrad.addColorStop(0.5, `rgba(127, 29, 29, 0.3)`); capeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = capeGrad; ctx.globalAlpha = 0.8 + pulse * 0.1; ctx.shadowBlur = 30; ctx.shadowColor = '#dc2626'; 
+              ctx.beginPath(); ctx.moveTo(-radius*1.5, 0); 
+              ctx.quadraticCurveTo(-radius*4, radius*3 + capeRipple, -radius*2.5 + capeSway, radius*8.5); 
+              ctx.quadraticCurveTo(capeSway, radius*10, radius*2.5 + capeSway, radius*8.5); 
+              ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0); ctx.fill();
+              
+              ctx.globalCompositeOperation = 'destination-out'; 
+              ctx.beginPath();
+              for(let i=-2; i<=2; i++) {
+                  const cutX = (i*radius*0.6) + capeSway;
+                  ctx.moveTo(cutX, radius*9); ctx.lineTo(cutX - 4, radius*6 + Math.random()*15); ctx.lineTo(cutX + 4, radius*9);
+              }
+              ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0; ctx.restore();
+
+              for(let i=0; i<4; i++) {
+                  const shardAng = time*0.002 + (i*Math.PI/2); const sX = x + Math.cos(shardAng)*radius*5.5; const sY = y - radius*1.5 + Math.sin(shardAng*2)*radius*2;
+                  ctx.save(); ctx.translate(sX, sY); ctx.rotate(time*0.005 + i);
+                  ctx.fillStyle = '#171717'; ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5; ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
+                  ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, 0); ctx.lineTo(0, 18); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+                  ctx.strokeStyle = '#ffb3b3'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 10); ctx.stroke(); ctx.restore();
+                  ctx.strokeStyle = `rgba(220, 38, 38, 0.2)`; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x, y-radius); ctx.lineTo(sX, sY); ctx.stroke();
+              }
+
+              for(let w=-1; w<=1; w+=2) {
+                  ctx.save(); ctx.translate(x + (radius*1.4*w), y - radius*0.8);
+                  ctx.fillStyle = '#0a0a0a'; ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 2.5; ctx.shadowBlur = 15; ctx.shadowColor = '#000000';
+                  ctx.beginPath(); ctx.moveTo(0, radius*0.5); ctx.lineTo(radius*2.2*w, -radius*0.8); ctx.lineTo(radius*1.2*w, radius*1.2); ctx.lineTo(0, radius*1.2);
+                  ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+              }
+
+              ctx.save(); ctx.translate(x, y - radius*1.8);
+              for(let i=0; i<8; i++) {
+                  const plumeX = Math.cos(time*0.004 + i*0.5)*18; const plumeY = Math.sin(time*0.005 + i*0.5)*12;
+                  ctx.strokeStyle = i < 3 ? 'rgba(255, 150, 150, 0.9)' : 'rgba(220, 38, 38, 0.7)';
+                  ctx.lineWidth = 5 - i*0.4; ctx.lineCap = 'round'; ctx.shadowBlur = i===0 ? 20 : 0; ctx.shadowColor = '#ff0000';
+                  ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(radius + plumeX, -radius*2.5 - i*4, radius*3.5 + plumeX*1.5, -radius + plumeY); ctx.stroke();
+              }
+              ctx.restore();
+
+              if (!eng.igrisSmoke) eng.igrisSmoke = [];
+              if (eng.igrisSmoke.length < 20 && Math.random() < 0.4) eng.igrisSmoke.push({ ox: (Math.random()-0.5)*radius*6, oy: radius + Math.random()*5, vy: 0.5 + Math.random(), size: 6 + Math.random()*8, life: 1, isRed: Math.random() > 0.8 });
+              eng.igrisSmoke.forEach((s, i) => {
+                  s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
+                  if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
+                  ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life * 0.5})` : `rgba(10, 10, 10, ${s.life * 0.8})`;
+                  ctx.shadowBlur = s.isRed ? 15 : 0; ctx.shadowColor = '#dc2626';
+                  ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
+              });
+
+              ctx.globalCompositeOperation = 'lighter';
+              const coreGrad = ctx.createRadialGradient(x, y-2, 0, x, y-2, radius*3.5);
+              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); coreGrad.addColorStop(0.3, 'rgba(220, 38, 38, 0.8)'); coreGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
+              ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(x, y-2, radius*3.5, 0, Math.PI*2); ctx.fill();
+          }
+
+          // 🌸⚔️ EMPRESS OF THE BLUSHING PETALS (Mythic Arcane Swordswoman)
+          else if (skinId === 'empress') {
+              ctx.globalCompositeOperation = 'lighter'; // Elegant blooming light
+              const pulse = Math.sin(time * 0.002);
+
+              // 1. DIVINE LOTUS CREST (Intricate Floor Mandala)
+              ctx.save(); 
+              ctx.translate(x, y + 5); ctx.scale(1, 0.35); // 3D Perspective
+              
+              // Glowing Rose-Gold Aura Base
+              const lotusGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6);
+              lotusGrad.addColorStop(0, 'rgba(255, 228, 230, 0.8)'); // White-pink core
+              lotusGrad.addColorStop(0.4, 'rgba(244, 63, 94, 0.4)'); // Deep rose
+              lotusGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = lotusGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6, 0, Math.PI*2); ctx.fill();
+
+              // Intricate Intersecting Lotus Rings
+              ctx.rotate(time * 0.0005);
+              ctx.strokeStyle = `rgba(253, 164, 175, ${0.5 + pulse * 0.2})`; 
+              ctx.shadowColor = '#f43f5e'; ctx.shadowBlur = 15; ctx.lineWidth = 2;
+              
+              for(let i=0; i<12; i++) {
+                  ctx.save();
+                  ctx.rotate((i * Math.PI*2)/12);
+                  ctx.translate(radius*2.5, 0); // Offset rings
+                  ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+                  ctx.restore();
+              }
+              // Outer Golden Lace Ring
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.6)'; // Soft Gold
+              ctx.setLineDash([10, 15, 2, 15]); ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.arc(0, 0, radius * 5.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([]); ctx.restore();
+
+              // 2. ORBITING ARCANE RAPIERS (Floating Rose-Gold Swords)
+              const swordCount = 5;
+              for(let i=0; i<swordCount; i++) {
+                  const sAng = time*0.002 + (i*Math.PI*2/swordCount);
+                  const sX = x + Math.cos(sAng)*radius*4.5;
+                  const sY = y - radius*2 + Math.sin(sAng*1.5)*radius*1.5; // Elegant hovering
+                  
+                  ctx.save(); ctx.translate(sX, sY); 
+                  // Point swords outwards and slightly angled
+                  ctx.rotate(sAng + Math.PI/4 + Math.sin(time*0.003 + i)*0.2); 
+                  
+                  // Rapier Blade (White-hot core, Pink edge)
+                  ctx.fillStyle = '#ffffff'; 
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#f43f5e';
+                  ctx.beginPath(); 
+                  ctx.moveTo(0, -25); // Sharp tip
+                  ctx.lineTo(3, -5); ctx.lineTo(1, 8); 
+                  ctx.lineTo(-1, 8); ctx.lineTo(-3, -5); 
+                  ctx.closePath(); ctx.fill();
+                  
+                  // Elegant Golden Hilt/Crossguard
+                  ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#fbbf24';
+                  ctx.beginPath(); ctx.moveTo(-6, -5); ctx.quadraticCurveTo(0, -8, 6, -5); ctx.stroke();
+                  ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 14); ctx.stroke(); // Handle
+                  ctx.restore();
+
+                  // Faint energy ribbons tethering swords to the Empress
+                  ctx.strokeStyle = `rgba(253, 164, 175, 0.2)`; ctx.lineWidth = 1; ctx.shadowBlur = 0;
+                  ctx.beginPath(); ctx.moveTo(x, y - radius*2); ctx.lineTo(sX, sY); ctx.stroke();
+              }
+
+              // 3. DIVINE SILK RIBBONS (Elegant Flowing Energy)
+              ctx.lineWidth = 5; ctx.lineCap = 'round';
+              for(let i=0; i<2; i++) {
+                  ctx.strokeStyle = i === 0 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(244, 63, 94, 0.6)';
+                  ctx.shadowBlur = 20; ctx.shadowColor = i === 0 ? '#fda4af' : '#e11d48';
+                  ctx.beginPath();
+                  for(let j=0; j<=20; j++) {
+                      const rAng = (time * -0.002) + (i * Math.PI) + (j * 0.25); // Spirals upwards
+                      const rDist = radius * 3 + Math.sin(time*0.004 + j)*4;
+                      const rx = x + Math.cos(rAng) * rDist;
+                      const ry = y + radius - (j * 4) + Math.sin(rAng)*6;
+                      if(j===0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
+                  }
+                  ctx.stroke();
+              }
+
+              // 4. ELEGANT GLASS HEARTS & GLOWING PETALS (Particle System)
+              if (!eng.empressParticles) eng.empressParticles = [];
+              if (eng.empressParticles.length < 35 && Math.random() < 0.4) {
+                  const type = Math.random(); // 0.6 Petals, 0.3 Dust, 0.1 Glass Hearts
+                  eng.empressParticles.push({
+                      ox: (Math.random() - 0.5) * radius * 8, 
+                      oy: (Math.random() - 0.5) * radius * 6 - radius,
+                      vy: (type > 0.9) ? -0.5 - Math.random() : 0.5 + Math.random(), // Hearts go up, petals go down
+                      size: (type > 0.9) ? 4+Math.random()*4 : 2+Math.random()*3, 
+                      life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05,
+                      type: type
+                  });
+              }
+              eng.empressParticles.forEach((p, i) => {
+                  p.oy += p.vy; p.ox += Math.sin(time*0.003 + i)*0.6; p.rot += p.rs; p.life -= 0.006;
+                  if (p.life <= 0) { eng.empressParticles.splice(i, 1); return; }
+
+                  ctx.save(); ctx.translate(x + p.ox, y + p.oy); ctx.rotate(p.rot);
+                  
+                  if (p.type > 0.9) {
+                      // Floating Glass Hearts (Elegant, thin outline, highly transparent)
+                      const s = p.size;
+                      ctx.scale(1 + Math.sin(p.life*Math.PI)*0.2, 1 + Math.sin(p.life*Math.PI)*0.2);
+                      ctx.strokeStyle = `rgba(255, 255, 255, ${p.life})`; ctx.lineWidth = 1.5;
+                      ctx.shadowBlur = 15; ctx.shadowColor = '#f43f5e';
+                      ctx.beginPath(); ctx.moveTo(0, -s*0.3);
+                      ctx.bezierCurveTo(-s*0.6, -s, -s*1.2, -s*0.3, 0, s*1.2); 
+                      ctx.bezierCurveTo(s*1.2, -s*0.3, s*0.6, -s, 0, -s*0.3);
+                      ctx.stroke();
+                      
+                      ctx.fillStyle = `rgba(253, 164, 175, ${p.life * 0.3})`; // Very soft fill
+                      ctx.fill();
+                  } else if (p.type > 0.3) {
+                      // Mythic Glowing Petals
+                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`; // Pure white core
+                      ctx.shadowBlur = 10; ctx.shadowColor = '#fb7185'; // Pink glow
+                      ctx.beginPath(); ctx.moveTo(0, p.size);
+                      ctx.bezierCurveTo(p.size, p.size, p.size*1.5, 0, 0, -p.size); ctx.lineTo(0, -p.size*0.4); 
+                      ctx.lineTo(0, -p.size); ctx.bezierCurveTo(-p.size*1.5, 0, -p.size, p.size, 0, p.size); ctx.fill();
+                  } else {
+                      // Rose-Gold Star Dust
+                      ctx.fillStyle = `rgba(253, 224, 71, ${p.life})`; ctx.shadowBlur = 5; ctx.shadowColor = '#fbbf24';
+                      ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
+                  }
+                  ctx.restore();
+              });
+
+              // 5. RADIANT EMPRESS CORE BLOOM
+              const empressGrad = ctx.createRadialGradient(x, y-radius, 0, x, y-radius, radius * 4);
+              empressGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Blinding white-rose core
+              empressGrad.addColorStop(0.3, 'rgba(251, 113, 133, 0.5)'); // Radiant pink
+              empressGrad.addColorStop(1, 'rgba(225, 29, 72, 0)');     
+              ctx.fillStyle = empressGrad; ctx.beginPath(); ctx.arc(x, y-radius, radius * 4, 0, Math.PI * 2); ctx.fill();
+          }
+
+          // 👑 INFERNAL ECLIPSE SOVEREIGN (MYTHIC TIER - Transcendent Demon/Celestial)
+          else if (skinId === 'infernal') {
+              ctx.globalCompositeOperation = 'source-over';
+              const pulse = Math.sin(time * 0.003);
+              const floatY = Math.sin(time * 0.002) * 4; // Idle Levitation Animation
+
+              // 1. ECLIPSE SHADOW DOMAIN (Floor)
+              ctx.save();
+              ctx.translate(x, y + 5 + floatY);
+              ctx.scale(1, 0.35); // 3D Perspective
+
+              // Abyssal Violet & Crimson Pool
+              const poolGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 7);
+              poolGrad.addColorStop(0, 'rgba(10, 0, 15, 0.95)'); // Obsidian core
+              poolGrad.addColorStop(0.4, 'rgba(153, 15, 61, 0.6)'); // Infernal scarlet
+              poolGrad.addColorStop(0.8, 'rgba(76, 29, 149, 0.3)'); // Abyssal violet
+              poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = poolGrad; ctx.beginPath(); ctx.arc(0, 0, radius*7, 0, Math.PI*2); ctx.fill();
+
+              // Pulsing Reality Distortion Rings
+              const shockRadius = (time * 0.2) % (radius * 9);
+              ctx.strokeStyle = `rgba(139, 92, 246, ${1 - (shockRadius / (radius * 9))})`; // Violet expanding wave
+              ctx.lineWidth = 4; ctx.shadowBlur = 15; ctx.shadowColor = '#8b5cf6';
+              ctx.beginPath(); ctx.arc(0, 0, shockRadius, 0, Math.PI * 2); ctx.stroke();
+
+              // Intricate Demonic Hexagram
+              ctx.rotate(time * -0.0005);
+              ctx.strokeStyle = `rgba(225, 29, 72, ${0.6 + pulse * 0.3})`; // Crimson red
+              ctx.lineWidth = 2.5; ctx.shadowColor = '#e11d48';
+              ctx.beginPath();
+              for(let i=0; i<6; i++) {
+                  const ang = (i * Math.PI*2)/6;
+                  ctx.lineTo(Math.cos(ang)*radius*5, Math.sin(ang)*radius*5);
+                  ctx.lineTo(Math.cos(ang + Math.PI/6)*radius*2.5, Math.sin(ang + Math.PI/6)*radius*2.5);
+              }
+              ctx.closePath(); ctx.stroke();
+              
+              // Outer Ancient Runes
+              ctx.setLineDash([12, 8, 4, 8]);
+              ctx.beginPath(); ctx.arc(0, 0, radius * 6, 0, Math.PI*2); ctx.stroke();
+              ctx.setLineDash([]); ctx.restore();
+
+              // 2. ASYMMETRICAL WINGS (Left: Demonic Dragon | Right: Celestial Light)
+              ctx.save(); ctx.translate(x, y - radius + floatY);
+              const flapAngle = Math.sin(time * 0.004) * 0.2;
+              
+              // --- LEFT WING: Demonic Shadow Webbing ---
+              ctx.save(); ctx.scale(-1, 1); ctx.rotate(flapAngle - 0.1);
+              const demonGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
+              demonGrad.addColorStop(0, 'rgba(20, 5, 10, 0.9)');
+              demonGrad.addColorStop(1, 'rgba(153, 15, 30, 0.7)');
+              ctx.fillStyle = demonGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#9f1239';
+              
+              ctx.beginPath(); ctx.moveTo(radius, 0);
+              ctx.quadraticCurveTo(radius*3, -radius*5, radius*7, -radius*4); // Top edge
+              ctx.quadraticCurveTo(radius*5, -radius*1, radius*8, radius*2); // Spiked tip
+              ctx.quadraticCurveTo(radius*4, radius*1, radius*5, radius*3); // Webbing
+              ctx.quadraticCurveTo(radius*2.5, radius*1.5, radius*1, radius*2); // Inner attach
+              ctx.fill();
+              
+              // Demonic Bone Structure
+              ctx.strokeStyle = 'rgba(225, 29, 72, 0.8)'; ctx.lineWidth = 2;
+              ctx.beginPath(); ctx.moveTo(radius, 0); ctx.quadraticCurveTo(radius*3, -radius*5, radius*7, -radius*4); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(radius*2.5, -radius*2.5); ctx.lineTo(radius*8, radius*2); ctx.stroke();
+              ctx.restore();
+
+              // --- RIGHT WING: Corrupted Celestial Energy ---
+              ctx.save(); ctx.scale(1, 1); ctx.rotate(flapAngle + 0.1);
+              ctx.globalCompositeOperation = 'lighter';
+              const celestGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
+              celestGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Blinding white origin
+              celestGrad.addColorStop(0.4, 'rgba(139, 92, 246, 0.8)'); // Violet energy
+              celestGrad.addColorStop(1, 'rgba(225, 29, 72, 0)'); // Crimson fade
+              ctx.fillStyle = celestGrad; ctx.shadowBlur = 25; ctx.shadowColor = '#8b5cf6';
+              
+              ctx.beginPath(); ctx.moveTo(radius, 0);
+              ctx.bezierCurveTo(radius*3, -radius*5, radius*6, -radius*3, radius*8 + Math.sin(time*0.01)*3, -radius*2);
+              ctx.quadraticCurveTo(radius*6, 0, radius*7, radius*1);   // Feather 1
+              ctx.quadraticCurveTo(radius*5, radius*0.5, radius*5.5, radius*2.5); // Feather 2
+              ctx.quadraticCurveTo(radius*4, radius*1, radius*4, radius*3);   // Feather 3
+              ctx.quadraticCurveTo(radius*2, radius*1.5, radius*1, radius*2);
+              ctx.fill(); ctx.restore();
+              ctx.restore();
+
+              // 3. LIVING SHADOW CLOAK (Independent Aura)
+              ctx.globalCompositeOperation = 'source-over';
+              ctx.save(); ctx.translate(x, y - radius + floatY);
+              const cloakSway = Math.sin(time * 0.003) * 15;
+              const cloakGrad = ctx.createLinearGradient(0, 0, 0, radius*8);
+              cloakGrad.addColorStop(0, 'rgba(10, 0, 15, 0.9)');
+              cloakGrad.addColorStop(0.6, 'rgba(139, 92, 246, 0.5)'); // Violet tint
+              cloakGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = cloakGrad; 
+              
+              ctx.beginPath(); ctx.moveTo(-radius*1.2, 0);
+              ctx.quadraticCurveTo(-radius*3.5, radius*4, -radius*2 + cloakSway, radius*8);
+              ctx.quadraticCurveTo(cloakSway, radius*9, radius*2 + cloakSway, radius*8);
+              ctx.quadraticCurveTo(radius*3.5, radius*4, radius*1.2, 0);
+              ctx.fill(); ctx.restore();
+
+              // 4. FLOATING CORRUPTED RELICS (Orbiting Magic Stones)
+              const relicCount = 3;
+              for(let i=0; i<relicCount; i++) {
+                  const rAng = time*0.002 + (i*Math.PI*2/relicCount);
+                  const rX = x + Math.cos(rAng)*radius*5;
+                  const rY = y - radius*1.5 + floatY + Math.sin(rAng*2)*radius*2;
+                  
+                  ctx.save(); ctx.translate(rX, rY); ctx.rotate(time*0.005 + i);
+                  ctx.fillStyle = '#0f0514'; ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 1.5;
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#8b5cf6';
+                  ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(5, 0); ctx.lineTo(0, 15); ctx.lineTo(-5, 0); ctx.closePath();
+                  ctx.fill(); ctx.stroke();
+                  // Crimson crack inside
+                  ctx.strokeStyle = '#e11d48'; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 8); ctx.stroke();
+                  ctx.restore();
+                  
+                  // Tether
+                  ctx.strokeStyle = `rgba(139, 92, 246, 0.2)`; ctx.lineWidth = 1;
+                  ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(rX, rY); ctx.stroke();
+              }
+
+              // 5. INFERNAL HALO (Floating Spiked Crown)
+              ctx.save(); ctx.translate(x, y - radius*3 + floatY);
+              ctx.scale(1, 0.3); ctx.rotate(time * 0.002);
+              ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 3; ctx.shadowBlur = 20; ctx.shadowColor = '#be123c';
+              ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+              for(let i=0; i<5; i++) {
+                  ctx.rotate(Math.PI*2/5);
+                  ctx.beginPath(); ctx.moveTo(radius*2.5, 0); ctx.lineTo(radius*4, 0); ctx.stroke();
+              }
+              ctx.restore();
+
+              // 6. DARK LIGHTNING & SHADOW FLAME PARTICLES
+              ctx.globalCompositeOperation = 'lighter';
+              if (Math.random() < 0.3) {
+                  // Violet or Crimson Lightning
+                  const lColor = Math.random() > 0.5 ? {c: '#ffffff', g: '#8b5cf6'} : {c: '#ffffff', g: '#e11d48'};
+                  if(typeof drawLightning === 'function') { // Fallback if helper is accessible
+                      drawLightning(x + (Math.random()-0.5)*radius*4, y - radius*4 + floatY, 
+                                    x + (Math.random()-0.5)*radius*10, y + 10 + (Math.random()-0.5)*radius*5, 
+                                    lColor.c, lColor.g, 4, true);
+                  }
+              }
+
+              if (!eng.infernalSmoke) eng.infernalSmoke = [];
+              if (eng.infernalSmoke.length < 30 && Math.random() < 0.5) {
+                  eng.infernalSmoke.push({
+                      ox: (Math.random()-0.5)*radius*7, oy: radius + Math.random()*10,
+                      vy: 0.6 + Math.random()*1.5, size: 5 + Math.random()*10, life: 1,
+                      isViolet: Math.random() > 0.5
+                  });
+              }
+              eng.infernalSmoke.forEach((s, i) => {
+                  s.oy -= s.vy; s.ox += Math.sin(time*0.003 + i)*0.6; s.life -= 0.015; s.size -= 0.05;
+                  if (s.life <= 0) { eng.infernalSmoke.splice(i, 1); return; }
+                  ctx.fillStyle = s.isViolet ? `rgba(139, 92, 246, ${s.life*0.6})` : `rgba(225, 29, 72, ${s.life*0.6})`;
+                  ctx.shadowBlur = 15; ctx.shadowColor = s.isViolet ? '#7c3aed' : '#be123c';
+                  ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy + floatY, s.size, 0, Math.PI*2); ctx.fill();
+              });
+
+              // 7. ABSOLUTE DOMINANCE CORE BLOOM
+              const coreGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius*4.5);
+              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.6)'); // Piercing white light
+              coreGrad.addColorStop(0.2, 'rgba(225, 29, 72, 0.8)'); // Scarlet
+              coreGrad.addColorStop(0.5, 'rgba(109, 40, 217, 0.4)'); // Abyssal Violet
+              coreGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius*4.5, 0, Math.PI*2); ctx.fill();
+          }
+
+          else if (skinId === 'leviathan') {
+              ctx.globalCompositeOperation = 'lighter'; // Blinding holy light
+              const pulse = Math.sin(time * 0.003);
+              const floatY = Math.sin(time * 0.002) * 5; // Divine levitation
+
+              // 1. DIVINE OCEANIC SEAL (Floor)
+              ctx.save(); 
+              ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); // 3D Perspective
+              
+              // Sapphire Whirlpool Base
+              const waterGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6);
+              waterGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Holy white core
+              waterGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.6)'); // Divine aqua
+              waterGrad.addColorStop(0.8, 'rgba(2, 132, 199, 0.3)'); // Ocean sapphire
+              waterGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = waterGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6, 0, Math.PI*2); ctx.fill();
+
+              // Rotating Water Runes & Gold Filigree
+              ctx.rotate(time * 0.0008);
+              ctx.strokeStyle = `rgba(56, 189, 248, ${0.6 + pulse * 0.2})`; 
+              ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 15; ctx.lineWidth = 2.5;
+              
+              // Geometric Water Rings
+              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.beginPath();
+              for(let i=0; i<6; i++) {
+                  ctx.rotate(Math.PI * 2 / 6);
+                  ctx.moveTo(0, radius*2);
+                  ctx.quadraticCurveTo(radius*2, radius*4, 0, radius*5);
+              }
+              ctx.stroke();
+
+              // Mythic Gold Accents
+              ctx.rotate(time * -0.0015);
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)'; // Mythic Gold
+              ctx.lineWidth = 2; ctx.shadowColor = '#fde047'; ctx.shadowBlur = 10;
+              ctx.setLineDash([15, 10, 5, 10]);
+              ctx.beginPath(); ctx.arc(0, 0, radius * 5.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([]); ctx.restore();
+
+              // 2. LEVIATHAN SPIRIT (Translucent Water Dragon swirling behind)
+              ctx.save(); ctx.translate(x, y - radius + floatY);
+              ctx.lineWidth = 12; ctx.lineCap = 'round';
+              ctx.shadowBlur = 20; ctx.shadowColor = '#0ea5e9';
+              
+              // The Spirit Serpent Body
+              ctx.beginPath();
+              for(let j=0; j<=30; j++) {
+                  const sAng = (time * -0.002) + (j * 0.2); // Spirals around
+                  const sDist = radius * 4.5 + Math.sin(time*0.004 + j)*2;
+                  const sx = Math.cos(sAng) * sDist;
+                  const sy = Math.sin(sAng) * sDist * 0.5 - (j * 1.5) + Math.sin(time*0.003 + j)*5; // Helical motion up
+                  if(j===0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+              }
+              
+              // Spirit Gradient
+              const spiritGrad = ctx.createLinearGradient(0, radius*2, 0, -radius*6);
+              spiritGrad.addColorStop(0, 'rgba(2, 132, 199, 0)'); // Faded tail
+              spiritGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.5)'); // Cyan body
+              spiritGrad.addColorStop(1, 'rgba(255, 255, 255, 0.8)'); // White-hot head
+              
+              ctx.strokeStyle = spiritGrad; ctx.stroke();
+              // Inner Bright Spine
+              ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.shadowBlur = 0; ctx.stroke();
+              ctx.restore();
+
+              // 3. CRYSTAL WATER WINGS (Translucent Angular Wings)
+              const flapAngle = Math.sin(time * 0.004) * 0.15;
+              for (let w = -1; w <= 1; w += 2) {
+                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
+                  ctx.rotate(flapAngle + 0.1);
+                  
+                  const wingGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
+                  wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Solid wing root
+                  wingGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.7)'); // Aqua crystal
+                  wingGrad.addColorStop(1, 'rgba(2, 132, 199, 0)'); // Transparent edge
+
+                  ctx.fillStyle = wingGrad; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+                  
+                  // Valkyrie Crystal Shards (Sharp, elegant polygonal wings)
+                  ctx.beginPath();
+                  ctx.moveTo(radius, 0);
+                  ctx.lineTo(radius*3, -radius*2);
+                  ctx.lineTo(radius*6, -radius*4 + Math.sin(time*0.005)*3); // Wing tip 1
+                  ctx.lineTo(radius*4.5, -radius*1);
+                  ctx.lineTo(radius*7, radius*1 + Math.sin(time*0.006)*2);  // Wing tip 2
+                  ctx.lineTo(radius*3.5, radius*1.5);
+                  ctx.lineTo(radius*4.5, radius*3); // Wing tip 3
+                  ctx.lineTo(radius*1.5, radius*2);
+                  ctx.closePath(); ctx.fill();
+                  
+                  // Crystal Facet Lines (Engravings)
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0;
+                  ctx.beginPath(); ctx.moveTo(radius, 0); ctx.lineTo(radius*6, -radius*4); ctx.stroke();
+                  ctx.beginPath(); ctx.moveTo(radius*2.5, -radius*0.5); ctx.lineTo(radius*7, radius*1); ctx.stroke();
+                  ctx.restore();
+              }
+
+              // 4. CELESTIAL WATER HALO (Above Head)
+              ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
+              ctx.scale(1, 0.3); ctx.rotate(time * 0.002);
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 3; ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
+              ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+              // Gold and Sapphire embedded in the halo
+              ctx.strokeStyle = '#fde047'; ctx.lineWidth = 5; ctx.setLineDash([5, 15]);
+              ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+              ctx.restore();
+
+              // 5. HOLY BLUE LIGHTNING (Divine Surges)
+              if (Math.random() < 0.2) {
+                  if(typeof drawLightning === 'function') { // Fallback if helper is accessible
+                      drawLightning(x + (Math.random()-0.5)*radius*3, y - radius*3 + floatY, 
+                                    x + (Math.random()-0.5)*radius*10, y + 10 + (Math.random()-0.5)*radius*5, 
+                                    '#ffffff', '#0284c7', 3, true);
+                  }
+              }
+
+              // 6. ANTI-GRAVITY WATER DROPLETS & GLOWING BUTTERFLIES
+              if (!eng.leviParticles) eng.leviParticles = [];
+              if (eng.leviParticles.length < 35 && Math.random() < 0.5) {
+                  const isButterfly = Math.random() > 0.8;
+                  eng.leviParticles.push({
+                      ox: (Math.random() - 0.5) * radius * 8, 
+                      oy: radius * 2 + Math.random() * 5, // Starts at the bottom
+                      vy: 0.5 + Math.random() * 1.5, // Floats UPWARDS
+                      size: isButterfly ? 3+Math.random()*2 : 1+Math.random()*3, 
+                      life: 1, rot: Math.random()*Math.PI*2,
+                      isButterfly: isButterfly
+                  });
+              }
+              eng.leviParticles.forEach((p, i) => {
+                  p.oy -= p.vy; // Anti-gravity movement (Up)
+                  p.ox += Math.sin(time*0.003 + i)*0.8; p.rot += 0.05; p.life -= 0.01;
+                  if (p.life <= 0) { eng.leviParticles.splice(i, 1); return; }
+
+                  ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
+                  
+                  if (p.isButterfly) {
+                      // Magical Glowing Butterfly
+                      const flap = Math.abs(Math.sin(time * 0.02 + i));
+                      ctx.scale(flap, 1); // Butterfly wing flapping
+                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
+                      ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
+                      ctx.beginPath(); ctx.ellipse(p.size, 0, p.size, p.size*1.5, Math.PI/4, 0, Math.PI*2); ctx.fill(); // Right Wing
+                      ctx.beginPath(); ctx.ellipse(-p.size, 0, p.size, p.size*1.5, -Math.PI/4, 0, Math.PI*2); ctx.fill(); // Left Wing
+                  } else {
+                      // Rising Water Droplet / Star
+                      ctx.fillStyle = `rgba(224, 242, 254, ${p.life})`; ctx.shadowBlur = 10; ctx.shadowColor = '#0284c7';
+                      ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
+                  }
+                  ctx.restore();
+              });
+
+              // 7. ORBITING SAPPHIRE GEMS
+              const gemCount = 4;
+              for(let i=0; i<gemCount; i++) {
+                  const gAng = time*0.003 + (i*Math.PI*2/gemCount);
+                  const gX = x + Math.cos(gAng)*radius*4;
+                  const gY = y - radius*1.5 + floatY + Math.sin(gAng*2)*radius*1.5;
+                  
+                  ctx.save(); ctx.translate(gX, gY); ctx.rotate(time*0.005 + i);
+                  ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 1.5;
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+                  ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4, 0); ctx.lineTo(0, 6); ctx.lineTo(-4, 0); ctx.closePath();
+                  ctx.fill(); ctx.stroke();
+                  ctx.restore();
+              }
+
+              // 8. SAINT VALKYRIE CORE BLOOM
+              const holyGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius*4);
+              holyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Blinding celestial white
+              holyGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.6)'); // Radiant Aqua
+              holyGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');     
+              ctx.fillStyle = holyGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius*4, 0, Math.PI * 2); ctx.fill();
+          }
+// 🌌⏳ ETERNAL REMEMBRANCE (Celestial Astral Sovereign - Clean Majestic Vibe)
+          else if (skinId === 'remembrance') {
+              ctx.globalCompositeOperation = 'lighter';
+              const pulse = Math.sin(time * 0.002);
+              const floatY = Math.sin(time * 0.0015) * 6; // Slow, eternal levitation
+
+              // 1. TIME DISTORTION & ASTRAL CLOCKWORK SEAL
+              ctx.save(); 
+              ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
+              
+              // Midnight Blue Starlight Base
+              const starGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6.5);
+              starGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); // White hot center
+              starGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); // Cyan/Starlight Blue
+              starGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.4)'); // Midnight Void
+              starGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = starGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6.5, 0, Math.PI*2); ctx.fill();
+
+              // Time Ripples (Expanding transparent rings)
+              for(let i=0; i<3; i++) {
+                  const rippleRad = ((time * 0.05) + (i * radius*3)) % (radius * 8);
+                  ctx.strokeStyle = `rgba(224, 242, 254, ${1 - (rippleRad/(radius*8))})`;
+                  ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rippleRad, 0, Math.PI*2); ctx.stroke();
+              }
+
+              // Astral Clockwork & Zodiac Circle (Replacing Elven Runes)
+              ctx.rotate(time * 0.0005);
+              ctx.strokeStyle = `rgba(186, 230, 253, ${0.6 + pulse * 0.2})`; 
+              ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 15; ctx.lineWidth = 2;
+              
+              // Outer dials
+              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([5, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 5.2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+              
+              // Clock Hands (Moving slowly)
+              ctx.save();
+              ctx.rotate(time * 0.001); // Minute hand
+              ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -radius * 4); ctx.stroke();
+              ctx.rotate(time * 0.0002); // Hour hand
+              ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(radius * 2.5, 0); ctx.stroke();
+              ctx.restore();
+              ctx.restore();
+
+              // 2. CONSTELLATION CAPE / WINGS (Night sky fabric)
+              for (let w = -1; w <= 1; w += 2) {
+                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
+                  const capeSway = Math.sin(time * 0.002) * 0.15;
+                  ctx.rotate(capeSway + 0.1);
+
+                  // Cape Fabric (Midnight to Transparent Cyan)
+                  const capeGradient = ctx.createLinearGradient(0, 0, radius*7, radius*5);
+                  capeGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+                  capeGradient.addColorStop(0.3, 'rgba(56, 189, 248, 0.8)');
+                  capeGradient.addColorStop(1, 'rgba(30, 27, 75, 0)');
+
+                  ctx.fillStyle = capeGradient; ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
+                  ctx.beginPath();
+                  ctx.moveTo(radius, 0);
+                  // Elegant sweeping wing shapes
+                  ctx.bezierCurveTo(radius*3, -radius*2, radius*5, -radius*1, radius*7 + Math.sin(time*0.003)*3, radius*3);
+                  ctx.quadraticCurveTo(radius*5, radius*5, radius*3, radius*6);
+                  ctx.quadraticCurveTo(radius*2, radius*3, radius, radius);
+                  ctx.fill();
+
+                  // Constellation Stars inside the Cape
+                  ctx.fillStyle = '#ffffff'; ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1; ctx.shadowBlur = 5;
+                  const starPoints = [ {px: 20, py: 10}, {px: 35, py: 5}, {px: 40, py: 25}, {px: 25, py: 30} ];
+                  ctx.beginPath();
+                  starPoints.forEach((pt, i) => {
+                      ctx.moveTo(starPoints[i].px, starPoints[i].py);
+                      const next = starPoints[(i+1)%starPoints.length];
+                      ctx.lineTo(next.px, next.py);
+                  });
+                  ctx.stroke();
+                  starPoints.forEach(pt => {
+                      ctx.beginPath(); ctx.arc(pt.px, pt.py, 1.5, 0, Math.PI*2); ctx.fill();
+                  });
+                  ctx.restore();
+              }
+
+              // 3. FLOATING CHRONO-SPHERES (Replacing the Books)
+              ctx.globalCompositeOperation = 'source-over';
+              const orbCount = 3;
+              for(let i=0; i<orbCount; i++) {
+                  const bAng = time*0.0015 + (i*Math.PI*2/orbCount);
+                  const bX = x + Math.cos(bAng)*radius*4.5;
+                  const bY = y - radius*2 + floatY + Math.sin(bAng*2)*radius*1.5;
+                  
+                  ctx.save(); ctx.translate(bX, bY);
+                  ctx.translate(0, Math.sin(time*0.004 + i)*5); 
+                  
+                  // Glowing Core
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#7dd3fc';
+                  ctx.fillStyle = '#ffffff';
+                  ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+                  
+                  // Rotating Astrolabe Rings
+                  ctx.strokeStyle = '#fde047'; // Starlight Gold
+                  ctx.lineWidth = 1.5;
+                  ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, time*0.003 + i, 0, Math.PI*2); ctx.stroke();
+                  ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, -time*0.002 + i + Math.PI/2, 0, Math.PI*2); ctx.stroke();
+                  ctx.restore();
+
+                  // Golden energy tether
+                  ctx.strokeStyle = `rgba(253, 224, 71, 0.2)`; ctx.lineWidth = 1;
+                  ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(bX, bY); ctx.stroke();
+              }
+
+              // 4. PRISMATIC SHARDS & ASTRAL DUST (Replacing Flowers & Butterflies)
+              ctx.globalCompositeOperation = 'lighter';
+              if (!eng.astralParticles) eng.astralParticles = [];
+              if (eng.astralParticles.length < 35 && Math.random() < 0.5) {
+                  const type = Math.random(); // 0.6 Prisms, 0.3 Dust, 0.1 Starfeathers
+                  eng.astralParticles.push({
+                      ox: (Math.random() - 0.5) * radius * 9, 
+                      oy: (Math.random() - 0.5) * radius * 8,
+                      vx: (Math.random() - 0.5) * 1.5,
+                      vy: -0.5 - Math.random(), // Floats upwards
+                      size: (type > 0.9) ? 3+Math.random()*3 : 1.5+Math.random()*1.5, 
+                      life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
+                  });
+              }
+              eng.astralParticles.forEach((p, i) => {
+                  p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.5;
+                  p.rot += p.rs; p.life -= 0.005;
+                  if (p.life <= 0) { eng.astralParticles.splice(i, 1); return; }
+
+                  ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
+                  
+                  if (p.type > 0.9) {
+                      // Starfeathers (Glowing elegant energy feathers)
+                      ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`;
+                      ctx.shadowBlur = 10; ctx.shadowColor = '#0ea5e9';
+                      ctx.beginPath();
+                      ctx.moveTo(0, -p.size);
+                      ctx.quadraticCurveTo(p.size, 0, 0, p.size);
+                      ctx.quadraticCurveTo(-p.size, 0, 0, -p.size);
+                      ctx.fill();
+                  } else if (p.type > 0.3) {
+                      // Crystal Memory Prisms (Diamonds)
+                      ctx.fillStyle = `rgba(96, 165, 250, ${p.life})`;
+                      ctx.shadowBlur = 5; ctx.shadowColor = '#38bdf8';
+                      ctx.beginPath();
+                      ctx.moveTo(0, -p.size); ctx.lineTo(p.size/2, 0); ctx.lineTo(0, p.size); ctx.lineTo(-p.size/2, 0);
+                      ctx.closePath(); ctx.fill();
+                  } else {
+                      // Celestial Stardust
+                      ctx.fillStyle = `rgba(248, 250, 252, ${p.life})`; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
+                      ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
+                  }
+                  ctx.restore();
+              });
+
+              // 5. GEOMETRIC ASTRAL CROWN (Replacing Flower Halo)
+              ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
+              ctx.scale(1, 0.3); ctx.rotate(time * 0.001);
+              
+              // Double Ring
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)'; // Starlight Gold
+              ctx.lineWidth = 2; ctx.shadowBlur = 15; ctx.shadowColor = '#fde047';
+              ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+              ctx.setLineDash([4, 8]); ctx.beginPath(); ctx.arc(0, 0, radius*3, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+              
+              // Crown Spikes
+              for(let i=0; i<4; i++) {
+                  ctx.rotate(Math.PI*2/4);
+                  ctx.fillStyle = '#ffffff';
+                  ctx.beginPath(); ctx.moveTo(-2, -radius*2.5); ctx.lineTo(2, -radius*2.5); ctx.lineTo(0, -radius*4); ctx.fill();
+              }
+              ctx.restore();
+
+              // 6. TIMELESS CORE BLOOM
+              const astralGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 4.5);
+              astralGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+              astralGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); // Cyan/Blue glow
+              astralGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');     
+              ctx.fillStyle = astralGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius * 4.5, 0, Math.PI * 2); ctx.fill();
+          }
+
+// 🌌⏳ THE ABSOLUTE PINNACLE TIER: ETERNAL REMEMBRANCE (Himmel's Legacy)
+          else if (skinId === 'frieren') {
+              ctx.globalCompositeOperation = 'lighter';
+              const pulse = Math.sin(time * 0.002);
+              const floatY = Math.sin(time * 0.001) * 6; // Timeless, slow levitation
+
+              // --- 1. HIMMEL'S PROMISE: THE MIRROR LOTUS MOON (Clean, Majestic Halo) ---
+              ctx.save(); 
+              // Nakapwesto sa likuran at itaas ng player
+              ctx.translate(x, y - radius * 3 + floatY); 
+              
+              // Soft Celestial Moon Aura
+              const moonGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 8);
+              moonGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+              moonGrad.addColorStop(0.4, 'rgba(96, 165, 250, 0.15)'); // Forget-Me-Not Blue
+              moonGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = moonGrad; 
+              ctx.beginPath(); ctx.arc(0, 0, radius * 8, 0, Math.PI * 2); ctx.fill();
+
+              // Giant Rotating Mirror Lotus
+              ctx.rotate(time * 0.0005);
+              ctx.strokeStyle = `rgba(224, 242, 254, ${0.4 + pulse * 0.2})`; // Shimmering silver-white
+              ctx.lineWidth = 1.5; 
+              ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+              
+              // Drawing elegant overlapping lotus petals
+              for(let i=0; i<8; i++) {
+                  ctx.rotate(Math.PI * 2 / 8);
+                  ctx.beginPath();
+                  ctx.moveTo(0, 0);
+                  ctx.quadraticCurveTo(radius * 3, -radius * 2, 0, -radius * 7); // Right curve of petal
+                  ctx.quadraticCurveTo(-radius * 3, -radius * 2, 0, 0);          // Left curve of petal
+                  ctx.stroke();
+              }
+              
+              // Delicate Starlight Ring containing the Lotus
+              ctx.rotate(time * -0.001); // Counter-rotation
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.4)'; // Soft Starlight Gold
+              ctx.lineWidth = 2;
+              ctx.setLineDash([4, 12]);
+              ctx.beginPath(); ctx.arc(0, 0, radius * 7.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([]);
+              ctx.restore();
+
+              // --- 2. HIMMEL TRIBUTE: HEROIC SILHOUETTE ---
+              const himmelAlpha = Math.max(0, Math.sin(time * 0.0008) - 0.4) * 0.4; 
+              if (himmelAlpha > 0) {
+                  ctx.save(); ctx.translate(x, y - radius*2);
+                  const himmelGrad = ctx.createLinearGradient(0, -radius*6, 0, radius*2);
+                  himmelGrad.addColorStop(0, `rgba(253, 224, 71, ${himmelAlpha})`); 
+                  himmelGrad.addColorStop(0.6, `rgba(96, 165, 250, ${himmelAlpha * 0.5})`); 
+                  himmelGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                  ctx.fillStyle = himmelGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#fde047';
+                  
+                  ctx.beginPath();
+                  ctx.moveTo(-radius*2.5, radius*2); 
+                  ctx.bezierCurveTo(-radius*2, -radius*3, -radius*1.5, -radius*5, 0, -radius*6); 
+                  ctx.bezierCurveTo(radius*1.5, -radius*5, radius*2, -radius*3, radius*2.5, radius*2); 
+                  ctx.fill(); ctx.restore();
+              }
+
+              // --- 3. DOMAIN OF ETERNITY (Galactic Floor) ---
+              ctx.save(); ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
+              const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 8);
+              voidGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); 
+              voidGrad.addColorStop(0.2, 'rgba(30, 27, 75, 0.8)'); 
+              voidGrad.addColorStop(0.6, 'rgba(14, 165, 233, 0.4)'); 
+              voidGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              ctx.fillStyle = voidGrad; ctx.beginPath(); ctx.arc(0, 0, radius*8, 0, Math.PI*2); ctx.fill();
+
+              ctx.rotate(time * -0.0003);
+              ctx.strokeStyle = `rgba(186, 230, 253, ${0.4 + pulse * 0.2})`; ctx.lineWidth = 1.5; ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 10;
+              ctx.beginPath(); ctx.arc(0, 0, radius * 6, 0, Math.PI*2); ctx.stroke();
+              ctx.setLineDash([5, 15, 2, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 7, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+              
+              for(let i=0; i<3; i++) {
+                  ctx.rotate(Math.PI*2/3);
+                  ctx.beginPath(); ctx.moveTo(-radius*7, 0); ctx.bezierCurveTo(-radius*3, radius*3, radius*3, -radius*3, radius*7, 0); ctx.stroke();
+              }
+              ctx.restore();
+
+              // --- 4. PROCEDURAL CONSTELLATION WINGS ---
+              const wingFlap = Math.sin(time * 0.002) * 0.15 + 0.1;
+              for (let w = -1; w <= 1; w += 2) {
+                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1); ctx.rotate(wingFlap);
+                  
+                  const wingGrad = ctx.createLinearGradient(0, 0, radius*8, -radius*5);
+                  wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+                  wingGrad.addColorStop(0.4, 'rgba(14, 165, 233, 0.6)');
+                  wingGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');
+                  ctx.fillStyle = wingGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#0ea5e9';
+                  
+                  ctx.beginPath(); ctx.moveTo(radius, 0);
+                  ctx.bezierCurveTo(radius*3, -radius*5, radius*6, -radius*4, radius*9 + Math.sin(time*0.002)*4, -radius*2);
+                  ctx.quadraticCurveTo(radius*7, radius*1, radius*8, radius*3);
+                  ctx.quadraticCurveTo(radius*5, radius*2, radius*5, radius*4);
+                  ctx.quadraticCurveTo(radius*3, radius*2, radius, radius*1);
+                  ctx.fill();
+
+                  const stars = [ {x: radius*2, y: -radius*1}, {x: radius*4, y: -radius*3}, {x: radius*7, y: -radius*2}, {x: radius*5, y: radius*1}, {x: radius*3, y: radius*1.5} ];
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 1; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
+                  ctx.beginPath(); ctx.moveTo(stars[0].x, stars[0].y);
+                  for(let i=1; i<stars.length; i++) ctx.lineTo(stars[i].x, stars[i].y);
+                  ctx.stroke();
+                  
+                  ctx.fillStyle = '#fde047'; 
+                  stars.forEach(st => { ctx.beginPath(); ctx.arc(st.x, st.y, 1.5 + Math.random(), 0, Math.PI*2); ctx.fill(); });
+                  ctx.restore();
+              }
+
+              // --- 5. FLOATING GRIMOIRES & ELVEN RIBBONS ---
+              ctx.globalCompositeOperation = 'source-over';
+              for(let i=0; i<2; i++) {
+                  const bAng = time*0.001 + (i*Math.PI);
+                  const bX = x + Math.cos(bAng)*radius*5.5;
+                  const bY = y - radius*2 + floatY + Math.sin(bAng*2)*radius*1.5;
+                  
+                  ctx.save(); ctx.translate(bX, bY); ctx.translate(0, Math.sin(time*0.003 + i)*4); 
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#7dd3fc';
+                  ctx.fillStyle = '#0f172a'; ctx.fillRect(-10, -2, 20, 4); 
+                  
+                  ctx.fillStyle = '#f8fafc';
+                  const pageFlap = Math.abs(Math.sin(time*0.002 + i));
+                  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-5, -5 * pageFlap, -10, -2); ctx.lineTo(-10, 2); ctx.lineTo(0, 2); ctx.fill();
+                  ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(5, -5 * (1-pageFlap), 10, -2); ctx.lineTo(10, 2); ctx.lineTo(0, 2); ctx.fill();
+                  ctx.restore();
+
+                  ctx.strokeStyle = i===0 ? 'rgba(253, 224, 71, 0.6)' : 'rgba(186, 230, 253, 0.6)'; 
+                  ctx.lineWidth = 2; ctx.beginPath();
+                  for(let j=0; j<=15; j++) {
+                      const rA = (time * -0.002) + (i * Math.PI) + (j * 0.3);
+                      const rD = radius * 3.5 + Math.sin(time*0.004 + j)*3;
+                      const rx = x + Math.cos(rA) * rD;
+                      const ry = y + radius - (j * 3) + Math.sin(rA)*5 + floatY;
+                      if(j===0) ctx.moveTo(rx, ry); else ctx.lineTo(rx, ry);
+                  }
+                  ctx.stroke();
+              }
+
+              // --- 6. FORGET-ME-NOTS, BUTTERFLIES, & REVERSE-TIME PARTICLES ---
+              ctx.globalCompositeOperation = 'lighter';
+              if (!eng.eternityParticles) eng.eternityParticles = [];
+              if (eng.eternityParticles.length < 45 && Math.random() < 0.6) {
+                  const type = Math.random(); 
+                  eng.eternityParticles.push({
+                      ox: (Math.random() - 0.5) * radius * 12, oy: (Math.random() - 0.5) * radius * 10,
+                      vx: (Math.random() - 0.5) * 1.5, vy: (type < 0.2) ? 0.5 + Math.random() : -0.5 - Math.random(), 
+                      size: (type > 0.8) ? 3+Math.random()*2 : 1.5+Math.random()*2, 
+                      life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
+                  });
+              }
+              eng.eternityParticles.forEach((p, i) => {
+                  if (p.type < 0.2) {
+                      p.ox -= Math.sign(p.ox) * 0.5; p.oy -= Math.sign(p.oy) * 0.5; 
+                  } else {
+                      p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.8; 
+                  }
+                  p.rot += p.rs; p.life -= 0.004; 
+                  if (p.life <= 0 || Math.abs(p.ox) < 2) { eng.eternityParticles.splice(i, 1); return; }
+
+                  ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
+                  
+                  if (p.type > 0.8) {
+                      ctx.fillStyle = `rgba(96, 165, 250, ${p.life})`; 
+                      ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
+                      for(let f=0; f<5; f++) {
+                          const fAng = f * Math.PI * 2 / 5;
+                          ctx.beginPath(); ctx.arc(Math.cos(fAng)*p.size, Math.sin(fAng)*p.size, p.size, 0, Math.PI*2); ctx.fill();
+                      }
+                      ctx.fillStyle = `rgba(253, 224, 71, ${p.life})`; 
+                      ctx.beginPath(); ctx.arc(0, 0, p.size*0.6, 0, Math.PI*2); ctx.fill();
+                  } else if (p.type > 0.6) {
+                      const flap = Math.abs(Math.sin(time * 0.02 + i)); ctx.scale(flap, 1);
+                      ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`; ctx.shadowBlur = 10; ctx.shadowColor = '#0ea5e9';
+                      ctx.beginPath(); ctx.ellipse(p.size, 0, p.size, p.size*1.5, Math.PI/4, 0, Math.PI*2); ctx.fill(); 
+                      ctx.beginPath(); ctx.ellipse(-p.size, 0, p.size, p.size*1.5, -Math.PI/4, 0, Math.PI*2); ctx.fill(); 
+                  } else {
+                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`; ctx.shadowBlur = 8; ctx.shadowColor = '#fde047';
+                      ctx.beginPath(); ctx.arc(0, 0, p.size*0.8, 0, Math.PI*2); ctx.fill();
+                  }
+                  ctx.restore();
+              });
+
+              // --- 7. ETERNAL CORE BLOOM ---
+              const eternalGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 5);
+              eternalGrad.addColorStop(0, 'rgba(255, 255, 255, 1)'); 
+              eternalGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.6)'); 
+              eternalGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.2)'); 
+              eternalGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');     
+              ctx.fillStyle = eternalGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius * 5, 0, Math.PI * 2); ctx.fill();
           }
 
           ctx.restore();
