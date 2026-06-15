@@ -1609,14 +1609,19 @@ export default function MetaShop({ screen, setScreen }) {
           <div className="panel-corner pc-bl" />
           <div className="panel-corner pc-br" />
 
-          {/* --- FIXED HEADER SECTION --- */}
-          <div style={{ flexShrink: 0 }}>
+      <div style={{ flexShrink: 0 }}>
             <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#d946ef', textAlign: 'center', fontSize: '1.5rem', textShadow: '0 0 15px rgba(217, 70, 239, 0.6)' }}>
               🌌 THE VOID SANCTUM
             </div>
             
-            <div style={{ textAlign: 'center', color: '#fef08a', fontSize: '1.2rem', fontWeight: 'bold', margin: '15px 0', textShadow: '0 0 10px rgba(254, 240, 138, 0.5)' }}>
-              💎 Void Crystals: {crystals.toLocaleString()}
+            {/* GROUPED CRYSTAL BALANCE AT HINT TEXT */}
+            <div style={{ textAlign: 'center', margin: '15px 0' }}>
+              <div style={{ color: '#fef08a', fontSize: '1.2rem', fontWeight: 'bold', textShadow: '0 0 10px rgba(254, 240, 138, 0.5)' }}>
+                💎 Void Crystals: {crystals.toLocaleString()}
+              </div>
+              <div style={{ color: '#cbd5e1', fontSize: '11px', fontStyle: 'italic', marginTop: '2px' }}>
+                * Defeat the 4 main bosses to obtain Void Crystals.
+              </div>
             </div>
 
             <div className="council-tab-headers" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
