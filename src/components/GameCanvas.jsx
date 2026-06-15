@@ -3120,28 +3120,28 @@ if (eng.gameStarted) {
                          dashTimer: 0 
                      });
                      
-                     // 🔥 Spawn TWO Primordial Demon Guards (Pinalaki para mas intimidating)
-                    //  eng.enemies.push({ 
-                    //      x: W/2 - 200, y: -90, 
-                    //      r: 50, // 🔥 Primordial Size
-                    //      speed: 95, 
-                    //      hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, 
-                    //      color: '#000000', glow: '#ea580c', boss: true, 
-                    //      type: 'primordial', // 🔥 Epic Primordial Renderer
-                    //      nameTag: 'Void Guard', 
-                    //      flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                    //  });
+                    //  🔥 Spawn TWO Primordial Demon Guards (Pinalaki para mas intimidating)
+                     eng.enemies.push({ 
+                         x: W/2 - 500, y: -90, 
+                         r: 30, // 🔥 Primordial Size
+                         speed: 65, 
+                         hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, 
+                         color: '#000000', glow: '#ea580c', boss: true, 
+                         type: 'primordial', // 🔥 Epic Primordial Renderer
+                         nameTag: 'Primordial Demon', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
                      
-                    //  eng.enemies.push({ 
-                    //      x: W/2 + 200, y: -90, 
-                    //      r: 50, // 🔥 Primordial Size
-                    //      speed: 95, 
-                    //      hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, 
-                    //      color: '#000000', glow: '#ea580c', boss: true, 
-                    //      type: 'primordial', 
-                    //      nameTag: 'Void Guard', 
-                    //      flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                    //  });
+                     eng.enemies.push({ 
+                         x: W/2 + 500, y: -90, 
+                         r: 30, // 🔥 Primordial Size
+                         speed: 65, 
+                         hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, 
+                         color: '#000000', glow: '#ea580c', boss: true, 
+                         type: 'primordial', 
+                         nameTag: 'Primordial Demon', 
+                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                     });
                   } 
                   // 2. THE ULTIMATE BOSS ENCOUNTER (Wave 75+, every 25 waves)
                   else if (currentWave >= 75 && currentWave % 25 === 0) {
