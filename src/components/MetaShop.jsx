@@ -12,8 +12,11 @@ const UPGRADES_DB = [
 const SKINS_DB = [
   { id: 'default', name: 'Apprentice Robes', desc: 'The humble attire worn by aspiring mages beginning their journey into the arcane arts.', cost: 0, glow: '#a855f7', colors: { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd' } },
   { id: 'shadow', name: 'Harbinger of the Void Realm', desc: 'A master of forbidden sorcery who draws power from the endless depths of the Void.', cost: 400, glow: '#ef4444', colors: { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d' } },
-  { id: 'pyro', name: 'Demon of the Ashen Flare', desc: 'An infernal entity forged within primordial flames, leaving only ash in its wake.', cost: 600, glow: '#f97316', colors: { c: '#ef4444', robe: '#7f1d1d', brim: '#fca5a5' } },
-  { id: 'igris', name: 'Abyssal Dreadlord', desc: 'A feared commander born from the endless abyss, clad in cursed armor and wreathed in crimson darkness.', cost: 1000, glow: '#dc2626', colors: { c: '#262626', robe: '#0a0a0a', brim: '#171717' } },
+
+  { id: 'igris', name: 'Abyssal Dreadlord', desc: 'A feared commander born from the endless abyss, clad in cursed armor and wreathed in crimson darkness.', cost: 600, glow: '#dc2626', colors: { c: '#262626', robe: '#0a0a0a', brim: '#171717' } },
+
+  { id: 'pyro', name: 'Demon of the Ashen Flare', desc: 'An infernal entity forged within primordial flames, leaving only ash in its wake.', cost: 800, glow: '#f97316', colors: { c: '#ef4444', robe: '#7f1d1d', brim: '#fca5a5' } },
+
   { id: 'archmage', name: 'The Arcane Archon', desc: 'A legendary master of magic whose command over the arcane eclipses all mortal understanding.', cost: 1000, glow: '#fbbf24', colors: { c: '#fef08a', robe: '#b45309', brim: '#fef9c3' } },
   { id: 'sakura', name: 'Roseheart Sovereign', desc: 'Commands an endless storm of enchanted petals.', cost: 1200, glow: '#ec4899', colors: { c: '#f472b6', robe: '#ec4899', brim: '#fdf2f8' } },
   { id: 'pink_wings', name: 'Seraph of the Pink Eclipse', desc: 'A celestial sovereign whose wings paint the heavens in radiant pink light.', cost: 1500, glow: '#fb7185', colors: { c: '#fb7185', robe: '#f472b6', brim: '#fff5fa' } },
