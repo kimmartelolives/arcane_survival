@@ -113,7 +113,7 @@ const ET = [
   // 3. Tanky/Elite Minion (Makunat pero MABAGAL na para pwedeng takbuhan)
   { r: 15, speed: 55,  hp: 120, dmg: 35,  xp: 40,  color: '#818cf8', glow: '#6366f1', boss: false },
   // 4. Generic Mini-Boss (Balanced entry stats)
-  { r: 27, speed: 60,  hp: 600, dmg: 80, xp: 150, color: '#fbbf24', glow: '#f59e0b', boss: true },
+  { r: 27, speed: 60,  hp: 600, dmg: 80, xp: 150, color: '#fbbf24', glow: '#f59e0b', boss: true, type: 'miniBoss' },
 ];
 
 const RARITY_COLORS = {
@@ -1793,7 +1793,7 @@ const clearAllInventory = () => {
 
 const engineRef = useRef({
     score: 0, wave: 1, waveT: 0, waveLen: 30, spawnT: 0, spawnRate: 0.9, boltDmg: 22,
-    gameStarted: false, screenShake: 0,
+    gameStarted: false, screenShake: 0, endlessTransitionTimer: 0,
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
     tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [], aoeZones: [], // 🔥 DINAGDAG: aoeZones
@@ -2603,6 +2603,11 @@ useEffect(() => {
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
         eng.screenShake = payload.screenShake ?? eng.screenShake;
 
+        if (payload.bossIntro !== undefined) eng.bossIntro = payload.bossIntro;
+        if (payload.showVictoryCinematic !== undefined && payload.showVictoryCinematic > 0) {
+            window.showVictoryCinematic = payload.showVictoryCinematic;
+        }
+
         if (payload.p1) eng.p1Target = payload.p1;
         if (payload.p2) eng.p2Target = payload.p2;
         
@@ -2947,6 +2952,14 @@ useEffect(() => {
         return; // Hihinto ang game loop dito para walang gumalaw!
       }
 
+      // 🔥 FIX: Pause ALL gameplay logic during the Victory Cinematic
+      if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
+        window.showVictoryCinematic -= dt;
+        if (window.showVictoryCinematic > 0) {
+            return; // Freezes everything except the rendering text
+        }
+      }
+
       if (screen === 'playing' || screen === 'levelup') {
         let mx = 0, my = 0;
 
@@ -2974,39 +2987,42 @@ useEffect(() => {
         if (eng.screenShake > 0) {
           eng.screenShake -= dt;
         }
-
 if (eng.gameStarted) {
-    // 1. Detect if The Abyss or Primordial is currently on the map
-    const isMajorBossAlive = eng.enemies.some(e => e.boss && (e.type === 'abyss' || e.type === 'primordial' || e.type === 'abyss_awakened'));
+        // 1. Detect if The Abyss or Primordial is currently on the map
+        const isMajorBossAlive = eng.enemies.some(e => e.boss && (e.type === 'abyss' || e.type === 'primordial' || e.type === 'abyss_awakened'));
 
-    // 2. Handle Boss Music Transitions via App.jsx's Global Audio
-    if (isMajorBossAlive && !eng.wasMajorBossAlive) {
-        // Boss appeared!
-        if (window.arcaneAudio) {
-            window.arcaneAudio.isBossActive = true; 
-            if (!window.arcaneAudio.isMuted) {
-                window.arcaneAudio.gameBgm.pause();
-                window.arcaneAudio.bossBgm.currentTime = 0; // Umpisahan sa simula ang boss music
-                window.arcaneAudio.bossBgm.play().catch(()=>{});
+        const isCinematicPlaying = eng.bossIntro && eng.bossIntro.active;
+        const isBossEncounterActive = isMajorBossAlive || isCinematicPlaying;
+
+        // 2. Handle Boss Music Transitions via App.jsx's Global Audio
+        if (isMajorBossAlive && !eng.wasMajorBossAlive) {
+            // Boss appeared!
+            // 🔥 SAFETY LOCK: Tutugtog lang sa umpisa kung hindi pa ito tumutugtog
+            if (window.arcaneAudio && !window.arcaneAudio.isBossActive) { 
+                window.arcaneAudio.isBossActive = true; 
+                if (!window.arcaneAudio.isMuted) {
+                    window.arcaneAudio.gameBgm.pause();
+                    window.arcaneAudio.bossBgm.currentTime = 0; // Umpisahan sa simula ang boss music
+                    window.arcaneAudio.bossBgm.play().catch(()=>{});
+                }
+            }
+        } else if (!isMajorBossAlive && eng.wasMajorBossAlive) {
+            // Boss defeated!
+            if (window.arcaneAudio) {
+                window.arcaneAudio.isBossActive = false;
+                if (!window.arcaneAudio.isMuted) {
+                    window.arcaneAudio.bossBgm.pause();
+                    window.arcaneAudio.gameBgm.play().catch(()=>{}); // Ituloy kung saan huminto ang normal game music
+                }
             }
         }
-    } else if (!isMajorBossAlive && eng.wasMajorBossAlive) {
-        // Boss defeated!
-        if (window.arcaneAudio) {
-            window.arcaneAudio.isBossActive = false;
-            if (!window.arcaneAudio.isMuted) {
-                window.arcaneAudio.bossBgm.pause();
-                window.arcaneAudio.gameBgm.play().catch(()=>{}); // Ituloy kung saan huminto ang normal game music
-            }
-        }
-    }
-    eng.wasMajorBossAlive = isMajorBossAlive;
+        eng.wasMajorBossAlive = isMajorBossAlive;
 
-    // 3. Pause Wave & Spawns
-    if (!isMajorBossAlive) {
-        eng.waveT += dt;
-        eng.spawnT += dt;
-    }
+        // 3. Pause Wave & Spawns
+        if (!isMajorBossAlive) {
+            eng.waveT += dt;
+            eng.spawnT += dt;
+        }
 
     if (!isCoopActive || isHost) {
 
@@ -3048,7 +3064,7 @@ if (eng.gameStarted) {
                  maxHp: calculatedHp, 
                  dmg: calculatedDmg, 
                  xp: Math.floor(t.xp * Math.pow(1.08, waveScale)),
-                 color: t.color, glow: t.glow, boss: t.boss, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                 color: t.color, glow: t.glow, boss: t.boss, type: t.type, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
           }
 
@@ -3154,6 +3170,15 @@ if (eng.gameStarted) {
                          maxDuration: 180,
                          bossName: "THE ABYSS"
                      };
+
+                     if (window.arcaneAudio && !window.arcaneAudio.isBossActive) {
+                          window.arcaneAudio.isBossActive = true;
+                          if (!window.arcaneAudio.isMuted) {
+                              window.arcaneAudio.gameBgm.pause();
+                              window.arcaneAudio.bossBgm.currentTime = 0; // Start sa simula
+                              window.arcaneAudio.bossBgm.play().catch(()=>{});
+                          }
+                      }
 
                      const hpScale = Math.floor((1000000 + (currentWave * 15000)) * diffScale);
                      eng.enemies.push({ 
@@ -3446,7 +3471,7 @@ if (eng.gameStarted) {
             }
           }
 
-          if (playerObj.skills.shootingStar?.learned) {
+            if (playerObj.skills.shootingStar?.learned) {
             if (playerObj.skills.shootingStar.cd === undefined) playerObj.skills.shootingStar.cd = 0;
             if (playerObj.skills.shootingStar.cd > 0) playerObj.skills.shootingStar.cd -= dt;
             
@@ -3455,16 +3480,25 @@ if (eng.gameStarted) {
               let targetX = playerObj.x + (Math.random() - 0.5) * 160;
               let targetY = playerObj.y + (Math.random() - 0.5) * 160;
               if (eng.enemies.length > 0) {
-                const randEnemy = eng.enemies[Math.floor(Math.random() * eng.enemies.length)];
-                targetX = randEnemy.x;
-                targetY = randEnemy.y;
+                let targetEnemy = eng.enemies[Math.floor(Math.random() * eng.enemies.length)];
+                let minDist = Infinity;
+                for (const e of eng.enemies) {
+                    if (e.y < -150 || e.hp <= 0) continue;
+                    let d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y) - (e.r || 15);
+                    if (e.boss) d -= 10000; // 🔥 BOSS MAGNET!
+                    if (d < minDist) { minDist = d; targetEnemy = e; }
+                }
+                if (targetEnemy) {
+                    targetX = targetEnemy.x;
+                    targetY = targetEnemy.y;
+                }
               }
               if (!eng.stars) eng.stars = [];
               eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 400, targetY: targetY, progress: 0, radius: 95 });
             }
           }
 
-if (playerObj.skills.cubeBash?.learned) {
+            if (playerObj.skills.cubeBash?.learned) {
             if (playerObj.skills.cubeBash.cd === undefined) playerObj.skills.cubeBash.cd = 0;
             if (playerObj.skills.cubeBash.cd > 0) playerObj.skills.cubeBash.cd -= dt;
             
@@ -3476,8 +3510,6 @@ if (playerObj.skills.cubeBash?.learned) {
               for (const enemy of eng.enemies) {
                 if (Math.hypot(enemy.x - playerObj.x, enemy.y - playerObj.y) <= 135) {
                   enemy.stunnedTime = 1.6;
-                  
-                  // 🔥 DYNAMIC SCALED DPS: Cube Bash
                   let cbDmg = 100 + ((eng?.wave || 1) * 40) + ((playerObj?.dmg || 0) * 1.5);
                   if (playerObj?.potBuffs?.power > 0) cbDmg *= 1.4;
                   if (playerObj?.skills?.arcaneInstinct?.duration > 0) cbDmg *= 2.0;
@@ -3485,8 +3517,7 @@ if (playerObj.skills.cubeBash?.learned) {
                   
                   let totalCrit = (playerObj?.baseCrit || 0) + (playerObj?.potBuffs?.crit > 0 ? 35 : 0);
                   if (Math.random() < (totalCrit / 100)) {
-                    cbDmg *= 2;
-                    enemy.flash = 0.5;
+                    cbDmg *= 2; enemy.flash = 0.5;
                   } else {
                     enemy.flash = 0.2;
                   }
@@ -3498,7 +3529,7 @@ if (playerObj.skills.cubeBash?.learned) {
             }
           }
 
-          if (playerObj.skills.vacuumSlash?.learned) {
+            if (playerObj.skills.vacuumSlash?.learned) {
             if (playerObj.skills.vacuumSlash.cd === undefined) playerObj.skills.vacuumSlash.cd = 0;
             if (playerObj.skills.vacuumSlash.cd > 0) playerObj.skills.vacuumSlash.cd -= dt;
             
@@ -3507,7 +3538,12 @@ if (playerObj.skills.cubeBash?.learned) {
               let targetEnemy = null;
               let minDist = Infinity;
               for (const e of eng.enemies) {
-                const d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y);
+                const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
+                if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
+                
+                let d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y) - (e.r || 15);
+                if (isBigBoss) d -= 100000; 
+                
                 if (d < minDist) { minDist = d; targetEnemy = e; }
               }
               let angle = -Math.PI / 2;
@@ -3746,6 +3782,8 @@ if (playerObj.skills.cubeBash?.learned) {
 
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 screenShake: eng.screenShake,
+                bossIntro: eng.bossIntro,
+                showVictoryCinematic: window.showVictoryCinematic || 0,
                 p1: eng.p ? { 
                 x: eng.p.x, 
                 y: eng.p.y, 
@@ -4040,20 +4078,29 @@ if (playerObj.skills.cubeBash?.learned) {
           }
         }
 
-        if (eng.gameStarted) {
+       if (eng.gameStarted) {
           if (eng.enemies.length > 0) {
+            
+            // ===============================================
+            // 🔥 PLAYER 1 (HOST) BOSS MAGNET AUTO-AIM
+            // ===============================================
             if (eng.p && !eng.p.dead) {
               eng.p.shootCd -= dt;
               if (eng.p.shootCd <= 0) {
                 let near = null, nd = Infinity;
                 for (const e of eng.enemies) {
-                  const d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
+
+                  const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
+                  if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue;
+                  let d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y) - (e.r || 15);
+                  if (isBigBoss) d -= 100000; 
+                  
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
                   let activeRate = (eng.p.skills?.berserk?.duration > 0 && eng.p.skills?.berserk?.enabled !== false) ?
                     (eng.p.shootRate * 0.5) : eng.p.shootRate;
-                  if (eng.p.skills?.arcaneInstinct?.duration > 0) activeRate *= 0.15; // 🔥 BUFF: Fire rate boost x0.15
+                  if (eng.p.skills?.arcaneInstinct?.duration > 0) activeRate *= 0.15;
 
                   eng.p.shootCd = activeRate;
                   const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
@@ -4066,18 +4113,26 @@ if (playerObj.skills.cubeBash?.learned) {
               }
             }
 
+            // ===============================================
+            // 🔥 PLAYER 2 (GUEST) BOSS MAGNET AUTO-AIM
+            // ===============================================
             if (isCoopActive && eng.p2 && !eng.p2.dead) {
               eng.p2.shootCd -= dt;
               if (eng.p2.shootCd <= 0) {
                 let near = null, nd = Infinity;
                 for (const e of eng.enemies) {
-                  const d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
+                  const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
+                  if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
+                  
+                  let d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) - (e.r || 15);
+                  if (isBigBoss) d -= 100000; 
+                  
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
                   let activeRatep2 = (eng.p2.skills?.berserk?.duration > 0 && eng.p2.skills?.berserk?.enabled !== false) ?
                     (eng.p2.shootRate * 0.5) : eng.p2.shootRate;
-                  if (eng.p2.skills?.arcaneInstinct?.duration > 0) activeRatep2 *= 0.15; // 🔥 BUFF: Fire rate boost x0.15
+                  if (eng.p2.skills?.arcaneInstinct?.duration > 0) activeRatep2 *= 0.15; 
 
                   eng.p2.shootCd = activeRatep2;
                   const ba = Math.atan2(near.y - eng.p2.y, near.x - eng.p2.x);
@@ -4138,7 +4193,7 @@ if (playerObj.skills.cubeBash?.learned) {
                 continue;
               }
 
-              for (let j = eng.enemies.length - 1; j >= 0; j--) {
+                for (let j = eng.enemies.length - 1; j >= 0; j--) {
                 const e = eng.enemies[j];
                 if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
                   const shooterObj = b.p2 ? eng.p2 : eng.p;
@@ -4167,119 +4222,11 @@ if (playerObj.skills.cubeBash?.learned) {
                   }
                   eng.bullets.splice(i, 1);
                   hit = true;
-                    if (e.hp <= 0) {
-                    eng.score += e.boss ? 1500 : 100;
-
-                    // --- 🩸 LIFESTEAL TRIGGER ---
-                    for (const pTarget of [eng.p, eng.p2]) {
-                      if (pTarget && !pTarget.dead && pTarget.lifeSteal > 0) {
-                        pTarget.hp = Math.min(pTarget.maxHp, pTarget.hp + pTarget.lifeSteal);
-                      }
-                    }
-
-                    eng.gems.push({ x: e.x, y: e.y, r: 7, xp: e.xp, life: 12 });
-
-                    // --- 💎 UTILITY & NORMAL DROPS ---
-                    const dropRoll = Math.random();
-                    if (dropRoll < 0.03 || (e.boss && dropRoll < 0.50)) { 
-                      const rareTypes = ['freeze', 'nuke'];
-                      eng.potions.push({
-                        x: e.x, y: e.y, r: 14,
-                        type: rareTypes[Math.floor(Math.random() * rareTypes.length)],
-                        life: 20.0 
-                      });
-                    } else if (dropRoll < 0.22) { 
-                      const types = ['power', 'defense', 'crit', 'health', 'regen', 'xp'];
-                      eng.potions.push({
-                        x: e.x, y: e.y, r: 8,
-                        type: types[Math.floor(Math.random() * types.length)],
-                        life: 14.0
-                      });
-                    }
-                    
-                // --- 🎒 ALGORITHMIC ENDLESS DROP LOGIC (FOR CONTINUOUS SPAWNS) ---
-                const dropRollEq = Math.random();
-                let droppedRarity = null;
-                const currentWave = eng.wave || 1;
-
-                // 📈 WAVE MULTIPLIER: Tumataas ang swerte tuwing nakakalampas ng 20 waves ang laro
-                // Wave 75 = 0% bonus | Wave 100 = +12.5% | Wave 120 = +22.5% 
-                const endlessBonus = Math.min(0.60, Math.max(0, (currentWave - 75) * 0.005));
-
-                if (e.type === 'abyss') {
-                  // Sasagad ito sa max na 80% Mythic Chance kapag sobrang late game!
-                  const finalMythicChance = Math.min(0.80, 0.20 + endlessBonus);
                   
-                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
-                  else droppedRarity = 'legendary'; // Laging Legendary ang fallback, walang tapon!
-                  
-                } else if (e.type === 'primordial') {
-                  // Base 15% Mythic sa simula, sasagad sa max na 60%
-                  const finalMythicChance = Math.min(0.60, 0.15 + endlessBonus);
-                  const finalLegendaryChance = 0.50; // Fixed 50% chance spread para sa Legendary
-                  
-                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
-                  else if (dropRollEq < finalMythicChance + finalLegendaryChance) droppedRarity = 'legendary';       
-                  else droppedRarity = 'epic';                                   
-                  
-                } else if (['demonKnight', 'archdemon'].includes(e.type)) {
-                  // Ang mga mid-tier bosses ay nagkakaroon din ng pakonti-konting Mythic chance sa late game (Max 15%)
-                  const finalMythicChance = Math.min(0.15, endlessBonus * 0.2);
-                  const finalLegendaryChance = Math.min(0.40, 0.05 + endlessBonus);
-                  
-                  if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';
-                  else if (dropRollEq < finalMythicChance + finalLegendaryChance) droppedRarity = 'legendary';            
-                  else if (dropRollEq < 0.85) droppedRarity = 'epic';            
-                  else droppedRarity = 'rare';
-                  
-                } else {
-                  // Normal Mobs & Mini Bosses (May swerte scaling din ng konti sa Epic at Rare)
-                  const normalBonus = Math.min(0.02, endlessBonus * 0.1);
-                  if (dropRollEq < 0.005 + normalBonus) droppedRarity = 'epic';                
-                  else if (dropRollEq < 0.025 + normalBonus) droppedRarity = 'rare';           
-                  else if (dropRollEq < 0.085) droppedRarity = 'common';         
-                }
-
-                if (droppedRarity) {
-                  const pool = EQUIPMENT_DB.filter(item => item.rarity === droppedRarity);
-                  if (pool.length > 0) {
-                    const baseItem = pool[Math.floor(Math.random() * pool.length)];
-                    const scaledItem = JSON.parse(JSON.stringify(baseItem));
-                    
-                    // 🔥 DYNAMIC ITEM SCALING BASED ON WAVE
-                    const waveMult = Math.max(1, Math.floor((eng.wave || 1) / 5));
-                    
-                    if (scaledItem.stats.atk) scaledItem.stats.atk += Math.floor(waveMult * 3);
-                    if (scaledItem.stats.def) scaledItem.stats.def += Math.floor(waveMult * 2);
-                    if (scaledItem.stats.hp) scaledItem.stats.hp += Math.floor(waveMult * 15);
-                    if (scaledItem.stats.crit) scaledItem.stats.crit += Math.floor(waveMult * 0.5);
-                    
-                    // 🔥 STATS CAPS APPLIED HERE
-                    if (scaledItem.stats.lifesteal) {
-                              scaledItem.stats.lifesteal += Math.floor(waveMult * 0.5);
-                          }
-                    if (scaledItem.stats.speed) {
-                        scaledItem.stats.speed += Math.floor(waveMult * 5);
-                        scaledItem.stats.speed = Math.min(scaledItem.stats.speed, 80); // Cap to 80
-                    }
-                    if (scaledItem.stats.rate) {
-                        scaledItem.stats.rate += (waveMult * 0.02);
-                        scaledItem.stats.rate = Math.min(scaledItem.stats.rate, 0.4); // Cap to 0.4 reduction
-                    }
-
-                    scaledItem.name = scaledItem.name + (waveMult > 1 ? ` (+${waveMult})` : "");
-
-                    if (!eng.droppedItems) eng.droppedItems = []; 
-                    eng.droppedItems.push({
-                      x: e.x + (Math.random()-0.5)*20, 
-                      y: e.y + (Math.random()-0.5)*20, 
-                      item: scaledItem, 
-                      life: 25.0
-                    });
-                  }
-                }
-
-                    eng.enemies.splice(j, 1);
+                  // 🔥 THE FIX: Stop processing drops and splices here. 
+                  // Let the main game loop's death handler process everything so it can trigger the cinematic.
+                  if (e.hp <= 0) {
+                    e.deadTrigger = true; 
                   }
                   break;
                 }
@@ -4294,11 +4241,46 @@ if (playerObj.skills.cubeBash?.learned) {
 
               if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss', 'abyss_awakened'].includes(e.type)) {
                 
+                // =========================================================
+                // 🔥 FIXED: ABYSS AWAKENED CUSTOM SKILLS (NASA LABAS NA!)
+                // =========================================================
+                if (e.type === 'abyss_awakened') {
+                    e.summonTimer = (e.summonTimer || 0) + dt;
+                    e.dashTimer = (e.dashTimer || 0) + dt;
+
+                    // Skill 1: Summon Void Spawns
+                    if (e.summonTimer >= 5.0) {
+                        e.summonTimer = 0;
+                        for (let k = 0; k < 4; k++) {
+                            let spawnAngle = (Math.PI * 2 / 4) * k;
+                            eng.enemies.push({
+                                x: e.x + Math.cos(spawnAngle) * 100, 
+                                y: e.y + Math.sin(spawnAngle) * 100,
+                                r: 20, speed: 250, hp: 50000 * (eng.diffScale || 1), maxHp: 50000 * (eng.diffScale || 1), 
+                                dmg: 1000 * (eng.diffScale || 1), xp: 5000, 
+                                color: '#000000', glow: '#dc2626', type: 'void_spawn',
+                                flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0
+                            });
+                        }
+                    }
+
+                    // Skill 2: Abyssal Dash
+                    if (e.dashTimer >= 8.0) {
+                        e.speed = 450; 
+                        if (e.dashTimer >= 9.5) {
+                            e.speed = 75; 
+                            e.dashTimer = 0;
+                        }
+                    }
+                }
+                // =========================================================
+
                 if (e.skillTimer === undefined) e.skillTimer = 2.0;
                 e.skillTimer -= dt;
 
                 if (e.skillTimer <= 0) {
-                  e.skillTimer = (e.type === 'abyss') ? 3.0 : 3.5; 
+                  // Mabilis mag-cast ng skill pag Awakened (3.0s din gaya ng normal abyss)
+                  e.skillTimer = (e.type === 'abyss' || e.type === 'abyss_awakened') ? 3.0 : 3.5; 
                   
                   let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2;
                   if (isCoopActive && eng.p2 && !eng.p2.dead) {
@@ -4308,54 +4290,30 @@ if (playerObj.skills.cubeBash?.learned) {
                   }
                   const baseAngle = Math.atan2(ty - e.y, tx - e.x);
 
-                    // 🔥 ABYSS AWAKENED SPECIAL SKILLS
-                    if (e.type === 'abyss_awakened') {
-                        e.summonTimer = (e.summonTimer || 0) + dt;
-                        e.dashTimer = (e.dashTimer || 0) + dt;
-
-                        // Skill 1: Summon Void Spawns
-                        if (e.summonTimer >= 5.0) {
-                            e.summonTimer = 0;
-                            for (let k = 0; k < 4; k++) {
-                                let spawnAngle = (Math.PI * 2 / 4) * k;
-                                eng.enemies.push({
-                                    x: e.x + Math.cos(spawnAngle) * 100, 
-                                    y: e.y + Math.sin(spawnAngle) * 100,
-                                    r: 20, speed: 250, hp: 50000 * (eng.diffScale || 1), maxHp: 50000 * (eng.diffScale || 1), 
-                                    dmg: 1000 * (eng.diffScale || 1), xp: 5000, 
-                                    color: '#000000', glow: '#dc2626', type: 'void_spawn',
-                                    flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0
-                                });
-                            }
-                        }
-
-                        // Skill 2: Abyssal Dash
-                        if (e.dashTimer >= 8.0) {
-                            e.speed = 450; 
-                            if (e.dashTimer >= 9.5) {
-                                e.speed = 75; 
-                                e.dashTimer = 0;
-                            }
-                        }
-                    }
-
-                  // 🔥 DANGER RED ZONE CHANCE! (35% for Abyss, 20% for Primordial)
-                  if ((e.type === 'abyss' || e.type === 'primordial') && Math.random() < (e.type === 'abyss' ? 0.35 : 0.20)) {
+                  // 🔥 FIXED: ISINAMA SI AWAKENED SA RED ZONE (Mas malaki at mas masakit!)
+                  const isVoidBoss = e.type === 'abyss' || e.type === 'abyss_awakened';
+                  if ((isVoidBoss || e.type === 'primordial') && Math.random() < (e.type === 'abyss_awakened' ? 0.45 : e.type === 'abyss' ? 0.35 : 0.20)) {
                       if (!eng.aoeZones) eng.aoeZones = [];
                       
                       eng.aoeZones.push({ 
-                          x: tx, y: ty, // Tinarget ang mismong paa ng player
-                          radius: e.type === 'abyss' ? 180 : 130, 
+                          x: tx, y: ty, 
+                          // 220 Radius kapag Awakened!
+                          radius: e.type === 'abyss_awakened' ? 220 : e.type === 'abyss' ? 180 : 130, 
                           timer: 1.5, maxTimer: 1.5, 
-                          dmg: e.type === 'abyss' ? 1500 : 800 
+                          dmg: e.type === 'abyss_awakened' ? 2500 : e.type === 'abyss' ? 1500 : 800 
                       });
                       
-                      // Mag-taunt ang The Abyss kapag nag-cast ng AoE
-                      if (e.type === 'abyss') e.chatBubble = { text: "PERISH IN THE VOID!", life: 1.5 };
+                      if (isVoidBoss) e.chatBubble = { text: "PERISH IN THE VOID!", life: 1.5 };
                       
                   } else {
-                      // 🔫 NORMAL BULLET SPREADS (Kung hindi nag-cast ng Red Zone)
-                      if (e.type === 'abyss') {
+                      // 🔫 FIXED: ISINAMA SI AWAKENED SA BULLET HELLS
+                      if (e.type === 'abyss_awakened') {
+                        // 30 Bullets na sobrang bibilis!
+                        for (let k = 0; k < 30; k++) {
+                          const angle = (Math.PI * 2 / 30) * k + (Math.random() * 0.2);
+                          eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*380, vy: Math.sin(angle)*380, r: 12, life: 6, isEnemy: true, dmg: 300 });
+                        }
+                      } else if (e.type === 'abyss') {
                         for (let k = 0; k < 24; k++) {
                           const angle = (Math.PI * 2 / 24) * k + (Math.random() * 0.2);
                           eng.bullets.push({ x: e.x, y: e.y, vx: Math.cos(angle)*300, vy: Math.sin(angle)*300, r: 10, life: 6, isEnemy: true, dmg: 150 });
@@ -4376,8 +4334,8 @@ if (playerObj.skills.cubeBash?.learned) {
                   }
                 }
 
-                // 🛡️ THE ABYSS SHIELD LOGIC
-                if (e.type === 'abyss') {
+                // 🛡️ THE ABYSS SHIELD LOGIC (Gagana na rin kay Awakened kung gusto mo)
+                if (e.type === 'abyss' || e.type === 'abyss_awakened') {
                   if (e.abyssShieldCd > 0) e.abyssShieldCd -= dt;
                   if (e.abyssShieldCd <= 0) {
                     e.abyssShieldTimer = 2.0; 
@@ -4385,12 +4343,11 @@ if (playerObj.skills.cubeBash?.learned) {
                   }
                   if (e.abyssShieldTimer > 0) {
                     e.abyssShieldTimer -= dt;
-                    if (e.hp < e.prevHpFrame) e.hp = e.prevHpFrame; 
+                    if (e.hp < e.prevHpFrame) e.hp = e.prevHpFrame; // Invulnerable state
                   }
                   e.prevHpFrame = e.hp;
                 }
               }
-
                 if (e.stigmaTime > 0) {
                 e.stigmaTime -= dt;
                 
@@ -4420,11 +4377,63 @@ if (playerObj.skills.cubeBash?.learned) {
 
           if (e.boss) {
                   let crystalYield = 0;
-                  if (e.type === 'demonKnight') crystalYield = 10 + Math.floor(Math.random() * 10);
+                  if (e.type === 'miniBoss') crystalYield = 1 + Math.floor(Math.random() * 2);
+                  else if (e.type === 'demonKnight') crystalYield = 10 + Math.floor(Math.random() * 10);
                   else if (e.type === 'archdemon') crystalYield = 25 + Math.floor(Math.random() * 25);
                   else if (e.type === 'primordial') crystalYield = 100 + Math.floor(Math.random() * 50);
                   else if (e.type === 'abyss') crystalYield = 300 + Math.floor(Math.random() * 200);
-                  else if (e.type === 'abyss_awakened') crystalYield = 500 + Math.floor(Math.random() * 200);
+
+               // 1. IBIGAY MUNA ANG REWARDS DEPENDE KUNG SINO ANG NAMATAY
+          if (e.type === 'abyss_awakened') {
+              console.log("🔥 THE ABYSS AWAKENED IS DEAD!");
+              const waveScaling = Math.floor((eng.wave || 100) / 10) * 100;
+              crystalYield = 500 + Math.floor(Math.random() * 200) + waveScaling;
+          } 
+          else if (e.type === 'primordial') {
+              console.log("🔥 A PRIMORDIAL DEMON IS DEAD!");
+              // (Panatilihin mo dito kung ano mang logic meron ka dati sa pagbibigay ng crystals/score para sa Primordial)
+              crystalYield = 300; // Halimbawa lang ito
+          }
+          // ... (Iba pang bosses kung meron)
+
+
+          // 2. 🔥 ANG UNIVERSAL WAVE 100 CINEMATIC TRIGGER
+          // Ito ay tatakbo kapag may namatay na Abyss Awakened O Primordial sa Wave 100
+          if (eng.wave === 100 && (e.type === 'abyss_awakened' || e.type === 'primordial')) {
+              let remainingBosses = 0;
+              
+              // Bibilangin ng laro kung may natitira pang Primordial O Abyss na buhay
+              for (let k = 0; k < eng.enemies.length; k++) {
+                  const otherEnemy = eng.enemies[k];
+                  if (otherEnemy !== e && 
+                      (otherEnemy.type === 'abyss_awakened' || otherEnemy.type === 'primordial') && 
+                      !otherEnemy.deadTrigger && 
+                      otherEnemy.hp > 0) {
+                      remainingBosses++;
+                  }
+              }
+
+              // Kapag UBOS NA ang The Abyss Awakened AT ang dalawang Primordial Demons (0 ang natitira)
+              if (remainingBosses === 0) {                  
+                  // Play Cinematic
+                  if (!window.hasShownVictoryCinematic) {
+                      window.hasShownVictoryCinematic = true; 
+                      window.showVictoryCinematic = 6.0; // 6.0 SECONDS real time
+                  }
+                  
+                  // 🎁 BONUS REWARD: Full Heal dahil na-clear na ang wave
+                  if (eng.p && !eng.p.dead) eng.p.hp = eng.p.maxHp;
+                  if (eng.p2 && !eng.p2.dead) eng.p2.hp = eng.p2.maxHp;
+                  
+                  // SCREEN WIPE: Patayin lahat ng maliliit na kalaban na naiwan
+                  for (let k = 0; k < eng.enemies.length; k++) {
+                      if (eng.enemies[k] !== e) {
+                          eng.enemies[k].deadTrigger = true; 
+                      }
+                  }
+              } else {
+              }
+          }
 
                   for (const pTarget of [eng.p, eng.p2]) {
                     if (pTarget && !pTarget.dead) {
@@ -4779,6 +4788,28 @@ if (localTarget) {
           }
           // 👆 HANGGANG DITO
         }
+
+
+        for (const e of eng.enemies) {
+            if (e.chatBubble) {
+              ctx.save();
+              ctx.textAlign = 'center';
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 12px monospace';
+              ctx.shadowColor = '#000';
+              ctx.shadowBlur = 4;
+              ctx.fillText(e.chatBubble.text, e.x, e.y - e.r - 15);
+              ctx.restore();
+            }
+          }
+
+// =========================================================
+          // 🏆 GAME CLEARED TIMER UPDATE (LOGIC ONLY)
+          // =========================================================
+          if (eng.endlessTransitionTimer > 0) {
+              eng.endlessTransitionTimer -= (dt * 60); 
+          }
+      
       }
 
     // 🔥 ANTI-LAG SYSTEM: I-cap ang particles sa 300 para hindi mag-crash ang browser sa late game
@@ -4842,6 +4873,8 @@ if (localTarget) {
       ctx.fillText(txt, x, boxY + boxHeight / 2 + 1);
       ctx.restore();
     };
+
+
     const renderLoop = () => {
       ctx.save();
       if (eng.screenShake > 0) {
@@ -6011,7 +6044,7 @@ for (const p of eng.particles) {
         ctx.restore();
       }
 
-   // 🟢 SKIN AESTHETICS HELPER (Nagpapalit ng kulay ng damit, sumbrero at glow)
+// 🟢 SKIN AESTHETICS HELPER (Nagpapalit ng kulay ng damit, sumbrero at glow)
       const getSkinAesthetics = (skinId, isP2) => {
           // Shadow Mage = Dark Red Assassin Mage
           if (skinId === 'shadow') return { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d', glow: '#ef4444', aura: true };
@@ -6024,7 +6057,6 @@ for (const p of eng.particles) {
               glow: '#f472b6', // Aura Core (Matching Main Pink)
               aura: true 
           };
-
           if (skinId === 'pink_wings') return { 
               c: '#fb7185',    // Hat/Main Hat Body (Soft Strawberry Pink)
               robe: '#f472b6', // Robe Color (Deep but cute pink)
@@ -6032,7 +6064,6 @@ for (const p of eng.particles) {
               glow: '#fb7185', // Aura Core (Matching Main Pink)
               aura: true 
           };
-
           if (skinId === 'igris') return { 
               c: '#262626',    // Dark grey metallic face mask / visor
               robe: '#0a0a0a', // Pitch black heavy armor
@@ -6040,7 +6071,6 @@ for (const p of eng.particles) {
               glow: '#dc2626', // Blood red energy glow
               aura: true 
           };
-
           if (skinId === 'emperor') return { 
               c: '#171717',    // Heavy Metallic Dark Grey
               robe: '#0a0a0a', // Pitch Black Armor
@@ -6048,7 +6078,6 @@ for (const p of eng.particles) {
               glow: '#dc2626', // Crimson Blood Glow
               aura: true 
           };
-
           if (skinId === 'empress') return { 
               c: '#ffe4e6',    // Rose-white skin/hair base
               robe: '#ffffff', // Pure white luxurious silk robe
@@ -6056,7 +6085,6 @@ for (const p of eng.particles) {
               glow: '#f43f5e', // Radiant Rose-Pink glow
               aura: true 
           };
-
           // 👑 INFERNAL ECLIPSE SOVEREIGN (Obsidian, Crimson, & Violet)
           if (skinId === 'infernal') return { 
               c: '#1f101a',    // Dark obsidian face/core
@@ -6065,7 +6093,6 @@ for (const p of eng.particles) {
               glow: '#e11d48', // Infernal Scarlet glow
               aura: true 
           };
-
           if (skinId === 'leviathan') return { 
               c: '#e0f2fe',    // Celestial Silver / Aqua white base
               robe: '#ffffff', // Royal white water-silk armor
@@ -6073,7 +6100,6 @@ for (const p of eng.particles) {
               glow: '#38bdf8', // Divine Aqua glow
               aura: true 
           };
-
           // 🌌✨ ETERNAL REMEMBRANCE (Frieren Theme)
           if (skinId === 'remembrance') return { 
               c: '#f8fafc',    // Silver-white elven hair/base
@@ -6082,7 +6108,6 @@ for (const p of eng.particles) {
               glow: '#60a5fa', // Forget-Me-Not Blue glow
               aura: true 
           };
-
           if (skinId === 'frieren') return { 
               c: '#f8fafc',    // Silver-white starlight hair/skin
               robe: '#0f172a', // Royal Midnight Void
@@ -6090,66 +6115,83 @@ for (const p of eng.particles) {
               glow: '#60a5fa', // Forget-Me-Not Celestial Blue
               aura: true 
           };
-
           return isP2 
               ? { c: '#f97316', robe: '#c2410c', brim: '#ffedd5', glow: 'rgba(249, 115, 22, 0.6)', aura: false } 
               : { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd', glow: 'rgba(168, 85, 247, 0.6)', aura: false };
       };
 
-// 💥 APOCALYPSE TIER: TERRIFYING, EPIC, LIGHTNING & SMOKE EFFECTS
+      // 💥 APOCALYPSE TIER: TERRIFYING, EPIC, LIGHTNING & SMOKE EFFECTS
       const drawAdvancedSkinAura = (x, y, radius, skinId) => {
           if (!skinId || skinId === 'default') return;
           const time = performance.now();
           const eng = engineRef.current;
           ctx.save();
           
-          // --- HELPER 1: DYNAMIC LIGHTNING GENERATOR ---
+          // --- HELPER 1: DYNAMIC LIGHTNING GENERATOR (🔥 OPTIMIZED GLOW) ---
           const drawLightning = (startX, startY, endX, endY, color, glowColor, segments = 5, branches = false) => {
-              ctx.strokeStyle = color; ctx.shadowBlur = 15; ctx.shadowColor = glowColor; ctx.lineWidth = 2;
-              ctx.beginPath(); ctx.moveTo(startX, startY);
+              ctx.lineCap = 'round';
+              const points = [{x: startX, y: startY}];
               let currX = startX, currY = startY;
+              
               for (let i = 1; i <= segments; i++) {
                   const progress = i / segments;
-                  const targetX = startX + (endX - startX) * progress;
-                  const targetY = startY + (endY - startY) * progress;
-                  const jitterX = (Math.random() - 0.5) * 20;
-                  const jitterY = (Math.random() - 0.5) * 20;
-                  currX = targetX + jitterX; currY = targetY + jitterY;
-                  ctx.lineTo(currX, currY);
-                  
-                  // Branching lightning (kidlat na sumasanga)
-                  if (branches && Math.random() < 0.3) {
-                      const bx = currX + (Math.random() - 0.5) * 30;
-                      const by = currY + (Math.random() - 0.5) * 30;
-                      ctx.moveTo(currX, currY); ctx.lineTo(bx, by); ctx.moveTo(currX, currY);
-                  }
+                  currX = startX + (endX - startX) * progress + (Math.random() - 0.5) * 20;
+                  currY = startY + (endY - startY) * progress + (Math.random() - 0.5) * 20;
+                  points.push({x: currX, y: currY});
               }
+
+              // Fake Glow (Mas mabilis kaysa sa shadowBlur)
+              ctx.strokeStyle = glowColor; ctx.lineWidth = 6; ctx.globalAlpha = 0.4;
+              ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+              for(let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
               ctx.stroke();
+
+              // Inner Lightning Core
+              ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.globalAlpha = 1.0;
+              ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+              for(let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+              ctx.stroke();
+
+              if (branches && Math.random() < 0.3) {
+                  const bx = currX + (Math.random() - 0.5) * 30;
+                  const by = currY + (Math.random() - 0.5) * 30;
+                  
+                  ctx.strokeStyle = glowColor; ctx.lineWidth = 4; ctx.globalAlpha = 0.4;
+                  ctx.beginPath(); ctx.moveTo(currX, currY); ctx.lineTo(bx, by); ctx.stroke();
+                  
+                  ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 1.0;
+                  ctx.beginPath(); ctx.moveTo(currX, currY); ctx.lineTo(bx, by); ctx.stroke();
+              }
+              ctx.globalAlpha = 1.0; // Reset
           };
 
           // --- HELPER 2: SHATTERED MAGIC SEAL ---
           const drawShatteredSeal = (cx, cy, r, rotation, color) => {
-              ctx.save(); ctx.translate(cx, cy + 5); ctx.scale(1, 0.35); ctx.rotate(rotation);
+              ctx.save();
+              ctx.translate(cx, cy + 5); ctx.scale(1, 0.35); ctx.rotate(rotation);
               ctx.strokeStyle = color; ctx.shadowBlur = 20; ctx.shadowColor = color; ctx.lineWidth = 3;
               // Broken outer ring
               for(let i=0; i<8; i++) {
                   if (Math.random() > 0.2) {
-                      ctx.beginPath(); ctx.arc(0, 0, r, (i*Math.PI)/4, ((i+0.8)*Math.PI)/4); ctx.stroke();
+                      ctx.beginPath();
+                      ctx.arc(0, 0, r, (i*Math.PI)/4, ((i+0.8)*Math.PI)/4); ctx.stroke();
                   }
               }
-              ctx.setLineDash([15, 10, 5, 20]); ctx.lineWidth = 1.5;
+              ctx.setLineDash([15, 10, 5, 20]);
+              ctx.lineWidth = 1.5;
               ctx.beginPath(); ctx.arc(0, 0, r * 0.8, 0, Math.PI*2); ctx.stroke();
               ctx.restore();
           };
 
-          // 🩸 SHADOW MAGE (NIGHTMARE TIER - As requested, left as is)
+          // 🩸 SHADOW MAGE (NIGHTMARE TIER)
           if (skinId === 'shadow') {
               ctx.globalCompositeOperation = 'source-over';
-              const twitch = Math.random() > 0.8 ? 5 : 0; 
+              const twitch = Math.random() > 0.8 ? 5 : 0;
               const grad = ctx.createRadialGradient(x, y+3, 0, x, y+3, radius*3 + twitch);
-              grad.addColorStop(0, '#000000'); grad.addColorStop(0.3, 'rgba(100, 0, 0, 0.9)'); grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              grad.addColorStop(0, '#000000'); grad.addColorStop(0.3, 'rgba(100, 0, 0, 0.9)');
+              grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y+3, radius*3.5, 0, Math.PI*2); ctx.fill();
-
+              
               ctx.fillStyle = 'rgba(10, 0, 0, 0.8)';
               for(let i=0; i<6; i++) {
                   const clawAng = time*0.001 + (i * Math.PI/3) + Math.sin(time*0.005+i)*0.5;
@@ -6166,67 +6208,63 @@ for (const p of eng.particles) {
                   if (eye.life <= 0) { eng.demonEyes.splice(i, 1); return; }
                   ctx.save(); ctx.translate(x + eye.ox, y + eye.oy);
                   const eyeOpen = Math.abs(Math.sin(eye.blink)) * 6; 
+                  
                   ctx.shadowBlur = 15; ctx.shadowColor = '#ff0000';
                   ctx.fillStyle = `rgba(180, 0, 0, ${eye.life})`; ctx.beginPath(); ctx.ellipse(0, 0, 10, eyeOpen, 0, 0, Math.PI*2); ctx.fill();
                   ctx.fillStyle = `rgba(0, 0, 0, ${eye.life})`; ctx.beginPath(); ctx.ellipse(0, 0, 2, eyeOpen*0.8, 0, 0, Math.PI*2); ctx.fill();
                   ctx.restore();
               });
-
+              
               ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
               for(let i=0; i<8; i++) {
                   if(Math.random() > 0.5) ctx.fillRect(x + (Math.random()-0.5)*radius*5, y + (Math.random()-0.5)*radius*6, Math.random()*15, Math.random()*3);
               }
           }
 
-          // 🔥 PYROMANCER (DEMON OF THE ASHEN FLARE - Smoke, Red Lightning, Lava)
+          // 🔥 PYROMANCER (DEMON OF THE ASHEN FLARE)
           else if (skinId === 'pyro') {
-              ctx.globalCompositeOperation = 'source-over'; // Allow thick dark smoke
+              ctx.globalCompositeOperation = 'source-over';
               
-              // 1. Apocalyptic Lava Floor & Red Lightning
               drawShatteredSeal(x, y, radius * 5, time * 0.001, '#ff0000');
               if (Math.random() < 0.2) {
-                  // Random red lightning striking the ground
                   const lx = x + (Math.random()-0.5)*radius*8;
                   const ly = y + 10 + (Math.random()-0.5)*radius*4;
                   drawLightning(x, y-radius*2, lx, ly, '#ffffff', '#ff0000', 4, true);
-                  drawLightning(x, y-radius*2, lx, ly, '#ff0000', '#ff0000', 4, false); // double layer for intensity
               }
 
-              // 2. Thick Choking Dark Ash & Smoke Particle System
               if (!eng.pyroSmoke) eng.pyroSmoke = [];
               if (eng.pyroSmoke.length < 25) {
                   eng.pyroSmoke.push({
                       ox: (Math.random()-0.5)*60, oy: 10 + Math.random()*10,
                       vy: 1 + Math.random()*2, size: 15 + Math.random()*20, life: 1, 
-                      isFire: Math.random() > 0.6 // Some are fire, some are black smoke
+                      isFire: Math.random() > 0.6 
                   });
               }
+              
               eng.pyroSmoke.forEach((s, i) => {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i); s.life -= 0.015; s.size += 0.2;
                   if (s.life <= 0) { eng.pyroSmoke.splice(i, 1); return; }
                   
-                  ctx.beginPath(); ctx.arc(x + s.ox, y + s.oy, s.size, 0, Math.PI*2);
                   if (s.isFire) {
-                      ctx.fillStyle = `rgba(255, 50, 0, ${s.life * 0.6})`;
-                      ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
+                      // 🔥 OPTIMIZED: Fake glow without shadowBlur
+                      ctx.fillStyle = `rgba(255, 50, 0, ${s.life * 0.3})`;
+                      ctx.beginPath(); ctx.arc(x + s.ox, y + s.oy, s.size * 1.5, 0, Math.PI*2); ctx.fill();
+                      ctx.fillStyle = `rgba(255, 200, 0, ${s.life * 0.8})`;
                   } else {
-                      ctx.fillStyle = `rgba(10, 5, 5, ${s.life * 0.8})`; // Thick black smoke
-                      ctx.shadowBlur = 10; ctx.shadowColor = '#000000';
+                      ctx.fillStyle = `rgba(10, 5, 5, ${s.life * 0.8})`; 
                   }
-                  ctx.fill();
+                  ctx.beginPath(); ctx.arc(x + s.ox, y + s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
-
-              ctx.globalCompositeOperation = 'lighter'; // Glow for the inner aura
-
-              // 3. Demonic Core Glow & Roaring Heat Waves
+              
+              ctx.globalCompositeOperation = 'lighter'; 
               const heatGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
               heatGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
               heatGrad.addColorStop(0.2, 'rgba(255, 50, 0, 0.6)');
               heatGrad.addColorStop(1, 'rgba(255, 0, 0, 0)');
-              ctx.fillStyle = heatGrad; ctx.beginPath(); ctx.arc(x, y, radius*4, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = heatGrad; ctx.beginPath();
+              ctx.arc(x, y, radius*4, 0, Math.PI*2); ctx.fill();
 
-              // 4. Violent Glowing Embers (Dust)
-              ctx.fillStyle = '#ffaa00'; ctx.shadowBlur = 10; ctx.shadowColor = '#ffaa00';
+              ctx.fillStyle = '#ffaa00';
               for(let i=0; i<10; i++) {
                   const ex = x + Math.sin(time*0.01 + i)*radius*4;
                   const ey = y - (time*0.1 + i*20)%80;
@@ -6234,11 +6272,10 @@ for (const p of eng.particles) {
               }
           }
 
-          // ⚡ ARCHMAGE (VOID STORM SOVEREIGN - Raging Storm, Cyan/Purple Lightning)
+          // ⚡ ARCHMAGE (VOID STORM SOVEREIGN)
           else if (skinId === 'archmage') {
-              ctx.globalCompositeOperation = 'source-over'; // Mix for dark clouds
+              ctx.globalCompositeOperation = 'source-over';
               
-              // 1. Swirling Void Storm (Dark purple/black clouds wrapping the player)
               if (!eng.stormClouds) eng.stormClouds = [];
               if (eng.stormClouds.length < 20) {
                   eng.stormClouds.push({
@@ -6254,29 +6291,23 @@ for (const p of eng.particles) {
                   const cx = x + Math.cos(cloud.ang) * cloud.dist;
                   const cy = y + cloud.yOff + Math.sin(time*0.002 + i)*10;
                   
-                  // Swirling dark nebula clouds
                   const cloudGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, cloud.size);
-                  cloudGrad.addColorStop(0, `rgba(20, 0, 40, ${cloud.life * 0.9})`); // Pitch black/purple
-                  cloudGrad.addColorStop(0.5, `rgba(70, 0, 150, ${cloud.life * 0.5})`); // Deep violet
+                  cloudGrad.addColorStop(0, `rgba(20, 0, 40, ${cloud.life * 0.9})`); 
+                  cloudGrad.addColorStop(0.5, `rgba(70, 0, 150, ${cloud.life * 0.5})`); 
                   cloudGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
                   
-                  ctx.fillStyle = cloudGrad; ctx.shadowBlur = 0;
+                  ctx.fillStyle = cloudGrad; 
                   ctx.beginPath(); ctx.arc(cx, cy, cloud.size, 0, Math.PI*2); ctx.fill();
               });
+              
+              ctx.globalCompositeOperation = 'lighter'; 
 
-              ctx.globalCompositeOperation = 'lighter'; // Blinding lights
-
-              // 2. Glitching Dimensional Floor
               drawShatteredSeal(x, y, radius * 5.5, time * -0.002, '#00ffff');
               drawShatteredSeal(x, y, radius * 3.5, time * 0.003, '#c084fc');
 
-              // 3. Raging Chaotic Lightning (Constant strikes all around)
-              const lightningColors = [
-                  { c: '#ffffff', g: '#00ffff' }, // Cyan lightning
-                  { c: '#ffffff', g: '#c084fc' }  // Purple lightning
-              ];
+              const lightningColors = [{ c: '#ffffff', g: '#00ffff' }, { c: '#ffffff', g: '#c084fc' }];
               for(let i=0; i<2; i++) {
-                  if (Math.random() < 0.6) { // 60% chance EVERY FRAME to strike
+                  if (Math.random() < 0.6) { 
                       const startX = x + (Math.random()-0.5)*radius*2;
                       const startY = y - radius*3 + (Math.random()-0.5)*radius*2;
                       const endX = x + (Math.random()-0.5)*radius*10;
@@ -6286,14 +6317,13 @@ for (const p of eng.particles) {
                   }
               }
 
-              // 4. Overwhelming Core Aura & Floating Power Prisms
               const stormCore = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
               stormCore.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
               stormCore.addColorStop(0.3, 'rgba(0, 255, 255, 0.4)');
               stormCore.addColorStop(1, 'rgba(168, 85, 247, 0)');
-              ctx.fillStyle = stormCore; ctx.beginPath(); ctx.arc(x, y, radius*4, 0, Math.PI*2); ctx.fill();
+              ctx.fillStyle = stormCore; ctx.beginPath();
+              ctx.arc(x, y, radius*4, 0, Math.PI*2); ctx.fill();
 
-              // Shattered floating glass prisms that generate the lightning
               for(let i=0; i<4; i++) {
                   const ang = time * 0.004 + (i * Math.PI/2);
                   const px = x + Math.cos(ang) * radius * 4.5;
@@ -6304,22 +6334,19 @@ for (const p of eng.particles) {
                   ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.fill();
                   ctx.restore();
                   
-                  // Small lightning tether connecting to player
                   if (Math.random() > 0.5) drawLightning(x, y, px, py, '#ffffff', '#00ffff', 2, false);
               }
           }
-          // ... (sa ilalim ng } ng archmage skinId block) ...
 
-          // 🌸 SAKURA SORCERESS (ULTRA KAWAII OVERLOAD - Pink Smoke, Sakura Petals, HEARTS)
+          // 🌸 SAKURA SORCERESS
           else if (skinId === 'sakura') {
-              ctx.globalCompositeOperation = 'lighter'; // Soft beautiful bloom glow
+              ctx.globalCompositeOperation = 'lighter';
               const pulse = Math.sin(time * 0.003);
-
-              // 1. Sakura Magic Seal sa lapag (Flower Pattern)
-              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.4); ctx.rotate(time * 0.0005);
-              ctx.strokeStyle = `rgba(236, 72, 153, ${0.6 + pulse * 0.2})`; // Deep Pink
+              
+              ctx.save();
+              ctx.translate(x, y + 5); ctx.scale(1, 0.4); ctx.rotate(time * 0.0005);
+              ctx.strokeStyle = `rgba(236, 72, 153, ${0.6 + pulse * 0.2})`;
               ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 15; ctx.lineWidth = 3;
-              // Draw an 8-petaled flower shape for the seal
               ctx.beginPath();
               for (let i = 0; i < 8; i++) {
                   ctx.rotate(Math.PI / 4);
@@ -6327,9 +6354,8 @@ for (const p of eng.particles) {
                   ctx.quadraticCurveTo(radius * 3, -radius * 3, 0, 0);
               }
               ctx.stroke(); ctx.restore();
-
-              // 2. Pink Mystical Smoke & Fairy Dust Aura
-              ctx.globalCompositeOperation = 'source-over'; // Para magmukhang fluffy yung usok
+              
+              ctx.globalCompositeOperation = 'source-over';
               if (!eng.pinkSmoke) eng.pinkSmoke = [];
               if (eng.pinkSmoke.length < 15 && Math.random() < 0.2) {
                   eng.pinkSmoke.push({
@@ -6340,21 +6366,18 @@ for (const p of eng.particles) {
               eng.pinkSmoke.forEach((s, i) => {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.002 + i)*0.5; s.life -= 0.01; s.size += 0.2;
                   if (s.life <= 0) { eng.pinkSmoke.splice(i, 1); return; }
-                  
                   const smokeGrad = ctx.createRadialGradient(x+s.ox, y+s.oy, 0, x+s.ox, y+s.oy, s.size);
-                  smokeGrad.addColorStop(0, `rgba(253, 164, 175, ${s.life * 0.6})`); // Rose pink smoke
+                  smokeGrad.addColorStop(0, `rgba(253, 164, 175, ${s.life * 0.6})`);
                   smokeGrad.addColorStop(1, 'rgba(255, 228, 230, 0)');
-                  
                   ctx.fillStyle = smokeGrad; ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
+              
+              ctx.globalCompositeOperation = 'lighter'; 
 
-              ctx.globalCompositeOperation = 'lighter'; // Ibalik sa glowing mode
-
-              // 3. Gentle Sakura Petal Particle System (Floating Down)
               if (!eng.sakuraParticles) eng.sakuraParticles = [];
               if (eng.sakuraParticles.length < 20 && Math.random() < 0.1) {
                   eng.sakuraParticles.push({
-                      ox: (Math.random() - 0.5) * 60, y: -60, // Start above
+                      ox: (Math.random() - 0.5) * 60, y: -60, 
                       vy: 0.5 + Math.random() * 1.0, rot: Math.random() * Math.PI * 2, rs: (Math.random() - 0.5) * 0.05,
                       size: 2 + Math.random() * 3, life: 1
                   });
@@ -6362,43 +6385,37 @@ for (const p of eng.particles) {
               eng.sakuraParticles.forEach((p, i) => {
                   p.y += p.vy; p.rot += p.rs; p.life -= 0.008;
                   if (p.life <= 0 || p.y > 10) { eng.sakuraParticles.splice(i, 1); return; }
-
                   ctx.save(); ctx.translate(x + p.ox, y + p.y); ctx.rotate(p.rot);
-                  ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`; // Light Pink petal
+                  ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`; 
                   ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 2, 0, 0, Math.PI * 2); ctx.fill();
                   ctx.restore();
               });
-
-              // 4. MASSIVE FLOATING HEARTS Overload (Rising Gentley)
+              
               if (!eng.sakuraHearts) eng.sakuraHearts = [];
-              // Pinarami natin ang limit at probability para "Siksik" sa hearts
               if (eng.sakuraHearts.length < 25 && Math.random() < 0.2) {
                   eng.sakuraHearts.push({
                       ox: (Math.random() - 0.5) * radius * 3.5, y: radius, 
-                      vy: 0.5 + Math.random() * 0.8, // Slow gentle rising
+                      vy: 0.5 + Math.random() * 0.8, 
                       size: 3 + Math.random() * 5, life: 1,
-                      rot: Math.random() * Math.PI, rs: (Math.random()-0.5)*0.02 // added rotation to hearts
+                      rot: Math.random() * Math.PI, rs: (Math.random()-0.5)*0.02 
                   });
               }
               eng.sakuraHearts.forEach((h, i) => {
                   h.y -= h.vy; h.life -= 0.005; h.rot += h.rs;
                   if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
-
                   ctx.save(); ctx.translate(x + h.ox, y + h.y); ctx.rotate(h.rot);
-                  // Bubbly pulsing effect
                   const hSize = h.size * (1 + Math.sin(time * 0.005 + i) * 0.2); 
-                  const hColor = `rgba(236, 72, 153, ${h.life * 0.9})`; // Hot Pink
+                  const hColor = `rgba(236, 72, 153, ${h.life * 0.9})`; 
 
-                  // Heart shape Bezier formula (Polished)
                   ctx.beginPath(); ctx.moveTo(0, -hSize * 0.3);
                   ctx.bezierCurveTo(-hSize * 0.5, -hSize * 0.8, -hSize * 1.0, -hSize * 0.3, 0, hSize * 1.0); 
                   ctx.bezierCurveTo(hSize * 1.0, -hSize * 0.3, hSize * 0.5, -hSize * 0.8, 0, -hSize * 0.3);
-                  ctx.fillStyle = hColor; ctx.shadowBlur = 15; ctx.shadowColor = '#ec4899';
+                  ctx.fillStyle = hColor; 
+                  // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.fill(); ctx.restore();
               });
-
-              // 5. Blinding Fairy Dust Sprinkles
-              ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 10; ctx.shadowColor = '#fdf2f8';
+              
+              ctx.fillStyle = '#ffffff';
               for(let i=0; i<10; i++) {
                   if(Math.random()>0.5) {
                       const ex = x + Math.sin(time*0.01 + i)*radius*3;
@@ -6407,50 +6424,44 @@ for (const p of eng.particles) {
                   }
               }
 
-              // 6. Sweet Soft Core Bloom (Pink Inner Aura)
               const pinkGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3.5);
-              pinkGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // White hot center
-              pinkGrad.addColorStop(0.3, 'rgba(251, 207, 232, 0.5)'); // Light pink
-              pinkGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');     
+              pinkGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+              pinkGrad.addColorStop(0.3, 'rgba(251, 207, 232, 0.5)');
+              pinkGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');
               ctx.fillStyle = pinkGrad; ctx.beginPath(); ctx.arc(x, y, radius * 3.5, 0, Math.PI * 2); ctx.fill();
           }
 
-          // 🌸 SAKURA SORCERESS (PREMIUM MAGICAL GIRL TIER - Glossy 3D Hearts & Crest)
+          // 🌸 SAKURA SORCERESS (PREMIUM MAGICAL GIRL TIER)
           else if (skinId === 'pink_wings') {
               ctx.globalCompositeOperation = 'lighter';
               const pulse = Math.sin(time * 0.003);
 
-              // 1. THE FLOOR: MAGICAL GIRL SAKURA CREST (Intricate, Rotating, 3D Perspective)
-              ctx.save(); 
+              ctx.save();
               ctx.translate(x, y + 5); 
-              ctx.scale(1, 0.35); // 3D Floor Perspective
+              ctx.scale(1, 0.35); 
               ctx.rotate(time * 0.0005);
-              
-              // Soft Glowing Pool (Lace-like base)
               const poolGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 5);
               poolGrad.addColorStop(0, 'rgba(251, 207, 232, 0.6)');
               poolGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');
               ctx.fillStyle = poolGrad; ctx.beginPath(); ctx.arc(0, 0, radius*5, 0, Math.PI*2); ctx.fill();
-
-              // Outer White Lace Ring
+              
               ctx.strokeStyle = `rgba(255, 255, 255, ${0.6 + pulse * 0.2})`;
               ctx.shadowColor = '#f472b6'; ctx.shadowBlur = 15; ctx.lineWidth = 4;
               ctx.setLineDash([15, 10, 5, 10]); 
-              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
               ctx.setLineDash([]);
-
-              // Giant Inner Pink Heart Crest
+              
               ctx.rotate(time * -0.001);
               ctx.strokeStyle = '#f472b6'; ctx.lineWidth = 3;
               ctx.fillStyle = `rgba(244, 114, 182, 0.3)`;
               ctx.beginPath();
               const hs = radius * 2.5;
               ctx.moveTo(0, -hs * 0.3);
-              ctx.bezierCurveTo(-hs * 0.5, -hs * 0.8, -hs * 1.0, -hs * 0.3, 0, hs * 1.0); 
+              ctx.bezierCurveTo(-hs * 0.5, -hs * 0.8, -hs * 1.0, -hs * 0.3, 0, hs * 1.0);
               ctx.bezierCurveTo(hs * 1.0, -hs * 0.3, hs * 0.5, -hs * 0.8, 0, -hs * 0.3);
               ctx.fill(); ctx.stroke();
               
-              // Inner Magical Star
               ctx.rotate(time * 0.002);
               ctx.fillStyle = 'rgba(253, 224, 71, 0.8)';
               ctx.shadowColor = '#fde047'; ctx.beginPath();
@@ -6460,13 +6471,12 @@ for (const p of eng.particles) {
               }
               ctx.closePath(); ctx.fill();
               ctx.restore();
-
-              // 2. PINK & WHITE FLAPPING WINGS (Flapping Animation)
+              
               for (let w = -1; w <= 1; w += 2) {
-                  ctx.save(); ctx.translate(x, y - radius); ctx.scale(w, 1);
+                  ctx.save();
+                  ctx.translate(x, y - radius); ctx.scale(w, 1);
                   const flap = Math.sin(time * 0.005) * 0.25 + 0.1;
                   ctx.rotate(flap);
-
                   const wingGrad = ctx.createLinearGradient(0, 0, radius*6, -radius*4);
                   wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
                   wingGrad.addColorStop(0.5, 'rgba(251, 207, 232, 0.8)');
@@ -6483,7 +6493,6 @@ for (const p of eng.particles) {
                   ctx.restore();
               }
 
-              // 3. GLOSSY 3D CANDY HEARTS (Pina-glossy ang reflection)
               if (!eng.sakuraHearts) eng.sakuraHearts = [];
               if (eng.sakuraHearts.length < 20 && Math.random() < 0.2) {
                   eng.sakuraHearts.push({
@@ -6497,20 +6506,19 @@ for (const p of eng.particles) {
                   ctx.save(); ctx.translate(x + h.ox, y + h.oy);
                   const hSize = h.size;
                   
-                  // Heart Shape
                   ctx.beginPath(); ctx.moveTo(0, -hSize * 0.3);
                   ctx.bezierCurveTo(-hSize * 0.6, -hSize, -hSize * 1.2, -hSize * 0.3, 0, hSize * 1.2); 
                   ctx.bezierCurveTo(hSize * 1.2, -hSize * 0.3, hSize * 0.6, -hSize, 0, -hSize * 0.3);
-                  ctx.fillStyle = `rgba(236, 72, 153, ${h.life})`; ctx.shadowBlur = 10; ctx.shadowColor = '#ec4899';
+                  ctx.fillStyle = `rgba(236, 72, 153, ${h.life})`; 
+                  // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.fill();
 
-                  // WHITE GLOSS SHEEN (Nagpapamukhang mamahalin/glossy)
                   ctx.fillStyle = `rgba(255, 255, 255, ${h.life * 0.8})`;
-                  ctx.beginPath(); ctx.ellipse(-hSize*0.3, -hSize*0.3, hSize*0.2, hSize*0.3, Math.PI/4, 0, Math.PI*2); ctx.fill();
+                  ctx.beginPath(); ctx.ellipse(-hSize*0.3, -hSize*0.3, hSize*0.2, hSize*0.3, Math.PI/4, 0, Math.PI*2);
+                  ctx.fill();
                   ctx.restore();
               });
 
-              // 4. SAKURA PETALS & DUST
               if (!eng.sakuraParticles) eng.sakuraParticles = [];
               if (eng.sakuraParticles.length < 20 && Math.random() < 0.2) {
                   eng.sakuraParticles.push({ ox: (Math.random()-0.5)*70, y: -70, vy: 0.5+Math.random(), size: 3+Math.random()*2, life: 1 });
@@ -6519,30 +6527,29 @@ for (const p of eng.particles) {
                   p.y += p.vy; p.life -= 0.005;
                   ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`;
                   ctx.beginPath(); ctx.ellipse(x+p.ox, y+p.y, p.size, p.size*1.5, 0, 0, Math.PI*2); ctx.fill();
-              });
+               });
 
-              // 5. INNER CORE BLOOM
               const pinkGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3);
               pinkGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); 
               pinkGrad.addColorStop(0.3, 'rgba(244, 114, 182, 0.4)'); 
               pinkGrad.addColorStop(1, 'rgba(236, 72, 153, 0)');     
-              ctx.fillStyle = pinkGrad; ctx.beginPath(); ctx.arc(x, y, radius * 3, 0, Math.PI * 2); ctx.fill();
+              ctx.fillStyle = pinkGrad; ctx.beginPath();
+              ctx.arc(x, y, radius * 3, 0, Math.PI * 2); ctx.fill();
           }
 
-          // 🗡️ CRIMSON SHADOW KNIGHT (SOLO LEVELING IGRIS TIER - Dark Armor, Red Plume, Crimson Cape)
+          // 🗡️ CRIMSON SHADOW KNIGHT (SOLO LEVELING IGRIS TIER)
           else if (skinId === 'igris') {
               ctx.globalCompositeOperation = 'source-over';
               const pulse = Math.sin(time * 0.004);
 
-              // 1. Sovereign's Shadow Seal (Throne-like magic circle on the floor)
-              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.35); ctx.rotate(time * -0.0005);
-              ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + pulse * 0.2})`; // Blood Red
-              ctx.shadowColor = '#dc2626'; ctx.shadowBlur = 20; ctx.lineWidth = 4;
+              ctx.save();
+              ctx.translate(x, y + 5); ctx.scale(1, 0.35); ctx.rotate(time * -0.0005);
+              ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + pulse * 0.2})`;
+              ctx.shadowColor = '#dc2626';
+              ctx.shadowBlur = 20; ctx.lineWidth = 4;
               
-              // Outer Ring
-              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
-              
-              // Inner Jagged Crown / Sword points (Intimidating geometry)
+              ctx.beginPath();
+              ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
               ctx.beginPath();
               for(let i=0; i<8; i++) {
                   ctx.rotate(Math.PI / 4);
@@ -6550,27 +6557,27 @@ for (const p of eng.particles) {
                   ctx.lineTo(radius*1.5, radius*4.5);
                   ctx.lineTo(-radius*1.5, radius*4.5);
               }
-              ctx.stroke(); ctx.restore();
+              ctx.stroke();
+              ctx.restore();
 
-              // 2. The Flowing Crimson Cape (Majestic & Intimidating at the back)
-              ctx.save(); ctx.translate(x, y - radius);
+              ctx.save();
+              ctx.translate(x, y - radius);
               const capeSway = Math.sin(time * 0.003) * 15;
               const capeRipple = Math.cos(time * 0.005) * 8;
-              
               const capeGrad = ctx.createLinearGradient(0, 0, 0, radius*6);
-              capeGrad.addColorStop(0, '#991b1b'); // Dark red top
+              capeGrad.addColorStop(0, '#991b1b'); 
               capeGrad.addColorStop(0.5, '#7f1d1d');
-              capeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Fades into shadow abyss
+              capeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); 
               
-              ctx.fillStyle = capeGrad; ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
+              ctx.fillStyle = capeGrad;
+              ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
               ctx.beginPath();
-              ctx.moveTo(-radius*1.5, 0); // Left shoulder attachment
-              ctx.quadraticCurveTo(-radius*4, radius*3 + capeRipple, -radius*2 + capeSway, radius*6.5); // Left flowing edge
-              ctx.quadraticCurveTo(capeSway/2, radius*7, radius*2 + capeSway, radius*6.5); // Bottom torn edge
-              ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0); // Right flowing edge
+              ctx.moveTo(-radius*1.5, 0); 
+              ctx.quadraticCurveTo(-radius*4, radius*3 + capeRipple, -radius*2 + capeSway, radius*6.5);
+              ctx.quadraticCurveTo(capeSway/2, radius*7, radius*2 + capeSway, radius*6.5);
+              ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0);
               ctx.fill();
               
-              // Cape Torn Details (Vertical cuts at the bottom to look battle-worn)
               ctx.globalCompositeOperation = 'destination-out';
               ctx.beginPath();
               ctx.moveTo(-radius + capeSway, radius*6.5);
@@ -6579,11 +6586,12 @@ for (const p of eng.particles) {
               ctx.fill();
               ctx.globalCompositeOperation = 'source-over';
               ctx.restore();
-
-              // 3. Helmet Blood Plume (The iconic red flowing hair/plume from the helmet)
-              ctx.save(); ctx.translate(x, y - radius*1.5);
+              
+              ctx.save();
+              ctx.translate(x, y - radius*1.5);
               ctx.strokeStyle = 'rgba(220, 38, 38, 0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-              ctx.shadowBlur = 15; ctx.shadowColor = '#ff0000';
+              ctx.shadowBlur = 15;
+              ctx.shadowColor = '#ff0000';
               ctx.beginPath();
               for(let i=0; i<6; i++) {
                   ctx.moveTo(0,0);
@@ -6592,8 +6600,7 @@ for (const p of eng.particles) {
                   ctx.quadraticCurveTo(radius + swayX, -radius*2 - i*2, radius*2.5 + swayX, -radius*0.5 + swayY);
               }
               ctx.stroke(); ctx.restore();
-
-              // 4. Shadow Aura Particles (Dark matter rising from the ground)
+              
               if (!eng.igrisSmoke) eng.igrisSmoke = [];
               if (eng.igrisSmoke.length < 20 && Math.random() < 0.4) {
                   eng.igrisSmoke.push({
@@ -6607,61 +6614,66 @@ for (const p of eng.particles) {
                   if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
                   
                   ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life*0.6})` : `rgba(10, 10, 10, ${s.life*0.8})`;
-                  ctx.shadowBlur = s.isRed ? 15 : 0; ctx.shadowColor = '#dc2626';
+                  // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
-
-              // 5. Crimson Lightning / Killing Intent (Sharp striking red bolts)
+              
               ctx.globalCompositeOperation = 'lighter';
               if (Math.random() < 0.25) {
                   const lx = x + (Math.random()-0.5)*radius*10;
                   const ly = y - radius*3 + (Math.random()-0.5)*radius*8;
-                  ctx.strokeStyle = `rgba(255, 50, 50, ${0.5 + Math.random()*0.5})`; 
+                  ctx.strokeStyle = `rgba(255, 50, 50, ${0.5 + Math.random()*0.5})`;
                   ctx.lineWidth = 2 + Math.random()*2; ctx.shadowBlur = 20; ctx.shadowColor = '#ff0000';
                   ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(lx, ly); ctx.stroke();
-                  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1; ctx.stroke(); // Flash core
+                  ctx.strokeStyle = '#ffffff';
+                  ctx.lineWidth = 1; ctx.stroke(); 
               }
 
-              // 6. Blood-Red Core Overdrive (Bleeds through the dark armor like glowing eyes)
               const coreGrad = ctx.createRadialGradient(x, y-2, 0, x, y-2, radius*3.5);
-              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); // White-hot intense core
-              coreGrad.addColorStop(0.2, 'rgba(220, 38, 38, 0.8)'); // Crimson glow
+              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); 
+              coreGrad.addColorStop(0.2, 'rgba(220, 38, 38, 0.8)');
               coreGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
               ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(x, y-2, radius*3.5, 0, Math.PI*2); ctx.fill();
           }
 
-        // 🗡️ 5. IGRIS (Mythic Translucent Shadow Sovereign)
+          // 🗡️ 5. EMPEROR (Mythic Translucent Shadow Sovereign)
           else if (skinId === 'emperor') {
-              ctx.globalCompositeOperation = 'source-over'; 
+              ctx.globalCompositeOperation = 'source-over';
               const pulse = Math.sin(time * 0.004);
 
-              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.35); 
+              ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.35);
               const poolGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6);
-              poolGrad.addColorStop(0, 'rgba(10, 0, 0, 0.9)'); poolGrad.addColorStop(0.6, 'rgba(127, 29, 29, 0.2)'); poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              poolGrad.addColorStop(0, 'rgba(10, 0, 0, 0.9)');
+              poolGrad.addColorStop(0.6, 'rgba(127, 29, 29, 0.2)'); poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = poolGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6, 0, Math.PI*2); ctx.fill();
-
-              const shockRadius = (time * 0.15) % (radius * 8); 
+              
+              const shockRadius = (time * 0.15) % (radius * 8);
               ctx.strokeStyle = `rgba(220, 38, 38, ${1 - (shockRadius / (radius * 8))})`; 
-              ctx.lineWidth = 3; ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
+              ctx.lineWidth = 3; ctx.shadowBlur = 15;
+              ctx.shadowColor = '#dc2626';
               ctx.beginPath(); ctx.arc(0, 0, shockRadius, 0, Math.PI * 2); ctx.stroke();
 
-              ctx.rotate(time * -0.001); ctx.strokeStyle = `rgba(153, 27, 27, ${0.5 + pulse * 0.3})`; ctx.lineWidth = 2.5; ctx.setLineDash([10, 5]);
+              ctx.rotate(time * -0.001);
+              ctx.strokeStyle = `rgba(153, 27, 27, ${0.5 + pulse * 0.3})`; ctx.lineWidth = 2.5; ctx.setLineDash([10, 5]);
               ctx.beginPath();
               for(let i=0; i<12; i++) {
                   const ang = (i * Math.PI*2)/12;
                   ctx.moveTo(Math.cos(ang)*radius*3.5, Math.sin(ang)*radius*3.5); ctx.lineTo(Math.cos(ang)*radius*5.5, Math.sin(ang)*radius*5.5);
               }
-              ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+              ctx.stroke(); ctx.setLineDash([]);
+              ctx.restore();
 
               ctx.save(); ctx.translate(x, y - radius);
-              const capeSway = Math.sin(time * 0.003) * 20; const capeRipple = Math.cos(time * 0.006) * 10;
+              const capeSway = Math.sin(time * 0.003) * 20;
+              const capeRipple = Math.cos(time * 0.006) * 10;
               const capeGrad = ctx.createLinearGradient(0, 0, 0, radius*8);
               capeGrad.addColorStop(0, `rgba(153, 27, 27, ${0.6 + pulse * 0.1})`); capeGrad.addColorStop(0.5, `rgba(127, 29, 29, 0.3)`); capeGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = capeGrad; ctx.globalAlpha = 0.8 + pulse * 0.1; ctx.shadowBlur = 30; ctx.shadowColor = '#dc2626'; 
-              ctx.beginPath(); ctx.moveTo(-radius*1.5, 0); 
+              ctx.beginPath(); ctx.moveTo(-radius*1.5, 0);
               ctx.quadraticCurveTo(-radius*4, radius*3 + capeRipple, -radius*2.5 + capeSway, radius*8.5); 
               ctx.quadraticCurveTo(capeSway, radius*10, radius*2.5 + capeSway, radius*8.5); 
-              ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0); ctx.fill();
+              ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0);
+              ctx.fill();
               
               ctx.globalCompositeOperation = 'destination-out'; 
               ctx.beginPath();
@@ -6669,30 +6681,39 @@ for (const p of eng.particles) {
                   const cutX = (i*radius*0.6) + capeSway;
                   ctx.moveTo(cutX, radius*9); ctx.lineTo(cutX - 4, radius*6 + Math.random()*15); ctx.lineTo(cutX + 4, radius*9);
               }
-              ctx.fill(); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1.0; ctx.restore();
+              ctx.fill(); ctx.globalCompositeOperation = 'source-over';
+              ctx.globalAlpha = 1.0; ctx.restore();
 
               for(let i=0; i<4; i++) {
-                  const shardAng = time*0.002 + (i*Math.PI/2); const sX = x + Math.cos(shardAng)*radius*5.5; const sY = y - radius*1.5 + Math.sin(shardAng*2)*radius*2;
+                  const shardAng = time*0.002 + (i*Math.PI/2);
+                  const sX = x + Math.cos(shardAng)*radius*5.5; const sY = y - radius*1.5 + Math.sin(shardAng*2)*radius*2;
                   ctx.save(); ctx.translate(sX, sY); ctx.rotate(time*0.005 + i);
                   ctx.fillStyle = '#171717'; ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 1.5; ctx.shadowBlur = 15; ctx.shadowColor = '#dc2626';
-                  ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, 0); ctx.lineTo(0, 18); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
-                  ctx.strokeStyle = '#ffb3b3'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 10); ctx.stroke(); ctx.restore();
+                  ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(6, 0);
+                  ctx.lineTo(0, 18); ctx.lineTo(-6, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+                  ctx.strokeStyle = '#ffb3b3'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0; ctx.beginPath(); ctx.moveTo(0, -5);
+                  ctx.lineTo(0, 10); ctx.stroke(); ctx.restore();
                   ctx.strokeStyle = `rgba(220, 38, 38, 0.2)`; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x, y-radius); ctx.lineTo(sX, sY); ctx.stroke();
               }
 
               for(let w=-1; w<=1; w+=2) {
-                  ctx.save(); ctx.translate(x + (radius*1.4*w), y - radius*0.8);
-                  ctx.fillStyle = '#0a0a0a'; ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 2.5; ctx.shadowBlur = 15; ctx.shadowColor = '#000000';
+                  ctx.save();
+                  ctx.translate(x + (radius*1.4*w), y - radius*0.8);
+                  ctx.fillStyle = '#0a0a0a'; ctx.strokeStyle = '#991b1b'; ctx.lineWidth = 2.5; ctx.shadowBlur = 15;
+                  ctx.shadowColor = '#000000';
                   ctx.beginPath(); ctx.moveTo(0, radius*0.5); ctx.lineTo(radius*2.2*w, -radius*0.8); ctx.lineTo(radius*1.2*w, radius*1.2); ctx.lineTo(0, radius*1.2);
                   ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
               }
 
               ctx.save(); ctx.translate(x, y - radius*1.8);
               for(let i=0; i<8; i++) {
-                  const plumeX = Math.cos(time*0.004 + i*0.5)*18; const plumeY = Math.sin(time*0.005 + i*0.5)*12;
+                  const plumeX = Math.cos(time*0.004 + i*0.5)*18;
+                  const plumeY = Math.sin(time*0.005 + i*0.5)*12;
                   ctx.strokeStyle = i < 3 ? 'rgba(255, 150, 150, 0.9)' : 'rgba(220, 38, 38, 0.7)';
-                  ctx.lineWidth = 5 - i*0.4; ctx.lineCap = 'round'; ctx.shadowBlur = i===0 ? 20 : 0; ctx.shadowColor = '#ff0000';
-                  ctx.beginPath(); ctx.moveTo(0,0); ctx.quadraticCurveTo(radius + plumeX, -radius*2.5 - i*4, radius*3.5 + plumeX*1.5, -radius + plumeY); ctx.stroke();
+                  ctx.lineWidth = 5 - i*0.4; ctx.lineCap = 'round';
+                  ctx.shadowBlur = i===0 ? 20 : 0; ctx.shadowColor = '#ff0000';
+                  ctx.beginPath(); ctx.moveTo(0,0);
+                  ctx.quadraticCurveTo(radius + plumeX, -radius*2.5 - i*4, radius*3.5 + plumeX*1.5, -radius + plumeY); ctx.stroke();
               }
               ctx.restore();
 
@@ -6702,89 +6723,88 @@ for (const p of eng.particles) {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
                   if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
                   ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life * 0.5})` : `rgba(10, 10, 10, ${s.life * 0.8})`;
-                  ctx.shadowBlur = s.isRed ? 15 : 0; ctx.shadowColor = '#dc2626';
+                  // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
-
+              
               ctx.globalCompositeOperation = 'lighter';
               const coreGrad = ctx.createRadialGradient(x, y-2, 0, x, y-2, radius*3.5);
-              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)'); coreGrad.addColorStop(0.3, 'rgba(220, 38, 38, 0.8)'); coreGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
+              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+              coreGrad.addColorStop(0.3, 'rgba(220, 38, 38, 0.8)'); coreGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
               ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(x, y-2, radius*3.5, 0, Math.PI*2); ctx.fill();
           }
 
-          // 🌸⚔️ EMPRESS OF THE BLUSHING PETALS (Mythic Arcane Swordswoman)
+          // 🌸⚔️ EMPRESS OF THE BLUSHING PETALS
           else if (skinId === 'empress') {
-              ctx.globalCompositeOperation = 'lighter'; // Elegant blooming light
+              ctx.globalCompositeOperation = 'lighter';
               const pulse = Math.sin(time * 0.002);
-
-              // 1. DIVINE LOTUS CREST (Intricate Floor Mandala)
-              ctx.save(); 
-              ctx.translate(x, y + 5); ctx.scale(1, 0.35); // 3D Perspective
               
-              // Glowing Rose-Gold Aura Base
+              ctx.save();
+              ctx.translate(x, y + 5); ctx.scale(1, 0.35); 
+              
               const lotusGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6);
-              lotusGrad.addColorStop(0, 'rgba(255, 228, 230, 0.8)'); // White-pink core
-              lotusGrad.addColorStop(0.4, 'rgba(244, 63, 94, 0.4)'); // Deep rose
+              lotusGrad.addColorStop(0, 'rgba(255, 228, 230, 0.8)'); 
+              lotusGrad.addColorStop(0.4, 'rgba(244, 63, 94, 0.4)');
               lotusGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = lotusGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6, 0, Math.PI*2); ctx.fill();
-
-              // Intricate Intersecting Lotus Rings
+              
               ctx.rotate(time * 0.0005);
               ctx.strokeStyle = `rgba(253, 164, 175, ${0.5 + pulse * 0.2})`; 
               ctx.shadowColor = '#f43f5e'; ctx.shadowBlur = 15; ctx.lineWidth = 2;
-              
               for(let i=0; i<12; i++) {
                   ctx.save();
                   ctx.rotate((i * Math.PI*2)/12);
-                  ctx.translate(radius*2.5, 0); // Offset rings
-                  ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+                  ctx.translate(radius*2.5, 0); 
+                  ctx.beginPath();
+                  ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
                   ctx.restore();
               }
-              // Outer Golden Lace Ring
-              ctx.strokeStyle = 'rgba(253, 224, 71, 0.6)'; // Soft Gold
-              ctx.setLineDash([10, 15, 2, 15]); ctx.lineWidth = 3;
+              
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.6)';
+              ctx.setLineDash([10, 15, 2, 15]);
+              ctx.lineWidth = 3;
               ctx.beginPath(); ctx.arc(0, 0, radius * 5.5, 0, Math.PI * 2); ctx.stroke();
               ctx.setLineDash([]); ctx.restore();
-
-              // 2. ORBITING ARCANE RAPIERS (Floating Rose-Gold Swords)
+              
               const swordCount = 5;
               for(let i=0; i<swordCount; i++) {
                   const sAng = time*0.002 + (i*Math.PI*2/swordCount);
                   const sX = x + Math.cos(sAng)*radius*4.5;
-                  const sY = y - radius*2 + Math.sin(sAng*1.5)*radius*1.5; // Elegant hovering
+                  const sY = y - radius*2 + Math.sin(sAng*1.5)*radius*1.5;
                   
-                  ctx.save(); ctx.translate(sX, sY); 
-                  // Point swords outwards and slightly angled
-                  ctx.rotate(sAng + Math.PI/4 + Math.sin(time*0.003 + i)*0.2); 
+                  ctx.save();
+                  ctx.translate(sX, sY); 
+                  ctx.rotate(sAng + Math.PI/4 + Math.sin(time*0.003 + i)*0.2);
                   
-                  // Rapier Blade (White-hot core, Pink edge)
-                  ctx.fillStyle = '#ffffff'; 
+                  ctx.fillStyle = '#ffffff';
                   ctx.shadowBlur = 15; ctx.shadowColor = '#f43f5e';
                   ctx.beginPath(); 
-                  ctx.moveTo(0, -25); // Sharp tip
-                  ctx.lineTo(3, -5); ctx.lineTo(1, 8); 
+                  ctx.moveTo(0, -25); 
+                  ctx.lineTo(3, -5);
+                  ctx.lineTo(1, 8); 
                   ctx.lineTo(-1, 8); ctx.lineTo(-3, -5); 
                   ctx.closePath(); ctx.fill();
                   
-                  // Elegant Golden Hilt/Crossguard
-                  ctx.strokeStyle = '#fde047'; ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#fbbf24';
+                  ctx.strokeStyle = '#fde047';
+                  ctx.lineWidth = 2; ctx.shadowBlur = 10; ctx.shadowColor = '#fbbf24';
                   ctx.beginPath(); ctx.moveTo(-6, -5); ctx.quadraticCurveTo(0, -8, 6, -5); ctx.stroke();
-                  ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(0, 14); ctx.stroke(); // Handle
+                  ctx.beginPath(); ctx.moveTo(0, 8);
+                  ctx.lineTo(0, 14); ctx.stroke(); 
                   ctx.restore();
-
-                  // Faint energy ribbons tethering swords to the Empress
-                  ctx.strokeStyle = `rgba(253, 164, 175, 0.2)`; ctx.lineWidth = 1; ctx.shadowBlur = 0;
+                  
+                  ctx.strokeStyle = `rgba(253, 164, 175, 0.2)`;
+                  ctx.lineWidth = 1; ctx.shadowBlur = 0;
                   ctx.beginPath(); ctx.moveTo(x, y - radius*2); ctx.lineTo(sX, sY); ctx.stroke();
               }
 
-              // 3. DIVINE SILK RIBBONS (Elegant Flowing Energy)
-              ctx.lineWidth = 5; ctx.lineCap = 'round';
+              ctx.lineWidth = 5;
+              ctx.lineCap = 'round';
               for(let i=0; i<2; i++) {
                   ctx.strokeStyle = i === 0 ? 'rgba(255, 255, 255, 0.8)' : 'rgba(244, 63, 94, 0.6)';
                   ctx.shadowBlur = 20; ctx.shadowColor = i === 0 ? '#fda4af' : '#e11d48';
                   ctx.beginPath();
                   for(let j=0; j<=20; j++) {
-                      const rAng = (time * -0.002) + (i * Math.PI) + (j * 0.25); // Spirals upwards
+                      const rAng = (time * -0.002) + (i * Math.PI) + (j * 0.25);
                       const rDist = radius * 3 + Math.sin(time*0.004 + j)*4;
                       const rx = x + Math.cos(rAng) * rDist;
                       const ry = y + radius - (j * 4) + Math.sin(rAng)*6;
@@ -6793,14 +6813,13 @@ for (const p of eng.particles) {
                   ctx.stroke();
               }
 
-              // 4. ELEGANT GLASS HEARTS & GLOWING PETALS (Particle System)
               if (!eng.empressParticles) eng.empressParticles = [];
               if (eng.empressParticles.length < 35 && Math.random() < 0.4) {
-                  const type = Math.random(); // 0.6 Petals, 0.3 Dust, 0.1 Glass Hearts
+                  const type = Math.random();
                   eng.empressParticles.push({
                       ox: (Math.random() - 0.5) * radius * 8, 
                       oy: (Math.random() - 0.5) * radius * 6 - radius,
-                      vy: (type > 0.9) ? -0.5 - Math.random() : 0.5 + Math.random(), // Hearts go up, petals go down
+                      vy: (type > 0.9) ? -0.5 - Math.random() : 0.5 + Math.random(), 
                       size: (type > 0.9) ? 4+Math.random()*4 : 2+Math.random()*3, 
                       life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05,
                       type: type
@@ -6813,132 +6832,126 @@ for (const p of eng.particles) {
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy); ctx.rotate(p.rot);
                   
                   if (p.type > 0.9) {
-                      // Floating Glass Hearts (Elegant, thin outline, highly transparent)
                       const s = p.size;
                       ctx.scale(1 + Math.sin(p.life*Math.PI)*0.2, 1 + Math.sin(p.life*Math.PI)*0.2);
                       ctx.strokeStyle = `rgba(255, 255, 255, ${p.life})`; ctx.lineWidth = 1.5;
-                      ctx.shadowBlur = 15; ctx.shadowColor = '#f43f5e';
+                      
                       ctx.beginPath(); ctx.moveTo(0, -s*0.3);
                       ctx.bezierCurveTo(-s*0.6, -s, -s*1.2, -s*0.3, 0, s*1.2); 
                       ctx.bezierCurveTo(s*1.2, -s*0.3, s*0.6, -s, 0, -s*0.3);
                       ctx.stroke();
                       
-                      ctx.fillStyle = `rgba(253, 164, 175, ${p.life * 0.3})`; // Very soft fill
+                      ctx.fillStyle = `rgba(253, 164, 175, ${p.life * 0.3})`; 
                       ctx.fill();
                   } else if (p.type > 0.3) {
-                      // Mythic Glowing Petals
-                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`; // Pure white core
-                      ctx.shadowBlur = 10; ctx.shadowColor = '#fb7185'; // Pink glow
-                      ctx.beginPath(); ctx.moveTo(0, p.size);
+                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
+                      ctx.beginPath();
+                      ctx.moveTo(0, p.size);
                       ctx.bezierCurveTo(p.size, p.size, p.size*1.5, 0, 0, -p.size); ctx.lineTo(0, -p.size*0.4); 
                       ctx.lineTo(0, -p.size); ctx.bezierCurveTo(-p.size*1.5, 0, -p.size, p.size, 0, p.size); ctx.fill();
                   } else {
-                      // Rose-Gold Star Dust
-                      ctx.fillStyle = `rgba(253, 224, 71, ${p.life})`; ctx.shadowBlur = 5; ctx.shadowColor = '#fbbf24';
+                      ctx.fillStyle = `rgba(253, 224, 71, ${p.life})`;
                       ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
                   }
                   ctx.restore();
               });
-
-              // 5. RADIANT EMPRESS CORE BLOOM
+              
               const empressGrad = ctx.createRadialGradient(x, y-radius, 0, x, y-radius, radius * 4);
-              empressGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Blinding white-rose core
-              empressGrad.addColorStop(0.3, 'rgba(251, 113, 133, 0.5)'); // Radiant pink
-              empressGrad.addColorStop(1, 'rgba(225, 29, 72, 0)');     
+              empressGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+              empressGrad.addColorStop(0.3, 'rgba(251, 113, 133, 0.5)');
+              empressGrad.addColorStop(1, 'rgba(225, 29, 72, 0)');
               ctx.fillStyle = empressGrad; ctx.beginPath(); ctx.arc(x, y-radius, radius * 4, 0, Math.PI * 2); ctx.fill();
           }
 
-          // 👑 INFERNAL ECLIPSE SOVEREIGN (MYTHIC TIER - Transcendent Demon/Celestial)
+          // 👑 INFERNAL ECLIPSE SOVEREIGN
           else if (skinId === 'infernal') {
               ctx.globalCompositeOperation = 'source-over';
               const pulse = Math.sin(time * 0.003);
-              const floatY = Math.sin(time * 0.002) * 4; // Idle Levitation Animation
+              const floatY = Math.sin(time * 0.002) * 4;
 
-              // 1. ECLIPSE SHADOW DOMAIN (Floor)
               ctx.save();
               ctx.translate(x, y + 5 + floatY);
-              ctx.scale(1, 0.35); // 3D Perspective
+              ctx.scale(1, 0.35); 
 
-              // Abyssal Violet & Crimson Pool
               const poolGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 7);
-              poolGrad.addColorStop(0, 'rgba(10, 0, 15, 0.95)'); // Obsidian core
-              poolGrad.addColorStop(0.4, 'rgba(153, 15, 61, 0.6)'); // Infernal scarlet
-              poolGrad.addColorStop(0.8, 'rgba(76, 29, 149, 0.3)'); // Abyssal violet
+              poolGrad.addColorStop(0, 'rgba(10, 0, 15, 0.95)'); 
+              poolGrad.addColorStop(0.4, 'rgba(153, 15, 61, 0.6)');
+              poolGrad.addColorStop(0.8, 'rgba(76, 29, 149, 0.3)');
               poolGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = poolGrad; ctx.beginPath(); ctx.arc(0, 0, radius*7, 0, Math.PI*2); ctx.fill();
-
-              // Pulsing Reality Distortion Rings
+              
               const shockRadius = (time * 0.2) % (radius * 9);
-              ctx.strokeStyle = `rgba(139, 92, 246, ${1 - (shockRadius / (radius * 9))})`; // Violet expanding wave
-              ctx.lineWidth = 4; ctx.shadowBlur = 15; ctx.shadowColor = '#8b5cf6';
+              ctx.strokeStyle = `rgba(139, 92, 246, ${1 - (shockRadius / (radius * 9))})`;
+              ctx.lineWidth = 4;
+              ctx.shadowBlur = 15; ctx.shadowColor = '#8b5cf6';
               ctx.beginPath(); ctx.arc(0, 0, shockRadius, 0, Math.PI * 2); ctx.stroke();
-
-              // Intricate Demonic Hexagram
+              
               ctx.rotate(time * -0.0005);
-              ctx.strokeStyle = `rgba(225, 29, 72, ${0.6 + pulse * 0.3})`; // Crimson red
-              ctx.lineWidth = 2.5; ctx.shadowColor = '#e11d48';
+              ctx.strokeStyle = `rgba(225, 29, 72, ${0.6 + pulse * 0.3})`;
+              ctx.lineWidth = 2.5;
+              ctx.shadowColor = '#e11d48';
               ctx.beginPath();
               for(let i=0; i<6; i++) {
                   const ang = (i * Math.PI*2)/6;
                   ctx.lineTo(Math.cos(ang)*radius*5, Math.sin(ang)*radius*5);
                   ctx.lineTo(Math.cos(ang + Math.PI/6)*radius*2.5, Math.sin(ang + Math.PI/6)*radius*2.5);
               }
-              ctx.closePath(); ctx.stroke();
+              ctx.closePath();
+              ctx.stroke();
               
-              // Outer Ancient Runes
               ctx.setLineDash([12, 8, 4, 8]);
               ctx.beginPath(); ctx.arc(0, 0, radius * 6, 0, Math.PI*2); ctx.stroke();
               ctx.setLineDash([]); ctx.restore();
-
-              // 2. ASYMMETRICAL WINGS (Left: Demonic Dragon | Right: Celestial Light)
-              ctx.save(); ctx.translate(x, y - radius + floatY);
+              
+              ctx.save();
+              ctx.translate(x, y - radius + floatY);
               const flapAngle = Math.sin(time * 0.004) * 0.2;
               
-              // --- LEFT WING: Demonic Shadow Webbing ---
-              ctx.save(); ctx.scale(-1, 1); ctx.rotate(flapAngle - 0.1);
+              ctx.save();
+              ctx.scale(-1, 1); ctx.rotate(flapAngle - 0.1);
               const demonGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
               demonGrad.addColorStop(0, 'rgba(20, 5, 10, 0.9)');
               demonGrad.addColorStop(1, 'rgba(153, 15, 30, 0.7)');
               ctx.fillStyle = demonGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#9f1239';
               
               ctx.beginPath(); ctx.moveTo(radius, 0);
-              ctx.quadraticCurveTo(radius*3, -radius*5, radius*7, -radius*4); // Top edge
-              ctx.quadraticCurveTo(radius*5, -radius*1, radius*8, radius*2); // Spiked tip
-              ctx.quadraticCurveTo(radius*4, radius*1, radius*5, radius*3); // Webbing
-              ctx.quadraticCurveTo(radius*2.5, radius*1.5, radius*1, radius*2); // Inner attach
+              ctx.quadraticCurveTo(radius*3, -radius*5, radius*7, -radius*4); 
+              ctx.quadraticCurveTo(radius*5, -radius*1, radius*8, radius*2);
+              ctx.quadraticCurveTo(radius*4, radius*1, radius*5, radius*3);
+              ctx.quadraticCurveTo(radius*2.5, radius*1.5, radius*1, radius*2);
               ctx.fill();
               
-              // Demonic Bone Structure
-              ctx.strokeStyle = 'rgba(225, 29, 72, 0.8)'; ctx.lineWidth = 2;
+              ctx.strokeStyle = 'rgba(225, 29, 72, 0.8)';
+              ctx.lineWidth = 2;
               ctx.beginPath(); ctx.moveTo(radius, 0); ctx.quadraticCurveTo(radius*3, -radius*5, radius*7, -radius*4); ctx.stroke();
               ctx.beginPath(); ctx.moveTo(radius*2.5, -radius*2.5); ctx.lineTo(radius*8, radius*2); ctx.stroke();
               ctx.restore();
-
-              // --- RIGHT WING: Corrupted Celestial Energy ---
-              ctx.save(); ctx.scale(1, 1); ctx.rotate(flapAngle + 0.1);
+              
+              ctx.save();
+              ctx.scale(1, 1); ctx.rotate(flapAngle + 0.1);
               ctx.globalCompositeOperation = 'lighter';
               const celestGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
-              celestGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Blinding white origin
-              celestGrad.addColorStop(0.4, 'rgba(139, 92, 246, 0.8)'); // Violet energy
-              celestGrad.addColorStop(1, 'rgba(225, 29, 72, 0)'); // Crimson fade
-              ctx.fillStyle = celestGrad; ctx.shadowBlur = 25; ctx.shadowColor = '#8b5cf6';
+              celestGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+              celestGrad.addColorStop(0.4, 'rgba(139, 92, 246, 0.8)');
+              celestGrad.addColorStop(1, 'rgba(225, 29, 72, 0)');
+              ctx.fillStyle = celestGrad;
+              ctx.shadowBlur = 25; ctx.shadowColor = '#8b5cf6';
               
               ctx.beginPath(); ctx.moveTo(radius, 0);
               ctx.bezierCurveTo(radius*3, -radius*5, radius*6, -radius*3, radius*8 + Math.sin(time*0.01)*3, -radius*2);
-              ctx.quadraticCurveTo(radius*6, 0, radius*7, radius*1);   // Feather 1
-              ctx.quadraticCurveTo(radius*5, radius*0.5, radius*5.5, radius*2.5); // Feather 2
-              ctx.quadraticCurveTo(radius*4, radius*1, radius*4, radius*3);   // Feather 3
+              ctx.quadraticCurveTo(radius*6, 0, radius*7, radius*1);   
+              ctx.quadraticCurveTo(radius*5, radius*0.5, radius*5.5, radius*2.5);
+              ctx.quadraticCurveTo(radius*4, radius*1, radius*4, radius*3);
               ctx.quadraticCurveTo(radius*2, radius*1.5, radius*1, radius*2);
               ctx.fill(); ctx.restore();
               ctx.restore();
 
-              // 3. LIVING SHADOW CLOAK (Independent Aura)
               ctx.globalCompositeOperation = 'source-over';
               ctx.save(); ctx.translate(x, y - radius + floatY);
               const cloakSway = Math.sin(time * 0.003) * 15;
               const cloakGrad = ctx.createLinearGradient(0, 0, 0, radius*8);
               cloakGrad.addColorStop(0, 'rgba(10, 0, 15, 0.9)');
-              cloakGrad.addColorStop(0.6, 'rgba(139, 92, 246, 0.5)'); // Violet tint
+              cloakGrad.addColorStop(0.6, 'rgba(139, 92, 246, 0.5)');
               cloakGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = cloakGrad; 
               
@@ -6948,44 +6961,45 @@ for (const p of eng.particles) {
               ctx.quadraticCurveTo(radius*3.5, radius*4, radius*1.2, 0);
               ctx.fill(); ctx.restore();
 
-              // 4. FLOATING CORRUPTED RELICS (Orbiting Magic Stones)
               const relicCount = 3;
               for(let i=0; i<relicCount; i++) {
                   const rAng = time*0.002 + (i*Math.PI*2/relicCount);
                   const rX = x + Math.cos(rAng)*radius*5;
                   const rY = y - radius*1.5 + floatY + Math.sin(rAng*2)*radius*2;
                   
-                  ctx.save(); ctx.translate(rX, rY); ctx.rotate(time*0.005 + i);
+                  ctx.save(); ctx.translate(rX, rY);
+                  ctx.rotate(time*0.005 + i);
                   ctx.fillStyle = '#0f0514'; ctx.strokeStyle = '#8b5cf6'; ctx.lineWidth = 1.5;
                   ctx.shadowBlur = 15; ctx.shadowColor = '#8b5cf6';
-                  ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(5, 0); ctx.lineTo(0, 15); ctx.lineTo(-5, 0); ctx.closePath();
+                  ctx.beginPath();
+                  ctx.moveTo(0, -10); ctx.lineTo(5, 0); ctx.lineTo(0, 15); ctx.lineTo(-5, 0); ctx.closePath();
                   ctx.fill(); ctx.stroke();
-                  // Crimson crack inside
-                  ctx.strokeStyle = '#e11d48'; ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 8); ctx.stroke();
+                  ctx.strokeStyle = '#e11d48';
+                  ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(0, 8); ctx.stroke();
                   ctx.restore();
                   
-                  // Tether
-                  ctx.strokeStyle = `rgba(139, 92, 246, 0.2)`; ctx.lineWidth = 1;
+                  ctx.strokeStyle = `rgba(139, 92, 246, 0.2)`;
+                  ctx.lineWidth = 1;
                   ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(rX, rY); ctx.stroke();
               }
 
-              // 5. INFERNAL HALO (Floating Spiked Crown)
-              ctx.save(); ctx.translate(x, y - radius*3 + floatY);
+              ctx.save();
+              ctx.translate(x, y - radius*3 + floatY);
               ctx.scale(1, 0.3); ctx.rotate(time * 0.002);
-              ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 3; ctx.shadowBlur = 20; ctx.shadowColor = '#be123c';
+              ctx.strokeStyle = '#e11d48'; ctx.lineWidth = 3; ctx.shadowBlur = 20;
+              ctx.shadowColor = '#be123c';
               ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
               for(let i=0; i<5; i++) {
                   ctx.rotate(Math.PI*2/5);
                   ctx.beginPath(); ctx.moveTo(radius*2.5, 0); ctx.lineTo(radius*4, 0); ctx.stroke();
               }
               ctx.restore();
-
-              // 6. DARK LIGHTNING & SHADOW FLAME PARTICLES
+              
               ctx.globalCompositeOperation = 'lighter';
               if (Math.random() < 0.3) {
-                  // Violet or Crimson Lightning
-                  const lColor = Math.random() > 0.5 ? {c: '#ffffff', g: '#8b5cf6'} : {c: '#ffffff', g: '#e11d48'};
-                  if(typeof drawLightning === 'function') { // Fallback if helper is accessible
+                  const lColor = Math.random() > 0.5 ?
+                  {c: '#ffffff', g: '#8b5cf6'} : {c: '#ffffff', g: '#e11d48'};
+                  if(typeof drawLightning === 'function') { 
                       drawLightning(x + (Math.random()-0.5)*radius*4, y - radius*4 + floatY, 
                                     x + (Math.random()-0.5)*radius*10, y + 10 + (Math.random()-0.5)*radius*5, 
                                     lColor.c, lColor.g, 4, true);
@@ -7004,43 +7018,39 @@ for (const p of eng.particles) {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.003 + i)*0.6; s.life -= 0.015; s.size -= 0.05;
                   if (s.life <= 0) { eng.infernalSmoke.splice(i, 1); return; }
                   ctx.fillStyle = s.isViolet ? `rgba(139, 92, 246, ${s.life*0.6})` : `rgba(225, 29, 72, ${s.life*0.6})`;
-                  ctx.shadowBlur = 15; ctx.shadowColor = s.isViolet ? '#7c3aed' : '#be123c';
+                  // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy + floatY, s.size, 0, Math.PI*2); ctx.fill();
               });
-
-              // 7. ABSOLUTE DOMINANCE CORE BLOOM
+              
               const coreGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius*4.5);
-              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.6)'); // Piercing white light
-              coreGrad.addColorStop(0.2, 'rgba(225, 29, 72, 0.8)'); // Scarlet
-              coreGrad.addColorStop(0.5, 'rgba(109, 40, 217, 0.4)'); // Abyssal Violet
+              coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.6)'); 
+              coreGrad.addColorStop(0.2, 'rgba(225, 29, 72, 0.8)');
+              coreGrad.addColorStop(0.5, 'rgba(109, 40, 217, 0.4)');
               coreGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = coreGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius*4.5, 0, Math.PI*2); ctx.fill();
           }
 
           else if (skinId === 'leviathan') {
-              ctx.globalCompositeOperation = 'lighter'; // Blinding holy light
+              ctx.globalCompositeOperation = 'lighter';
               const pulse = Math.sin(time * 0.003);
-              const floatY = Math.sin(time * 0.002) * 5; // Divine levitation
+              const floatY = Math.sin(time * 0.002) * 5; 
 
-              // 1. DIVINE OCEANIC SEAL (Floor)
-              ctx.save(); 
-              ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); // 3D Perspective
+              ctx.save();
+              ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
               
-              // Sapphire Whirlpool Base
               const waterGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6);
-              waterGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Holy white core
-              waterGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.6)'); // Divine aqua
-              waterGrad.addColorStop(0.8, 'rgba(2, 132, 199, 0.3)'); // Ocean sapphire
+              waterGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+              waterGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.6)');
+              waterGrad.addColorStop(0.8, 'rgba(2, 132, 199, 0.3)');
               waterGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = waterGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6, 0, Math.PI*2); ctx.fill();
-
-              // Rotating Water Runes & Gold Filigree
+              
               ctx.rotate(time * 0.0008);
               ctx.strokeStyle = `rgba(56, 189, 248, ${0.6 + pulse * 0.2})`; 
               ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 15; ctx.lineWidth = 2.5;
               
-              // Geometric Water Rings
-              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.beginPath();
+              ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
               ctx.beginPath();
               for(let i=0; i<6; i++) {
                   ctx.rotate(Math.PI * 2 / 6);
@@ -7048,216 +7058,213 @@ for (const p of eng.particles) {
                   ctx.quadraticCurveTo(radius*2, radius*4, 0, radius*5);
               }
               ctx.stroke();
-
-              // Mythic Gold Accents
+              
               ctx.rotate(time * -0.0015);
-              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)'; // Mythic Gold
-              ctx.lineWidth = 2; ctx.shadowColor = '#fde047'; ctx.shadowBlur = 10;
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)'; 
+              ctx.lineWidth = 2;
+              ctx.shadowColor = '#fde047'; ctx.shadowBlur = 10;
               ctx.setLineDash([15, 10, 5, 10]);
-              ctx.beginPath(); ctx.arc(0, 0, radius * 5.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.beginPath(); ctx.arc(0, 0, radius * 5.5, 0, Math.PI * 2);
+              ctx.stroke();
               ctx.setLineDash([]); ctx.restore();
 
-              // 2. LEVIATHAN SPIRIT (Translucent Water Dragon swirling behind)
-              ctx.save(); ctx.translate(x, y - radius + floatY);
+              ctx.save();
+              ctx.translate(x, y - radius + floatY);
               ctx.lineWidth = 12; ctx.lineCap = 'round';
               ctx.shadowBlur = 20; ctx.shadowColor = '#0ea5e9';
               
-              // The Spirit Serpent Body
               ctx.beginPath();
               for(let j=0; j<=30; j++) {
-                  const sAng = (time * -0.002) + (j * 0.2); // Spirals around
+                  const sAng = (time * -0.002) + (j * 0.2);
                   const sDist = radius * 4.5 + Math.sin(time*0.004 + j)*2;
                   const sx = Math.cos(sAng) * sDist;
-                  const sy = Math.sin(sAng) * sDist * 0.5 - (j * 1.5) + Math.sin(time*0.003 + j)*5; // Helical motion up
-                  if(j===0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+                  const sy = Math.sin(sAng) * sDist * 0.5 - (j * 1.5) + Math.sin(time*0.003 + j)*5;
+                  if(j===0) ctx.moveTo(sx, sy);
+                  else ctx.lineTo(sx, sy);
               }
               
-              // Spirit Gradient
               const spiritGrad = ctx.createLinearGradient(0, radius*2, 0, -radius*6);
-              spiritGrad.addColorStop(0, 'rgba(2, 132, 199, 0)'); // Faded tail
-              spiritGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.5)'); // Cyan body
-              spiritGrad.addColorStop(1, 'rgba(255, 255, 255, 0.8)'); // White-hot head
+              spiritGrad.addColorStop(0, 'rgba(2, 132, 199, 0)'); 
+              spiritGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.5)');
+              spiritGrad.addColorStop(1, 'rgba(255, 255, 255, 0.8)');
               
-              ctx.strokeStyle = spiritGrad; ctx.stroke();
-              // Inner Bright Spine
-              ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.shadowBlur = 0; ctx.stroke();
+              ctx.strokeStyle = spiritGrad;
+              ctx.stroke();
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = '#ffffff'; ctx.shadowBlur = 0; ctx.stroke();
               ctx.restore();
 
-              // 3. CRYSTAL WATER WINGS (Translucent Angular Wings)
               const flapAngle = Math.sin(time * 0.004) * 0.15;
               for (let w = -1; w <= 1; w += 2) {
-                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
+                  ctx.save();
+                  ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
                   ctx.rotate(flapAngle + 0.1);
                   
                   const wingGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
-                  wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Solid wing root
-                  wingGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.7)'); // Aqua crystal
-                  wingGrad.addColorStop(1, 'rgba(2, 132, 199, 0)'); // Transparent edge
+                  wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+                  wingGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.7)');
+                  wingGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');
 
-                  ctx.fillStyle = wingGrad; ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+                  ctx.fillStyle = wingGrad;
+                  ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
                   
-                  // Valkyrie Crystal Shards (Sharp, elegant polygonal wings)
                   ctx.beginPath();
                   ctx.moveTo(radius, 0);
                   ctx.lineTo(radius*3, -radius*2);
-                  ctx.lineTo(radius*6, -radius*4 + Math.sin(time*0.005)*3); // Wing tip 1
+                  ctx.lineTo(radius*6, -radius*4 + Math.sin(time*0.005)*3); 
                   ctx.lineTo(radius*4.5, -radius*1);
-                  ctx.lineTo(radius*7, radius*1 + Math.sin(time*0.006)*2);  // Wing tip 2
+                  ctx.lineTo(radius*7, radius*1 + Math.sin(time*0.006)*2);  
                   ctx.lineTo(radius*3.5, radius*1.5);
-                  ctx.lineTo(radius*4.5, radius*3); // Wing tip 3
+                  ctx.lineTo(radius*4.5, radius*3); 
                   ctx.lineTo(radius*1.5, radius*2);
                   ctx.closePath(); ctx.fill();
                   
-                  // Crystal Facet Lines (Engravings)
-                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.lineWidth = 1.5; ctx.shadowBlur = 0;
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+                  ctx.lineWidth = 1.5; ctx.shadowBlur = 0;
                   ctx.beginPath(); ctx.moveTo(radius, 0); ctx.lineTo(radius*6, -radius*4); ctx.stroke();
                   ctx.beginPath(); ctx.moveTo(radius*2.5, -radius*0.5); ctx.lineTo(radius*7, radius*1); ctx.stroke();
                   ctx.restore();
               }
 
-              // 4. CELESTIAL WATER HALO (Above Head)
-              ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
+              ctx.save();
+              ctx.translate(x, y - radius*3.5 + floatY);
               ctx.scale(1, 0.3); ctx.rotate(time * 0.002);
-              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 3; ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
+              ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 3;
+              ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
               ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
-              // Gold and Sapphire embedded in the halo
-              ctx.strokeStyle = '#fde047'; ctx.lineWidth = 5; ctx.setLineDash([5, 15]);
+              ctx.strokeStyle = '#fde047';
+              ctx.lineWidth = 5; ctx.setLineDash([5, 15]);
               ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
               ctx.restore();
-
-              // 5. HOLY BLUE LIGHTNING (Divine Surges)
+              
               if (Math.random() < 0.2) {
-                  if(typeof drawLightning === 'function') { // Fallback if helper is accessible
+                  if(typeof drawLightning === 'function') { 
                       drawLightning(x + (Math.random()-0.5)*radius*3, y - radius*3 + floatY, 
                                     x + (Math.random()-0.5)*radius*10, y + 10 + (Math.random()-0.5)*radius*5, 
                                     '#ffffff', '#0284c7', 3, true);
                   }
               }
 
-              // 6. ANTI-GRAVITY WATER DROPLETS & GLOWING BUTTERFLIES
               if (!eng.leviParticles) eng.leviParticles = [];
               if (eng.leviParticles.length < 35 && Math.random() < 0.5) {
                   const isButterfly = Math.random() > 0.8;
                   eng.leviParticles.push({
                       ox: (Math.random() - 0.5) * radius * 8, 
-                      oy: radius * 2 + Math.random() * 5, // Starts at the bottom
-                      vy: 0.5 + Math.random() * 1.5, // Floats UPWARDS
+                      oy: radius * 2 + Math.random() * 5, 
+                      vy: 0.5 + Math.random() * 1.5, 
                       size: isButterfly ? 3+Math.random()*2 : 1+Math.random()*3, 
                       life: 1, rot: Math.random()*Math.PI*2,
                       isButterfly: isButterfly
                   });
               }
               eng.leviParticles.forEach((p, i) => {
-                  p.oy -= p.vy; // Anti-gravity movement (Up)
+                  p.oy -= p.vy; 
                   p.ox += Math.sin(time*0.003 + i)*0.8; p.rot += 0.05; p.life -= 0.01;
                   if (p.life <= 0) { eng.leviParticles.splice(i, 1); return; }
 
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
                   
                   if (p.isButterfly) {
-                      // Magical Glowing Butterfly
                       const flap = Math.abs(Math.sin(time * 0.02 + i));
-                      ctx.scale(flap, 1); // Butterfly wing flapping
+                      ctx.scale(flap, 1); 
                       ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
-                      ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
-                      ctx.beginPath(); ctx.ellipse(p.size, 0, p.size, p.size*1.5, Math.PI/4, 0, Math.PI*2); ctx.fill(); // Right Wing
-                      ctx.beginPath(); ctx.ellipse(-p.size, 0, p.size, p.size*1.5, -Math.PI/4, 0, Math.PI*2); ctx.fill(); // Left Wing
+                      // 🔥 OPTIMIZED: Removed shadowBlur.
+                      ctx.beginPath(); ctx.ellipse(p.size, 0, p.size, p.size*1.5, Math.PI/4, 0, Math.PI*2); ctx.fill(); 
+                      ctx.beginPath(); ctx.ellipse(-p.size, 0, p.size, p.size*1.5, -Math.PI/4, 0, Math.PI*2);
+                      ctx.fill(); 
                   } else {
-                      // Rising Water Droplet / Star
-                      ctx.fillStyle = `rgba(224, 242, 254, ${p.life})`; ctx.shadowBlur = 10; ctx.shadowColor = '#0284c7';
+                      ctx.fillStyle = `rgba(224, 242, 254, ${p.life})`;
                       ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
                   }
                   ctx.restore();
               });
-
-              // 7. ORBITING SAPPHIRE GEMS
+              
               const gemCount = 4;
               for(let i=0; i<gemCount; i++) {
                   const gAng = time*0.003 + (i*Math.PI*2/gemCount);
                   const gX = x + Math.cos(gAng)*radius*4;
                   const gY = y - radius*1.5 + floatY + Math.sin(gAng*2)*radius*1.5;
                   
-                  ctx.save(); ctx.translate(gX, gY); ctx.rotate(time*0.005 + i);
+                  ctx.save(); ctx.translate(gX, gY);
+                  ctx.rotate(time*0.005 + i);
                   ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 1.5;
                   ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
-                  ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(4, 0); ctx.lineTo(0, 6); ctx.lineTo(-4, 0); ctx.closePath();
+                  ctx.beginPath();
+                  ctx.moveTo(0, -6); ctx.lineTo(4, 0); ctx.lineTo(0, 6); ctx.lineTo(-4, 0); ctx.closePath();
                   ctx.fill(); ctx.stroke();
                   ctx.restore();
               }
 
-              // 8. SAINT VALKYRIE CORE BLOOM
               const holyGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius*4);
-              holyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); // Blinding celestial white
-              holyGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.6)'); // Radiant Aqua
-              holyGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');     
+              holyGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+              holyGrad.addColorStop(0.3, 'rgba(56, 189, 248, 0.6)');
+              holyGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');
               ctx.fillStyle = holyGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius*4, 0, Math.PI * 2); ctx.fill();
           }
-// 🌌⏳ ETERNAL REMEMBRANCE (Celestial Astral Sovereign - Clean Majestic Vibe)
+
+          // 🌌⏳ ETERNAL REMEMBRANCE
           else if (skinId === 'remembrance') {
               ctx.globalCompositeOperation = 'lighter';
               const pulse = Math.sin(time * 0.002);
-              const floatY = Math.sin(time * 0.0015) * 6; // Slow, eternal levitation
+              const floatY = Math.sin(time * 0.0015) * 6;
 
-              // 1. TIME DISTORTION & ASTRAL CLOCKWORK SEAL
-              ctx.save(); 
+              ctx.save();
               ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
               
-              // Midnight Blue Starlight Base
               const starGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6.5);
-              starGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); // White hot center
-              starGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); // Cyan/Starlight Blue
-              starGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.4)'); // Midnight Void
+              starGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); 
+              starGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)');
+              starGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.4)');
               starGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = starGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6.5, 0, Math.PI*2); ctx.fill();
-
-              // Time Ripples (Expanding transparent rings)
+              
               for(let i=0; i<3; i++) {
                   const rippleRad = ((time * 0.05) + (i * radius*3)) % (radius * 8);
                   ctx.strokeStyle = `rgba(224, 242, 254, ${1 - (rippleRad/(radius*8))})`;
                   ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rippleRad, 0, Math.PI*2); ctx.stroke();
               }
 
-              // Astral Clockwork & Zodiac Circle (Replacing Elven Runes)
               ctx.rotate(time * 0.0005);
               ctx.strokeStyle = `rgba(186, 230, 253, ${0.6 + pulse * 0.2})`; 
               ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 15; ctx.lineWidth = 2;
               
-              // Outer dials
-              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
-              ctx.setLineDash([5, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 5.2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+              ctx.beginPath();
+              ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([5, 10]); ctx.beginPath();
+              ctx.arc(0, 0, radius * 5.2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
               
-              // Clock Hands (Moving slowly)
               ctx.save();
-              ctx.rotate(time * 0.001); // Minute hand
-              ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -radius * 4); ctx.stroke();
-              ctx.rotate(time * 0.0002); // Hour hand
-              ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(radius * 2.5, 0); ctx.stroke();
+              ctx.rotate(time * 0.001); 
+              ctx.beginPath();
+              ctx.moveTo(0, 0); ctx.lineTo(0, -radius * 4); ctx.stroke();
+              ctx.rotate(time * 0.0002);
+              ctx.lineWidth = 4; ctx.beginPath();
+              ctx.moveTo(0, 0); ctx.lineTo(radius * 2.5, 0); ctx.stroke();
               ctx.restore();
               ctx.restore();
 
-              // 2. CONSTELLATION CAPE / WINGS (Night sky fabric)
               for (let w = -1; w <= 1; w += 2) {
-                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
+                  ctx.save();
+                  ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
                   const capeSway = Math.sin(time * 0.002) * 0.15;
                   ctx.rotate(capeSway + 0.1);
-
-                  // Cape Fabric (Midnight to Transparent Cyan)
+                  
                   const capeGradient = ctx.createLinearGradient(0, 0, radius*7, radius*5);
                   capeGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
                   capeGradient.addColorStop(0.3, 'rgba(56, 189, 248, 0.8)');
                   capeGradient.addColorStop(1, 'rgba(30, 27, 75, 0)');
 
-                  ctx.fillStyle = capeGradient; ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
+                  ctx.fillStyle = capeGradient;
+                  ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
                   ctx.beginPath();
                   ctx.moveTo(radius, 0);
-                  // Elegant sweeping wing shapes
                   ctx.bezierCurveTo(radius*3, -radius*2, radius*5, -radius*1, radius*7 + Math.sin(time*0.003)*3, radius*3);
                   ctx.quadraticCurveTo(radius*5, radius*5, radius*3, radius*6);
                   ctx.quadraticCurveTo(radius*2, radius*3, radius, radius);
                   ctx.fill();
 
-                  // Constellation Stars inside the Cape
-                  ctx.fillStyle = '#ffffff'; ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1; ctx.shadowBlur = 5;
+                  ctx.fillStyle = '#ffffff';
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1; ctx.shadowBlur = 5;
                   const starPoints = [ {px: 20, py: 10}, {px: 35, py: 5}, {px: 40, py: 25}, {px: 25, py: 30} ];
                   ctx.beginPath();
                   starPoints.forEach((pt, i) => {
@@ -7272,7 +7279,6 @@ for (const p of eng.particles) {
                   ctx.restore();
               }
 
-              // 3. FLOATING CHRONO-SPHERES (Replacing the Books)
               ctx.globalCompositeOperation = 'source-over';
               const orbCount = 3;
               for(let i=0; i<orbCount; i++) {
@@ -7283,33 +7289,32 @@ for (const p of eng.particles) {
                   ctx.save(); ctx.translate(bX, bY);
                   ctx.translate(0, Math.sin(time*0.004 + i)*5); 
                   
-                  // Glowing Core
-                  ctx.shadowBlur = 15; ctx.shadowColor = '#7dd3fc';
+                  ctx.shadowBlur = 15;
+                  ctx.shadowColor = '#7dd3fc';
                   ctx.fillStyle = '#ffffff';
                   ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
                   
-                  // Rotating Astrolabe Rings
-                  ctx.strokeStyle = '#fde047'; // Starlight Gold
+                  ctx.strokeStyle = '#fde047';
                   ctx.lineWidth = 1.5;
                   ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, time*0.003 + i, 0, Math.PI*2); ctx.stroke();
-                  ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, -time*0.002 + i + Math.PI/2, 0, Math.PI*2); ctx.stroke();
+                  ctx.beginPath();
+                  ctx.ellipse(0, 0, 8, 12, -time*0.002 + i + Math.PI/2, 0, Math.PI*2); ctx.stroke();
                   ctx.restore();
-
-                  // Golden energy tether
-                  ctx.strokeStyle = `rgba(253, 224, 71, 0.2)`; ctx.lineWidth = 1;
+                  
+                  ctx.strokeStyle = `rgba(253, 224, 71, 0.2)`;
+                  ctx.lineWidth = 1;
                   ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(bX, bY); ctx.stroke();
               }
 
-              // 4. PRISMATIC SHARDS & ASTRAL DUST (Replacing Flowers & Butterflies)
               ctx.globalCompositeOperation = 'lighter';
               if (!eng.astralParticles) eng.astralParticles = [];
               if (eng.astralParticles.length < 35 && Math.random() < 0.5) {
-                  const type = Math.random(); // 0.6 Prisms, 0.3 Dust, 0.1 Starfeathers
+                  const type = Math.random();
                   eng.astralParticles.push({
                       ox: (Math.random() - 0.5) * radius * 9, 
                       oy: (Math.random() - 0.5) * radius * 8,
                       vx: (Math.random() - 0.5) * 1.5,
-                      vy: -0.5 - Math.random(), // Floats upwards
+                      vy: -0.5 - Math.random(),
                       size: (type > 0.9) ? 3+Math.random()*3 : 1.5+Math.random()*1.5, 
                       life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
                   });
@@ -7322,105 +7327,94 @@ for (const p of eng.particles) {
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
                   
                   if (p.type > 0.9) {
-                      // Starfeathers (Glowing elegant energy feathers)
                       ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`;
-                      ctx.shadowBlur = 10; ctx.shadowColor = '#0ea5e9';
+                      // 🔥 OPTIMIZED: Removed shadowBlur.
                       ctx.beginPath();
                       ctx.moveTo(0, -p.size);
                       ctx.quadraticCurveTo(p.size, 0, 0, p.size);
                       ctx.quadraticCurveTo(-p.size, 0, 0, -p.size);
                       ctx.fill();
                   } else if (p.type > 0.3) {
-                      // Crystal Memory Prisms (Diamonds)
                       ctx.fillStyle = `rgba(96, 165, 250, ${p.life})`;
-                      ctx.shadowBlur = 5; ctx.shadowColor = '#38bdf8';
                       ctx.beginPath();
                       ctx.moveTo(0, -p.size); ctx.lineTo(p.size/2, 0); ctx.lineTo(0, p.size); ctx.lineTo(-p.size/2, 0);
                       ctx.closePath(); ctx.fill();
                   } else {
-                      // Celestial Stardust
-                      ctx.fillStyle = `rgba(248, 250, 252, ${p.life})`; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
+                      ctx.fillStyle = `rgba(248, 250, 252, ${p.life})`; 
                       ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
                   }
                   ctx.restore();
               });
-
-              // 5. GEOMETRIC ASTRAL CROWN (Replacing Flower Halo)
-              ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
+              
+              ctx.save();
+              ctx.translate(x, y - radius*3.5 + floatY);
               ctx.scale(1, 0.3); ctx.rotate(time * 0.001);
               
-              // Double Ring
-              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)'; // Starlight Gold
-              ctx.lineWidth = 2; ctx.shadowBlur = 15; ctx.shadowColor = '#fde047';
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)';
+              ctx.lineWidth = 2;
+              ctx.shadowBlur = 15; ctx.shadowColor = '#fde047';
               ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
-              ctx.setLineDash([4, 8]); ctx.beginPath(); ctx.arc(0, 0, radius*3, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+              ctx.setLineDash([4, 8]); ctx.beginPath();
+              ctx.arc(0, 0, radius*3, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
               
-              // Crown Spikes
               for(let i=0; i<4; i++) {
                   ctx.rotate(Math.PI*2/4);
                   ctx.fillStyle = '#ffffff';
                   ctx.beginPath(); ctx.moveTo(-2, -radius*2.5); ctx.lineTo(2, -radius*2.5); ctx.lineTo(0, -radius*4); ctx.fill();
               }
               ctx.restore();
-
-              // 6. TIMELESS CORE BLOOM
+              
               const astralGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 4.5);
               astralGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
-              astralGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); // Cyan/Blue glow
-              astralGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');     
+              astralGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)');
+              astralGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');
               ctx.fillStyle = astralGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius * 4.5, 0, Math.PI * 2); ctx.fill();
           }
 
-// 🌌⏳ THE ABSOLUTE PINNACLE TIER: ETERNAL REMEMBRANCE (Himmel's Legacy)
+          // 🌌⏳ THE ABSOLUTE PINNACLE TIER: ETERNAL REMEMBRANCE
           else if (skinId === 'frieren') {
               ctx.globalCompositeOperation = 'lighter';
               const pulse = Math.sin(time * 0.002);
-              const floatY = Math.sin(time * 0.001) * 6; // Timeless, slow levitation
+              const floatY = Math.sin(time * 0.001) * 6;
 
-              // --- 1. HIMMEL'S PROMISE: THE MIRROR LOTUS MOON (Clean, Majestic Halo) ---
-              ctx.save(); 
-              // Nakapwesto sa likuran at itaas ng player
-              ctx.translate(x, y - radius * 3 + floatY); 
+              ctx.save();
+              ctx.translate(x, y - radius * 3 + floatY);
               
-              // Soft Celestial Moon Aura
               const moonGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 8);
               moonGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-              moonGrad.addColorStop(0.4, 'rgba(96, 165, 250, 0.15)'); // Forget-Me-Not Blue
+              moonGrad.addColorStop(0.4, 'rgba(96, 165, 250, 0.15)');
               moonGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = moonGrad; 
               ctx.beginPath(); ctx.arc(0, 0, radius * 8, 0, Math.PI * 2); ctx.fill();
-
-              // Giant Rotating Mirror Lotus
+              
               ctx.rotate(time * 0.0005);
-              ctx.strokeStyle = `rgba(224, 242, 254, ${0.4 + pulse * 0.2})`; // Shimmering silver-white
-              ctx.lineWidth = 1.5; 
+              ctx.strokeStyle = `rgba(224, 242, 254, ${0.4 + pulse * 0.2})`;
+              ctx.lineWidth = 1.5;
               ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
               
-              // Drawing elegant overlapping lotus petals
               for(let i=0; i<8; i++) {
                   ctx.rotate(Math.PI * 2 / 8);
                   ctx.beginPath();
                   ctx.moveTo(0, 0);
-                  ctx.quadraticCurveTo(radius * 3, -radius * 2, 0, -radius * 7); // Right curve of petal
-                  ctx.quadraticCurveTo(-radius * 3, -radius * 2, 0, 0);          // Left curve of petal
+                  ctx.quadraticCurveTo(radius * 3, -radius * 2, 0, -radius * 7);
+                  ctx.quadraticCurveTo(-radius * 3, -radius * 2, 0, 0);
                   ctx.stroke();
               }
               
-              // Delicate Starlight Ring containing the Lotus
-              ctx.rotate(time * -0.001); // Counter-rotation
-              ctx.strokeStyle = 'rgba(253, 224, 71, 0.4)'; // Soft Starlight Gold
+              ctx.rotate(time * -0.001);
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.4)';
               ctx.lineWidth = 2;
               ctx.setLineDash([4, 12]);
               ctx.beginPath(); ctx.arc(0, 0, radius * 7.5, 0, Math.PI * 2); ctx.stroke();
               ctx.setLineDash([]);
               ctx.restore();
-
-              // --- 2. HIMMEL TRIBUTE: HEROIC SILHOUETTE ---
-              const himmelAlpha = Math.max(0, Math.sin(time * 0.0008) - 0.4) * 0.4; 
+              
+              const himmelAlpha = Math.max(0, Math.sin(time * 0.0008) - 0.4) * 0.4;
               if (himmelAlpha > 0) {
-                  ctx.save(); ctx.translate(x, y - radius*2);
+                  ctx.save();
+                  ctx.translate(x, y - radius*2);
                   const himmelGrad = ctx.createLinearGradient(0, -radius*6, 0, radius*2);
-                  himmelGrad.addColorStop(0, `rgba(253, 224, 71, ${himmelAlpha})`); 
+                  himmelGrad.addColorStop(0, `rgba(253, 224, 71, ${himmelAlpha})`);
                   himmelGrad.addColorStop(0.6, `rgba(96, 165, 250, ${himmelAlpha * 0.5})`); 
                   himmelGrad.addColorStop(1, 'rgba(0,0,0,0)');
                   ctx.fillStyle = himmelGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#fde047';
@@ -7432,8 +7426,8 @@ for (const p of eng.particles) {
                   ctx.fill(); ctx.restore();
               }
 
-              // --- 3. DOMAIN OF ETERNITY (Galactic Floor) ---
-              ctx.save(); ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
+              ctx.save();
+              ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
               const voidGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 8);
               voidGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); 
               voidGrad.addColorStop(0.2, 'rgba(30, 27, 75, 0.8)'); 
@@ -7443,25 +7437,28 @@ for (const p of eng.particles) {
 
               ctx.rotate(time * -0.0003);
               ctx.strokeStyle = `rgba(186, 230, 253, ${0.4 + pulse * 0.2})`; ctx.lineWidth = 1.5; ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = 10;
-              ctx.beginPath(); ctx.arc(0, 0, radius * 6, 0, Math.PI*2); ctx.stroke();
-              ctx.setLineDash([5, 15, 2, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 7, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+              ctx.beginPath();
+              ctx.arc(0, 0, radius * 6, 0, Math.PI*2); ctx.stroke();
+              ctx.setLineDash([5, 15, 2, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 7, 0, Math.PI*2);
+              ctx.stroke(); ctx.setLineDash([]);
               
               for(let i=0; i<3; i++) {
                   ctx.rotate(Math.PI*2/3);
                   ctx.beginPath(); ctx.moveTo(-radius*7, 0); ctx.bezierCurveTo(-radius*3, radius*3, radius*3, -radius*3, radius*7, 0); ctx.stroke();
               }
               ctx.restore();
-
-              // --- 4. PROCEDURAL CONSTELLATION WINGS ---
+              
               const wingFlap = Math.sin(time * 0.002) * 0.15 + 0.1;
               for (let w = -1; w <= 1; w += 2) {
-                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1); ctx.rotate(wingFlap);
+                  ctx.save();
+                  ctx.translate(x, y - radius + floatY); ctx.scale(w, 1); ctx.rotate(wingFlap);
                   
                   const wingGrad = ctx.createLinearGradient(0, 0, radius*8, -radius*5);
                   wingGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
                   wingGrad.addColorStop(0.4, 'rgba(14, 165, 233, 0.6)');
                   wingGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');
-                  ctx.fillStyle = wingGrad; ctx.shadowBlur = 20; ctx.shadowColor = '#0ea5e9';
+                  ctx.fillStyle = wingGrad;
+                  ctx.shadowBlur = 20; ctx.shadowColor = '#0ea5e9';
                   
                   ctx.beginPath(); ctx.moveTo(radius, 0);
                   ctx.bezierCurveTo(radius*3, -radius*5, radius*6, -radius*4, radius*9 + Math.sin(time*0.002)*4, -radius*2);
@@ -7469,26 +7466,26 @@ for (const p of eng.particles) {
                   ctx.quadraticCurveTo(radius*5, radius*2, radius*5, radius*4);
                   ctx.quadraticCurveTo(radius*3, radius*2, radius, radius*1);
                   ctx.fill();
-
+                  
                   const stars = [ {x: radius*2, y: -radius*1}, {x: radius*4, y: -radius*3}, {x: radius*7, y: -radius*2}, {x: radius*5, y: radius*1}, {x: radius*3, y: radius*1.5} ];
                   ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 1; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
                   ctx.beginPath(); ctx.moveTo(stars[0].x, stars[0].y);
                   for(let i=1; i<stars.length; i++) ctx.lineTo(stars[i].x, stars[i].y);
                   ctx.stroke();
                   
-                  ctx.fillStyle = '#fde047'; 
+                  ctx.fillStyle = '#fde047';
                   stars.forEach(st => { ctx.beginPath(); ctx.arc(st.x, st.y, 1.5 + Math.random(), 0, Math.PI*2); ctx.fill(); });
                   ctx.restore();
               }
 
-              // --- 5. FLOATING GRIMOIRES & ELVEN RIBBONS ---
               ctx.globalCompositeOperation = 'source-over';
               for(let i=0; i<2; i++) {
                   const bAng = time*0.001 + (i*Math.PI);
                   const bX = x + Math.cos(bAng)*radius*5.5;
                   const bY = y - radius*2 + floatY + Math.sin(bAng*2)*radius*1.5;
                   
-                  ctx.save(); ctx.translate(bX, bY); ctx.translate(0, Math.sin(time*0.003 + i)*4); 
+                  ctx.save(); ctx.translate(bX, bY);
+                  ctx.translate(0, Math.sin(time*0.003 + i)*4); 
                   ctx.shadowBlur = 15; ctx.shadowColor = '#7dd3fc';
                   ctx.fillStyle = '#0f172a'; ctx.fillRect(-10, -2, 20, 4); 
                   
@@ -7510,11 +7507,10 @@ for (const p of eng.particles) {
                   ctx.stroke();
               }
 
-              // --- 6. FORGET-ME-NOTS, BUTTERFLIES, & REVERSE-TIME PARTICLES ---
               ctx.globalCompositeOperation = 'lighter';
               if (!eng.eternityParticles) eng.eternityParticles = [];
               if (eng.eternityParticles.length < 45 && Math.random() < 0.6) {
-                  const type = Math.random(); 
+                  const type = Math.random();
                   eng.eternityParticles.push({
                       ox: (Math.random() - 0.5) * radius * 12, oy: (Math.random() - 0.5) * radius * 10,
                       vx: (Math.random() - 0.5) * 1.5, vy: (type < 0.2) ? 0.5 + Math.random() : -0.5 - Math.random(), 
@@ -7535,37 +7531,43 @@ for (const p of eng.particles) {
                   
                   if (p.type > 0.8) {
                       ctx.fillStyle = `rgba(96, 165, 250, ${p.life})`; 
-                      ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
+                      // 🔥 OPTIMIZED: Removed shadowBlur.
                       for(let f=0; f<5; f++) {
                           const fAng = f * Math.PI * 2 / 5;
                           ctx.beginPath(); ctx.arc(Math.cos(fAng)*p.size, Math.sin(fAng)*p.size, p.size, 0, Math.PI*2); ctx.fill();
                       }
-                      ctx.fillStyle = `rgba(253, 224, 71, ${p.life})`; 
+                      ctx.fillStyle = `rgba(253, 224, 71, ${p.life})`;
                       ctx.beginPath(); ctx.arc(0, 0, p.size*0.6, 0, Math.PI*2); ctx.fill();
                   } else if (p.type > 0.6) {
-                      const flap = Math.abs(Math.sin(time * 0.02 + i)); ctx.scale(flap, 1);
-                      ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`; ctx.shadowBlur = 10; ctx.shadowColor = '#0ea5e9';
-                      ctx.beginPath(); ctx.ellipse(p.size, 0, p.size, p.size*1.5, Math.PI/4, 0, Math.PI*2); ctx.fill(); 
-                      ctx.beginPath(); ctx.ellipse(-p.size, 0, p.size, p.size*1.5, -Math.PI/4, 0, Math.PI*2); ctx.fill(); 
+                      const flap = Math.abs(Math.sin(time * 0.02 + i));
+                      ctx.scale(flap, 1);
+                      ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`; 
+                      ctx.beginPath();
+                      ctx.ellipse(p.size, 0, p.size, p.size*1.5, Math.PI/4, 0, Math.PI*2); ctx.fill(); 
+                      ctx.beginPath(); ctx.ellipse(-p.size, 0, p.size, p.size*1.5, -Math.PI/4, 0, Math.PI*2); ctx.fill();
                   } else {
-                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`; ctx.shadowBlur = 8; ctx.shadowColor = '#fde047';
+                      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
                       ctx.beginPath(); ctx.arc(0, 0, p.size*0.8, 0, Math.PI*2); ctx.fill();
                   }
                   ctx.restore();
               });
-
-              // --- 7. ETERNAL CORE BLOOM ---
+              
               const eternalGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 5);
               eternalGrad.addColorStop(0, 'rgba(255, 255, 255, 1)'); 
               eternalGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.6)'); 
               eternalGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.2)'); 
-              eternalGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');     
+              eternalGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = eternalGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius * 5, 0, Math.PI * 2); ctx.fill();
           }
 
           ctx.restore();
-      };
 
+
+
+
+
+
+      };
       const p1Aes = getSkinAesthetics(eng.p?.skin, false);
       const p2Aes = getSkinAesthetics(eng.p2?.skin, true);
 
@@ -7828,9 +7830,49 @@ for (const p of eng.particles) {
       }
       // ==============================================================================
       ctx.restore(); 
+
+
+// =========================================================
+      // 🏆 FOOLPROOF VICTORY CINEMATIC RENDER (REAL-TIME)
+      // =========================================================
+      if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
+          
+          const timerVal = window.showVictoryCinematic;
+          
+          // 🔥 THE FIX: Tinanggal ang "/ 60" para maging 100% visible ang text!
+          const alpha = Math.min(1, Math.max(0, timerVal)); 
+          
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0); 
+          
+          // Black Dim Overlay
+          ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.75})`;
+          ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); 
+          
+          ctx.textAlign = 'center';
+          
+          // 🌟 MAIN TITLE
+          ctx.fillStyle = `rgba(251, 191, 36, ${alpha})`; 
+          ctx.font = 'bold 45px "Georgia", serif';
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#f59e0b';
+          ctx.fillText("VICTORY ACHIEVED!", ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+          
+          // ⚔️ SUBTITLE
+          ctx.fillStyle = `rgba(226, 232, 240, ${alpha})`; 
+          ctx.font = '22px monospace';
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#ffffff';
+          ctx.fillText("The Abyss has fallen. Entering Endless Waves...", ctx.canvas.width / 2, ctx.canvas.height / 2 + 30);
+          
+          ctx.restore();
+      }
+
+      // Ito yung orihinal na dulo mo:
       renderAnimId = requestAnimationFrame(renderLoop);
-    };
-    renderAnimId = requestAnimationFrame(renderLoop);
+    }; // <-- Nagsasara sa renderLoop
+
+    renderLoop(); // <-- Nagpapagana sa animation
 
     const down = (e) => { 
 
@@ -7866,150 +7908,150 @@ for (const p of eng.particles) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 

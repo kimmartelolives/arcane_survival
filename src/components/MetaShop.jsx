@@ -9,7 +9,7 @@ const UPGRADES_DB = [
 ];
 
 
-const SKINS_DB = [
+export const SKINS_DB = [
   { id: 'default', name: 'Apprentice Robes', desc: 'The humble attire worn by aspiring mages beginning their journey into the arcane arts.', cost: 0, glow: '#a855f7', colors: { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd' } },
   { id: 'shadow', name: 'Harbinger of the Void Realm', desc: 'A master of forbidden sorcery who draws power from the endless depths of the Void.', cost: 1000, glow: '#ef4444', colors: { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d' } },
 
@@ -1403,7 +1403,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
     }
 };
 
-const LiveSkinPreview = ({ skin }) => {
+export const LiveSkinPreview = ({ skin }) => {
   const canvasRef = useRef(null);
   const engRef = useRef({}); 
   const isVisibleRef = useRef(false);

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { sbGet, sbPost, hasSupabase, supabase, sbWatchTable } from '../services/supabase';
+import { SKINS_DB, LiveSkinPreview } from './MetaShop';
+
 
 export default function Overlays({ 
   screen, 
@@ -82,7 +84,8 @@ useEffect(() => {
         if (!isSilent) setLoadingLb(true);
         
         // Added mode filter to the endpoint based on the active tab
-        sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
+        // sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
+        sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode,skin&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
           .then(data => { 
             setLeaderboard(data || []); 
             if (!isSilent) setLoadingLb(false); 
@@ -156,7 +159,7 @@ useEffect(() => {
     return () => window.removeEventListener('keydown', handleHotkey);
   }, [screen, levelUpOptions, onSelectUpgrade]);
 
-  const handleSubmitScore = async () => {
+const handleSubmitScore = async () => {
     const nameToSubmit = wizardName.trim();
     if (!nameToSubmit) return alert('Enter Arcane Identity first');
     
@@ -166,13 +169,14 @@ useEffect(() => {
       return;
     }
 
+    // 🔥 KUNIN ANG CURRENT SKIN NA SUOT NG PLAYER
+    const currentSkin = localStorage.getItem('arcane_equipped_skin') || 'default';
+
     setSubmitStatus('Checking ancient records...');
 
     try {
-      // 1. Hanapin kung may existing record na ang pangalan na ito gamit ang sbGet
       const existingData = await sbGet(`/rest/v1/leaderboard?select=id,score&name=ilike.${encodeURIComponent(nameToSubmit)}`);
 
-      // 2. Kung MAY NAHANAP na existing record
       if (existingData && existingData.length > 0) {
         const existingRecord = existingData[0];
 
@@ -185,41 +189,34 @@ useEffect(() => {
               score: newScore, 
               wave: hudData?.wave || 1, 
               level: hudData?.p?.level || 1,
-              mode: isCoop ? 'coop' : 'solo'
+              mode: isCoop ? 'coop' : 'solo',
+              skin: currentSkin // 🔥 ISINAMA ANG SKIN ID SA DATABASE
             })
             .eq('id', existingRecord.id);
 
           if (!error) {
-            setSubmitStatus(`✦ New personal best! Overwrote previous score of ${existingRecord.score}.`);
+            setSubmitStatus(`✦ New personal best! Overwrote previous score.`);
             setIsScoreSubmitted(true);
-          } else {
-            console.error(error);
-            setSubmitStatus('Failed to overwrite record.');
           }
         } else {
-          setSubmitStatus(`A higher record (${existingRecord.score}) already exists for this name.`);
+          setSubmitStatus(`A higher record already exists.`);
         }
-      } 
-      
-      else {
+      } else {
         const ok = await sbPost('/rest/v1/leaderboard', {
           name: nameToSubmit, 
           score: newScore, 
           wave: hudData?.wave || 1, 
           level: hudData?.p?.level || 1, 
-          mode: isCoop ? 'coop' : 'solo'
+          mode: isCoop ? 'coop' : 'solo',
+          skin: currentSkin // 🔥 ISINAMA ANG SKIN ID SA DATABASE
         });
         
         if (ok) {
           setSubmitStatus('✦ Name etched into the Tombstone successfully!');
           setIsScoreSubmitted(true);
-        } else {
-          setSubmitStatus('Failed submission.');
         }
       }
-
     } catch (err) {
-      console.error("Error submitting score:", err);
       setSubmitStatus('Failed to access the Tombstone. Try again.');
     }
   };
@@ -813,6 +810,52 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             padding: 4px 12px !important;
             font-size: 0.8rem !important;
           }
+
+          /* ==========================================================================
+           🧙‍♂️ ANIMATED LEADERBOARD AVATAR PREVIEW
+           ========================================================================== */
+        @keyframes avatarFloat {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-4px); }
+        }
+        @keyframes auraPulse {
+          0%, 100% { transform: scale(1); opacity: 0.5; filter: blur(4px); }
+          50% { transform: scale(1.2); opacity: 0.8; filter: blur(6px); }
+        }
+        @keyframes robeSway {
+          0%, 100% { transform: rotate(-3deg); border-radius: 40% 40% 60% 60%; }
+          50% { transform: rotate(3deg); border-radius: 45% 45% 55% 55%; }
+        }
+        @keyframes shadowFlame {
+          0%, 100% { box-shadow: 0 -3px 8px rgba(220, 38, 38, 0.8); }
+          50% { box-shadow: 0 -6px 12px rgba(239, 68, 68, 0.4); }
+        }
+
+        .avatar-container {
+          position: relative; width: 44px; height: 44px; display: flex; 
+          align-items: center; justify-content: center; margin: 0 auto;
+        }
+        .avatar-aura {
+          position: absolute; width: 36px; height: 36px; border-radius: 50%;
+          animation: auraPulse 3s infinite ease-in-out; z-index: 1;
+        }
+        .avatar-body-float {
+          position: relative; z-index: 2; display: flex; flex-direction: column; 
+          align-items: center; animation: avatarFloat 3.5s infinite ease-in-out;
+        }
+        .avatar-crown {
+          width: 14px; height: 14px; border-radius: 50%; position: relative; z-index: 4; 
+          margin-bottom: -5px; box-shadow: inset 0 2px 4px rgba(255,255,255,0.3), 0 2px 4px rgba(0,0,0,0.5);
+        }
+        .avatar-brim {
+          width: 30px; height: 10px; border-radius: 50%; position: relative; z-index: 3;
+          box-shadow: 0 3px 5px rgba(0,0,0,0.6); border: 2px solid;
+        }
+        .avatar-robe {
+          width: 22px; height: 16px; position: relative; z-index: 2; margin-top: -3px;
+          animation: robeSway 4s infinite ease-in-out; border-bottom: 2px solid;
+          box-shadow: inset 0 -3px 6px rgba(0,0,0,0.6);
+        }
       `}</style>
 
 
@@ -1096,23 +1139,50 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             {/* SCROLL AREA - Malaki na, sagad pababa, at may margin sa ilalim */}
             <div className="lb-scroll-area">
               {loadingLb ? <div className="lb-loading" style={{ padding: '40px', color: '#a78bfa', fontFamily: 'Georgia', textAlign: 'center' }}>Summoning records from ancient scroll…</div> : (
-                <table className="witch-table">
+              <table className="witch-table">
                   <thead>
-                    <tr><th style={{ textAlign: 'center', width: '60px' }}>#</th><th style={{ textAlign: 'center' }}>Wizard</th><th style={{ textAlign: 'center', width: '90px' }}>Level</th><th style={{ textAlign: 'center', width: '90px' }}>Wave</th><th style={{ textAlign: 'right', width: '130px' }}>Score</th></tr>
+                    <tr>
+                      <th style={{ textAlign: 'center', width: '60px' }}>#</th>
+                      <th style={{ textAlign: 'center', width: '70px' }}>Avatar</th>
+                      <th style={{ textAlign: 'center' }}>Wizard</th>
+                      <th style={{ textAlign: 'center', width: '90px' }}>Level</th>
+                      <th style={{ textAlign: 'center', width: '90px' }}>Wave</th>
+                      <th style={{ textAlign: 'right', width: '130px' }}>Score</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {leaderboard.length === 0 ? (
-                      <tr><td colSpan="5" style={{ textAlign: 'center', color: 'rgba(167,139,250,0.5)', padding: '30px' }}>No records yet. Be the first legend!</td></tr>
+                      <tr><td colSpan="6" style={{ textAlign: 'center', color: 'rgba(167,139,250,0.5)', padding: '30px' }}>No records yet. Be the first legend!</td></tr>
                     ) : (
-                      leaderboard.map((row, idx) => (
-                        <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
-                          <td style={{ fontWeight: 'bold', textAlign: 'center' }}>{idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}</td>
-                          <td style={{ fontWeight: 600, textAlign: 'center' }}>{row.name || 'Anonymous'}</td>
-                          <td style={{ textAlign: 'center' }}>{row.level || 1}</td>
-                          <td style={{ textAlign: 'center' }}>{row.wave || 1}</td>
-                          <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
-                        </tr>
-                      ))
+                      leaderboard.map((row, idx) => {
+                        // 🔥 KUNIN ANG EXACT SKIN OBJECT MULA SA METASHOP DATABASE
+                        const playerSkin = SKINS_DB.find(s => s.id === (row.skin || 'default')) || SKINS_DB[0];
+
+                        return (
+                          <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
+                            <td style={{ fontWeight: 'bold', textAlign: 'center' }}>{idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}</td>
+                            
+                            {/* 🔥 ANG LIVE CANVAS RENDERER MULA SA METASHOP */}
+                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '4px' }}>
+                              <div style={{ 
+                                width: '50px', height: '50px', margin: '0 auto', 
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                overflow: 'visible'
+                              }}>
+                                {/* Scale pababa (70% ng orig size) para fit na fit sa table row */}
+                                <div style={{ transform: 'scale(0.7)', transformOrigin: 'center', display: 'flex' }}>
+                                  <LiveSkinPreview skin={playerSkin} />
+                                </div>
+                              </div>
+                            </td>
+
+                            <td style={{ fontWeight: 600, textAlign: 'center' }}>{row.name || 'Anonymous'}</td>
+                            <td style={{ textAlign: 'center' }}>{row.level || 1}</td>
+                            <td style={{ textAlign: 'center' }}>{row.wave || 1}</td>
+                            <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
+                          </tr>
+                        );
+                      })
                     )}
                   </tbody>
                 </table>
