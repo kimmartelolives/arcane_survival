@@ -2719,8 +2719,10 @@ useEffect(() => {
     const net = netRef.current;
     if (net && net.channel && net.isHost) {
       if (p1VotedRestart && p2VotedRestart) {
-        net.channel.send('restart_game', {}); 
-        setScreen('playing');
+       setTimeout(() => {
+           net.channel.send('restart_game', {}); 
+           setScreen('playing');
+        }, 1000);
       }
     }
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
@@ -2974,10 +2976,39 @@ useEffect(() => {
         }
 
 if (eng.gameStarted) {
-          eng.waveT += dt;
-          eng.spawnT += dt;
+    // 1. Detect if The Abyss or Primordial is currently on the map
+    const isMajorBossAlive = eng.enemies.some(e => e.boss && (e.type === 'abyss' || e.type === 'primordial' || e.type === 'abyss_awakened'));
 
-          if (!isCoopActive || isHost) {
+    // 2. Handle Boss Music Transitions via App.jsx's Global Audio
+    if (isMajorBossAlive && !eng.wasMajorBossAlive) {
+        // Boss appeared!
+        if (window.arcaneAudio) {
+            window.arcaneAudio.isBossActive = true; 
+            if (!window.arcaneAudio.isMuted) {
+                window.arcaneAudio.gameBgm.pause();
+                window.arcaneAudio.bossBgm.currentTime = 0; // Umpisahan sa simula ang boss music
+                window.arcaneAudio.bossBgm.play().catch(()=>{});
+            }
+        }
+    } else if (!isMajorBossAlive && eng.wasMajorBossAlive) {
+        // Boss defeated!
+        if (window.arcaneAudio) {
+            window.arcaneAudio.isBossActive = false;
+            if (!window.arcaneAudio.isMuted) {
+                window.arcaneAudio.bossBgm.pause();
+                window.arcaneAudio.gameBgm.play().catch(()=>{}); // Ituloy kung saan huminto ang normal game music
+            }
+        }
+    }
+    eng.wasMajorBossAlive = isMajorBossAlive;
+
+    // 3. Pause Wave & Spawns
+    if (!isMajorBossAlive) {
+        eng.waveT += dt;
+        eng.spawnT += dt;
+    }
+
+    if (!isCoopActive || isHost) {
 
 // 🔥 MEMORY PROTECTION: Bawal mag-spawn ng normal minion kung lagpas 120 na ang kalaban sa screen
           if (eng.spawnT >= eng.spawnRate && eng.enemies.length < 120) {
@@ -3032,7 +3063,7 @@ if (eng.gameStarted) {
               // Increased cap to 5 to ensure multi-boss raids spawn correctly
               const activeBosses = eng.enemies.filter(e => e.boss).length;
 
-if (activeBosses < 5) {
+              if (activeBosses < 5) {
                   const currentWave = eng.wave || 1;
                   
                   // 🔥 EXPONENTIAL MULTIPLIER: Starts scaling past Wave 30.
@@ -3040,17 +3071,27 @@ if (activeBosses < 5) {
                   // This ensures their HP outpaces the player's late-game item combinations.
                   const diffScale = Math.pow(1.025, Math.max(0, currentWave - 30)); 
 
-                  // 1. END-GAME COVENANT RAID (Wave 100+ Every 20 Waves: Magkasamang Bababa ang Dalawang Diyos!)
-                  if (currentWave >= 100 && currentWave % 20 === 0) {
-                     eng.screenShake = 3.5;
+              if (currentWave >= 100 && currentWave % 20 === 0) {
+                     eng.screenShake = 8.0; // 🔥 Pinalakas ang lindol!
+                    //  eng.screenFlash = 1.0;
 
-                     // 🔥 STEP 2: TRIGGER CINEMATIC INTRO PARA KAY AWAKENED ABYSS
+                     // 🔥 STEP 2: TRIGGER CANVAS CINEMATIC INTRO
                      eng.bossIntro = {
                          active: true,
                          timer: 180,
                          maxDuration: 180,
-                         bossName: "THE ABYSS (AWAKENED)"
+                         bossName: "THE ABYSS AWAKENED"
                      };
+
+                     // 🔥 TRIGGER BOSS MUSIC AGAD
+                     if (window.arcaneAudio) {
+                         window.arcaneAudio.isBossActive = true;
+                         if (!window.arcaneAudio.isMuted) {
+                             window.arcaneAudio.gameBgm.pause();
+                             window.arcaneAudio.bossBgm.currentTime = 0;
+                             window.arcaneAudio.bossBgm.play().catch(() => {});
+                         }
+                     }
                      
                      if (eng.p) eng.p.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
                      if (eng.p2) eng.p2.chatBubble = { text: "⚠️ THE COVENANT IS COLLAPSING!!!", life: 3.0 };
@@ -3058,25 +3099,49 @@ if (activeBosses < 5) {
                      const abyssHp = Math.floor((1500000 + (currentWave * 30000)) * diffScale);
                      const primHp = Math.floor((600000 + (currentWave * 12000)) * diffScale);
 
-                     // Spawn The Abyss (Awakened God Form)
+                     // 🔥 Spawn The Abyss (Awakened God Form)
                      eng.enemies.push({ 
-                         x: W/2, y: -60, r: 60, speed: 75, 
+                         x: W/2, y: -200, // Magsisimula sa labas ng screen pababa
+                         r: 55, // 🔥 God-Tier Size
+                         speed: 70, 
                          hp: abyssHp, maxHp: abyssHp, prevHpFrame: abyssHp,
-                         dmg: Math.floor(2500 * diffScale), xp: 150000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss (Awakened)', 
-                         abyssShieldTimer: 0, abyssShieldCd: 5, abyssAttackTimer: 3, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                         dmg: Math.floor(2500 * diffScale), xp: 150000, 
+                         color: '#1a0505', glow: '#dc2626', boss: true, 
+                         type: 'abyss_awakened', // 🔥 Eto ang magti-trigger ng epic renderer natin!
+                         nameTag: 'The Abyss (Awakened)', 
+                         
+                         // Core Engine Stats
+                         abyssShieldTimer: 0, abyssShieldCd: 5, abyssAttackTimer: 3, flash: 0, 
+                         stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, 
+                         voidExhaustTime: 0, instabTime: 0,
+                         
+                         // 🔥 Custom Skill Timers para sa minion summon at dash
+                         summonTimer: 0, 
+                         dashTimer: 0 
                      });
                      
-                     // Spawn TWO Primordial Demon Guards instead of one
-                     eng.enemies.push({ 
-                         x: W/2 - 200, y: -90, r: 40, speed: 95, 
-                         hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Void Guard', 
-                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                     });
-                     eng.enemies.push({ 
-                         x: W/2 + 200, y: -90, r: 40, speed: 95, 
-                         hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Void Guard', 
-                         flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-                     });
+                     // 🔥 Spawn TWO Primordial Demon Guards (Pinalaki para mas intimidating)
+                    //  eng.enemies.push({ 
+                    //      x: W/2 - 200, y: -90, 
+                    //      r: 50, // 🔥 Primordial Size
+                    //      speed: 95, 
+                    //      hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, 
+                    //      color: '#000000', glow: '#ea580c', boss: true, 
+                    //      type: 'primordial', // 🔥 Epic Primordial Renderer
+                    //      nameTag: 'Void Guard', 
+                    //      flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                    //  });
+                     
+                    //  eng.enemies.push({ 
+                    //      x: W/2 + 200, y: -90, 
+                    //      r: 50, // 🔥 Primordial Size
+                    //      speed: 95, 
+                    //      hp: primHp, maxHp: primHp, dmg: Math.floor(1200 * diffScale), xp: 50000, 
+                    //      color: '#000000', glow: '#ea580c', boss: true, 
+                    //      type: 'primordial', 
+                    //      nameTag: 'Void Guard', 
+                    //      flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+                    //  });
                   } 
                   // 2. THE ULTIMATE BOSS ENCOUNTER (Wave 75+, every 25 waves)
                   else if (currentWave >= 75 && currentWave % 25 === 0) {
@@ -3098,7 +3163,7 @@ if (activeBosses < 5) {
                      });
                   } 
                   // 3. MID-LATE GATEKEEPER (Wave 50+, every 20 waves kapag walang Abyss/Covenant)
-                  else if (currentWave >= 50 && currentWave % 20 === 0) {
+                  else if (currentWave >= 50 && (currentWave - 50) % 20 === 0) {
                      const hpScale = Math.floor((350000 + (currentWave * 8000)) * diffScale);
                      eng.enemies.push({ 
                          x: W/2, y: -50, r: 40, speed: 95, hp: hpScale, maxHp: hpScale, dmg: Math.floor(1000 * diffScale), 
@@ -4227,7 +4292,7 @@ if (playerObj.skills.cubeBash?.learned) {
               
               if (e.flash > 0) e.flash -= dt;
 
-if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.type)) {
+              if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss', 'abyss_awakened'].includes(e.type)) {
                 
                 if (e.skillTimer === undefined) e.skillTimer = 2.0;
                 e.skillTimer -= dt;
@@ -4242,6 +4307,37 @@ if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.typ
                     if (d2 < d1) { tx = eng.p2.x; ty = eng.p2.y; }
                   }
                   const baseAngle = Math.atan2(ty - e.y, tx - e.x);
+
+                    // 🔥 ABYSS AWAKENED SPECIAL SKILLS
+                    if (e.type === 'abyss_awakened') {
+                        e.summonTimer = (e.summonTimer || 0) + dt;
+                        e.dashTimer = (e.dashTimer || 0) + dt;
+
+                        // Skill 1: Summon Void Spawns
+                        if (e.summonTimer >= 5.0) {
+                            e.summonTimer = 0;
+                            for (let k = 0; k < 4; k++) {
+                                let spawnAngle = (Math.PI * 2 / 4) * k;
+                                eng.enemies.push({
+                                    x: e.x + Math.cos(spawnAngle) * 100, 
+                                    y: e.y + Math.sin(spawnAngle) * 100,
+                                    r: 20, speed: 250, hp: 50000 * (eng.diffScale || 1), maxHp: 50000 * (eng.diffScale || 1), 
+                                    dmg: 1000 * (eng.diffScale || 1), xp: 5000, 
+                                    color: '#000000', glow: '#dc2626', type: 'void_spawn',
+                                    flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0
+                                });
+                            }
+                        }
+
+                        // Skill 2: Abyssal Dash
+                        if (e.dashTimer >= 8.0) {
+                            e.speed = 450; 
+                            if (e.dashTimer >= 9.5) {
+                                e.speed = 75; 
+                                e.dashTimer = 0;
+                            }
+                        }
+                    }
 
                   // 🔥 DANGER RED ZONE CHANCE! (35% for Abyss, 20% for Primordial)
                   if ((e.type === 'abyss' || e.type === 'primordial') && Math.random() < (e.type === 'abyss' ? 0.35 : 0.20)) {
@@ -4328,6 +4424,7 @@ if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.typ
                   else if (e.type === 'archdemon') crystalYield = 25 + Math.floor(Math.random() * 25);
                   else if (e.type === 'primordial') crystalYield = 100 + Math.floor(Math.random() * 50);
                   else if (e.type === 'abyss') crystalYield = 300 + Math.floor(Math.random() * 200);
+                  else if (e.type === 'abyss_awakened') crystalYield = 500 + Math.floor(Math.random() * 200);
 
                   for (const pTarget of [eng.p, eng.p2]) {
                     if (pTarget && !pTarget.dead) {
@@ -4391,7 +4488,15 @@ if (e.boss && ['demonKnight', 'archdemon', 'primordial', 'abyss'].includes(e.typ
                 // Wave 75 = 0% bonus | Wave 100 = +12.5% | Wave 120 = +22.5% 
                 const endlessBonus = Math.min(0.60, Math.max(0, (currentWave - 75) * 0.005));
 
-                if (e.type === 'abyss') {
+                if (e.type === 'abyss_awakened') {
+
+                    const finalMythicChance = Math.min(0.90, 0.10 + endlessBonus);
+                     if (dropRollEq < finalMythicChance) droppedRarity = 'mythic';               
+                     else droppedRarity = 'legendary'; // Laging Legendary ang fallback, walang tapon!
+                
+                }
+
+                else if (e.type === 'abyss') {
                   // Sasagad ito sa max na 80% Mythic Chance kapag sobrang late game!
                   const finalMythicChance = Math.min(0.80, 0.20 + endlessBonus);
                   
@@ -5592,39 +5697,256 @@ if (eng.potions) {
           }
           ctx.closePath(); ctx.fill();
           ctx.restore(); 
-        } else if (e.type === 'primordial') {
-          ctx.shadowColor = '#ef4444';
-          ctx.shadowBlur = 30 + Math.sin(performance.now() * 0.005) * 10;
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 4;
-          ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); 
-          ctx.fill(); ctx.stroke();
-          ctx.beginPath(); ctx.arc(e.x, e.y, e.r * 0.5, 0, Math.PI * 2); 
-          ctx.stroke();
-        } else if (e.type === 'abyss') {
-          ctx.save(); 
-          ctx.shadowColor = '#f59e0b';
-          ctx.shadowBlur = 40;
-          ctx.translate(e.x, e.y);
-          
-          ctx.rotate(performance.now() * 0.001);
-          ctx.strokeStyle = '#b45309'; 
-          ctx.lineWidth = 6;
-          ctx.strokeRect(-e.r, -e.r, e.r * 2, e.r * 2);
-          
-          ctx.rotate(Math.PI / 4);
-          ctx.strokeStyle = '#ef4444'; 
-          ctx.strokeRect(-e.r, -e.r, e.r * 2, e.r * 2);
-          
-          ctx.rotate(-performance.now() * 0.002 - Math.PI / 4);
-          ctx.fillStyle = e.flash > 0 ? '#fff' : '#1a0505';
-          ctx.beginPath(); ctx.arc(0, 0, e.r * 0.7, 0, Math.PI * 2); ctx.fill();
-          
-          ctx.restore(); 
+} else if (e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial') {
+            const now = performance.now();
+            ctx.save();
+            
+            // Violent shaking/glitch effect pag boss
+            let shakeStrength = e.type === 'abyss' ? 5 : (e.type === 'abyss_awakened' ? 3 : 2);
+            let shakeX = (Math.random() * shakeStrength * 2 - shakeStrength);
+            let shakeY = (Math.random() * shakeStrength * 2 - shakeStrength);
+            ctx.translate(e.x + shakeX, e.y + shakeY);
+
+            // ==================================================
+            // 🔥 OVERWHELMING BOSS DOMAIN AURA (Massive background glow)
+            // ==================================================
+            ctx.globalCompositeOperation = 'lighter'; // Makes energies blend and glow intensely
+            let auraRadius = e.r * (6 + Math.sin(now / 200)); // Breathing domain
+            
+            let auraGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, auraRadius);
+            if (e.type === 'abyss') {
+                auraGrad.addColorStop(0, 'rgba(126, 34, 206, 0.4)'); // Void Purple
+                auraGrad.addColorStop(0.5, 'rgba(88, 28, 135, 0.1)');
+            } else if (e.type === 'abyss_awakened') {
+                auraGrad.addColorStop(0, 'rgba(153, 27, 27, 0.5)'); // Blood Cosmos
+                auraGrad.addColorStop(0.5, 'rgba(69, 10, 10, 0.1)');
+            } else if (e.type === 'primordial') {
+                auraGrad.addColorStop(0, 'rgba(234, 88, 12, 0.5)'); // Hellfire
+                auraGrad.addColorStop(0.5, 'rgba(124, 45, 18, 0.1)');
+            }
+            auraGrad.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = auraGrad;
+            ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, Math.PI * 2); ctx.fill();
+            ctx.globalCompositeOperation = 'source-over'; // Reset for solid bodies
+
+            if (e.type === 'abyss') {
+                // ==================================================
+                // 🌌 THE ABYSS (Reality Breaker / Screen Shatter)
+                // ==================================================
+                ctx.shadowBlur = e.flash > 0 ? 100 : 150;
+                ctx.shadowColor = e.flash > 0 ? '#ffffff' : '#a855f7';
+
+                // 1. Reality Glass Shatter (Gigantic jagged cracks spreading off-screen)
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = 1.5;
+                for (let i = 0; i < 12; i++) {
+                    let ang = (i * Math.PI / 6) + (Math.random() * 0.2 - 0.1);
+                    let crackLength = e.r * (10 + Math.random() * 5); // Basag na umaabot sa dulo ng screen
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    let currX = 0, currY = 0;
+                    for (let j = 0; j < 5; j++) {
+                        currX += Math.cos(ang) * (crackLength / 5) + (Math.random() * 40 - 20);
+                        currY += Math.sin(ang) * (crackLength / 5) + (Math.random() * 40 - 20);
+                        ctx.lineTo(currX, currY);
+                    }
+                    ctx.stroke();
+                }
+
+                // 2. Thick Volumetric Void Smoke (Heavy, suffocating fog)
+                ctx.fillStyle = 'rgba(15, 15, 15, 0.9)';
+                for (let i = 0; i < 15; i++) {
+                    let sAng = (now / 500) + (i * Math.PI / 7.5);
+                    let sDist = e.r * (0.5 + Math.sin(now / 300 + i) * 1.5);
+                    ctx.beginPath(); 
+                    ctx.arc(Math.cos(sAng) * sDist, Math.sin(sAng) * sDist, e.r * 1.8, 0, Math.PI * 2); 
+                    ctx.fill();
+                }
+
+                // 3. Black Hole Core (Violently consuming matter)
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#000000';
+                ctx.beginPath();
+                for (let i = 0; i < 30; i++) {
+                    let ang = (Math.PI * 2 / 30) * i + (now / 100); // Mabilis umikot
+                    let dist = e.r * (0.7 + Math.random() * 0.6); // Mas matutulis na spikes
+                    ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+                }
+                ctx.fill();
+
+                // 4. Overwhelming Demonic Eyes (Glitching and bleeding)
+                ctx.fillStyle = e.flash > 0 ? '#000000' : '#ff0000';
+                ctx.shadowColor = '#ff0000';
+                ctx.shadowBlur = 80;
+                let eyeGlitch = Math.random() > 0.8 ? 5 : 0; // Mata na nagfi-flicker
+                ctx.beginPath(); ctx.moveTo(-e.r * 0.7, -e.r * 0.2 + eyeGlitch); ctx.lineTo(-e.r * 0.1, -e.r * 0.5); ctx.lineTo(-e.r * 0.3, e.r * 0.6); ctx.fill();
+                ctx.beginPath(); ctx.moveTo(e.r * 0.7, -e.r * 0.2 + eyeGlitch); ctx.lineTo(e.r * 0.1, -e.r * 0.5); ctx.lineTo(e.r * 0.3, e.r * 0.6); ctx.fill();
+
+            } else if (e.type === 'abyss_awakened') {
+                // ==================================================
+                // 👁️ THE ABYSS AWAKENED (Eldritch God / Cosmic Horror)
+                // ==================================================
+                ctx.shadowBlur = e.flash > 0 ? 100 : 120;
+                ctx.shadowColor = e.flash > 0 ? '#ffffff' : '#991b1b';
+
+                // 1. Cursed God-Rays (Dark beams shooting outward)
+                ctx.globalCompositeOperation = 'lighter';
+                for(let i=0; i<6; i++) {
+                    let ang = (now / 800) + (i * Math.PI / 3);
+                    let beamGrad = ctx.createLinearGradient(0, 0, Math.cos(ang)*e.r*8, Math.sin(ang)*e.r*8);
+                    beamGrad.addColorStop(0, 'rgba(220, 38, 38, 0.4)');
+                    beamGrad.addColorStop(1, 'transparent');
+                    ctx.fillStyle = beamGrad;
+                    ctx.beginPath();
+                    ctx.moveTo(0,0);
+                    ctx.lineTo(Math.cos(ang - 0.2)*e.r*8, Math.sin(ang - 0.2)*e.r*8);
+                    ctx.lineTo(Math.cos(ang + 0.2)*e.r*8, Math.sin(ang + 0.2)*e.r*8);
+                    ctx.fill();
+                }
+                ctx.globalCompositeOperation = 'source-over';
+
+                // 2. The Omniscient Eye (Higanteng mata sa itaas, nagfi-flicker ang pupil)
+                let eyeY = -e.r * 3.5 + Math.sin(now / 200) * 15;
+                ctx.fillStyle = '#050505';
+                ctx.beginPath(); ctx.ellipse(0, eyeY, e.r * 2, e.r * 1.2, 0, 0, Math.PI * 2); ctx.fill(); 
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath(); ctx.arc(Math.random() * 4 - 2, eyeY + Math.random() * 4 - 2, e.r * 0.8, 0, Math.PI * 2); ctx.fill(); // Twitching pupil
+                ctx.fillStyle = '#000000';
+                ctx.beginPath(); ctx.ellipse(0, eyeY, e.r * 0.15, e.r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+
+                // 3. Eldritch Shadow Tentacles/Hands (Humahaba na parang may kinukuha)
+                ctx.fillStyle = 'rgba(5, 5, 5, 0.9)';
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 3;
+                for(let i=0; i<5; i++) {
+                    let ang = (now/600) + i*(Math.PI*2/5);
+                    let reach = e.r * (3 + Math.sin(now/150 + i) * 1.5); // Humahaba at umiikli
+                    ctx.save();
+                    ctx.rotate(ang);
+                    ctx.beginPath();
+                    ctx.moveTo(0,0);
+                    ctx.quadraticCurveTo(e.r*2, e.r*2, reach, -e.r);
+                    ctx.quadraticCurveTo(reach*1.2, -e.r*2, reach*1.5, -e.r*1.5);
+                    ctx.quadraticCurveTo(reach, 0, e.r*1.5, e.r*1.5);
+                    ctx.fill(); ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 4. 12 Divine Scythe Wings (Super fast aggressive flapping)
+                let flap = Math.sin(now / 50) * 0.5; // Sobrang bilis na pagpag na parang galit
+                for (let i = 0; i < 12; i++) {
+                    ctx.save();
+                    ctx.rotate((Math.PI * 2 / 12) * i + flap);
+                    ctx.fillStyle = '#000000';
+                    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-e.r * 2, -e.r * 3, 0, -e.r * 7); ctx.quadraticCurveTo(e.r * 1.5, -e.r * 3, 0, 0); ctx.fill();
+                    ctx.strokeStyle = e.flash > 0 ? '#ffffff' : 'rgba(220, 38, 38, 0.8)';
+                    ctx.lineWidth = 2; ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 5. Singularity Core
+                let coreSize = e.r * (1.5 + Math.sin(now / 40) * 0.3); // Aggressive heartbeat
+                const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize);
+                grad.addColorStop(0, '#000000');
+                grad.addColorStop(0.3, '#991b1b');
+                grad.addColorStop(1, 'transparent');
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : grad;
+                ctx.beginPath(); ctx.arc(0, 0, coreSize, 0, Math.PI * 2); ctx.fill();
+
+            } else if (e.type === 'primordial') {
+                // ==================================================
+                // 🌋 PRIMORDIAL DEMON (World-Ending Inferno / Apocalyptic Aura)
+                // ==================================================
+                ctx.shadowBlur = e.flash > 0 ? 100 : 150;
+                ctx.shadowColor = e.flash > 0 ? '#ffffff' : '#ea580c'; 
+
+                // 1. Apocalyptic Lava Pillars (Umaapoy mula sa ibaba ng screen)
+                ctx.globalCompositeOperation = 'lighter';
+                for (let i = 0; i < 8; i++) {
+                    let pX = (Math.random() - 0.5) * e.r * 12;
+                    let pHeight = e.r * (4 + Math.random() * 8);
+                    let pillarGrad = ctx.createLinearGradient(0, 0, 0, -pHeight);
+                    pillarGrad.addColorStop(0, 'rgba(253, 224, 71, 0.8)'); // Super hot yellow
+                    pillarGrad.addColorStop(0.5, 'rgba(234, 88, 12, 0.4)'); // Fire orange
+                    pillarGrad.addColorStop(1, 'transparent');
+                    ctx.fillStyle = pillarGrad;
+                    ctx.fillRect(pX, e.r * 2, e.r * (0.5 + Math.random()), -pHeight);
+                }
+                ctx.globalCompositeOperation = 'source-over';
+
+                // 2. Underworld Demonic Sigil (Gigantic spinning pentagram)
+                ctx.save();
+                ctx.rotate(now / -400);
+                ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
+                ctx.lineWidth = 6;
+                ctx.shadowBlur = 50;
+                ctx.beginPath(); ctx.arc(0, 0, e.r * 5, 0, Math.PI * 2); ctx.stroke(); // Double outer ring
+                ctx.beginPath(); ctx.arc(0, 0, e.r * 4.7, 0, Math.PI * 2); ctx.stroke();
+                ctx.beginPath();
+                for(let i=0; i<=5; i++) { // Star logic
+                    ctx.lineTo(Math.cos(i * Math.PI * 0.8) * e.r * 4.7, Math.sin(i * Math.PI * 0.8) * e.r * 4.7);
+                }
+                ctx.stroke();
+                ctx.restore();
+
+                // 3. 8 Gigantic Demonic Wings of Hellfire
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#7c2d12';
+                ctx.strokeStyle = '#fef08a'; 
+                ctx.lineWidth = 3;
+                let pFlap = Math.cos(now / 120) * 0.35; 
+                for (let i = 0; i < 8; i++) {
+                    ctx.save();
+                    ctx.rotate((Math.PI * 2 / 8) * i + pFlap);
+                    ctx.beginPath(); 
+                    ctx.moveTo(0, 0);
+                    ctx.quadraticCurveTo(-e.r * 3, -e.r * 2.5, -e.r * 5, -e.r * 4); // Mas mahaba at malaking pakpak
+                    ctx.lineTo(-e.r * 2.5, -e.r * 1.5);
+                    ctx.lineTo(-e.r * 4, -e.r * 0.5);
+                    ctx.lineTo(0, 0);
+                    ctx.fill(); ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 4. Obsidian Body with Pulsating Magma Core
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#0c0a09';
+                ctx.beginPath(); ctx.arc(0, 0, e.r * 1.3, 0, Math.PI * 2); ctx.fill(); // Mas malaking katawan
+                
+                let magmaPulse = Math.sin(now / 80) * 0.2; // Mabilis na pintig
+                const lava = ctx.createRadialGradient(0, e.r * 0.3, 0, 0, e.r * 0.3, e.r * (1 + magmaPulse));
+                lava.addColorStop(0, '#ffffff'); 
+                lava.addColorStop(0.2, '#facc15'); 
+                lava.addColorStop(1, 'transparent');
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : lava;
+                ctx.beginPath(); ctx.arc(0, e.r * 0.3, e.r * 1.2, 0, Math.PI * 2); ctx.fill();
+
+                // 5. Crown of Hellfire (God-tier Horns)
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#450a0a';
+                ctx.shadowColor = '#facc15';
+                ctx.shadowBlur = 50;
+                ctx.beginPath(); ctx.moveTo(-e.r * 0.4, -e.r); ctx.quadraticCurveTo(-e.r * 6, -e.r * 6, -e.r * 5, -e.r * 2); ctx.fill(); 
+                ctx.beginPath(); ctx.moveTo(e.r * 0.4, -e.r); ctx.quadraticCurveTo(e.r * 6, -e.r * 6, e.r * 5, -e.r * 2); ctx.fill(); 
+
+                // 6. Volcanic Ash Particles (Daan-daang baga na lumilipad)
+                ctx.fillStyle = '#fef08a';
+                ctx.shadowBlur = 10;
+                for(let k=0; k<30; k++) {
+                    let ashX = (Math.random() - 0.5) * e.r * 15;
+                    let ashY = (Math.random() - 0.5) * e.r * 15 - (now / 10 + k * 50) % (e.r * 10); // Laging lumilipad paitaas
+                    ctx.fillRect(ashX, ashY, 3, 3);
+                }
+            }
+            
+            ctx.restore();
+
         } else {
-          ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+            // ==================================================
+            // NORMAL ENEMY RENDER
+            // ==================================================
+            ctx.fillStyle = e.flash > 0 ? '#fff' : (e.color || 'red');
+            ctx.beginPath(); 
+            ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); 
+            ctx.fill();
         }
-        ctx.shadowBlur = 0;
 
         if (e.abyssShieldTimer > 0) {
           ctx.beginPath();
@@ -7544,150 +7866,150 @@ for (const p of eng.particles) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 60;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
+             target.baseDef = 60;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 
