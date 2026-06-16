@@ -8,56 +8,65 @@ const UPGRADES_DB = [
   { id: 'speed', name: 'Windwalker', desc: '+5 Move Speed per level', baseCost: 40, costMult: 1.4, maxLevel: 10 },
 ];
 
-
 export const SKINS_DB = [
   { id: 'default', name: 'Apprentice Robes', desc: 'The humble attire worn by aspiring mages beginning their journey into the arcane arts.', cost: 0, glow: '#a855f7', colors: { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd' } },
   { id: 'shadow', name: 'Harbinger of the Void Realm', desc: 'A master of forbidden sorcery who draws power from the endless depths of the Void.', cost: 1000, glow: '#ef4444', colors: { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d' } },
-
   { id: 'igris', name: 'Abyssal Dreadlord', desc: 'A feared commander born from the endless abyss, clad in cursed armor and wreathed in crimson darkness.', cost: 1500, glow: '#dc2626', colors: { c: '#262626', robe: '#0a0a0a', brim: '#171717' } },
-
   { id: 'pyro', name: 'Demon of the Ashen Flare', desc: 'An infernal entity forged within primordial flames, leaving only ash in its wake.', cost: 2000, glow: '#f97316', colors: { c: '#ef4444', robe: '#7f1d1d', brim: '#fca5a5' } },
-
   { id: 'archmage', name: 'The Arcane Archon', desc: 'A legendary master of magic whose command over the arcane eclipses all mortal understanding.', cost: 2500, glow: '#fbbf24', colors: { c: '#fef08a', robe: '#b45309', brim: '#fef9c3' } },
   { id: 'sakura', name: 'Roseheart Sovereign', desc: 'Commands an endless storm of enchanted petals.', cost: 2500, glow: '#ec4899', colors: { c: '#f472b6', robe: '#ec4899', brim: '#fdf2f8' } },
   { id: 'pink_wings', name: 'Seraph of the Pink Eclipse', desc: 'A celestial sovereign whose wings paint the heavens in radiant pink light.', cost: 3000, glow: '#fb7185', colors: { c: '#fb7185', robe: '#f472b6', brim: '#fff5fa' } },
-    { 
-    id: 'remembrance', 
-    name: 'Starlit Elegy', 
-    desc: 'Beyond time, beyond fate. The supreme manifestation of ancient elven magic and eternal memories.', 
-    cost: 3500, 
-    glow: '#60a5fa', 
-    colors: { c: '#f8fafc', robe: '#1e1b4b', brim: '#e0f2fe' } 
-  },
+  { id: 'remembrance', name: 'Starlit Elegy', desc: 'Beyond time, beyond fate. The supreme manifestation of ancient elven magic and eternal memories.', cost: 3500, glow: '#60a5fa', colors: { c: '#f8fafc', robe: '#1e1b4b', brim: '#e0f2fe' } },
   { id: 'emperor', name: 'The Black Monarch', desc: 'A legendary tyrant whose shadow eclipsed the heavens themselves.', cost: 4500, glow: '#dc2626', colors: { c: '#171717', robe: '#0a0a0a', brim: '#050505' } },
   { id: 'empress', name: 'Empress of the Blushing Petals', desc: 'A divine guardian shrouded in radiant petals. Entire battlefields fall silent beneath her breathtaking grace.', cost: 5000, glow: '#fb7185', colors: { c: '#ffe4e6', robe: '#ffffff', brim: '#fda4af' } },
+  { id: 'infernal', name: 'Infernal Eclipse Sovereign', desc: 'The supreme ruler of the Eternal Eclipse. Cloaked in abyssal flames, every step bends darkness itself to their command.', cost: 5500, glow: '#e11d48', colors: { c: '#1f101a', robe: '#09050e', brim: '#1f0510' } },
+  { id: 'leviathan', name: 'Leviathan Empress of the Sacred Tide', desc: 'A divine Valkyrie chosen by Leviathan. Surrounded by celestial oceans, floating crystals, and holy tides that embody absolute grace and overwhelming power.', cost: 6000, glow: '#38bdf8', colors: { c: '#e0f2fe', robe: '#ffffff', brim: '#0284c7' } },
+  { id: 'frieren', name: 'Mirrored Lotus: Eternal Remembrance', desc: 'A celestial relic born from mirrored lotus petals and drifting forget-me-not blossoms, reflecting an endless cycle of eternal promises and undying love.', cost: 7000, glow: '#60a5fa', colors: { c: '#f8fafc', robe: '#0f172a', brim: '#e0f2fe' } },
+];
+
+export const FAMILIARS_DB = [
   { 
-    id: 'infernal', 
-    name: 'Infernal Eclipse Sovereign', 
-    desc: 'The supreme ruler of the Eternal Eclipse. Cloaked in abyssal flames, every step bends darkness itself to their command.', 
-    cost: 5500, 
-    glow: '#e11d48', 
-    colors: { c: '#1f101a', robe: '#09050e', brim: '#1f0510' } 
+    id: 'wisp', name: 'Ignis Wisp', type: 'Attack',
+    desc: 'Shoots seeking fireballs at nearby enemies.', 
+    scaleDesc: '+30 Dmg, -0.05s Cooldown, +Projectiles at Lv5/10',
+    baseCost: 800, upgBase: 150, maxLevel: 10, color: '#f97316',
+    evolutions: { 1: 'Ignis Wisp', 5: 'Blaze Spirit', 10: 'Inferno Elemental' }
   },
-
   { 
-    id: 'leviathan', 
-    name: 'Leviathan Empress of the Sacred Tide', 
-    desc: 'A divine Valkyrie chosen by Leviathan. Surrounded by celestial oceans, floating crystals, and holy tides that embody absolute grace and overwhelming power.', 
-    cost: 6000, 
-    glow: '#38bdf8', 
-    colors: { c: '#e0f2fe', robe: '#ffffff', brim: '#0284c7' } 
+    id: 'fairy', name: 'Sylph of Life', type: 'Support',
+    desc: 'Passively regenerates your HP over time.', 
+    scaleDesc: '+4 HP Heal amount per tick',
+    baseCost: 1000, upgBase: 200, maxLevel: 10, color: '#86efac',
+    evolutions: { 1: 'Sylph of Life', 5: 'Nature Pixie', 10: 'Yggdrasil Guardian' }
   },
-
   { 
-    id: 'frieren', 
-    name: 'Mirrored Lotus: Eternal Remembrance', 
-    desc: 'A celestial relic born from mirrored lotus petals and drifting forget-me-not blossoms, reflecting an endless cycle of eternal promises and undying love.', 
-    cost: 7000, 
-    glow: '#60a5fa', 
-    colors: { c: '#f8fafc', robe: '#0f172a', brim: '#e0f2fe' } 
+    id: 'voidling', name: 'Void Eye', type: 'Utility',
+    desc: 'Automatically pulls gems and potions towards you.', 
+    scaleDesc: '+35 Vacuum Radius per Level',
+    baseCost: 1500, upgBase: 250, maxLevel: 10, color: '#d946ef',
+    evolutions: { 1: 'Void Eye', 5: 'Abyssal Watcher', 10: 'Ender of Worlds' }
   },
-
-
+  { 
+    id: 'frost', name: 'Frost Sprite', type: 'Crowd Control',
+    desc: 'Casts a mini Ice Storm to freeze and damage enemies.', 
+    scaleDesc: '+5 Radius, -0.15s Cooldown per Level',
+    baseCost: 1200, upgBase: 220, maxLevel: 10, color: '#38bdf8',
+    evolutions: { 1: 'Frost Sprite', 5: 'Glacial Owl', 10: 'Winter Wyrm' }
+  },
+  { 
+    id: 'golem', name: 'Stone Golem', type: 'Defense',
+    desc: 'Smashes the ground, dealing AoE damage and stun.', 
+    scaleDesc: '+50 Dmg, +8 Radius, -0.2s Cooldown',
+    baseCost: 1800, upgBase: 300, maxLevel: 10, color: '#f59e0b',
+    evolutions: { 1: 'Stone Golem', 5: 'Earth Titan', 10: 'Obsidian Guardian' }
+  },
+  { 
+    id: 'thunder', name: 'Spark Fox', type: 'Burst Attack',
+    desc: 'Calls down piercing lightning strikes.', 
+    scaleDesc: '+45 Dmg, -0.1s Cooldown per Level',
+    baseCost: 2000, upgBase: 350, maxLevel: 10, color: '#e879f9',
+    evolutions: { 1: 'Spark Fox', 5: 'Storm Griffin', 10: 'Thunderbird' }
+  }
 ];
 
 const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
@@ -440,182 +449,160 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
     }
 
     else if (skinId === 'remembrance') {
-              ctx.globalCompositeOperation = 'lighter';
-              const pulse = Math.sin(time * 0.002);
-              const floatY = Math.sin(time * 0.0015) * 6; // Slow, eternal levitation
+        ctx.globalCompositeOperation = 'lighter';
+        const pulse = Math.sin(time * 0.002);
+        const floatY = Math.sin(time * 0.0015) * 6;
 
-              // 1. TIME DISTORTION & ASTRAL CLOCKWORK SEAL
-              ctx.save(); 
-              ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
-              
-              // Midnight Blue Starlight Base
-              const starGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6.5);
-              starGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); // White hot center
-              starGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); // Cyan/Starlight Blue
-              starGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.4)'); // Midnight Void
-              starGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-              ctx.fillStyle = starGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6.5, 0, Math.PI*2); ctx.fill();
+        ctx.save(); 
+        ctx.translate(x, y + 5 + floatY); ctx.scale(1, 0.35); 
+        
+        const starGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, radius * 6.5);
+        starGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+        starGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); 
+        starGrad.addColorStop(0.7, 'rgba(30, 27, 75, 0.4)'); 
+        starGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = starGrad; ctx.beginPath(); ctx.arc(0, 0, radius*6.5, 0, Math.PI*2); ctx.fill();
 
-              // Time Ripples (Expanding transparent rings)
-              for(let i=0; i<3; i++) {
-                  const rippleRad = ((time * 0.05) + (i * radius*3)) % (radius * 8);
-                  ctx.strokeStyle = `rgba(224, 242, 254, ${1 - (rippleRad/(radius*8))})`;
-                  ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rippleRad, 0, Math.PI*2); ctx.stroke();
-              }
+        for(let i=0; i<3; i++) {
+            const rippleRad = ((time * 0.05) + (i * radius*3)) % (radius * 8);
+            ctx.strokeStyle = `rgba(224, 242, 254, ${1 - (rippleRad/(radius*8))})`;
+            ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, rippleRad, 0, Math.PI*2); ctx.stroke();
+        }
 
-              // Astral Clockwork & Zodiac Circle (Replacing Elven Runes)
-              ctx.rotate(time * 0.0005);
-              ctx.strokeStyle = `rgba(186, 230, 253, ${0.6 + pulse * 0.2})`; 
-              ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 15; ctx.lineWidth = 2;
-              
-              // Outer dials
-              ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
-              ctx.setLineDash([5, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 5.2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-              
-              // Clock Hands (Moving slowly)
-              ctx.save();
-              ctx.rotate(time * 0.001); // Minute hand
-              ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -radius * 4); ctx.stroke();
-              ctx.rotate(time * 0.0002); // Hour hand
-              ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(radius * 2.5, 0); ctx.stroke();
-              ctx.restore();
-              ctx.restore();
+        ctx.rotate(time * 0.0005);
+        ctx.strokeStyle = `rgba(186, 230, 253, ${0.6 + pulse * 0.2})`; 
+        ctx.shadowColor = '#7dd3fc'; ctx.shadowBlur = 15; ctx.lineWidth = 2;
+        
+        ctx.beginPath(); ctx.arc(0, 0, radius * 4.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.setLineDash([5, 10]); ctx.beginPath(); ctx.arc(0, 0, radius * 5.2, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        
+        ctx.save();
+        ctx.rotate(time * 0.001);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -radius * 4); ctx.stroke();
+        ctx.rotate(time * 0.0002);
+        ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(radius * 2.5, 0); ctx.stroke();
+        ctx.restore();
+        ctx.restore();
 
-              // 2. CONSTELLATION CAPE / WINGS (Night sky fabric)
-              for (let w = -1; w <= 1; w += 2) {
-                  ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
-                  const capeSway = Math.sin(time * 0.002) * 0.15;
-                  ctx.rotate(capeSway + 0.1);
+        for (let w = -1; w <= 1; w += 2) {
+            ctx.save(); ctx.translate(x, y - radius + floatY); ctx.scale(w, 1);
+            const capeSway = Math.sin(time * 0.002) * 0.15;
+            ctx.rotate(capeSway + 0.1);
 
-                  // Cape Fabric (Midnight to Transparent Cyan)
-                  const capeGradient = ctx.createLinearGradient(0, 0, radius*7, radius*5);
-                  capeGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-                  capeGradient.addColorStop(0.3, 'rgba(56, 189, 248, 0.8)');
-                  capeGradient.addColorStop(1, 'rgba(30, 27, 75, 0)');
+            const capeGradient = ctx.createLinearGradient(0, 0, radius*7, radius*5);
+            capeGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+            capeGradient.addColorStop(0.3, 'rgba(56, 189, 248, 0.8)');
+            capeGradient.addColorStop(1, 'rgba(30, 27, 75, 0)');
 
-                  ctx.fillStyle = capeGradient; ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
-                  ctx.beginPath();
-                  ctx.moveTo(radius, 0);
-                  // Elegant sweeping wing shapes
-                  ctx.bezierCurveTo(radius*3, -radius*2, radius*5, -radius*1, radius*7 + Math.sin(time*0.003)*3, radius*3);
-                  ctx.quadraticCurveTo(radius*5, radius*5, radius*3, radius*6);
-                  ctx.quadraticCurveTo(radius*2, radius*3, radius, radius);
-                  ctx.fill();
+            ctx.fillStyle = capeGradient; ctx.shadowBlur = 20; ctx.shadowColor = '#38bdf8';
+            ctx.beginPath();
+            ctx.moveTo(radius, 0);
+            ctx.bezierCurveTo(radius*3, -radius*2, radius*5, -radius*1, radius*7 + Math.sin(time*0.003)*3, radius*3);
+            ctx.quadraticCurveTo(radius*5, radius*5, radius*3, radius*6);
+            ctx.quadraticCurveTo(radius*2, radius*3, radius, radius);
+            ctx.fill();
 
-                  // Constellation Stars inside the Cape
-                  ctx.fillStyle = '#ffffff'; ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1; ctx.shadowBlur = 5;
-                  const starPoints = [ {px: 20, py: 10}, {px: 35, py: 5}, {px: 40, py: 25}, {px: 25, py: 30} ];
-                  ctx.beginPath();
-                  starPoints.forEach((pt, i) => {
-                      ctx.moveTo(starPoints[i].px, starPoints[i].py);
-                      const next = starPoints[(i+1)%starPoints.length];
-                      ctx.lineTo(next.px, next.py);
-                  });
-                  ctx.stroke();
-                  starPoints.forEach(pt => {
-                      ctx.beginPath(); ctx.arc(pt.px, pt.py, 1.5, 0, Math.PI*2); ctx.fill();
-                  });
-                  ctx.restore();
-              }
+            ctx.fillStyle = '#ffffff'; ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 1; ctx.shadowBlur = 5;
+            const starPoints = [ {px: 20, py: 10}, {px: 35, py: 5}, {px: 40, py: 25}, {px: 25, py: 30} ];
+            ctx.beginPath();
+            starPoints.forEach((pt, i) => {
+                ctx.moveTo(starPoints[i].px, starPoints[i].py);
+                const next = starPoints[(i+1)%starPoints.length];
+                ctx.lineTo(next.px, next.py);
+            });
+            ctx.stroke();
+            starPoints.forEach(pt => {
+                ctx.beginPath(); ctx.arc(pt.px, pt.py, 1.5, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.restore();
+        }
 
-              // 3. FLOATING CHRONO-SPHERES (Replacing the Books)
-              ctx.globalCompositeOperation = 'source-over';
-              const orbCount = 3;
-              for(let i=0; i<orbCount; i++) {
-                  const bAng = time*0.0015 + (i*Math.PI*2/orbCount);
-                  const bX = x + Math.cos(bAng)*radius*4.5;
-                  const bY = y - radius*2 + floatY + Math.sin(bAng*2)*radius*1.5;
-                  
-                  ctx.save(); ctx.translate(bX, bY);
-                  ctx.translate(0, Math.sin(time*0.004 + i)*5); 
-                  
-                  // Glowing Core
-                  ctx.shadowBlur = 15; ctx.shadowColor = '#7dd3fc';
-                  ctx.fillStyle = '#ffffff';
-                  ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
-                  
-                  // Rotating Astrolabe Rings
-                  ctx.strokeStyle = '#fde047'; // Starlight Gold
-                  ctx.lineWidth = 1.5;
-                  ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, time*0.003 + i, 0, Math.PI*2); ctx.stroke();
-                  ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, -time*0.002 + i + Math.PI/2, 0, Math.PI*2); ctx.stroke();
-                  ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
+        const orbCount = 3;
+        for(let i=0; i<orbCount; i++) {
+            const bAng = time*0.0015 + (i*Math.PI*2/orbCount);
+            const bX = x + Math.cos(bAng)*radius*4.5;
+            const bY = y - radius*2 + floatY + Math.sin(bAng*2)*radius*1.5;
+            
+            ctx.save(); ctx.translate(bX, bY);
+            ctx.translate(0, Math.sin(time*0.004 + i)*5); 
+            
+            ctx.shadowBlur = 15; ctx.shadowColor = '#7dd3fc';
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+            
+            ctx.strokeStyle = '#fde047';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, time*0.003 + i, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.ellipse(0, 0, 8, 12, -time*0.002 + i + Math.PI/2, 0, Math.PI*2); ctx.stroke();
+            ctx.restore();
 
-                  // Golden energy tether
-                  ctx.strokeStyle = `rgba(253, 224, 71, 0.2)`; ctx.lineWidth = 1;
-                  ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(bX, bY); ctx.stroke();
-              }
+            ctx.strokeStyle = `rgba(253, 224, 71, 0.2)`; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(bX, bY); ctx.stroke();
+        }
 
-              // 4. PRISMATIC SHARDS & ASTRAL DUST (Replacing Flowers & Butterflies)
-              ctx.globalCompositeOperation = 'lighter';
-              if (!eng.astralParticles) eng.astralParticles = [];
-              if (eng.astralParticles.length < 35 && Math.random() < 0.5) {
-                  const type = Math.random(); // 0.6 Prisms, 0.3 Dust, 0.1 Starfeathers
-                  eng.astralParticles.push({
-                      ox: (Math.random() - 0.5) * radius * 9, 
-                      oy: (Math.random() - 0.5) * radius * 8,
-                      vx: (Math.random() - 0.5) * 1.5,
-                      vy: -0.5 - Math.random(), // Floats upwards
-                      size: (type > 0.9) ? 3+Math.random()*3 : 1.5+Math.random()*1.5, 
-                      life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
-                  });
-              }
-              eng.astralParticles.forEach((p, i) => {
-                  p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.5;
-                  p.rot += p.rs; p.life -= 0.005;
-                  if (p.life <= 0) { eng.astralParticles.splice(i, 1); return; }
+        ctx.globalCompositeOperation = 'lighter';
+        if (!eng.astralParticles) eng.astralParticles = [];
+        if (eng.astralParticles.length < 35 && Math.random() < 0.5) {
+            const type = Math.random();
+            eng.astralParticles.push({
+                ox: (Math.random() - 0.5) * radius * 9, 
+                oy: (Math.random() - 0.5) * radius * 8,
+                vx: (Math.random() - 0.5) * 1.5,
+                vy: -0.5 - Math.random(),
+                size: (type > 0.9) ? 3+Math.random()*3 : 1.5+Math.random()*1.5, 
+                life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
+            });
+        }
+        eng.astralParticles.forEach((p, i) => {
+            p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.5;
+            p.rot += p.rs; p.life -= 0.005;
+            if (p.life <= 0) { eng.astralParticles.splice(i, 1); return; }
 
-                  ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
-                  
-                  if (p.type > 0.9) {
-                      // Starfeathers (Glowing elegant energy feathers)
-                      ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`;
-                      ctx.shadowBlur = 10; ctx.shadowColor = '#0ea5e9';
-                      ctx.beginPath();
-                      ctx.moveTo(0, -p.size);
-                      ctx.quadraticCurveTo(p.size, 0, 0, p.size);
-                      ctx.quadraticCurveTo(-p.size, 0, 0, -p.size);
-                      ctx.fill();
-                  } else if (p.type > 0.3) {
-                      // Crystal Memory Prisms (Diamonds)
-                      ctx.fillStyle = `rgba(96, 165, 250, ${p.life})`;
-                      ctx.shadowBlur = 5; ctx.shadowColor = '#38bdf8';
-                      ctx.beginPath();
-                      ctx.moveTo(0, -p.size); ctx.lineTo(p.size/2, 0); ctx.lineTo(0, p.size); ctx.lineTo(-p.size/2, 0);
-                      ctx.closePath(); ctx.fill();
-                  } else {
-                      // Celestial Stardust
-                      ctx.fillStyle = `rgba(248, 250, 252, ${p.life})`; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
-                      ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
-                  }
-                  ctx.restore();
-              });
+            ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
+            
+            if (p.type > 0.9) {
+                ctx.fillStyle = `rgba(186, 230, 253, ${p.life})`;
+                ctx.shadowBlur = 10; ctx.shadowColor = '#0ea5e9';
+                ctx.beginPath();
+                ctx.moveTo(0, -p.size);
+                ctx.quadraticCurveTo(p.size, 0, 0, p.size);
+                ctx.quadraticCurveTo(-p.size, 0, 0, -p.size);
+                ctx.fill();
+            } else if (p.type > 0.3) {
+                ctx.fillStyle = `rgba(96, 165, 250, ${p.life})`;
+                ctx.shadowBlur = 5; ctx.shadowColor = '#38bdf8';
+                ctx.beginPath();
+                ctx.moveTo(0, -p.size); ctx.lineTo(p.size/2, 0); ctx.lineTo(0, p.size); ctx.lineTo(-p.size/2, 0);
+                ctx.closePath(); ctx.fill();
+            } else {
+                ctx.fillStyle = `rgba(248, 250, 252, ${p.life})`; ctx.shadowBlur = 5; ctx.shadowColor = '#ffffff';
+                ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
+            }
+            ctx.restore();
+        });
 
-              // 5. GEOMETRIC ASTRAL CROWN (Replacing Flower Halo)
-              ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
-              ctx.scale(1, 0.3); ctx.rotate(time * 0.001);
-              
-              // Double Ring
-              ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)'; // Starlight Gold
-              ctx.lineWidth = 2; ctx.shadowBlur = 15; ctx.shadowColor = '#fde047';
-              ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
-              ctx.setLineDash([4, 8]); ctx.beginPath(); ctx.arc(0, 0, radius*3, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
-              
-              // Crown Spikes
-              for(let i=0; i<4; i++) {
-                  ctx.rotate(Math.PI*2/4);
-                  ctx.fillStyle = '#ffffff';
-                  ctx.beginPath(); ctx.moveTo(-2, -radius*2.5); ctx.lineTo(2, -radius*2.5); ctx.lineTo(0, -radius*4); ctx.fill();
-              }
-              ctx.restore();
+        ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
+        ctx.scale(1, 0.3); ctx.rotate(time * 0.001);
+        
+        ctx.strokeStyle = 'rgba(253, 224, 71, 0.8)';
+        ctx.lineWidth = 2; ctx.shadowBlur = 15; ctx.shadowColor = '#fde047';
+        ctx.beginPath(); ctx.arc(0, 0, radius*2.5, 0, Math.PI*2); ctx.stroke();
+        ctx.setLineDash([4, 8]); ctx.beginPath(); ctx.arc(0, 0, radius*3, 0, Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
+        
+        for(let i=0; i<4; i++) {
+            ctx.rotate(Math.PI*2/4);
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.moveTo(-2, -radius*2.5); ctx.lineTo(2, -radius*2.5); ctx.lineTo(0, -radius*4); ctx.fill();
+        }
+        ctx.restore();
 
-              // 6. TIMELESS CORE BLOOM
-              const astralGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 4.5);
-              astralGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
-              astralGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); // Cyan/Blue glow
-              astralGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');     
-              ctx.fillStyle = astralGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius * 4.5, 0, Math.PI * 2); ctx.fill();
-          }
+        const astralGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 4.5);
+        astralGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
+        astralGrad.addColorStop(0.3, 'rgba(96, 165, 250, 0.5)'); 
+        astralGrad.addColorStop(1, 'rgba(30, 27, 75, 0)');     
+        ctx.fillStyle = astralGrad; ctx.beginPath(); ctx.arc(x, y - radius + floatY, radius * 4.5, 0, Math.PI * 2); ctx.fill();
+    }
 
     else if (skinId === 'igris') {
         ctx.globalCompositeOperation = 'source-over';
@@ -1429,7 +1416,7 @@ export const LiveSkinPreview = ({ skin }) => {
       animationId = requestAnimationFrame(render);
       
       if (!isVisibleRef.current) return;
-      if (timestamp - lastTime < 40) return; // Throttled to ~25 FPS to stop lagging
+      if (timestamp - lastTime < 40) return; 
       lastTime = timestamp;
 
       const time = performance.now();
@@ -1442,9 +1429,7 @@ export const LiveSkinPreview = ({ skin }) => {
 
       drawAdvancedSkinAura(ctx, x, y, radius, skin.id, time, eng);
 
-      // --- MGA DESIGNS NG KATAWAN ---
       if (skin.id === 'frieren') {
-          // Frieren Character Design (No Hat, with Hair & Earring)
           ctx.globalCompositeOperation = 'source-over';
           ctx.fillStyle = skin.colors.brim;
           ctx.beginPath(); ctx.ellipse(x, y - radius * 1.1, radius * 1.8, radius * 0.4, 0, 0, Math.PI * 2); ctx.fill();
@@ -1464,7 +1449,6 @@ export const LiveSkinPreview = ({ skin }) => {
           ctx.beginPath(); ctx.arc(x - 2.5, y - radius * 0.5, 1.2, 0, Math.PI*2); ctx.fill();
           ctx.beginPath(); ctx.arc(x + 2.5, y - radius * 0.5, 1.2, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur = 0;
       } else {
-          // Standard Mini Player Design
           ctx.globalCompositeOperation = 'source-over';
           ctx.fillStyle = skin.colors.robe; ctx.beginPath();
           ctx.moveTo(x, y - radius); ctx.lineTo(x - radius * 1.5, y + radius * 1.5); ctx.lineTo(x + radius * 1.5, y + radius * 1.5); ctx.fill();
@@ -1493,18 +1477,156 @@ export const LiveSkinPreview = ({ skin }) => {
   );
 };
 
+// 🔥 NAKALABAS DITO ANG LIVE FAMILIAR PREVIEW (Para hindi mag-error)
+export function LiveFamiliarPreview({ id, level }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let animationFrameId;
+
+    const render = () => {
+      const t = performance.now();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(2.5, 2.5); 
+
+      const f = { id, level };
+
+      if (f.id === 'wisp') {
+        const wispSize = 7 + (f.level >= 5 ? 3 : 0) + (f.level >= 10 ? 4 : 0);
+        ctx.shadowBlur = 10; ctx.shadowColor = '#ef4444';
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath(); ctx.arc(0, 0, wispSize * 0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = `rgba(249, 115, 22, ${0.8 + Math.sin(t * 0.01) * 0.2})`;
+        ctx.beginPath(); ctx.moveTo(0, -wispSize * 1.5);
+        ctx.quadraticCurveTo(wispSize, 0, 0, wispSize);
+        ctx.quadraticCurveTo(-wispSize, 0, 0, -wispSize * 1.5); ctx.fill();
+        if (f.level >= 5) {
+          const orbCount = f.level >= 10 ? 3 : 1;
+          ctx.fillStyle = '#ef4444';
+          for(let i = 0; i < orbCount; i++) {
+            const oA = t * 0.005 + (i * Math.PI * 2 / orbCount);
+            ctx.beginPath(); ctx.arc(Math.cos(oA) * 18, Math.sin(oA) * 18, 3, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+      } 
+      else if (f.id === 'fairy') {
+        ctx.shadowBlur = 10; ctx.shadowColor = '#22c55e';
+        ctx.fillStyle = '#86efac';
+        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+        const flap = Math.abs(Math.sin(t * 0.015)) * 6 + 1;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.beginPath(); ctx.ellipse(-5, -3, 8, flap, Math.PI/4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(5, -3, 8, flap, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+        if (f.level >= 5) {
+          ctx.strokeStyle = 'rgba(134, 239, 172, 0.5)'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.ellipse(0, -8, 10, 3, 0, 0, Math.PI*2); ctx.stroke();
+        }
+        if (f.level >= 10) {
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath(); ctx.arc(Math.cos(t * 0.002) * 12, Math.sin(t * 0.002) * 12, 1.5, 0, Math.PI*2); ctx.fill();
+        }
+      }
+      else if (f.id === 'voidling') {
+        const float = Math.sin(t * 0.005) * 4;
+        ctx.shadowBlur = 10; ctx.shadowColor = '#a855f7';
+        ctx.strokeStyle = 'rgba(217, 70, 239, 0.8)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(0, float, 12, 4 + Math.sin(t*0.01)*2, t*0.002, 0, Math.PI*2); ctx.stroke();
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath(); ctx.arc(0, float, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f472b6';
+        ctx.beginPath(); ctx.ellipse(0, float, 3, 5, 0, 0, Math.PI*2); ctx.fill();
+        if (f.level >= 5) {
+          ctx.strokeStyle = 'rgba(192, 132, 252, 0.5)';
+          ctx.beginPath(); ctx.arc(0, float, 18, 0, Math.PI*2); ctx.stroke();
+        }
+        if (f.level >= 10) {
+          ctx.fillStyle = '#e879f9';
+          for(let i=0; i<4; i++) {
+            const pA = t*0.003 + (i*Math.PI/2);
+            ctx.beginPath(); ctx.arc(Math.cos(pA)*22, Math.sin(pA)*22 + float, 2, 0, Math.PI*2); ctx.fill();
+          }
+        }
+      }
+      else if (f.id === 'frost') {
+        ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
+        ctx.fillStyle = '#bae6fd';
+        ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.fill();
+        if (f.level >= 5) {
+          ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI*2); ctx.stroke();
+        }
+        if (f.level >= 10) {
+          ctx.fillStyle = '#e0f2fe';
+          for(let i=0; i<3; i++) {
+             const a = t*0.003 + (i*Math.PI*2/3);
+             ctx.beginPath(); ctx.arc(Math.cos(a)*18, Math.sin(a)*18, 2.5, 0, Math.PI*2); ctx.fill();
+          }
+        }
+      }
+      else if (f.id === 'golem') {
+        ctx.shadowBlur = 8; ctx.shadowColor = '#d97706';
+        const float = Math.sin(t * 0.005) * 2;
+        ctx.fillStyle = '#f59e0b'; ctx.fillRect(-8, -8 + float, 16, 16);
+        ctx.fillStyle = '#fffbeb'; ctx.fillRect(-4, -4 + float, 3, 3); ctx.fillRect(4, -4 + float, 3, 3);
+        if (f.level >= 5) { 
+           ctx.fillStyle = '#d97706'; const armSway = Math.cos(t * 0.005) * 5;
+           ctx.fillRect(-16, 0 + armSway, 6, 8); ctx.fillRect(10, 0 - armSway, 6, 8);
+        }
+        if (f.level >= 10) { 
+           ctx.fillStyle = '#ef4444'; ctx.fillRect(-2, 2 + float, 4, 4);
+           ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)'; ctx.lineWidth = 2;
+           ctx.beginPath(); ctx.arc(0, float, 24, 0, Math.PI*2); ctx.stroke();
+        }
+      }
+      else if (f.id === 'thunder') {
+        ctx.shadowBlur = 10; ctx.shadowColor = '#e879f9';
+        ctx.fillStyle = '#fdf4ff';
+        const pulse = Math.sin(t * 0.01) * 2;
+        ctx.beginPath(); ctx.arc(0, 0, 6 + pulse, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, -12); ctx.lineTo(-2, -6); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, -12); ctx.lineTo(2, -6); ctx.fill();
+        if (f.level >= 5) {
+           ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 2;
+           ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, t*0.005, 0, Math.PI*2); ctx.stroke();
+        }
+        if (f.level >= 10 && Math.random() < 0.3) {
+            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo((Math.random()-0.5)*35, (Math.random()-0.5)*35); ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+      animationFrameId = requestAnimationFrame(render);
+    };
+    render();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [id, level]);
+
+  return <canvas ref={canvasRef} width={90} height={90} style={{ background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} />;
+}
+
+// 🔥 ITO ANG MAIN METASHOP COMPONENT
 export default function MetaShop({ screen, setScreen }) {
   const [activeTab, setActiveTab] = useState('stats');
   const [crystals, setCrystals] = useState(0);
   const [upgrades, setUpgrades] = useState({});
   const [unlockedSkins, setUnlockedSkins] = useState(['default']);
   const [equippedSkin, setEquippedSkin] = useState('default');
+  
+  // NEW FAMILIAR STATES
+  const [unlockedFamiliars, setUnlockedFamiliars] = useState(['none']);
+  const [equippedFamiliar, setEquippedFamiliar] = useState('none');
+  const [familiarLevels, setFamiliarLevels] = useState({});
 
   // ANTI-INSPECT AT ANTI-RIGHT CLICK SECURITY
   useEffect(() => {
     const handleContextMenu = (e) => e.preventDefault();
     const handleKeyDown = (e) => {
-      // Pinipigilan ang F12, Ctrl+Shift+I, Ctrl+Shift+J, at Ctrl+U
       if (
         e.keyCode === 123 || 
         (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || 
@@ -1531,6 +1653,11 @@ export default function MetaShop({ screen, setScreen }) {
       const savedSkins = JSON.parse(localStorage.getItem('arcane_unlocked_skins') || '["default"]');
       setUnlockedSkins(savedSkins);
       setEquippedSkin(localStorage.getItem('arcane_equipped_skin') || 'default');
+
+      // LOAD FAMILIARS
+      setUnlockedFamiliars(JSON.parse(localStorage.getItem('arcane_unlocked_familiars') || '["none"]'));
+      setEquippedFamiliar(localStorage.getItem('arcane_equipped_familiar') || 'none');
+      setFamiliarLevels(JSON.parse(localStorage.getItem('arcane_familiar_levels') || '{}'));
     }
   }, [screen]);
 
@@ -1568,6 +1695,44 @@ export default function MetaShop({ screen, setScreen }) {
       localStorage.setItem('arcane_void_crystals', newCrystals);
       localStorage.setItem('arcane_unlocked_skins', JSON.stringify(newUnlocked));
       localStorage.setItem('arcane_equipped_skin', skin.id);
+    }
+  };
+
+  const buyOrEquipFamiliar = (fam) => {
+    const isUnlocked = unlockedFamiliars.includes(fam.id);
+    if (isUnlocked) {
+      setEquippedFamiliar(fam.id);
+      localStorage.setItem('arcane_equipped_familiar', fam.id);
+    } else if (crystals >= fam.baseCost) {
+      const newCrystals = crystals - fam.baseCost;
+      const newUnlocked = [...unlockedFamiliars, fam.id];
+      const newLevels = { ...familiarLevels, [fam.id]: 1 };
+      
+      setCrystals(newCrystals);
+      setUnlockedFamiliars(newUnlocked);
+      setEquippedFamiliar(fam.id);
+      setFamiliarLevels(newLevels);
+      
+      localStorage.setItem('arcane_void_crystals', newCrystals);
+      localStorage.setItem('arcane_unlocked_familiars', JSON.stringify(newUnlocked));
+      localStorage.setItem('arcane_equipped_familiar', fam.id);
+      localStorage.setItem('arcane_familiar_levels', JSON.stringify(newLevels));
+    }
+  };
+
+  const upgradeFamiliar = (fam) => {
+    const currentLevel = familiarLevels[fam.id] || 1;
+    if (currentLevel >= fam.maxLevel) return;
+
+    const cost = fam.upgBase * currentLevel;
+    if (crystals >= cost) {
+      const newCrystals = crystals - cost;
+      const newLevels = { ...familiarLevels, [fam.id]: currentLevel + 1 };
+      
+      setCrystals(newCrystals);
+      setFamiliarLevels(newLevels);
+      localStorage.setItem('arcane_void_crystals', newCrystals);
+      localStorage.setItem('arcane_familiar_levels', JSON.stringify(newLevels));
     }
   };
 
@@ -1614,7 +1779,6 @@ export default function MetaShop({ screen, setScreen }) {
               🌌 THE VOID SANCTUM
             </div>
             
-            {/* GROUPED CRYSTAL BALANCE AT HINT TEXT */}
             <div style={{ textAlign: 'center', margin: '15px 0' }}>
               <div style={{ color: '#fef08a', fontSize: '1.2rem', fontWeight: 'bold', textShadow: '0 0 10px rgba(254, 240, 138, 0.5)' }}>
                 💎 Void Crystals: {crystals.toLocaleString()}
@@ -1627,12 +1791,12 @@ export default function MetaShop({ screen, setScreen }) {
             <div className="council-tab-headers" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
               <button className={`council-tab-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')} style={{ flex: 1, maxWidth: '200px' }}>🔮 Arcane Stats</button>
               <button className={`council-tab-btn ${activeTab === 'skins' ? 'active' : ''}`} onClick={() => setActiveTab('skins')} style={{ flex: 1, maxWidth: '200px' }}>🧥 Wardrobe</button>
+              <button className={`council-tab-btn ${activeTab === 'familiars' ? 'active' : ''}`} onClick={() => setActiveTab('familiars')} style={{ flex: 1, maxWidth: '200px' }}>🐾 Familiars</button>
             </div>
 
             <div className="divider mystic-divider" style={{ margin: '10px 0' }} />
           </div>
 
-          {/* --- SCROLLABLE CONTENT SECTION --- */}
           <div className="shop-scroll-area" style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             
             {activeTab === 'stats' && (
@@ -1706,9 +1870,79 @@ export default function MetaShop({ screen, setScreen }) {
                 })}
               </>
             )}
+
+            {activeTab === 'familiars' && (
+              <>
+                <button className="btn wizard-btn danger-theme" onClick={() => { setEquippedFamiliar('none'); localStorage.setItem('arcane_equipped_familiar', 'none'); }} style={{ marginBottom: '10px' }}>
+                  🚫 Unequip Companion
+                </button>
+
+                {FAMILIARS_DB.map(fam => {
+                  const isUnlocked = unlockedFamiliars.includes(fam.id);
+                  const isEquipped = equippedFamiliar === fam.id;
+                  const level = familiarLevels[fam.id] || 1;
+                  const isMax = level >= fam.maxLevel;
+                  const upgCost = fam.upgBase * level;
+                  const canAffordUnlock = crystals >= fam.baseCost;
+                  const canAffordUpg = crystals >= upgCost;
+
+                  let evoName = fam.evolutions[1];
+                  if (level >= 10) evoName = fam.evolutions[10];
+                  else if (level >= 5) evoName = fam.evolutions[5];
+
+                  return (
+                    <div key={fam.id} className="shop-card" style={{ border: `1px solid ${isEquipped ? fam.color : 'rgba(139, 92, 246, 0.3)'}`, boxShadow: isEquipped ? `0 0 15px ${fam.color}40` : 'none', flexDirection: 'column' }}>
+                      
+                      <div style={{ display: 'flex', width: '100%', gap: '15px', alignItems: 'center' }}>
+                        <LiveFamiliarPreview id={fam.id} level={isUnlocked ? level : 1} />
+
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <span style={{ color: isEquipped ? fam.color : '#fff', fontWeight: 'bold', fontFamily: 'Georgia, serif', fontSize: '1.2rem' }}>
+                            {evoName} <span style={{ color: '#a78bfa', fontSize: '0.9rem' }}>[Lv. {isUnlocked ? level : 0}/{fam.maxLevel}]</span> {isEquipped && '✓'}
+                          </span>
+                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '4px' }}>Type: {fam.type} | {fam.desc}</span>
+                          
+                          <span style={{ color: '#34d399', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace', marginTop: '6px', background: 'rgba(52, 211, 153, 0.1)', padding: '4px 6px', borderRadius: '4px', display: 'inline-block', width: 'fit-content' }}>
+                            ⏫ Upgrades: {fam.scaleDesc}
+                          </span>
+                        </div>
+                        
+                        <button className="shop-btn" onClick={() => buyOrEquipFamiliar(fam)} disabled={isEquipped || (!isUnlocked && !canAffordUnlock)}
+                          style={{
+                            background: isEquipped ? 'rgba(5, 2, 12, 0.8)' : (isUnlocked ? 'linear-gradient(180deg, #b45309 0%, #78350f 100%)' : (canAffordUnlock ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)')),
+                            border: `1px solid ${isEquipped ? '#475569' : (isUnlocked ? '#fef08a' : (canAffordUnlock ? '#a78bfa' : '#ef4444'))}`,
+                            color: isEquipped ? '#94a3b8' : (isUnlocked ? '#fef08a' : (canAffordUnlock ? '#fff' : '#f87171')),
+                            padding: '8px 14px', borderRadius: '6px', cursor: isEquipped || (!isUnlocked && !canAffordUnlock) ? 'not-allowed' : 'pointer',
+                            fontFamily: 'monospace', fontWeight: 'bold', flexShrink: 0
+                          }}>
+                          {isEquipped ? 'EQUIPPED' : (isUnlocked ? 'EQUIP' : `💎 ${fam.baseCost}`)}
+                        </button>
+                      </div>
+
+                      {isUnlocked && (
+                        <div style={{ width: '100%', marginTop: '12px', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '10px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', marginRight: 'auto', fontFamily: 'monospace' }}>
+                            Next Evolution at: <span style={{color: '#fef08a'}}>Lv. 5 / Lv. 10</span>
+                          </span>
+                          <button className="shop-btn" onClick={() => upgradeFamiliar(fam)} disabled={isMax || !canAffordUpg}
+                            style={{
+                              background: isMax ? 'transparent' : (canAffordUpg ? 'linear-gradient(180deg, #047857 0%, #064e3b 100%)' : 'rgba(239, 68, 68, 0.1)'),
+                              border: `1px solid ${isMax ? '#475569' : (canAffordUpg ? '#34d399' : '#ef4444')}`,
+                              color: isMax ? '#94a3b8' : (canAffordUpg ? '#fff' : '#f87171'),
+                              padding: '6px 14px', borderRadius: '4px', cursor: isMax || !canAffordUpg ? 'not-allowed' : 'pointer',
+                              fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.9rem'
+                            }}>
+                            {isMax ? 'MAX LEVEL' : `⏫ UPGRADE: 💎 ${upgCost}`}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
 
-          {/* --- FIXED FOOTER SECTION --- */}
           <div style={{ flexShrink: 0, marginTop: 'auto' }}>
             <div className="divider mystic-divider" style={{ margin: '15px 0 10px 0' }} />
             <button className="btn wizard-btn danger-theme" onClick={() => setScreen('menu')} style={{ width: '100%', maxWidth: '200px', margin: '0 auto', display: 'block' }}>
