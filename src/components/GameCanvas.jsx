@@ -2004,7 +2004,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     if (!target.skills.natureRecovery) target.skills.natureRecovery = { learned: true, enabled: true, cd: 0 };
     if (target.skills.natureRecovery.cd > 0) return;
 
-    target.skills.natureRecovery.cd = 50.0;
+    target.skills.natureRecovery.cd = 45.0;
 
     playSfx('heal');
     target.chatBubble = { text: "NATURE'S RECOVERY!", life: 1.5 };
@@ -2135,7 +2135,7 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
 
     playSfx('instinct');
 
-    target.skills.arcaneInstinct.cd = 60.0; 
+    target.skills.arcaneInstinct.cd = 55.0; 
     target.skills.arcaneInstinct.duration = 15.0; 
     target.skills.arcaneInstinct.autoTimer = 0.5;
     eng.screenShake = 1.2; 
