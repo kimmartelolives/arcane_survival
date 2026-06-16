@@ -43,7 +43,7 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
   window.arcaneAudio.levelUpSfx.volume = 0.4;       // Setup ang volume para sa SFX
   window.arcaneAudio.selectUpgradeSfx.volume = 0.4;
   window.arcaneAudio.gameOverSfx.volume = 0.6;
-  window.arcaneAudio.bossBgm.volume = 0.3
+  window.arcaneAudio.bossBgm.volume = 0.4
 }
 
 export default function App() {

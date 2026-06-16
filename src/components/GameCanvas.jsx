@@ -22,7 +22,8 @@ class SoundManager {
       equip: [],
       unequip: [],
       delete: [],
-      dash:[]
+      dash: [],
+      choir: [],
     };
     this.unlocked = false;
 
@@ -41,7 +42,8 @@ class SoundManager {
       equip: '/equip.mp3',
       unequip: '/unequip.mp3',
       delete: '/delete.mp3',
-      dash: '/dash.mp3'
+      dash: '/dash.mp3',
+      choir: '/choir.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -1880,7 +1882,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     if (target.skills[sigilType].cd > 0) return;
 
     // 1. I-apply agad ang cooldown para hindi ma-spam habang nag-ca-cast
-    target.skills[sigilType].cd = 40.0;
+    target.skills[sigilType].cd = 30.0;
 
     // 2. 🔥 PLAY ELEMENTAL SOUND EFFECT AGAD
     const sigilSfxMap = {
@@ -2002,7 +2004,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     if (!target.skills.natureRecovery) target.skills.natureRecovery = { learned: true, enabled: true, cd: 0 };
     if (target.skills.natureRecovery.cd > 0) return;
 
-    target.skills.natureRecovery.cd = 75.0;
+    target.skills.natureRecovery.cd = 50.0;
 
     playSfx('heal');
     target.chatBubble = { text: "NATURE'S RECOVERY!", life: 1.5 };
@@ -2133,9 +2135,9 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
 
     playSfx('instinct');
 
-    target.skills.arcaneInstinct.cd = 85.0; // 🔥 BUFF: Cooldown reduced to 40s
-    target.skills.arcaneInstinct.duration = 15.0; // 🔥 BUFF: Duration increased to 15s
-    target.skills.arcaneInstinct.autoTimer = 0.5; // 🔥 BUFF: Auto-cast delay reduced to 0.5s
+    target.skills.arcaneInstinct.cd = 60.0; 
+    target.skills.arcaneInstinct.duration = 15.0; 
+    target.skills.arcaneInstinct.autoTimer = 0.5;
     eng.screenShake = 1.2; 
 
     target.chatBubble = { text: "ARCANE INSTINCT!!!", life: 1.8 };
@@ -2898,23 +2900,33 @@ useEffect(() => {
     let syncTimer = 0;
 
       const rollUpgradeOptions = (playerObj) => {
-      let pool = ['Vitality', 'Arcane Might']; 
+      // ✅ Nilagay dito ang 4 na upgrades para laging available (walang cap)
+      let pool = ['Vitality', 'Arcane Might', 'Vampiric Aura', 'Iron Plating']; 
 
       if (playerObj) {
         // I-add lang sa pool kung HINDI PA sagad sa cap
         if ((playerObj.shootRate || 0.6) > 0.151) pool.push('Rapid Fire');
         if ((playerObj.multiShot || 1) < 20) pool.push('Gain Multi-Shot');
         if ((playerObj.speed || 200) < 800) pool.push('Swift Stride');
-        
-        // 👇 NEW CAPS CHECK
         if ((playerObj.baseCrit || 0) < 60) pool.push('Fatal Strike');
-        if ((playerObj.baseDef || 0) < 60) pool.push('Iron Plating');
+
       } else {
-        // Fallback
-        pool.push('Rapid Fire', 'Gain Multi-Shot', 'Swift Stride', 'Fatal Strike', 'Iron Plating', 'Vampiric Aura');
+
+        pool.push('Rapid Fire', 'Gain Multi-Shot', 'Swift Stride', 'Fatal Strike');
       }
 
       return pool.sort(() => 0.5 - Math.random()).slice(0, 3);
+    };
+
+    // 🔥 NEW: GLOBAL REROLL FUNCTION
+    window.requestLevelUpReroll = () => {
+      const eng = engineRef.current;
+      const net = netRef.current || {};
+      const isCoopActive = Boolean(net.channel);
+      const localTarget = (isCoopActive && !net.isHost) ? eng.p2 : eng.p;
+      
+      const newUps = rollUpgradeOptions(localTarget);
+      onLevelUpOffer(newUps);
     };
 
     const workerBlob = new Blob([`
@@ -3118,7 +3130,7 @@ if (eng.gameStarted) {
                      // 🔥 Spawn The Abyss (Awakened God Form)
                      eng.enemies.push({ 
                          x: W/2, y: -200, // Magsisimula sa labas ng screen pababa
-                         r: 55, // 🔥 God-Tier Size
+                         r: 40, // 🔥 God-Tier Size
                          speed: 70, 
                          hp: abyssHp, maxHp: abyssHp, prevHpFrame: abyssHp,
                          dmg: Math.floor(2500 * diffScale), xp: 150000, 
@@ -3182,7 +3194,7 @@ if (eng.gameStarted) {
 
                      const hpScale = Math.floor((1000000 + (currentWave * 15000)) * diffScale);
                      eng.enemies.push({ 
-                         x: W/2, y: -60, r: 55, speed: 70, hp: hpScale, maxHp: hpScale, prevHpFrame: hpScale, dmg: Math.floor(1800 * diffScale), 
+                         x: W/2, y: -60, r: 35, speed: 70, hp: hpScale, maxHp: hpScale, prevHpFrame: hpScale, dmg: Math.floor(1800 * diffScale), 
                          xp: 80000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', nameTag: 'The Abyss', 
                          abyssShieldTimer: 0, abyssShieldCd: 7, abyssAttackTimer: 4, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
@@ -3191,7 +3203,7 @@ if (eng.gameStarted) {
                   else if (currentWave >= 50 && (currentWave - 50) % 20 === 0) {
                      const hpScale = Math.floor((350000 + (currentWave * 8000)) * diffScale);
                      eng.enemies.push({ 
-                         x: W/2, y: -50, r: 40, speed: 95, hp: hpScale, maxHp: hpScale, dmg: Math.floor(1000 * diffScale), 
+                         x: W/2, y: -50, r: 30, speed: 95, hp: hpScale, maxHp: hpScale, dmg: Math.floor(1000 * diffScale), 
                          xp: 40000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', nameTag: 'Primordial Demon', 
                          flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
                      });
@@ -4104,7 +4116,12 @@ if (eng.gameStarted) {
 
                   eng.p.shootCd = activeRate;
                   const ba = Math.atan2(near.y - eng.p.y, near.x - eng.p.x);
-                  const sp = (eng.p.multiShot - 1) * 0.18;
+                  
+                  // 🔥 FIX: TIGHTER SPREAD LOGIC PARA MAS TUMAMA
+                  // Kung dati ay laging 0.18, ngayon ay liliit ang spread kapag dumami ang bullets
+                  // para hindi sumabog kung saan-saan.
+                  const sp = Math.max(0.05, 0.25 - (eng.p.multiShot * 0.015)); 
+                  
                   for (let i = 0; i < eng.p.multiShot; i++) {
                     const a = ba + (i - (eng.p.multiShot - 1) / 2) * sp;
                     eng.bullets.push({ x: eng.p.x, y: eng.p.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: false });
@@ -4136,7 +4153,10 @@ if (eng.gameStarted) {
 
                   eng.p2.shootCd = activeRatep2;
                   const ba = Math.atan2(near.y - eng.p2.y, near.x - eng.p2.x);
-                  const sp = (eng.p2.multiShot - 1) * 0.18;
+                  
+                  // 🔥 FIX: TIGHTER SPREAD LOGIC PARA MAS TUMAMA (Gawin din sa P2)
+                  const sp = Math.max(0.05, 0.25 - (eng.p2.multiShot * 0.015));
+
                   for (let i = 0; i < eng.p2.multiShot; i++) {
                     const a = ba + (i - (eng.p2.multiShot - 1) / 2) * sp;
                     eng.bullets.push({ x: eng.p2.x, y: eng.p2.y, vx: Math.cos(a) * 390, vy: Math.sin(a) * 390, r: 5, life: 2, p2: true });
@@ -4415,23 +4435,27 @@ if (eng.gameStarted) {
 
               // Kapag UBOS NA ang The Abyss Awakened AT ang dalawang Primordial Demons (0 ang natitira)
               if (remainingBosses === 0) {                  
-                  // Play Cinematic
-                  if (!window.hasShownVictoryCinematic) {
-                      window.hasShownVictoryCinematic = true; 
-                      window.showVictoryCinematic = 6.0; // 6.0 SECONDS real time
+              // 🎁 BONUS REWARD: Full Heal dahil na-clear na ang wave
+              if (eng.p && !eng.p.dead) eng.p.hp = eng.p.maxHp;
+              if (eng.p2 && !eng.p2.dead) eng.p2.hp = eng.p2.maxHp;
+              
+              // SCREEN WIPE: Patayin lahat ng maliliit na kalaban na naiwan
+              for (let k = 0; k < eng.enemies.length; k++) {
+                  if (eng.enemies[k] !== e) {
+                      eng.enemies[k].deadTrigger = true; 
                   }
+              }
+
+              // Play Cinematic with DELAY
+              if (!window.hasShownVictoryCinematic) {
+                  window.hasShownVictoryCinematic = true; 
                   
-                  // 🎁 BONUS REWARD: Full Heal dahil na-clear na ang wave
-                  if (eng.p && !eng.p.dead) eng.p.hp = eng.p.maxHp;
-                  if (eng.p2 && !eng.p2.dead) eng.p2.hp = eng.p2.maxHp;
-                  
-                  // SCREEN WIPE: Patayin lahat ng maliliit na kalaban na naiwan
-                  for (let k = 0; k < eng.enemies.length; k++) {
-                      if (eng.enemies[k] !== e) {
-                          eng.enemies[k].deadTrigger = true; 
-                      }
-                  }
-              } else {
+                  // 🔥 Maghihintay ng 2 segundo para sa smooth transition / breathing room
+                  setTimeout(() => {
+                      window.showVictoryCinematic = 12.0; // 12.0 SECONDS real time
+                  }, 500); 
+              }
+          } else {
               }
           }
 
@@ -5763,7 +5787,7 @@ if (eng.potions) {
             ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, Math.PI * 2); ctx.fill();
             ctx.globalCompositeOperation = 'source-over'; // Reset for solid bodies
 
-            if (e.type === 'abyss') {
+            if (e.type === 'primordial') {
                 // ==================================================
                 // 🌌 THE ABYSS (Reality Breaker / Screen Shatter)
                 // ==================================================
@@ -5815,159 +5839,549 @@ if (eng.potions) {
                 ctx.beginPath(); ctx.moveTo(-e.r * 0.7, -e.r * 0.2 + eyeGlitch); ctx.lineTo(-e.r * 0.1, -e.r * 0.5); ctx.lineTo(-e.r * 0.3, e.r * 0.6); ctx.fill();
                 ctx.beginPath(); ctx.moveTo(e.r * 0.7, -e.r * 0.2 + eyeGlitch); ctx.lineTo(e.r * 0.1, -e.r * 0.5); ctx.lineTo(e.r * 0.3, e.r * 0.6); ctx.fill();
 
-            } else if (e.type === 'abyss_awakened') {
+            }else if (e.type === 'abyss_awakened') {
                 // ==================================================
-                // 👁️ THE ABYSS AWAKENED (Eldritch God / Cosmic Horror)
+                // 👁️ THE ABYSS AWAKENED (The Sovereign of Annihilation)
                 // ==================================================
-                ctx.shadowBlur = e.flash > 0 ? 100 : 120;
-                ctx.shadowColor = e.flash > 0 ? '#ffffff' : '#991b1b';
-
-                // 1. Cursed God-Rays (Dark beams shooting outward)
-                ctx.globalCompositeOperation = 'lighter';
-                for(let i=0; i<6; i++) {
-                    let ang = (now / 800) + (i * Math.PI / 3);
-                    let beamGrad = ctx.createLinearGradient(0, 0, Math.cos(ang)*e.r*8, Math.sin(ang)*e.r*8);
-                    beamGrad.addColorStop(0, 'rgba(220, 38, 38, 0.4)');
-                    beamGrad.addColorStop(1, 'transparent');
-                    ctx.fillStyle = beamGrad;
-                    ctx.beginPath();
-                    ctx.moveTo(0,0);
-                    ctx.lineTo(Math.cos(ang - 0.2)*e.r*8, Math.sin(ang - 0.2)*e.r*8);
-                    ctx.lineTo(Math.cos(ang + 0.2)*e.r*8, Math.sin(ang + 0.2)*e.r*8);
-                    ctx.fill();
-                }
-                ctx.globalCompositeOperation = 'source-over';
-
-                // 2. The Omniscient Eye (Higanteng mata sa itaas, nagfi-flicker ang pupil)
-                let eyeY = -e.r * 3.5 + Math.sin(now / 200) * 15;
-                ctx.fillStyle = '#050505';
-                ctx.beginPath(); ctx.ellipse(0, eyeY, e.r * 2, e.r * 1.2, 0, 0, Math.PI * 2); ctx.fill(); 
-                ctx.fillStyle = '#ff0000';
-                ctx.beginPath(); ctx.arc(Math.random() * 4 - 2, eyeY + Math.random() * 4 - 2, e.r * 0.8, 0, Math.PI * 2); ctx.fill(); // Twitching pupil
-                ctx.fillStyle = '#000000';
-                ctx.beginPath(); ctx.ellipse(0, eyeY, e.r * 0.15, e.r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
-
-                // 3. Eldritch Shadow Tentacles/Hands (Humahaba na parang may kinukuha)
-                ctx.fillStyle = 'rgba(5, 5, 5, 0.9)';
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 3;
-                for(let i=0; i<5; i++) {
-                    let ang = (now/600) + i*(Math.PI*2/5);
-                    let reach = e.r * (3 + Math.sin(now/150 + i) * 1.5); // Humahaba at umiikli
-                    ctx.save();
-                    ctx.rotate(ang);
-                    ctx.beginPath();
-                    ctx.moveTo(0,0);
-                    ctx.quadraticCurveTo(e.r*2, e.r*2, reach, -e.r);
-                    ctx.quadraticCurveTo(reach*1.2, -e.r*2, reach*1.5, -e.r*1.5);
-                    ctx.quadraticCurveTo(reach, 0, e.r*1.5, e.r*1.5);
-                    ctx.fill(); ctx.stroke();
-                    ctx.restore();
-                }
-
-                // 4. 12 Divine Scythe Wings (Super fast aggressive flapping)
-                let flap = Math.sin(now / 50) * 0.5; // Sobrang bilis na pagpag na parang galit
-                for (let i = 0; i < 12; i++) {
-                    ctx.save();
-                    ctx.rotate((Math.PI * 2 / 12) * i + flap);
-                    ctx.fillStyle = '#000000';
-                    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(-e.r * 2, -e.r * 3, 0, -e.r * 7); ctx.quadraticCurveTo(e.r * 1.5, -e.r * 3, 0, 0); ctx.fill();
-                    ctx.strokeStyle = e.flash > 0 ? '#ffffff' : 'rgba(220, 38, 38, 0.8)';
-                    ctx.lineWidth = 2; ctx.stroke();
-                    ctx.restore();
-                }
-
-                // 5. Singularity Core
-                let coreSize = e.r * (1.5 + Math.sin(now / 40) * 0.3); // Aggressive heartbeat
-                const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreSize);
-                grad.addColorStop(0, '#000000');
-                grad.addColorStop(0.3, '#991b1b');
-                grad.addColorStop(1, 'transparent');
-                ctx.fillStyle = e.flash > 0 ? '#ffffff' : grad;
-                ctx.beginPath(); ctx.arc(0, 0, coreSize, 0, Math.PI * 2); ctx.fill();
-
-            } else if (e.type === 'primordial') {
-                // ==================================================
-                // 🌋 PRIMORDIAL DEMON (World-Ending Inferno / Apocalyptic Aura)
-                // ==================================================
-                ctx.shadowBlur = e.flash > 0 ? 100 : 150;
-                ctx.shadowColor = e.flash > 0 ? '#ffffff' : '#ea580c'; 
-
-                // 1. Apocalyptic Lava Pillars (Umaapoy mula sa ibaba ng screen)
-                ctx.globalCompositeOperation = 'lighter';
-                for (let i = 0; i < 8; i++) {
-                    let pX = (Math.random() - 0.5) * e.r * 12;
-                    let pHeight = e.r * (4 + Math.random() * 8);
-                    let pillarGrad = ctx.createLinearGradient(0, 0, 0, -pHeight);
-                    pillarGrad.addColorStop(0, 'rgba(253, 224, 71, 0.8)'); // Super hot yellow
-                    pillarGrad.addColorStop(0.5, 'rgba(234, 88, 12, 0.4)'); // Fire orange
-                    pillarGrad.addColorStop(1, 'transparent');
-                    ctx.fillStyle = pillarGrad;
-                    ctx.fillRect(pX, e.r * 2, e.r * (0.5 + Math.random()), -pHeight);
-                }
-                ctx.globalCompositeOperation = 'source-over';
-
-                // 2. Underworld Demonic Sigil (Gigantic spinning pentagram)
+                
+                const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
+                const isEnraged = hpRatio <= 0.3;
+                
+                const enrageMult = isEnraged ? 1.5 : 1;
+                const coreR = e.r * 1.5;
+                
                 ctx.save();
-                ctx.rotate(now / -400);
-                ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
-                ctx.lineWidth = 6;
-                ctx.shadowBlur = 50;
-                ctx.beginPath(); ctx.arc(0, 0, e.r * 5, 0, Math.PI * 2); ctx.stroke(); // Double outer ring
-                ctx.beginPath(); ctx.arc(0, 0, e.r * 4.7, 0, Math.PI * 2); ctx.stroke();
+
+                // ==================================================
+                // 1. GLOBAL MAP AURA & SHOCKWAVES
+                // ==================================================
+                const auraPulse = Math.sin(now / 800) * 0.1;
+                const auraRadius = coreR * (40 + auraPulse * 10); 
+                
+                const mapAuraGrad = ctx.createRadialGradient(0, 0, coreR * 5, 0, 0, auraRadius);
+                mapAuraGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+                mapAuraGrad.addColorStop(0.3, `rgba(153, 27, 27, ${0.15 + auraPulse})`);
+                mapAuraGrad.addColorStop(0.7, `rgba(10, 0, 10, ${0.4 + auraPulse})`);
+                mapAuraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                
+                ctx.fillStyle = mapAuraGrad;
                 ctx.beginPath();
-                for(let i=0; i<=5; i++) { // Star logic
-                    ctx.lineTo(Math.cos(i * Math.PI * 0.8) * e.r * 4.7, Math.sin(i * Math.PI * 0.8) * e.r * 4.7);
+                ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // APOCALYPTIC SHOCKWAVES (Pulsing rings outward)
+                const swTime = (now / (isEnraged ? 400 : 800)) % 1;
+                const swRadius = coreR * (5 + swTime * 20);
+                ctx.beginPath();
+                ctx.arc(0, 0, swRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 * (1 - swTime)})`;
+                ctx.lineWidth = isEnraged ? 15 * (1 - swTime) : 5 * (1 - swTime);
+                ctx.stroke();
+
+                // ==================================================
+                // 2. NEW: ANNIHILATION ARRAY & ASCENDING EMBERS
+                // ==================================================
+                
+                // --- Outer Rotating Geometric Array ---
+                ctx.save();
+                ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.3 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.15 + Math.abs(auraPulse)})`;
+                ctx.lineWidth = isEnraged ? 3 : 1;
+                ctx.rotate(now / 6000); // Slow clockwise spin
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, coreR * 5.5, 0, Math.PI * 2);
+                ctx.stroke();
+                
+                // Hexagram pattern inside outer ring
+                for(let i=0; i<6; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(Math.cos(i * Math.PI / 3) * coreR * 5.5, Math.sin(i * Math.PI / 3) * coreR * 5.5);
+                    ctx.lineTo(Math.cos((i + 2) * Math.PI / 3) * coreR * 5.5, Math.sin((i + 2) * Math.PI / 3) * coreR * 5.5);
+                    ctx.stroke();
                 }
+                ctx.restore();
+
+                // --- Inner Reverse Rotating Ring ---
+                ctx.save();
+                ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.5 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.3 + Math.abs(auraPulse)})`;
+                ctx.lineWidth = 2;
+                ctx.rotate(now / -3000); // Faster counter-clockwise spin
+                ctx.setLineDash([coreR * 0.8, coreR * 0.4]);
+                ctx.beginPath();
+                ctx.arc(0, 0, coreR * 4.2, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.restore();
 
-                // 3. 8 Gigantic Demonic Wings of Hellfire
-                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#7c2d12';
-                ctx.strokeStyle = '#fef08a'; 
-                ctx.lineWidth = 3;
-                let pFlap = Math.cos(now / 120) * 0.35; 
-                for (let i = 0; i < 8; i++) {
+                // --- Ascending Void Embers (Anti-gravity particles) ---
+                ctx.save();
+                ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#ef4444';
+                const numEmbers = isEnraged ? 40 : 20;
+                
+                for (let i = 0; i < numEmbers; i++) {
+                    // Spread pseudo-randomly across the aura width
+                    let emberX = (Math.sin(i * 123.45) * coreR * 6); 
+                    let speed = 1 + (i % 3); // Parallax speeds
+                    
+                    // Particles move from bottom (coreR*5) to top (-coreR*6)
+                    let totalHeight = coreR * 11;
+                    let emberY = (coreR * 5) - ((now / (10 * speed) + i * 80) % totalHeight); 
+                    
+                    // Fade in at bottom, fade out at top
+                    let fade = 1 - (Math.abs(emberY) / (coreR * 5.5));
+                    if (fade > 0) {
+                        ctx.globalAlpha = fade;
+                        ctx.beginPath();
+                        ctx.arc(emberX, emberY, isEnraged ? Math.random() * 3 + 1 : 1.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+                ctx.restore();
+
+                // ==================================================
+                // 3. LEVITATION & ENTITY JITTER (Violent shake when enraged)
+                // ==================================================
+                let shakeX = 0, shakeY = 0;
+                if (isEnraged) {
+                    shakeX = (Math.random() - 0.5) * (coreR * 0.25);
+                    shakeY = (Math.random() - 0.5) * (coreR * 0.25);
+                }
+                const floatY = Math.sin(now / 1200) * (coreR * 0.4) + shakeY;
+                ctx.translate(shakeX, floatY);
+
+                // 4. THE ECLIPSE HALO
+                ctx.shadowBlur = isEnraged ? 150 : 50;
+                ctx.shadowColor = '#dc2626';
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#000000';
+                ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + Math.sin(now / 200) * 0.4})`;
+                ctx.lineWidth = coreR * 0.4;
+                
+                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 3.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+                
+                const eclipseGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5, 0, -coreR * 0.5, coreR * 6);
+                eclipseGrad.addColorStop(0, 'rgba(153, 27, 27, 0.8)');
+                eclipseGrad.addColorStop(0.5, 'rgba(45, 10, 70, 0.3)');
+                eclipseGrad.addColorStop(1, 'transparent');
+                ctx.fillStyle = eclipseGrad;
+                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 6.5, 0, Math.PI * 2); ctx.fill();
+
+                // 5. AWAKENED CROWN
+                const crownSpeed = isEnraged ? 800 : 2500;
+                ctx.save();
+                ctx.translate(0, -coreR * 0.5);
+                ctx.rotate(now / crownSpeed);
+                
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = isEnraged ? 4 : 2;
+                ctx.setLineDash([coreR * 0.8, coreR * 1.2]);
+                ctx.beginPath(); ctx.arc(0, 0, coreR * 3.8, 0, Math.PI * 2); ctx.stroke();
+                
+                ctx.fillStyle = '#ef4444';
+                for(let i=0; i<4; i++) {
+                    let gAng = (i * Math.PI / 2);
+                    let gDist = coreR * 3.8;
                     ctx.save();
-                    ctx.rotate((Math.PI * 2 / 8) * i + pFlap);
-                    ctx.beginPath(); 
-                    ctx.moveTo(0, 0);
-                    ctx.quadraticCurveTo(-e.r * 3, -e.r * 2.5, -e.r * 5, -e.r * 4); // Mas mahaba at malaking pakpak
-                    ctx.lineTo(-e.r * 2.5, -e.r * 1.5);
-                    ctx.lineTo(-e.r * 4, -e.r * 0.5);
-                    ctx.lineTo(0, 0);
-                    ctx.fill(); ctx.stroke();
+                    ctx.translate(Math.cos(gAng) * gDist, Math.sin(gAng) * gDist);
+                    ctx.rotate(now / 500);
+                    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(12, 0); ctx.lineTo(0, 12); ctx.lineTo(-12, 0); ctx.fill();
+                    ctx.restore();
+                }
+                ctx.restore();
+
+                // 6. REALITY RIBBONS
+                ctx.strokeStyle = isEnraged ? '#ef4444' : 'rgba(153, 27, 27, 0.9)';
+                ctx.lineWidth = isEnraged ? 6 : 4;
+                ctx.setLineDash([]);
+                for(let i=0; i<4; i++) {
+                    let rAng = (now / -2000) + i * (Math.PI / 2);
+                    let flow = coreR * (3 + Math.sin(now / 400 + i) * 2);
+                    
+                    ctx.save();
+                    ctx.rotate(rAng);
+                    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(coreR * 2.5, coreR, flow, -coreR * 2.5); ctx.stroke();
+                    
+                    ctx.fillStyle = '#ffffff';
+                    ctx.shadowBlur = 15;
+                    ctx.beginPath(); ctx.arc(flow, -coreR * 2.5, 4, 0, Math.PI*2); ctx.fill();
                     ctx.restore();
                 }
 
-                // 4. Obsidian Body with Pulsating Magma Core
-                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#0c0a09';
-                ctx.beginPath(); ctx.arc(0, 0, e.r * 1.3, 0, Math.PI * 2); ctx.fill(); // Mas malaking katawan
+                // 7. DARK SERAPH WINGS
+                const wingFlap = Math.cos(now / (isEnraged ? 600 : 1000)) * 0.2 * enrageMult; 
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#030303';
+                ctx.strokeStyle = isEnraged ? '#ef4444' : '#991b1b';
+                ctx.lineWidth = 3;
                 
-                let magmaPulse = Math.sin(now / 80) * 0.2; // Mabilis na pintig
-                const lava = ctx.createRadialGradient(0, e.r * 0.3, 0, 0, e.r * 0.3, e.r * (1 + magmaPulse));
-                lava.addColorStop(0, '#ffffff'); 
-                lava.addColorStop(0.2, '#facc15'); 
-                lava.addColorStop(1, 'transparent');
-                ctx.fillStyle = e.flash > 0 ? '#ffffff' : lava;
-                ctx.beginPath(); ctx.arc(0, e.r * 0.3, e.r * 1.2, 0, Math.PI * 2); ctx.fill();
-
-                // 5. Crown of Hellfire (God-tier Horns)
-                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#450a0a';
-                ctx.shadowColor = '#facc15';
-                ctx.shadowBlur = 50;
-                ctx.beginPath(); ctx.moveTo(-e.r * 0.4, -e.r); ctx.quadraticCurveTo(-e.r * 6, -e.r * 6, -e.r * 5, -e.r * 2); ctx.fill(); 
-                ctx.beginPath(); ctx.moveTo(e.r * 0.4, -e.r); ctx.quadraticCurveTo(e.r * 6, -e.r * 6, e.r * 5, -e.r * 2); ctx.fill(); 
-
-                // 6. Volcanic Ash Particles (Daan-daang baga na lumilipad)
-                ctx.fillStyle = '#fef08a';
-                ctx.shadowBlur = 10;
-                for(let k=0; k<30; k++) {
-                    let ashX = (Math.random() - 0.5) * e.r * 15;
-                    let ashY = (Math.random() - 0.5) * e.r * 15 - (now / 10 + k * 50) % (e.r * 10); // Laging lumilipad paitaas
-                    ctx.fillRect(ashX, ashY, 3, 3);
+                const wingAngles = [-0.8, -0.3, 0.2, 0.7]; 
+                for (let j = 0; j < 2; j++) { 
+                    ctx.save();
+                    ctx.scale(j === 0 ? 1 : -1, 1); 
+                    for (let i = 0; i < 4; i++) {
+                        ctx.save();
+                        ctx.rotate(wingAngles[i] + wingFlap * (i % 2 === 0 ? 1 : -1));
+                        let wLen = coreR * (isEnraged ? 8 : 6) - (i * coreR);
+                        
+                        ctx.beginPath(); ctx.moveTo(0, 0);
+                        ctx.lineTo(coreR * 1.8, -wLen * 0.5);
+                        ctx.lineTo(coreR * 0.6, -wLen);
+                        ctx.lineTo(-coreR * 0.6, -wLen * 0.7);
+                        ctx.closePath();
+                        ctx.fill(); ctx.stroke();
+                        ctx.restore();
+                    }
+                    ctx.restore();
                 }
-            }
+
+                // 8. SOVEREIGN CARAPACE
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#09090b'; 
+                ctx.strokeStyle = '#ef4444'; 
+                ctx.lineWidth = isEnraged ? 3 : 2;
+                
+                const breathe = Math.sin(now / 400) * (coreR * 0.15);
+                ctx.beginPath(); ctx.moveTo(coreR * 1.2 + breathe, -coreR); ctx.lineTo(coreR * 2.8 + breathe, -coreR * 1.6); ctx.lineTo(coreR * 1.8 + breathe, -coreR * 0.2); ctx.fill(); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-coreR * 1.2 - breathe, -coreR); ctx.lineTo(-coreR * 2.8 - breathe, -coreR * 1.6); ctx.lineTo(-coreR * 1.8 - breathe, -coreR * 0.2); ctx.fill(); ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, -coreR * 2.8); 
+                ctx.lineTo(coreR * 1.6, -coreR * 0.8);
+                ctx.lineTo(coreR * 0.9, coreR * 2.0);
+                ctx.lineTo(0, coreR * 3.0); 
+                ctx.lineTo(-coreR * 0.9, coreR * 2.0);
+                ctx.lineTo(-coreR * 1.6, -coreR * 0.8);
+                ctx.closePath();
+                ctx.fill(); ctx.stroke();
+
+                // 9. SOUL VORTEX / DEBRIS
+                ctx.fillStyle = '#ef4444';
+                for(let i=0; i<8; i++) {
+                    let pTime = ((now / (isEnraged ? 300 : 600)) + (i / 8)) % 1;
+                    let pAngle = (i * Math.PI / 4) + (now / 500);
+                    let pRadius = coreR * 5 * (1 - pTime); 
+                    
+                    ctx.globalAlpha = Math.sin(pTime * Math.PI); 
+                    ctx.beginPath(); 
+                    ctx.arc(Math.cos(pAngle) * pRadius, Math.sin(pAngle) * pRadius, coreR * 0.15, 0, Math.PI * 2); 
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1.0;
+
+                // 10. THE BLACK STAR CORE
+                const coreBeat = Math.sin(now / (isEnraged ? 100 : 250)) * (isEnraged ? 0.3 : 0.2);
+                const innerCoreR = coreR * (0.8 + coreBeat);
+                
+                ctx.shadowBlur = isEnraged ? 80 : 40;
+                ctx.shadowColor = '#ef4444';
+                
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#ef4444';
+                ctx.beginPath();
+                for(let i=0; i<8; i++) { 
+                    let ang = (i * Math.PI / 4) + (now/ (isEnraged ? 500 : 1000));
+                    let dist = i % 2 === 0 ? innerCoreR * 1.8 : innerCoreR * 0.8;
+                    ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+                }
+                ctx.fill();
+                
+                ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#000000';
+                ctx.shadowBlur = 0;
+                ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 0.7, 0, Math.PI * 2); ctx.fill();
+
+                // 11. THE ZENITH EYE
+                const eyeY = -coreR * 3.8; 
+                const eyeBlink = isEnraged ? 1 : Math.max(0.1, Math.sin(now / 1200)); 
+                const eyeHeight = coreR * 1.0 * eyeBlink;
+                
+                ctx.shadowBlur = isEnraged ? 80 : 40;
+                ctx.shadowColor = '#ef4444';
+                
+                ctx.fillStyle = '#050505';
+                ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6, eyeHeight, 0, 0, Math.PI * 2); ctx.fill(); 
+                
+                if (eyeBlink > 0.2) { 
+                    const pupilTrackX = Math.sin(now / 800) * (coreR * 0.5);
+                    
+                    ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444'; 
+                    ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.6, eyeHeight * 0.6, 0, 0, Math.PI * 2); ctx.fill(); 
+                    
+                    ctx.fillStyle = '#000000';
+                    ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.15, eyeHeight * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+                    
+                    ctx.fillStyle = '#ef4444';
+                    for(let i=0; i<5; i++) {
+                        let dropY = eyeY + eyeHeight + ((now / (isEnraged ? 15 : 20) + i * 25) % (isEnraged ? 80 : 50));
+                        ctx.globalAlpha = 1 - ((dropY - eyeY) / (isEnraged ? 80 : 50));
+                        ctx.beginPath(); ctx.arc(pupilTrackX + (i-2)*6, dropY, isEnraged ? 3 : 2, 0, Math.PI*2); ctx.fill();
+                    }
+                    ctx.globalAlpha = 1.0;
+                }
+
+                ctx.restore();
+            } else if (e.type === 'abyss') {
+    // ==================================================
+    // 🌋 PRIMORDIAL DEMON (World-Ending God of Destruction)
+    // ==================================================
+    
+    // Enrage Logic: Check if HP is below 25%
+    const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
+    const isEnraged = hpRatio <= 0.25;
+    
+    const enrageScale = isEnraged ? 1.5 : 1;
+    const baseR = e.r * 1.4; // 40% overall size increase
+    const coreR = baseR * enrageScale;
+    
+    ctx.save();
+    
+    // 💥 REALITY DISTORTION / ENRAGE SCREEN SHAKE
+    if (isEnraged) {
+        const intensity = 3 + Math.random() * 4;
+        ctx.translate((Math.random() - 0.5) * intensity, (Math.random() - 0.5) * intensity);
+    }
+
+    // 0. APOCALYPTIC ENVIRONMENT & REALITY DISTORTION
+    const distPulse = Math.sin(now / 150) * 0.15;
+    const envGrad = ctx.createRadialGradient(0, 0, coreR * 2, 0, 0, coreR * 15);
+    envGrad.addColorStop(0, 'transparent');
+    envGrad.addColorStop(0.6, `rgba(153, 27, 27, ${0.1 + distPulse})`); // Infernal Red space
+    envGrad.addColorStop(1, `rgba(69, 10, 10, ${0.3 + distPulse})`);
+    ctx.fillStyle = envGrad;
+    ctx.fillRect(-coreR * 20, -coreR * 20, coreR * 40, coreR * 40);
+
+    // 1. MULTI-LAYERED APOCALYPTIC AURA
+    const auraPulse = Math.abs(Math.sin(now / 200));
+    const auraRadius = coreR * (isEnraged ? 6 + auraPulse * 2 : 4 + auraPulse);
+    
+    const aura = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, auraRadius);
+    aura.addColorStop(0, '#ffffff'); // Inner: Blinding white-hot
+    aura.addColorStop(0.2, '#facc15'); // Middle-inner: Magma bright yellow
+    aura.addColorStop(0.4, '#ea580c'); // Middle: Molten lava flames
+    aura.addColorStop(0.7, '#7f1d1d'); // Outer: Dark red infernal smoke
+    aura.addColorStop(1, 'transparent'); // Reality heatwave blend
+    
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : aura;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Swirling Infernal Vortexes
+    ctx.save();
+    ctx.rotate(now / 200);
+    ctx.strokeStyle = `rgba(234, 88, 12, ${0.3 + distPulse})`;
+    ctx.lineWidth = coreR * 0.4;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 3, 0, Math.PI); ctx.stroke();
+    ctx.rotate(Math.PI / 2);
+    ctx.strokeStyle = `rgba(153, 27, 27, ${0.2 + distPulse})`;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 4, 0, Math.PI); ctx.stroke();
+    ctx.restore();
+
+    // 2. GYROSCOPIC INFERNAL SIGILS 
+    const sigilSpeed = isEnraged ? 150 : 300;
+    
+    // Outer Arcane Ring
+    ctx.save();
+    ctx.rotate(-now / sigilSpeed);
+    ctx.strokeStyle = 'rgba(153, 27, 27, 0.6)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([20, 15, 5, 15]);
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 5.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+
+    // Inner Demonic Runes Ring
+    ctx.save();
+    ctx.rotate(now / (sigilSpeed * 0.8));
+    ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([40, 20]);
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 4.5, 0, Math.PI * 2); ctx.stroke();
+    ctx.font = `${coreR * 0.6}px "Courier New", monospace`;
+    ctx.fillStyle = '#facc15';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < 12; i++) {
+        let ang = (i / 12) * Math.PI * 2;
+        let rune = String.fromCharCode(0x16A0 + (i % 20)); // Runic characters
+        ctx.fillText(rune, Math.cos(ang) * coreR * 4.5, Math.sin(ang) * coreR * 4.5);
+    }
+    
+    // Smooth Celestial Gyroscope
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, coreR * 4.2, coreR * 0.8, (i / 4) * Math.PI, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+    ctx.restore();
+
+    // 3. 12 WINGS (6 SHADOW + 6 HELLFIRE)
+    const wingFlap = Math.cos(now / 150) * 0.4;
+    const wingLen = isEnraged ? coreR * 8 : coreR * 5;
+    
+    // Shadow Wings (Background Layer)
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#09090b';
+    ctx.strokeStyle = '#4c1d95'; 
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+        ctx.save();
+        ctx.rotate((Math.PI * 2 / 6) * i + wingFlap * 0.8 + 0.2); // Offset
+        ctx.beginPath(); 
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(-coreR * 2, -coreR * 2, -wingLen * 1.1, -wingLen * 0.9);
+        ctx.lineTo(-coreR * 3, -coreR * 1);
+        ctx.lineTo(-wingLen * 0.8, 0);
+        ctx.lineTo(0, 0);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+    }
+
+    // Hellfire Wings (Foreground Layer)
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#7c2d12';
+    ctx.strokeStyle = '#fef08a'; 
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 6; i++) {
+        ctx.save();
+        ctx.rotate((Math.PI * 2 / 6) * i - wingFlap);
+        ctx.beginPath(); 
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(coreR * 2, -coreR * 2.5, wingLen, -wingLen * 0.8); 
+        ctx.lineTo(coreR * 2.5, -coreR * 1.5);
+        ctx.lineTo(wingLen * 0.7, -coreR * 0.5);
+        ctx.lineTo(0, 0);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+    }
+
+    // 4. COLOSSAL TITAN CARAPACE (Organic Molten Armor)
+    const corePulse = Math.sin(now / 80) * 0.3;
+    
+    // Glowing Magma Core Inside
+    const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * (1.3 + corePulse));
+    coreGrad.addColorStop(0, '#ffffff'); // Star center
+    coreGrad.addColorStop(0.3, '#facc15'); // Bright yellow core
+    coreGrad.addColorStop(0.7, '#b91c1c'); // Deep magma
+    coreGrad.addColorStop(1, 'transparent');
+    
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : coreGrad;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 1.4, 0, Math.PI * 2); ctx.fill();
+
+    // Floating Obsidian Armor Plates (Curved, breathing body)
+    ctx.fillStyle = e.flash > 0 ? '#ffffff' : '#0c0a09';
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ea580c';
+    
+    for (let i = 0; i < 6; i++) {
+        let pAng = (i / 6) * Math.PI * 2 + (now / 500); // Slow body rotation
+        let breathe = Math.sin((now / 150) + i) * 0.15; // Plates expand and contract
+        let pDist = coreR * (0.5 + breathe); 
+        
+        ctx.save();
+        ctx.rotate(pAng);
+        ctx.translate(pDist, 0);
+        
+        ctx.beginPath();
+        // Organic shell curve
+        ctx.moveTo(0, -coreR * 0.6);
+        ctx.quadraticCurveTo(coreR * 1.6, -coreR * 0.2, coreR * 1.6, 0);
+        ctx.quadraticCurveTo(coreR * 1.6, coreR * 0.2, 0, coreR * 0.6);
+        ctx.quadraticCurveTo(coreR * 0.6, 0, 0, -coreR * 0.6);
+        
+        ctx.fill();
+        ctx.strokeStyle = '#dc2626'; // Glowing red edges
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.restore();
+    }
+    ctx.shadowBlur = 0;
+
+    // 5. OMNIPRESENT EYES (Body & Main)
+    const eyeColors = ['#ffffff', '#facc15', '#dc2626', '#09090b'];
+    const flickerColor = eyeColors[Math.floor((now / 100) % eyeColors.length)];
+    
+    // Main Eye
+    ctx.shadowBlur = 50;
+    ctx.shadowColor = flickerColor;
+    ctx.fillStyle = e.flash > 0 ? '#000000' : flickerColor;
+    ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 0.6, coreR * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    
+    // Additional body eyes (More open when enraged)
+    const eyeCount = isEnraged ? 8 : 4;
+    for (let i = 0; i < eyeCount; i++) {
+        let eAng = (i / eyeCount) * Math.PI * 2 + Math.PI;
+        let eDist = coreR * 0.9;
+        let eScale = (i % 2 === 0) ? 0.2 : 0.15;
+        ctx.fillStyle = eyeColors[Math.floor(((now + i * 50) / 100) % eyeColors.length)];
+        ctx.beginPath(); 
+        ctx.ellipse(Math.cos(eAng) * eDist, Math.sin(eAng) * eDist, coreR * eScale, coreR * (eScale * 0.4), eAng, 0, Math.PI * 2); 
+        ctx.fill();
+    }
+
+    // 6. FLOATING INFERNAL CROWN 
+    const crownY = -coreR * 2 + Math.sin(now / 150) * 15;
+    ctx.save();
+    ctx.translate(0, crownY);
+    
+    ctx.fillStyle = '#0c0a09';
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i++) {
+        let cAng = (now / -200) + (i * Math.PI * 2 / 5);
+        let cDist = coreR * 1.2;
+        ctx.save();
+        ctx.translate(Math.cos(cAng) * cDist, Math.sin(cAng) * cDist * 0.3); // 3D orbit effect
+        ctx.rotate(now / 100);
+        ctx.beginPath();
+        // Slightly curved shards instead of pure straight lines
+        ctx.moveTo(0, -coreR * 0.4); 
+        ctx.quadraticCurveTo(coreR * 0.1, 0, coreR * 0.2, 0); 
+        ctx.quadraticCurveTo(coreR * 0.1, coreR * 0.2, 0, coreR * 0.4); 
+        ctx.quadraticCurveTo(-coreR * 0.1, coreR * 0.2, -coreR * 0.2, 0);
+        ctx.quadraticCurveTo(-coreR * 0.1, 0, 0, -coreR * 0.4);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+    }
+    
+    // Burning Crown Runes (Inner Ring)
+    ctx.fillStyle = '#ea580c';
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = '#ea580c';
+    ctx.font = `${coreR * 0.4}px "Georgia"`;
+    ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+        let rAng = (now / 150) + (i * Math.PI * 2 / 3);
+        ctx.fillText("✦", Math.cos(rAng) * coreR * 0.7, Math.sin(rAng) * coreR * 0.2);
+    }
+    ctx.restore();
+
+    // 7. PARTICLES (Lava Embers, Ash, Sparks, Obsidian Fragments)
+    ctx.shadowBlur = 10;
+    for (let k = 0; k < 40; k++) {
+        let pType = k % 3; // 0 = Ash, 1 = Ember, 2 = Obsidian
+        let pX = (Math.random() - 0.5) * coreR * 20;
+        let pY = (Math.random() - 0.5) * coreR * 20 - ((now / (pType === 1 ? 5 : 15)) + k * 80) % (coreR * 15);
+        
+        ctx.beginPath();
+        if (pType === 0) { // Volcanic Ash
+            ctx.fillStyle = 'rgba(87, 83, 78, 0.8)';
+            ctx.arc(pX, pY, Math.random() * 2 + 1, 0, Math.PI * 2);
+        } else if (pType === 1) { // Lava Ember
+            ctx.fillStyle = '#facc15';
+            ctx.shadowColor = '#ea580c';
+            ctx.arc(pX, pY, Math.random() * 3 + 1, 0, Math.PI * 2);
+        } else { // Small curved dark fragments
+            ctx.fillStyle = '#0c0a09';
+            ctx.strokeStyle = '#dc2626';
+            ctx.lineWidth = 1;
+            ctx.arc(pX, pY, 2.5, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+}
             
             ctx.restore();
 
@@ -7833,41 +8247,223 @@ for (const p of eng.particles) {
 
 
 // =========================================================
-      // 🏆 FOOLPROOF VICTORY CINEMATIC RENDER (REAL-TIME)
+      // 🏆 ARCANE VICTORY CINEMATIC RENDER (MYTHIC TIER)
       // =========================================================
       if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
-          
           const timerVal = window.showVictoryCinematic;
           
-          // 🔥 THE FIX: Tinanggal ang "/ 60" para maging 100% visible ang text!
-          const alpha = Math.min(1, Math.max(0, timerVal)); 
+          // 🔥 SMOOTH FADE-IN AT FADE-OUT
+          // Dahan-dahang lilitaw sa unang 1.5 segundo (12.0 down to 10.5)
+          const fadeIn = Math.min(1, (12.0 - timerVal) / 1.5); 
+          // Dahan-dahang mawawala sa huling 1 segundo (1.0 down to 0.0)
+          const fadeOut = Math.min(1, timerVal);
+          const alpha = fadeIn * fadeOut; 
+
+          const now = Date.now(); 
           
+          const cx = ctx.canvas.width / 2;
+          const cy = ctx.canvas.height / 2;
+
+          // 🎵 ONE-TIME CHOIR SOUND TRIGGER
+          if (!window.victoryChoirPlayed && alpha > 0.1) {
+              window.victoryChoirPlayed = true; // Flag para hindi mag-loop ang sound
+              playSfx('choir');
+          }
+
           ctx.save();
           ctx.setTransform(1, 0, 0, 1, 0, 0); 
           
-          // Black Dim Overlay
-          ctx.fillStyle = `rgba(0, 0, 0, ${alpha * 0.75})`;
+          // 💥 EPIC SCREEN SHAKE (Yayanig ang screen sa unang 2 segundo)
+          if (timerVal > 10.0) {
+              const intensity = (timerVal - 10.0) * 5; // Pababang intensity
+              ctx.translate((Math.random() - 0.5) * intensity, (Math.random() - 0.5) * intensity);
+          }
+
+          // ---------------------------------------------------------
+          // 1. DARK VIOLET ARCANE MIST & BACKGROUND
+          // ---------------------------------------------------------
+          const pulseMist = 0.8 + 0.1 * Math.sin(now * 0.002);
+          ctx.fillStyle = `rgba(5, 1, 12, ${alpha * pulseMist})`;
           ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height); 
+
+          const bgGlow = ctx.createRadialGradient(cx, cy, 0, cx, cy, ctx.canvas.width * 0.7);
+          bgGlow.addColorStop(0, `rgba(124, 58, 237, ${alpha * 0.35})`); 
+          bgGlow.addColorStop(0.4, `rgba(197, 160, 89, ${alpha * 0.15})`); 
+          bgGlow.addColorStop(1, `rgba(0, 0, 0, 0)`);
+          ctx.fillStyle = bgGlow;
+          ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+          // ---------------------------------------------------------
+          // 🌟 NEW: ROTATING CELESTIAL GOD RAYS (LIGHT BEAMS)
+          // ---------------------------------------------------------
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(now * 0.0001); // Mabagal na ikot ng rays
+          for (let i = 0; i < 12; i++) {
+              ctx.rotate((Math.PI * 2) / 12);
+              const rayGrad = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+              rayGrad.addColorStop(0, `rgba(254, 240, 138, ${alpha * 0.15})`); // Solid Gold
+              rayGrad.addColorStop(1, `rgba(254, 240, 138, 0)`); // Fades out
+              
+              ctx.fillStyle = rayGrad;
+              ctx.beginPath();
+              ctx.moveTo(-15, 0);
+              ctx.lineTo(15, 0);
+              ctx.lineTo(60, ctx.canvas.height);
+              ctx.lineTo(-60, ctx.canvas.height);
+              ctx.fill();
+          }
+          ctx.restore();
+
+          // ---------------------------------------------------------
+          // 2. ROTATING ANCIENT MAGICAL SIGILS
+          // ---------------------------------------------------------
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.globalAlpha = alpha * 0.7;
           
+          ctx.save();
+          ctx.rotate(now * 0.0003);
+          ctx.strokeStyle = '#c5a059'; 
+          ctx.lineWidth = 2.5;
+          ctx.setLineDash([15, 25, 5, 25]);
+          ctx.beginPath(); ctx.arc(0, 0, 290, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
+
+          ctx.save();
+          ctx.rotate(-now * 0.0005);
+          ctx.strokeStyle = '#a78bfa'; 
+          ctx.lineWidth = 4;
+          ctx.setLineDash([50, 20]);
+          ctx.beginPath(); ctx.arc(0, 0, 250, 0, Math.PI * 2); ctx.stroke();
+          
+          ctx.font = '24px "Georgia"';
+          ctx.fillStyle = '#fef08a';
           ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          for(let i = 0; i < 8; i++) {
+              let ang = (i / 8) * Math.PI * 2;
+              ctx.fillText("✧", Math.cos(ang) * 250, Math.sin(ang) * 250);
+          }
+          ctx.restore();
+
+          ctx.save();
+          ctx.rotate(now * 0.0008);
+          ctx.strokeStyle = 'rgba(253, 224, 71, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([5, 10]);
+          ctx.beginPath(); ctx.arc(0, 0, 210, 0, Math.PI * 2); ctx.stroke();
+          ctx.restore();
           
-          // 🌟 MAIN TITLE
-          ctx.fillStyle = `rgba(251, 191, 36, ${alpha})`; 
-          ctx.font = 'bold 45px "Georgia", serif';
-          ctx.shadowBlur = 20;
-          ctx.shadowColor = '#f59e0b';
-          ctx.fillText("VICTORY ACHIEVED!", ctx.canvas.width / 2, ctx.canvas.height / 2 - 20);
+          ctx.restore(); 
+
+          // ---------------------------------------------------------
+          // 🌠 NEW: SHOOTING ARCANE COMETS (FAST PARTICLES)
+          // ---------------------------------------------------------
+          ctx.save();
+          ctx.translate(cx, cy);
+          for (let i = 0; i < 8; i++) {
+              const pTime = ((now * 0.002) + i * 1.5) % 3; 
+              const pAng = i * (Math.PI * 2 / 8) + (now * 0.0001);
+              const pDist = pTime * 400; 
+              
+              ctx.globalAlpha = alpha * Math.max(0, 1 - (pTime / 3));
+              ctx.fillStyle = '#d8b4fe';
+              ctx.beginPath();
+              ctx.arc(Math.cos(pAng) * pDist, Math.sin(pAng) * pDist, 3, 0, Math.PI * 2);
+              ctx.fill();
+              
+              ctx.strokeStyle = `rgba(216, 180, 254, ${alpha * Math.max(0, 1 - (pTime / 3))})`;
+              ctx.lineWidth = 2;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(pAng) * pDist, Math.sin(pAng) * pDist);
+              ctx.lineTo(Math.cos(pAng) * (pDist - 60), Math.sin(pAng) * (pDist - 60));
+              ctx.stroke();
+          }
+          ctx.restore();
+
+          // ---------------------------------------------------------
+          // 3. FLOATING MANA STARDUST
+          // ---------------------------------------------------------
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.globalAlpha = alpha;
+          for (let i = 0; i < 50; i++) {
+              const sparkT = ((now * 0.0004) + i * 0.12) % 3; 
+              const sparkAng = i * (Math.PI * 2 / 50) + Math.sin(now * 0.0002 + i);
+              const sparkR = sparkT * 150; 
+              const sparkSize = Math.max(0.1, 3.5 - sparkT); 
+              
+              ctx.fillStyle = i % 2 === 0 ? '#ffe6a3' : '#d8b4fe'; 
+              ctx.globalAlpha = alpha * Math.max(0, 1 - (sparkT / 3)); 
+              ctx.beginPath();
+              ctx.arc(Math.cos(sparkAng) * sparkR, Math.sin(sparkAng) * sparkR, sparkSize, 0, Math.PI * 2);
+              ctx.fill();
+          }
+          ctx.restore();
+
+          // ---------------------------------------------------------
+          // 4. ARCANE LIGHTNING FLASH EFFECT
+          // ---------------------------------------------------------
+          if (Math.sin(now * 0.004) > 0.97) {
+              ctx.fillStyle = `rgba(167, 139, 250, ${Math.random() * 0.2 * alpha})`;
+              ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+          }
+
+          // ---------------------------------------------------------
+          // 5. MAIN CINEMATIC TITLE TEXT
+          // ---------------------------------------------------------
+          const floatY = Math.sin(now * 0.002) * 10; 
+          const titleY = cy - 40 + floatY; // Inangat ko ng kaunti (-30 to -40) para may space sa ilalim
+
+          ctx.textAlign = 'center';
+          const titleGrad = ctx.createLinearGradient(cx - 300, titleY - 40, cx + 300, titleY + 10);
+          titleGrad.addColorStop(0, '#fde047'); 
+          titleGrad.addColorStop(0.5, '#d8b4fe'); 
+          titleGrad.addColorStop(1, '#fde047'); 
+
+          ctx.fillStyle = titleGrad; 
+          ctx.globalAlpha = alpha;
+          ctx.font = 'bold 65px "Georgia", serif';
           
-          // ⚔️ SUBTITLE
-          ctx.fillStyle = `rgba(226, 232, 240, ${alpha})`; 
-          ctx.font = '22px monospace';
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = '#ffffff';
-          ctx.fillText("The Abyss has fallen. Entering Endless Waves...", ctx.canvas.width / 2, ctx.canvas.height / 2 + 30);
+          const shadowPulse = 25 + 15 * Math.sin(now * 0.005);
+          ctx.shadowBlur = shadowPulse;
+          ctx.shadowColor = '#a78bfa';
+          
+          ctx.fillText("THE VOID HAS BEEN SEALED", cx, titleY);
+          
+          // ---------------------------------------------------------
+          // 6. CINEMATIC SUBTITLE
+          // ---------------------------------------------------------
+          const subFade = 0.6 + 0.4 * Math.sin(now * 0.003); 
+          ctx.fillStyle = `rgba(226, 232, 240, ${alpha * subFade})`; 
+          ctx.font = 'italic 24px "Georgia", serif';
+          
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = '#c5a059'; 
+          
+          ctx.fillText("Ancient seals awaken across the shattered realms... ", cx, titleY + 60);
+
+          // ---------------------------------------------------------
+          // 7. 🔥 NEW: ENDLESS WAVES INITIATION WARNING
+          // ---------------------------------------------------------
+          // Ang text na ito ay magfa-flash nang mas mabilis at gagamit ng mapulang kulay
+          // para mag-pahiwatig ng papalapit na panganib matapos ang tagumpay.
+          
+          // Lilitaw lang ang endless text kapag medyo nakapag-sink in na yung unang text
+          if (timerVal <= 10.5) { 
+              const endlessPulse = Math.max(0, Math.sin(now * 0.006)); // Mabilis na tibok
+              ctx.fillStyle = `rgba(255, 69, 0, ${alpha * (0.4 + endlessPulse * 0.6)})`; // Crimson Orange/Red
+              ctx.font = 'bold 22px "Courier New", monospace'; // Ibang font para mag-stand out as "system alert" o shift ng tone
+              
+              ctx.shadowBlur = 20 + (endlessPulse * 15);
+              ctx.shadowColor = '#ff0000';
+              
+              ctx.fillText(">> WARNING: ENDLESS WAVES INCOMING... <<", cx, titleY + 115);
+          }
           
           ctx.restore();
       }
-
       // Ito yung orihinal na dulo mo:
       renderAnimId = requestAnimationFrame(renderLoop);
     }; // <-- Nagsasara sa renderLoop

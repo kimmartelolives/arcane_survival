@@ -29,6 +29,30 @@ export default function Overlays({
   const [newsData, setNewsData] = useState([]);
   const [loadingNews, setLoadingNews] = useState(false);
 
+  const [voidCrystals, setVoidCrystals] = useState(0);
+
+  useEffect(() => {
+    if (screen === 'levelup') {
+      setVoidCrystals(parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10));
+    }
+  }, [screen, levelUpOptions]);
+
+  const handleReroll = (e) => {
+    e.stopPropagation();
+    const REROLL_COST = 50; // Presyo ng pag-reroll (Maaaring baguhin kung gusto mo)
+    let currentCrystals = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
+    
+    if (currentCrystals >= REROLL_COST) {
+      currentCrystals -= REROLL_COST;
+      localStorage.setItem('arcane_void_crystals', currentCrystals);
+      setVoidCrystals(currentCrystals);
+      
+      if (window.requestLevelUpReroll) {
+        window.requestLevelUpReroll();
+      }
+    }
+  };
+
   // I-sync ang local field kapag may nakuhang global name prop galing sa App level
   useEffect(() => {
     if (initialWizardName) {
@@ -1202,6 +1226,28 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             <div className="lu-title">LEVEL UP — WAVE {hudData?.wave || 1}</div>
             <div className="lu-subtitle">Choose an Upgrade (Press 1, 2, 3 or Click)</div>
             <div className="lu-warning">⚠️ Game continues – enemies are still moving!</div>
+
+            <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div style={{ color: '#d946ef', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 8px rgba(217, 70, 239, 0.6)', fontSize: '0.9rem' }}>
+                💎 Void Crystals: {voidCrystals.toLocaleString()}
+              </div>
+              <button 
+                className="btn wizard-btn" 
+                onClick={handleReroll}
+                disabled={voidCrystals < 50}
+                style={{ 
+                  maxWidth: '240px', 
+                  padding: '8px 16px', 
+                  fontSize: '0.75rem',
+                  opacity: voidCrystals < 50 ? 0.5 : 1,
+                  cursor: voidCrystals < 50 ? 'not-allowed' : 'pointer',
+                  borderColor: '#d946ef',
+                  margin: '0 auto'
+                }}
+              >
+                🎲 Reroll Options (Cost: 50)
+              </button>
+            </div>
             
               <div className="lu-cards-row">
               {displayedChoices.map((opt, i) => {
