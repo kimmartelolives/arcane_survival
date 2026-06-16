@@ -30,10 +30,20 @@ export default function Overlays({
   const [loadingNews, setLoadingNews] = useState(false);
 
   const [voidCrystals, setVoidCrystals] = useState(0);
+  const [gameOverPhase, setGameOverPhase] = useState('continue');
+  
 
-  useEffect(() => {
-    if (screen === 'levelup') {
+useEffect(() => {
+    if (screen === 'levelup' || screen === 'gameover') {
       setVoidCrystals(parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10));
+    }
+    if (screen === 'gameover') {
+      // 🔥 CHECK FLAG: Kung naka-continue na siya sa run na ito, diretso sa summary
+      if (hudData?.p?.hasContinued) {
+        setGameOverPhase('summary');
+      } else {
+        setGameOverPhase('continue');
+      }
     }
   }, [screen, levelUpOptions]);
 
@@ -983,7 +993,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             </button>
 
             <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => setScreen('metashop')}>
-              <span className="btn-icon">🌌</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Void Sanctum (Upgrades)</span>
+              <span className="btn-icon">🌌</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Void Sanctum (Shop)</span>
             </button>
             
             <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
@@ -1274,7 +1284,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
         </div>
       )}
 
-      {/* GAME OVER SUMMARY SCREEN */}
+ {/* GAME OVER SUMMARY SCREEN */}
       {screen === 'gameover' && (
         <div className="overlay active">
           <div className="panel wizard-panel">
@@ -1283,80 +1293,109 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
-            <div className="menu-title" style={{ color: '#ef4444', textShadow: '0 0 15px rgba(239,68,68,0.4)' }}>YOU PERISHED</div>
-            <div className="divider mystic-divider" />
+            {gameOverPhase === 'continue' ? (
+              <>
+                <div className="menu-title" style={{ color: '#d946ef', textShadow: '0 0 15px rgba(217, 70, 239, 0.4)' }}>CONTINUE?</div>
+                <div className="divider mystic-divider" />
 
-            <div id="go-score" style={{ fontSize: '1.45rem', margin: '12px 0', fontFamily: 'Georgia', color: '#ffe6a3', textAlign: 'center' }}>
-              Final Score: {(hudData?.score || 0).toLocaleString()}
-            </div>
-            <div style={{ fontSize: '.88rem', color: '#cbd5e1', marginBottom: '18px', fontFamily: 'monospace', textAlign: 'center' }}>
-              Survived to Wave {hudData?.wave || 1}
-            </div>
+                <div style={{ fontSize: '1.2rem', color: '#ffe6a3', textAlign: 'center', marginBottom: '10px', fontFamily: 'Georgia, serif' }}>
+                  Revive and Resume Trial
+                </div>
+                
+                <div style={{ fontSize: '1rem', color: '#cbd5e1', textAlign: 'center', marginBottom: '20px', fontFamily: 'monospace' }}>
+                  Cost: <span style={{ color: '#d946ef', fontWeight: 'bold' }}>100 💎</span>
+                </div>
+                
+                <div style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginBottom: '20px', fontFamily: 'monospace' }}>
+                  Your Void Crystals: {voidCrystals.toLocaleString()} 💎
+                </div>
 
-            {hudData?.p?.voidCrystals > 0 && (
-               <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)' }}>
-                 💎 +{hudData.p.voidCrystals} Void Crystals Retrieved
-               </div>
-            )}
+                <button 
+                  className="btn wizard-btn gold-theme" 
+                  disabled={voidCrystals < 100}
+                  style={{ opacity: voidCrystals < 100 ? 0.5 : 1, marginBottom: '10px' }}
+                  onClick={() => {
+                     const currentCrystals = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
+                     if (currentCrystals >= 100) {
+                         localStorage.setItem('arcane_void_crystals', currentCrystals - 100);
+                         setVoidCrystals(currentCrystals - 100);
+                         if (window.executeContinueAction) window.executeContinueAction();
+                         setScreen('playing');
+                     }
+                  }}
+                >
+                  ✦ Pay Void Crystals to Continue ✦
+                </button>
 
-            {isCoop && (
-              <div style={{ fontSize: '.85rem', color: '#fca5a5', marginBottom: '10px', fontStyle: 'italic', textAlign: 'center' }}>
-                {restartVotes} / 2 voted to restart the game
-              </div>
-            )}
-            {/* {hasSupabase && (
-              <div id="go-submit" style={{ marginBottom: '14px', width: '100%' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label className="wizard-field-label" style={{ textAlign: 'center' }}>Record Name on Tombstone</label>
-                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                    <input 
-                      className="field-input wizard-field-input" 
-                      type="text" 
-                      value={wizardName} 
-                      maxLength={15}
-                      onChange={e => setWizardName(e.target.value)} 
-                      onKeyDown={e => e.key === 'Enter' && handleSubmitScore()}
-                      placeholder="e.g. Archmage Martel" 
-                      style={{ flex: 1 }}
-                    />
-                    <button className="btn wizard-btn gold-theme" onClick={handleSubmitScore} style={{ margin: 0, width: 'auto', padding: '0 20px' }}>Submit</button>
+                <button 
+                  className="btn wizard-btn danger-theme" 
+                  onClick={() => setGameOverPhase('summary')}
+                >
+                  Accept Your Fate
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="menu-title" style={{ color: '#ef4444', textShadow: '0 0 15px rgba(239,68,68,0.4)' }}>YOU PERISHED</div>
+                <div className="divider mystic-divider" />
+
+                <div id="go-score" style={{ fontSize: '1.45rem', margin: '12px 0', fontFamily: 'Georgia', color: '#ffe6a3', textAlign: 'center' }}>
+                  Final Score: {(hudData?.score || 0).toLocaleString()}
+                </div>
+                <div style={{ fontSize: '.88rem', color: '#cbd5e1', marginBottom: '18px', fontFamily: 'monospace', textAlign: 'center' }}>
+                  Survived to Wave {hudData?.wave || 1}
+                </div>
+
+                {hudData?.p?.voidCrystals > 0 && (
+                   <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)' }}>
+                     💎 +{hudData.p.voidCrystals} Void Crystals Retrieved
+                   </div>
+                )}
+
+                {isCoop && (
+                  <div style={{ fontSize: '.85rem', color: '#fca5a5', marginBottom: '10px', fontStyle: 'italic', textAlign: 'center' }}>
+                    {restartVotes} / 2 voted to restart the game
                   </div>
-                </div>
-                <div style={{ fontSize: '.75rem', color: '#a78bfa', marginTop: '6px', minHeight: '1em', fontFamily: 'monospace', textAlign: 'center' }}>{submitStatus}</div>
-              </div>
-            )} */}
+                )}
 
-            {hasSupabase && (
-              <div id="go-submit" style={{ marginBottom: '14px', width: '100%' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label className="wizard-field-label" style={{ textAlign: 'center' }}>Record Name on Tombstone</label>
-                  
-                  {/* 🔥 DITO NAGBAGO: Ipakita lang ang input at button kung hindi pa submitted */}
-                  {!isScoreSubmitted ? (
-                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                      <input 
-                        className="field-input wizard-field-input" 
-                        type="text" 
-                        value={wizardName} 
-                        maxLength={15}
-                        onChange={e => setWizardName(e.target.value)} 
-                        onKeyDown={e => e.key === 'Enter' && handleSubmitScore()}
-                        placeholder="e.g. Archmage Martel" 
-                        style={{ flex: 1 }}
-                      />
-                      <button className="btn wizard-btn gold-theme" onClick={handleSubmitScore} style={{ margin: 0, width: 'auto', padding: '0 20px' }}>Submit</button>
+                {hasSupabase && (
+                  <div id="go-submit" style={{ marginBottom: '14px', width: '100%' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label className="wizard-field-label" style={{ textAlign: 'center' }}>Record Name on Tombstone</label>
+                      
+                      {!isScoreSubmitted ? (
+                        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                          <input 
+                            className="field-input wizard-field-input" 
+                            type="text" 
+                            value={wizardName} 
+                            maxLength={15}
+                            onChange={e => setWizardName(e.target.value)} 
+                            onKeyDown={e => e.key === 'Enter' && handleSubmitScore()}
+                            placeholder="e.g. Archmage Martel" 
+                            style={{ flex: 1 }}
+                          />
+                          <button className="btn wizard-btn gold-theme" onClick={handleSubmitScore} style={{ margin: 0, width: 'auto', padding: '0 20px' }}>Submit</button>
+                        </div>
+                      ) : null}
+
                     </div>
-                  ) : null}
+                    <div style={{ fontSize: '.75rem', color: '#a78bfa', marginTop: '6px', minHeight: '1em', fontFamily: 'monospace', textAlign: 'center' }}>{submitStatus}</div>
+                  </div>
+                )}
 
-                </div>
-                <div style={{ fontSize: '.75rem', color: '#a78bfa', marginTop: '6px', minHeight: '1em', fontFamily: 'monospace', textAlign: 'center' }}>{submitStatus}</div>
-              </div>
+                {isCoop && (!hudData?.p?.dead || !hudData?.p2?.dead) && (
+                  <button className="btn wizard-btn" style={{ borderColor: '#38bdf8', color: '#38bdf8', marginBottom: '10px' }} onClick={() => setScreen('playing')}>
+                    👁️ Spectate Partner
+                  </button>
+                )}
+
+                <button className="btn wizard-btn gold-theme" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName })}>
+                  🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
+                </button>
+                <button className="btn wizard-btn" onClick={() => setScreen('menu')}>🏠 Main Menu</button>
+              </>
             )}
-
-            <button className="btn wizard-btn gold-theme" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName })}>
-              🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
-            </button>
-            <button className="btn wizard-btn" onClick={() => setScreen('menu')}>🏠 Main Menu</button>
           </div>
         </div>
       )}

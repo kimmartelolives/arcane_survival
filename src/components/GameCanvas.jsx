@@ -2638,6 +2638,7 @@ useEffect(() => {
           eng.p.baseCrit = payload.p1.baseCrit ?? eng.p.baseCrit;
           eng.p.baseDef = payload.p1.baseDef ?? eng.p.baseDef;
           eng.p.multiShot = payload.p1.multiShot ?? eng.p.multiShot;
+          eng.p.hasContinued = payload.p1.hasContinued ?? eng.p.hasContinued;
 
           eng.p.x = payload.p1.x;
           eng.p.y = payload.p1.y;
@@ -2699,6 +2700,65 @@ useEffect(() => {
       if (event === 'offer_levelup' && !net.isHost) {
         onLevelUpOffer(payload.ups);
         setScreen('levelup');
+      }
+
+ // 🔥 NEW: Catching Host Continuing
+      if (event === 'host_player_continued' && !net.isHost) {
+        if (eng.p) {
+          eng.p.dead = false;
+          eng.p.hp = eng.p.maxHp;
+          eng.p.inv = 4.0; // Gawin nating 4.0 para parehas sa main logic
+          eng.p.hasContinued = true; // 🔥 LOCK
+          
+          // 🔥 SYNC ANG VISUAL SHIELD SA GUEST SCREEN
+          if (!eng.p.skills) eng.p.skills = initSkills();
+          if (!eng.p.skills.shield) eng.p.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
+          eng.p.skills.shield.learned = true;
+          eng.p.skills.shield.duration = 4.0;
+
+          if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('revival');
+          for (let k = 0; k < 60; k++) {
+            const pa = Math.random() * Math.PI * 2;
+            const ps = Math.random() * 200 + 50;
+            eng.particles.push({
+              x: eng.p.x, y: eng.p.y,
+              vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+              color: '#d946ef', life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
+            });
+          }
+        }
+      }
+
+      // 🔥 NEW: Catching Guest Continuing
+      if (event === 'guest_player_continued' && net.isHost) {
+        if (eng.p2) {
+          eng.p2.dead = false;
+          eng.p2.hp = eng.p2.maxHp;
+          eng.p2.inv = 4.0; // Gawin nating 4.0
+          eng.p2.hasContinued = true; // 🔥 LOCK
+          
+          // 🔥 SYNC ANG VISUAL SHIELD SA HOST SCREEN
+          if (!eng.p2.skills) eng.p2.skills = initSkills();
+          if (!eng.p2.skills.shield) eng.p2.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
+          eng.p2.skills.shield.learned = true;
+          eng.p2.skills.shield.duration = 4.0;
+
+          if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('revival');
+          for (let k = 0; k < 60; k++) {
+            const pa = Math.random() * Math.PI * 2;
+            const ps = Math.random() * 200 + 50;
+            eng.particles.push({
+              x: eng.p2.x, y: eng.p2.y,
+              vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+              color: '#d946ef', life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
+            });
+          }
+        }
+      }
+
+      // Ito yung original na susundan:
+      if (event === 'game_over') {
+        setScreen('gameover');
       }
       
       if (event === 'game_over') {
@@ -2784,6 +2844,7 @@ useEffect(() => {
       baseDef: 0 + bonusDef,                  // <-- Added
       baseCrit: 0 + bonusCrit,                // <-- Added
       voidCrystals: 0,                        // <-- Added tracker
+      hasContinued: false,
       chatBubble: null, 
       dashCd: 0, isDashing: false, dashTimer: 0, dashAngle: 0, // 💨 DINAGDAG PARA SA DASH
       skills: initSkills(), 
@@ -2797,7 +2858,9 @@ useEffect(() => {
       eng.p1Render = { x: eng.p.x, y: eng.p.y };
 
       if (isCoopActive) {
-        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0, chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
+        eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0,
+        hasContinued: false,
+        chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
         name: netRef.current?.isHost ? allyName : playerName
         };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
@@ -2850,6 +2913,8 @@ useEffect(() => {
       }
     };
 
+    
+
     window.executeNetworkExitAction = () => {
       const net = netRef?.current;
       const isCoopActive = Boolean(net && net.channel);
@@ -2870,6 +2935,49 @@ useEffect(() => {
         }
         setScreen('menu');
       }, 100);
+    };
+
+    window.executeContinueAction = () => {
+      const eng = engineRef.current;
+      const net = netRef.current || {};
+      const isCoopActive = Boolean(net.channel);
+      const isHost = Boolean(net.isHost) || !isCoopActive;
+
+      const localTarget = (isCoopActive && !isHost) ? eng.p2 : eng.p;
+
+      if (localTarget) {
+        localTarget.dead = false;
+        localTarget.hp = localTarget.maxHp;
+        localTarget.inv = 4.0; // Invincibility window to avoid immediate death
+        localTarget.hasContinued = true;
+
+        // 🔥 IDAGDAG ITO: I-trigger ang visual Shield skill na tatagal ng 4 seconds
+        if (!localTarget.skills) localTarget.skills = initSkills();
+        if (!localTarget.skills.shield) localTarget.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
+        localTarget.skills.shield.learned = true;
+        localTarget.skills.shield.duration = 4.0;
+
+        if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('revival');
+        for (let k = 0; k < 60; k++) {
+          const pa = Math.random() * Math.PI * 2;
+          const ps = Math.random() * 200 + 50;
+          eng.particles.push({
+            x: localTarget.x, y: localTarget.y,
+            vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps,
+            color: '#d946ef', 
+            life: 2.0, ml: 2.0, r: Math.random() * 5 + 2
+          });
+        }
+      }
+
+      // Tell the other player we continued our run
+      if (isCoopActive) {
+        if (isHost) {
+          net.channel.send('host_player_continued', {});
+        } else {
+          net.channel.send('guest_player_continued', {});
+        }
+      }
     };
 
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
@@ -3554,7 +3662,6 @@ if (eng.gameStarted) {
                 if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
                 
                 let d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y) - (e.r || 15);
-                if (isBigBoss) d -= 100000; 
                 
                 if (d < minDist) { minDist = d; targetEnemy = e; }
               }
@@ -3810,7 +3917,8 @@ if (eng.gameStarted) {
                 baseDef: eng.p.baseDef,
                 multiShot: eng.p.multiShot, 
                 chatBubble: eng.p.chatBubble,
-                name: playerName
+                name: playerName,
+                hasContinued: eng.p.hasContinued
               } : null,
               p2: eng.p2 ? { 
                 x: eng.p2.x, 
@@ -3826,7 +3934,8 @@ if (eng.gameStarted) {
                 baseDef: eng.p2.baseDef,
                 multiShot: eng.p2.multiShot,
                 chatBubble: eng.p2.chatBubble, 
-                name: isHost ? allyName : playerName 
+                name: isHost ? allyName : playerName, 
+                hasContinued: eng.p2.hasContinued
               } : null,
                 p1_skills: eng.p ? eng.p.skills : null,
                 p2_skills: eng.p2 ? eng.p2.skills : null,
@@ -4105,7 +4214,6 @@ if (eng.gameStarted) {
                   const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
                   if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue;
                   let d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y) - (e.r || 15);
-                  if (isBigBoss) d -= 100000; 
                   
                   if (d < nd) { nd = d; near = e; }
                 }
@@ -4142,7 +4250,6 @@ if (eng.gameStarted) {
                   if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
                   
                   let d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) - (e.r || 15);
-                  if (isBigBoss) d -= 100000; 
                   
                   if (d < nd) { nd = d; near = e; }
                 }

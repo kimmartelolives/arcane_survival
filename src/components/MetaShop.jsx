@@ -1620,7 +1620,7 @@ export default function MetaShop({ screen, setScreen }) {
                 💎 Void Crystals: {crystals.toLocaleString()}
               </div>
               <div style={{ color: '#cbd5e1', fontSize: '11px', fontStyle: 'italic', marginTop: '2px' }}>
-                * Defeat the 4 main bosses to obtain Void Crystals.
+                ✦ Slay bosses and claim Void Crystals. 💎
               </div>
             </div>
 
