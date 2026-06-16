@@ -2822,16 +2822,20 @@ useEffect(() => {
       eng.gameStarted = false; 
       setHasStarted(false);
 
-      const eqFam = localStorage.getItem('arcane_equipped_familiar') || 'none';
+      const eqFamsStr = localStorage.getItem('arcane_equipped_familiars');
+      let eqFamsArray = [];
+      if (eqFamsStr) {
+         eqFamsArray = JSON.parse(eqFamsStr);
+      } else {
+         const old = localStorage.getItem('arcane_equipped_familiar');
+         if (old && old !== 'none') eqFamsArray = [old];
+      }
       const famLevels = JSON.parse(localStorage.getItem('arcane_familiar_levels') || '{}');
 
-      const initFamiliarObj = (eqFam !== 'none') ? { 
-        id: eqFam, 
-        level: famLevels[eqFam] || 1, 
-        x: isCoopActive ? W / 3 : W / 2, 
-        y: H / 2, 
-        cd: 0 
-      } : null;
+      const initFamiliarsObjArray = eqFamsArray.map(id => ({ 
+        id: id, level: famLevels[id] || 1, 
+        x: isCoopActive ? W / 3 : W / 2, y: H / 2, cd: 0 
+      }));
 
       // 🟢 ADD THIS BEFORE eng.p = { ... }
       const metaUpgrades = JSON.parse(localStorage.getItem('arcane_upgrades') || '{}');
@@ -2857,7 +2861,7 @@ useEffect(() => {
       voidCrystals: 0,                        // <-- Added tracker
       hasContinued: false,
       chatBubble: null,
-      familiar: initFamiliarObj, 
+      familiars: initFamiliarsObjArray,
       dashCd: 0, isDashing: false, dashTimer: 0, dashAngle: 0, // 💨 DINAGDAG PARA SA DASH
       skills: initSkills(), 
       potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
@@ -4973,187 +4977,162 @@ if (localTarget) {
       }
 
 
-// 🔥 COMPANION / FAMILIAR AI & PHYSICS
-const tickFamiliar = (pObj, isP2) => {
-  if (!pObj || pObj.dead || !pObj.familiar) return;
-  const f = pObj.familiar;
+// 🔥 COMPANION / FAMILIAR AI & PHYSICS (NOW SUPPORTS UP TO 3 PETS)
+const tickFamiliars = (pObj, isP2) => {
+  if (!pObj || pObj.dead || !pObj.familiars) return;
   
-  // 1. Follow Player Logic
-  const tX = pObj.x - 35;
-  const tY = pObj.y - 45 + Math.sin(performance.now() * 0.003) * 8; 
-  
-  const fDist = Math.hypot(tX - f.x, tY - f.y);
-  const fSpeed = fDist > 150 ? 8 : 4; 
-  f.x += (tX - f.x) * dt * fSpeed;
-  f.y += (tY - f.y) * dt * fSpeed;
+  pObj.familiars.forEach((f, index) => {
+    // 1. Offsets para hindi magpatong ang 3 familiars
+    let offsetX = -35, offsetY = -45;
+    if (index === 1) { offsetX = 35; offsetY = -45; } // Right
+    if (index === 2) { offsetX = 0; offsetY = -70; }  // Top Center
 
-  // 🔥 FIX: VOID EYE VACUUM LOGIC (Nilabas sa cooldown para EVERY FRAME ang hatak!)
-  if (f.id === 'voidling') {
-    const vacRadius = 250 + (f.level * 35); 
-    const pullSpeed = 1500; // Pinalakas na hatak (from 700 to 1500) para swabe!
+    const tX = pObj.x + offsetX;
+    const tY = pObj.y + offsetY + Math.sin(performance.now() * 0.003 + index) * 8; 
     
-    // Hatakin ang Gems
-    for (const g of eng.gems) {
-      if (Math.hypot(g.x - pObj.x, g.y - pObj.y) < vacRadius) {
-         const ang = Math.atan2(pObj.y - g.y, pObj.x - g.x);
-         g.x += Math.cos(ang) * pullSpeed * dt;
-         g.y += Math.sin(ang) * pullSpeed * dt;
-      }
-    }
-    // Hatakin ang Potions
-    for (const p of eng.potions) {
-      if (Math.hypot(p.x - pObj.x, p.y - pObj.y) < vacRadius) {
-         const pa = Math.atan2(pObj.y - p.y, pObj.x - p.x);
-         p.x += Math.cos(pa) * (pullSpeed * 0.8) * dt; // Medyo mabagal nang onti sa potion
-         p.y += Math.sin(pa) * (pullSpeed * 0.8) * dt;
-      }
-    }
-  }
+    const fDist = Math.hypot(tX - f.x, tY - f.y);
+    const fSpeed = fDist > 150 ? 8 : 4; 
+    f.x += (tX - f.x) * dt * fSpeed;
+    f.y += (tY - f.y) * dt * fSpeed;
 
-  // 2. Familiar Skill Cooldowns & Execution
-  f.cd -= dt;
-  if (f.cd <= 0) {
-    if (f.id === 'wisp') {
-      // ☄️ ATTACK: Shoots Fireballs
-      let near = null, nd = Infinity;
-      for (const e of eng.enemies) {
-        if (e.hp <= 0 || e.y < -50) continue;
-        let d = Math.hypot(e.x - f.x, e.y - f.y) - (e.r || 15);
-        if (d < nd && d < 450) { nd = d; near = e; }
-      }
-      
-      if (near) {
-        f.cd = Math.max(0.15, 0.8 - (f.level * 0.05)); 
-        const a = Math.atan2(near.y - f.y, near.x - f.x);
-        
-        const famDmg = 50 + (f.level * 30) + ((eng.wave || 1) * 15);
-        const projCount = f.level >= 10 ? 3 : (f.level >= 5 ? 2 : 1);
-        const spread = 0.2;
-        
-        for (let i = 0; i < projCount; i++) {
-          const ang = a + (i - (projCount - 1) / 2) * spread;
-          eng.bullets.push({ 
-            x: f.x, y: f.y, vx: Math.cos(ang) * 600, vy: Math.sin(ang) * 600, 
-            r: 7, life: 2, p2: isP2, dmg: famDmg, color: '#f97316', isFamiliar: true 
-          });
+    if (f.id === 'voidling') {
+      const vacRadius = 250 + (f.level * 35); 
+      const pullSpeed = 1500; 
+      for (const g of eng.gems) {
+        if (Math.hypot(g.x - pObj.x, g.y - pObj.y) < vacRadius) {
+           const ang = Math.atan2(pObj.y - g.y, pObj.x - g.x);
+           g.x += Math.cos(ang) * pullSpeed * dt; g.y += Math.sin(ang) * pullSpeed * dt;
         }
       }
-    } 
-    else if (f.id === 'fairy') {
-      // 🌿 SUPPORT: Area Heal
-      f.cd = 3.0; // Heals every 3 seconds
-      const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01); 
-      pObj.hp = Math.min(pObj.maxHp, pObj.hp + healAmount);
-      
-      for(let k=0; k<6; k++) {
-        eng.particles.push({ 
-          x: pObj.x + (Math.random()-0.5)*30, y: pObj.y + (Math.random()-0.5)*30, 
-          vx: 0, vy: -40 - Math.random()*20, color: '#86efac', life: 0.8, ml: 0.8, r: 2.5 
-        });
-      }
-    }
-    else if (f.id === 'voidling') {
-      // 🔮 UTILITY: Visual Pulse lang (Ang vacuum nasa labas na ng cooldown loop)
-      f.cd = 0.5; 
-      if (f.level >= 10 && Math.random() < 0.3) {
-         eng.particles.push({ x: f.x, y: f.y, vx: 0, vy: 0, color: 'rgba(217, 70, 239, 0.4)', life: 0.3, ml: 0.3, r: 25, isGhost: true });
-      }
-    }
-
-    else if (f.id === 'frost') {
-      // ❄️ CROWD CONTROL: Mini Ice Storm
-      f.cd = Math.max(1.0, 3.0 - (f.level * 0.15)); // Cooldown reduction per level
-      let target = null, minDist = Infinity;
-      for (const e of eng.enemies) {
-        if (e.hp <= 0 || e.y < -50) continue;
-        let d = Math.hypot(e.x - f.x, e.y - f.y);
-        if (d < minDist && d < 350) { minDist = d; target = e; }
-      }
-      if (target) {
-        const stormRadius = 80 + (f.level * 5); // Lalo lumalaki ang radius pag nag-level up
-        if (!eng.iceStorms) eng.iceStorms = [];
-        // Ang engine na mismo ang bahala sa damage at slow effect kapag na-spawn ito!
-        eng.iceStorms.push({ x: target.x, y: target.y, radius: stormRadius, life: 2.0 });
-      }
-    }
-    
-    else if (f.id === 'golem') {
-      // 🪨 DEFENSE: Ground Smash (AoE Stun + Damage)
-      f.cd = Math.max(1.5, 4.0 - (f.level * 0.2)); 
-      let enemiesHit = 0;
-      const smashRadius = 120 + (f.level * 8);
-      const smashDmg = 150 + (f.level * 50) + ((eng.wave || 1) * 20);
-      
-      for (const e of eng.enemies) {
-        if (e.hp <= 0 || e.y < -50) continue;
-        if (Math.hypot(e.x - f.x, e.y - f.y) < smashRadius) {
-          e.hp -= smashDmg;
-          e.stunnedTime = Math.max(e.stunnedTime || 0, 1.5);
-          e.flash = 0.5;
-          if (e.hp <= 0) e.deadTrigger = true;
-          enemiesHit++;
-        }
-      }
-      
-      if (enemiesHit > 0) {
-        eng.screenShake = 0.6;
-        // Shockwave visual ring
-        if (!eng.cubeBashes) eng.cubeBashes = [];
-        eng.cubeBashes.push({ x: f.x, y: f.y, radius: 10, maxRadius: smashRadius, speed: 350 });
-        
-        // Rock particles
-        for(let k=0; k<15; k++) {
-          const pa = Math.random() * Math.PI * 2;
-          const ps = Math.random() * (smashRadius * 0.5);
-          eng.particles.push({ 
-            x: f.x + Math.cos(pa)*ps, y: f.y + Math.sin(pa)*ps, 
-            vx: 0, vy: -10 - Math.random()*15, color: '#f59e0b', life: 0.5, ml: 0.5, r: 3 
-          });
+      for (const p of eng.potions) {
+        if (Math.hypot(p.x - pObj.x, p.y - pObj.y) < vacRadius) {
+           const pa = Math.atan2(pObj.y - p.y, pObj.x - p.x);
+           p.x += Math.cos(pa) * (pullSpeed * 0.8) * dt; p.y += Math.sin(pa) * (pullSpeed * 0.8) * dt;
         }
       }
     }
 
-    else if (f.id === 'thunder') {
-      // ⚡ BURST ATTACK: Lightning Strike
-      f.cd = Math.max(0.3, 1.5 - (f.level * 0.1)); // Fast cooldown
-      let target = null, minDist = Infinity;
-      for (const e of eng.enemies) {
-        if (e.hp <= 0 || e.y < -50) continue;
-        let d = Math.hypot(e.x - f.x, e.y - f.y);
-        if (d < minDist && d < 450) { minDist = d; target = e; }
+    f.cd -= dt;
+    if (f.cd <= 0) {
+      if (f.id === 'wisp') {
+        let near = null, nd = Infinity;
+        for (const e of eng.enemies) {
+          if (e.hp <= 0 || e.y < -50) continue;
+          let d = Math.hypot(e.x - f.x, e.y - f.y) - (e.r || 15);
+          if (d < nd && d < 450) { nd = d; near = e; }
+        }
+        if (near) {
+          f.cd = Math.max(0.15, 0.8 - (f.level * 0.05)); 
+          const a = Math.atan2(near.y - f.y, near.x - f.x);
+          const famDmg = 50 + (f.level * 30) + ((eng.wave || 1) * 15);
+          const projCount = f.level >= 10 ? 3 : (f.level >= 5 ? 2 : 1);
+          for (let i = 0; i < projCount; i++) {
+            const ang = a + (i - (projCount - 1) / 2) * 0.2;
+            eng.bullets.push({ x: f.x, y: f.y, vx: Math.cos(ang) * 600, vy: Math.sin(ang) * 600, r: 7, life: 2, p2: isP2, dmg: famDmg, color: '#f97316', isFamiliar: true });
+          }
+        }
+      } 
+      else if (f.id === 'fairy') {
+        f.cd = 3.0; 
+        const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01); 
+        pObj.hp = Math.min(pObj.maxHp, pObj.hp + healAmount);
+        for(let k=0; k<6; k++) eng.particles.push({ x: pObj.x + (Math.random()-0.5)*30, y: pObj.y + (Math.random()-0.5)*30, vx: 0, vy: -40 - Math.random()*20, color: '#86efac', life: 0.8, ml: 0.8, r: 2.5 });
       }
-      
-      if (target) {
-        const boltDmg = 200 + (f.level * 45) + ((eng.wave || 1) * 25);
-        target.hp -= boltDmg;
-        target.flash = 0.8;
-        target.instabTime = Math.max(target.instabTime || 0, 2.0); // Adds Arcane Instability
-        if (target.hp <= 0) target.deadTrigger = true;
-        
-        if (!eng.lightnings) eng.lightnings = [];
-        eng.lightnings.push({ 
-          pts: [{x: f.x, y: f.y}, {x: target.x, y: target.y}], 
-          life: 0.4 
-        });
-        
-        // Electric particles
-        for(let k=0; k<8; k++) {
-          eng.particles.push({ 
-            x: target.x, y: target.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, 
-            color: '#e879f9', life: 0.3, ml: 0.3, r: 2 
-          });
+      else if (f.id === 'voidling') {
+        f.cd = 0.5; 
+        if (f.level >= 10 && Math.random() < 0.3) eng.particles.push({ x: f.x, y: f.y, vx: 0, vy: 0, color: 'rgba(217, 70, 239, 0.4)', life: 0.3, ml: 0.3, r: 25, isGhost: true });
+      }
+      else if (f.id === 'frost') {
+        f.cd = Math.max(1.0, 3.0 - (f.level * 0.15)); 
+        let target = null, minDist = Infinity;
+        for (const e of eng.enemies) {
+          if (e.hp <= 0 || e.y < -50) continue;
+          let d = Math.hypot(e.x - f.x, e.y - f.y);
+          if (d < minDist && d < 350) { minDist = d; target = e; }
+        }
+        if (target) {
+          const stormRadius = 80 + (f.level * 5); 
+          if (!eng.iceStorms) eng.iceStorms = [];
+          eng.iceStorms.push({ x: target.x, y: target.y, radius: stormRadius, life: 2.0 });
+        }
+      }
+      else if (f.id === 'golem') {
+        f.cd = Math.max(1.5, 4.0 - (f.level * 0.2)); 
+        let enemiesHit = 0;
+        const smashRadius = 120 + (f.level * 8);
+        const smashDmg = 150 + (f.level * 50) + ((eng.wave || 1) * 20);
+        for (const e of eng.enemies) {
+          if (e.hp <= 0 || e.y < -50) continue;
+          if (Math.hypot(e.x - f.x, e.y - f.y) < smashRadius) {
+            e.hp -= smashDmg; e.stunnedTime = Math.max(e.stunnedTime || 0, 1.5); e.flash = 0.5;
+            if (e.hp <= 0) e.deadTrigger = true;
+            enemiesHit++;
+          }
+        }
+        if (enemiesHit > 0) {
+          eng.screenShake = 0.6;
+          if (!eng.cubeBashes) eng.cubeBashes = [];
+          eng.cubeBashes.push({ x: f.x, y: f.y, radius: 10, maxRadius: smashRadius, speed: 350 });
+          for(let k=0; k<15; k++) eng.particles.push({ x: f.x + Math.cos(Math.random()*Math.PI*2)*(Math.random()*(smashRadius*0.5)), y: f.y + Math.sin(Math.random()*Math.PI*2)*(Math.random()*(smashRadius*0.5)), vx: 0, vy: -10 - Math.random()*15, color: '#f59e0b', life: 0.5, ml: 0.5, r: 3 });
+        }
+      }
+      else if (f.id === 'thunder') {
+        f.cd = Math.max(0.3, 1.5 - (f.level * 0.1)); 
+        let target = null, minDist = Infinity;
+        for (const e of eng.enemies) {
+          if (e.hp <= 0 || e.y < -50) continue;
+          let d = Math.hypot(e.x - f.x, e.y - f.y);
+          if (d < minDist && d < 450) { minDist = d; target = e; }
+        }
+        if (target) {
+          const boltDmg = 200 + (f.level * 45) + ((eng.wave || 1) * 25);
+          target.hp -= boltDmg; target.flash = 0.8; target.instabTime = Math.max(target.instabTime || 0, 2.0);
+          if (target.hp <= 0) target.deadTrigger = true;
+          if (!eng.lightnings) eng.lightnings = [];
+          eng.lightnings.push({ pts: [{x: f.x, y: f.y}, {x: target.x, y: target.y}], life: 0.4 });
+          for(let k=0; k<8; k++) eng.particles.push({ x: target.x, y: target.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#e879f9', life: 0.3, ml: 0.3, r: 2 });
+        }
+      }
+      // 🔥 NEW FAMILIARS AI:
+      else if (f.id === 'shadow') {
+        f.cd = Math.max(0.2, 1.2 - (f.level * 0.1)); 
+        let target = null, minDist = Infinity;
+        for (const e of eng.enemies) {
+          if (e.hp <= 0 || e.y < -50) continue;
+          let d = Math.hypot(e.x - f.x, e.y - f.y);
+          if (d < minDist && d < 500) { minDist = d; target = e; }
+        }
+        if (target) {
+           const a = Math.atan2(target.y - f.y, target.x - f.x);
+           if (!eng.slashes) eng.slashes = [];
+           eng.slashes.push({ x: f.x, y: f.y, vx: Math.cos(a) * 800, vy: Math.sin(a) * 800, angle: a, life: 1.0, hits: new Set(), p2: isP2, isFamiliar: true, dmg: 80 + (f.level*60) });
+        }
+      }
+      else if (f.id === 'light') {
+        f.cd = Math.max(5.0, 15.0 - (f.level * 1.0)); 
+        if (!pObj.skills.shield) pObj.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
+        pObj.skills.shield.learned = true;
+        pObj.skills.shield.duration = Math.max(pObj.skills.shield.duration || 0, 3.0 + (f.level * 0.5));
+        for(let k=0; k<10; k++) eng.particles.push({ x: pObj.x, y: pObj.y, vx: (Math.random()-0.5)*100, vy: (Math.random()-0.5)*100, color: '#fde047', life: 1.0, ml: 1.0, r: 3 });
+      }
+      else if (f.id === 'wind') {
+        f.cd = Math.max(2.0, 6.0 - (f.level * 0.4)); 
+        const a = Math.random() * Math.PI * 2;
+        if (!eng.tornados) eng.tornados = [];
+        const tornadoCount = f.level >= 5 ? 2 : 1;
+        for (let i=0; i<tornadoCount; i++) {
+           const spreadA = a + (i * Math.PI);
+           eng.tornados.push({ x: f.x, y: f.y, vx: Math.cos(spreadA) * 150, vy: Math.sin(spreadA) * 150, life: 4.0, r: 50 + (f.level*5), isFamiliar: true, dmg: 40 + (f.level*25) });
         }
       }
     }
-
-  }
+  });
 };
 
-      // I-trigger ang Familiar AI bago gumalaw ang mga bullets
-      if (isHost || !isCoopActive) {
-        tickFamiliar(eng.p, false);
-        if (isCoopActive) tickFamiliar(eng.p2, true);
-      }
+if (isHost || !isCoopActive) {
+  tickFamiliars(eng.p, false);
+  if (isCoopActive) tickFamiliars(eng.p2, true);
+}
 
     };
 
@@ -8444,183 +8423,146 @@ for (const p of eng.particles) {
         }
       }
 
-      const renderFamiliar = (pObj) => {
-  if (!pObj || !pObj.familiar || pObj.dead) return;
-  const f = pObj.familiar;
-  const t = performance.now();
+// 🔥 FAMILIAR RENDERER (NOW LOOPING THROUGH ARRAY)
+const renderFamiliars = (pObj) => {
+  if (!pObj || !pObj.familiars || pObj.dead) return;
   
-  ctx.save();
-  ctx.translate(f.x, f.y);
+  pObj.familiars.forEach(f => {
+    const t = performance.now();
+    ctx.save();
+    ctx.translate(f.x, f.y);
 
-  if (f.id === 'wisp') {
-    // ☄️ IGNIS WISP AESTHETICS
-    const wispSize = 7 + (f.level >= 5 ? 3 : 0) + (f.level >= 10 ? 4 : 0);
-    ctx.shadowBlur = 20; ctx.shadowColor = '#ef4444';
-    
-    // Core
-    ctx.fillStyle = '#fef08a';
-    ctx.beginPath(); ctx.arc(0, 0, wispSize * 0.6, 0, Math.PI * 2); ctx.fill();
-    
-    // Flame Body
-    ctx.fillStyle = `rgba(249, 115, 22, ${0.8 + Math.sin(t * 0.01) * 0.2})`;
-    ctx.beginPath(); 
-    ctx.moveTo(0, -wispSize * 1.5);
-    ctx.quadraticCurveTo(wispSize, 0, 0, wispSize);
-    ctx.quadraticCurveTo(-wispSize, 0, 0, -wispSize * 1.5);
-    ctx.fill();
-
-    // Evolutions (Orbiting Flame Spheres)
-    if (f.level >= 5) {
-      const orbCount = f.level >= 10 ? 3 : 1;
-      ctx.fillStyle = '#ef4444';
-      for(let i = 0; i < orbCount; i++) {
-        const oA = t * 0.005 + (i * Math.PI * 2 / orbCount);
-        ctx.beginPath(); ctx.arc(Math.cos(oA) * 18, Math.sin(oA) * 18, 3, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-  } 
-// Sa loob ng renderFamiliar, hanapin ang fairy block at palitan:
-  else if (f.id === 'fairy') {
-    // 🌿 SYLPH FAIRY AESTHETICS
-    ctx.shadowBlur = 15; ctx.shadowColor = '#22c55e';
-    
-    // Body
-    ctx.fillStyle = '#86efac';
-    ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
-    
-    // Fluttering Wings (🔥 FIX: Laging positive ang size para hindi mag-crash ang canvas!)
-    const flap = Math.abs(Math.sin(t * 0.015)) * 6 + 1;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    ctx.beginPath(); ctx.ellipse(-5, -3, 8, flap, Math.PI/4, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(5, -3, 8, flap, -Math.PI/4, 0, Math.PI*2); ctx.fill();
-
-    // Evolutions (Nature Halo & Dust)
-    if (f.level >= 5) {
-      ctx.strokeStyle = 'rgba(134, 239, 172, 0.5)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.ellipse(0, -8, 10, 3, 0, 0, Math.PI*2); ctx.stroke();
-    }
-    if (f.level >= 10) {
+    if (f.id === 'wisp') {
+      const wispSize = 7 + (f.level >= 5 ? 3 : 0) + (f.level >= 10 ? 4 : 0);
+      ctx.shadowBlur = 20; ctx.shadowColor = '#ef4444';
       ctx.fillStyle = '#fef08a';
-      ctx.beginPath(); ctx.arc(Math.cos(t * 0.002) * 12, Math.sin(t * 0.002) * 12, 1.5, 0, Math.PI*2); ctx.fill();
-    }
-  }
-  else if (f.id === 'voidling') {
-    // 🔮 VOID EYE AESTHETICS
-    const float = Math.sin(t * 0.005) * 4;
-    ctx.shadowBlur = 20; ctx.shadowColor = '#a855f7';
-    
-    // Tentacles/Rings
-    ctx.strokeStyle = 'rgba(217, 70, 239, 0.8)'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.ellipse(0, float, 12, 4 + Math.sin(t*0.01)*2, t*0.002, 0, Math.PI*2); ctx.stroke();
-    
-    // Core Eye
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath(); ctx.arc(0, float, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#f472b6';
-    ctx.beginPath(); ctx.ellipse(0, float, 3, 5, 0, 0, Math.PI*2); ctx.fill();
-
-    // Evolutions
-    if (f.level >= 5) {
-      ctx.strokeStyle = 'rgba(192, 132, 252, 0.5)';
-      ctx.beginPath(); ctx.arc(0, float, 18, 0, Math.PI*2); ctx.stroke();
-    }
-    if (f.level >= 10) {
-      ctx.fillStyle = '#e879f9';
-      for(let i=0; i<4; i++) {
-        const pA = t*0.003 + (i*Math.PI/2);
-        ctx.beginPath(); ctx.arc(Math.cos(pA)*22, Math.sin(pA)*22 + float, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(0, 0, wispSize * 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(249, 115, 22, ${0.8 + Math.sin(t * 0.01) * 0.2})`;
+      ctx.beginPath(); ctx.moveTo(0, -wispSize * 1.5); ctx.quadraticCurveTo(wispSize, 0, 0, wispSize); ctx.quadraticCurveTo(-wispSize, 0, 0, -wispSize * 1.5); ctx.fill();
+      if (f.level >= 5) {
+        const orbCount = f.level >= 10 ? 3 : 1;
+        ctx.fillStyle = '#ef4444';
+        for(let i = 0; i < orbCount; i++) {
+          const oA = t * 0.005 + (i * Math.PI * 2 / orbCount);
+          ctx.beginPath(); ctx.arc(Math.cos(oA) * 18, Math.sin(oA) * 18, 3, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    } 
+    else if (f.id === 'fairy') {
+      ctx.shadowBlur = 15; ctx.shadowColor = '#22c55e';
+      ctx.fillStyle = '#86efac';
+      ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+      const flap = Math.abs(Math.sin(t * 0.015)) * 6 + 1;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.beginPath(); ctx.ellipse(-5, -3, 8, flap, Math.PI/4, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(5, -3, 8, flap, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+      if (f.level >= 5) {
+        ctx.strokeStyle = 'rgba(134, 239, 172, 0.5)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(0, -8, 10, 3, 0, 0, Math.PI*2); ctx.stroke();
+      }
+      if (f.level >= 10) {
+        ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(Math.cos(t * 0.002) * 12, Math.sin(t * 0.002) * 12, 1.5, 0, Math.PI*2); ctx.fill();
       }
     }
-  }
-
-  else if (f.id === 'frost') {
-    // ❄️ FROST SPRITE AESTHETICS (Diamond Ice Crystal)
-    ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
-    ctx.fillStyle = '#bae6fd';
-    
-    // Core Ice Shape
-    ctx.beginPath();
-    ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); 
-    ctx.fill();
-    
-    // Evolutions
-    if (f.level >= 5) {
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI*2); ctx.stroke();
-    }
-    if (f.level >= 10) {
-      ctx.fillStyle = '#e0f2fe';
-      for(let i=0; i<3; i++) {
-         const a = t*0.003 + (i*Math.PI*2/3);
-         ctx.beginPath(); ctx.arc(Math.cos(a)*18, Math.sin(a)*18, 2.5, 0, Math.PI*2); ctx.fill();
+    else if (f.id === 'voidling') {
+      const float = Math.sin(t * 0.005) * 4;
+      ctx.shadowBlur = 20; ctx.shadowColor = '#a855f7';
+      ctx.strokeStyle = 'rgba(217, 70, 239, 0.8)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(0, float, 12, 4 + Math.sin(t*0.01)*2, t*0.002, 0, Math.PI*2); ctx.stroke();
+      ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(0, float, 8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#f472b6'; ctx.beginPath(); ctx.ellipse(0, float, 3, 5, 0, 0, Math.PI*2); ctx.fill();
+      if (f.level >= 5) {
+        ctx.strokeStyle = 'rgba(192, 132, 252, 0.5)'; ctx.beginPath(); ctx.arc(0, float, 18, 0, Math.PI*2); ctx.stroke();
+      }
+      if (f.level >= 10) {
+        ctx.fillStyle = '#e879f9';
+        for(let i=0; i<4; i++) {
+          const pA = t*0.003 + (i*Math.PI/2);
+          ctx.beginPath(); ctx.arc(Math.cos(pA)*22, Math.sin(pA)*22 + float, 2, 0, Math.PI*2); ctx.fill();
+        }
       }
     }
-  }
-
-  else if (f.id === 'golem') {
-    // 🪨 STONE GOLEM AESTHETICS (Blocky Earth Guardian)
-    ctx.shadowBlur = 10; ctx.shadowColor = '#d97706';
-    
-    const float = Math.sin(t * 0.005) * 2;
-    // Core Block
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillRect(-8, -8 + float, 16, 16);
-    // Glowing Eyes
-    ctx.fillStyle = '#fffbeb';
-    ctx.fillRect(-4, -4 + float, 3, 3);
-    ctx.fillRect(4, -4 + float, 3, 3);
-    
-    // Evolutions
-    if (f.level >= 5) { 
-       // Floating heavy hands
-       ctx.fillStyle = '#d97706';
-       const armSway = Math.cos(t * 0.005) * 5;
-       ctx.fillRect(-16, 0 + armSway, 6, 8);
-       ctx.fillRect(10, 0 - armSway, 6, 8);
+    else if (f.id === 'frost') {
+      ctx.shadowBlur = 15; ctx.shadowColor = '#38bdf8';
+      ctx.fillStyle = '#bae6fd';
+      ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.fill();
+      if (f.level >= 5) {
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI*2); ctx.stroke();
+      }
+      if (f.level >= 10) {
+        ctx.fillStyle = '#e0f2fe';
+        for(let i=0; i<3; i++) {
+           const a = t*0.003 + (i*Math.PI*2/3);
+           ctx.beginPath(); ctx.arc(Math.cos(a)*18, Math.sin(a)*18, 2.5, 0, Math.PI*2); ctx.fill();
+        }
+      }
     }
-    if (f.level >= 10) { 
-       // Core magma glow & outer shield
-       ctx.fillStyle = '#ef4444';
-       ctx.fillRect(-2, 2 + float, 4, 4);
-       ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)'; ctx.lineWidth = 2;
-       ctx.beginPath(); ctx.arc(0, float, 24, 0, Math.PI*2); ctx.stroke();
+    else if (f.id === 'golem') {
+      ctx.shadowBlur = 10; ctx.shadowColor = '#d97706';
+      const float = Math.sin(t * 0.005) * 2;
+      ctx.fillStyle = '#f59e0b'; ctx.fillRect(-8, -8 + float, 16, 16);
+      ctx.fillStyle = '#fffbeb'; ctx.fillRect(-4, -4 + float, 3, 3); ctx.fillRect(4, -4 + float, 3, 3);
+      if (f.level >= 5) { 
+         ctx.fillStyle = '#d97706'; const armSway = Math.cos(t * 0.005) * 5;
+         ctx.fillRect(-16, 0 + armSway, 6, 8); ctx.fillRect(10, 0 - armSway, 6, 8);
+      }
+      if (f.level >= 10) { 
+         ctx.fillStyle = '#ef4444'; ctx.fillRect(-2, 2 + float, 4, 4);
+         ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)'; ctx.lineWidth = 2;
+         ctx.beginPath(); ctx.arc(0, float, 24, 0, Math.PI*2); ctx.stroke();
+      }
     }
-  }
-
-  else if (f.id === 'thunder') {
-    // ⚡ SPARK FOX AESTHETICS (Lightning Orb with Fox Ears)
-    ctx.shadowBlur = 15; ctx.shadowColor = '#e879f9';
-    ctx.fillStyle = '#fdf4ff';
-    
-    const pulse = Math.sin(t * 0.01) * 2;
-    // Energy Body
-    ctx.beginPath(); ctx.arc(0, 0, 6 + pulse, 0, Math.PI*2); ctx.fill();
-    // Fox Ears Shape
-    ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, -12); ctx.lineTo(-2, -6); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, -12); ctx.lineTo(2, -6); ctx.fill();
-    
-    // Evolutions
-    if (f.level >= 5) {
-       ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 2;
-       ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, t*0.005, 0, Math.PI*2); ctx.stroke();
-    }
-    if (f.level >= 10) {
-       if (Math.random() < 0.3) {
-          // Random wild lightning arcs popping out of it
+    else if (f.id === 'thunder') {
+      ctx.shadowBlur = 15; ctx.shadowColor = '#e879f9';
+      ctx.fillStyle = '#fdf4ff';
+      const pulse = Math.sin(t * 0.01) * 2;
+      ctx.beginPath(); ctx.arc(0, 0, 6 + pulse, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, -12); ctx.lineTo(-2, -6); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, -12); ctx.lineTo(2, -6); ctx.fill();
+      if (f.level >= 5) {
+         ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 2;
+         ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, t*0.005, 0, Math.PI*2); ctx.stroke();
+      }
+      if (f.level >= 10 && Math.random() < 0.3) {
           ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.moveTo(0,0); 
-          ctx.lineTo((Math.random()-0.5)*35, (Math.random()-0.5)*35); ctx.stroke();
-       }
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo((Math.random()-0.5)*35, (Math.random()-0.5)*35); ctx.stroke();
+      }
     }
-  }
-  
-  ctx.restore();
+    else if (f.id === 'shadow') {
+      ctx.shadowBlur = 15; ctx.shadowColor = '#7c3aed';
+      ctx.fillStyle = '#4c1d95';
+      ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
+      const flap = Math.sin(t * 0.02) * 5;
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.8)';
+      ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-12, -8 + flap); ctx.lineTo(-10, 2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(12, -8 + flap); ctx.lineTo(10, 2); ctx.fill();
+    }
+    else if (f.id === 'light') {
+      ctx.shadowBlur = 20; ctx.shadowColor = '#fde047';
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(0, Math.sin(t*0.005)*3, 6, 0, Math.PI*2); ctx.fill();
+      const flap = Math.abs(Math.sin(t * 0.01)) * 4 + 2;
+      ctx.fillStyle = 'rgba(254, 240, 138, 0.6)';
+      ctx.beginPath(); ctx.ellipse(-8, Math.sin(t*0.005)*3, 8, flap, -Math.PI/6, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(8, Math.sin(t*0.005)*3, 8, flap, Math.PI/6, 0, Math.PI*2); ctx.fill();
+    }
+    else if (f.id === 'wind') {
+      ctx.shadowBlur = 15; ctx.shadowColor = '#6ee7b7';
+      ctx.fillStyle = '#a7f3d0';
+      ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.fill();
+      const wSway = Math.cos(t * 0.01) * 3;
+      ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-4, 0); ctx.quadraticCurveTo(-12, -8, -14, wSway); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(4, 0); ctx.quadraticCurveTo(12, -8, 14, -wSway); ctx.stroke();
+    }
+
+    ctx.restore();
+  });
 };
 
-
-      // Tawagin ito bago mag-end ang renderLoop mo
-renderFamiliar(eng.p);
-if (isCoopActive && eng.p2) renderFamiliar(eng.p2);
+renderFamiliars(eng.p);
+if (isCoopActive && eng.p2) renderFamiliars(eng.p2);
 
 // ==============================================================================
       // 🔥 UPDATED STEP 4: INTENSE & SCARY CINEMATIC BOSS INTRO EFFECTS
@@ -9329,7 +9271,6 @@ const renderTooltipStats = (item) => {
 
   const isNetworked = Boolean(netRef.current && netRef.current.channel);
   const isHostInstance = !isNetworked || Boolean(netRef.current?.isHost);
-  //
   return (
 <div 
   id="wrap"

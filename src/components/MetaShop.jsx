@@ -66,6 +66,27 @@ export const FAMILIARS_DB = [
     scaleDesc: '+45 Dmg, -0.1s Cooldown per Level',
     baseCost: 2000, upgBase: 350, maxLevel: 10, color: '#e879f9',
     evolutions: { 1: 'Spark Fox', 5: 'Storm Griffin', 10: 'Thunderbird' }
+  },
+  { 
+    id: 'shadow', name: 'Umbral Bat', type: 'Assassin',
+    desc: 'Fires fast, piercing shadow blades at enemies.', 
+    scaleDesc: '+60 Dmg, -0.1s Cooldown per Level',
+    baseCost: 2500, upgBase: 400, maxLevel: 10, color: '#6d28d9',
+    evolutions: { 1: 'Umbral Bat', 5: 'Void Vampire', 10: 'Nightmare Fiend' }
+  },
+  { 
+    id: 'light', name: 'Holy Seraph', type: 'Support Shield',
+    desc: 'Periodically grants a Divine Shield to block damage.', 
+    scaleDesc: '+0.5s Shield Duration, -1s Cooldown',
+    baseCost: 3000, upgBase: 500, maxLevel: 10, color: '#fde047',
+    evolutions: { 1: 'Holy Seraph', 5: 'Divine Angel', 10: 'Archangel of Hope' }
+  },
+  { 
+    id: 'wind', name: 'Zephyr Falcon', type: 'AoE Control',
+    desc: 'Summons roaming tornadoes that sweep across the field.', 
+    scaleDesc: '+1 Tornado, +Damage, -0.5s Cooldown',
+    baseCost: 2800, upgBase: 450, maxLevel: 10, color: '#a7f3d0',
+    evolutions: { 1: 'Zephyr Falcon', 5: 'Storm Hawk', 10: 'Hurricane Roc' }
   }
 ];
 
@@ -1600,6 +1621,28 @@ export function LiveFamiliarPreview({ id, level }) {
         }
       }
 
+      else if (f.id === 'shadow') {
+        ctx.shadowBlur = 10; ctx.shadowColor = '#7c3aed'; ctx.fillStyle = '#4c1d95';
+        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
+        const flap = Math.sin(t * 0.02) * 5; ctx.fillStyle = 'rgba(139, 92, 246, 0.8)';
+        ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-12, -8 + flap); ctx.lineTo(-10, 2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(12, -8 + flap); ctx.lineTo(10, 2); ctx.fill();
+      }
+      else if (f.id === 'light') {
+        ctx.shadowBlur = 15; ctx.shadowColor = '#fde047'; ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(0, Math.sin(t*0.005)*3, 6, 0, Math.PI*2); ctx.fill();
+        const flap = Math.abs(Math.sin(t * 0.01)) * 4 + 2; ctx.fillStyle = 'rgba(254, 240, 138, 0.6)';
+        ctx.beginPath(); ctx.ellipse(-8, Math.sin(t*0.005)*3, 8, flap, -Math.PI/6, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(8, Math.sin(t*0.005)*3, 8, flap, Math.PI/6, 0, Math.PI*2); ctx.fill();
+      }
+      else if (f.id === 'wind') {
+        ctx.shadowBlur = 10; ctx.shadowColor = '#6ee7b7'; ctx.fillStyle = '#a7f3d0';
+        ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.fill();
+        const wSway = Math.cos(t * 0.01) * 3; ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-4, 0); ctx.quadraticCurveTo(-12, -8, -14, wSway); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(4, 0); ctx.quadraticCurveTo(12, -8, 14, -wSway); ctx.stroke();
+      }
+
       ctx.restore();
       animationFrameId = requestAnimationFrame(render);
     };
@@ -1619,9 +1662,10 @@ export default function MetaShop({ screen, setScreen }) {
   const [equippedSkin, setEquippedSkin] = useState('default');
   
   // NEW FAMILIAR STATES
-  const [unlockedFamiliars, setUnlockedFamiliars] = useState(['none']);
-  const [equippedFamiliar, setEquippedFamiliar] = useState('none');
+const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
+  const [equippedFamiliars, setEquippedFamiliars] = useState([]);
   const [familiarLevels, setFamiliarLevels] = useState({});
+
 
   // ANTI-INSPECT AT ANTI-RIGHT CLICK SECURITY
   useEffect(() => {
@@ -1655,8 +1699,17 @@ export default function MetaShop({ screen, setScreen }) {
       setEquippedSkin(localStorage.getItem('arcane_equipped_skin') || 'default');
 
       // LOAD FAMILIARS
-      setUnlockedFamiliars(JSON.parse(localStorage.getItem('arcane_unlocked_familiars') || '["none"]'));
-      setEquippedFamiliar(localStorage.getItem('arcane_equipped_familiar') || 'none');
+      // LOAD FAMILIARS ARRAY
+      setUnlockedFamiliars(JSON.parse(localStorage.getItem('arcane_unlocked_familiars') || '[]'));
+      
+      // Fallback para sa lumang save na iisa lang ang pet
+      let savedEquipped = localStorage.getItem('arcane_equipped_familiars');
+      if (!savedEquipped) {
+         const oldFam = localStorage.getItem('arcane_equipped_familiar');
+         savedEquipped = (oldFam && oldFam !== 'none') ? `["${oldFam}"]` : '[]';
+      }
+      setEquippedFamiliars(JSON.parse(savedEquipped));
+
       setFamiliarLevels(JSON.parse(localStorage.getItem('arcane_familiar_levels') || '{}'));
     }
   }, [screen]);
@@ -1698,26 +1751,42 @@ export default function MetaShop({ screen, setScreen }) {
     }
   };
 
-  const buyOrEquipFamiliar = (fam) => {
+const buyOrEquipFamiliar = (fam) => {
     const isUnlocked = unlockedFamiliars.includes(fam.id);
+    let newEquipped = [...equippedFamiliars];
+
     if (isUnlocked) {
-      setEquippedFamiliar(fam.id);
-      localStorage.setItem('arcane_equipped_familiar', fam.id);
+      if (newEquipped.includes(fam.id)) {
+        // 🔥 ITO ANG SIKRETO: Dito dapat matatanggal ang familiar
+        newEquipped = newEquipped.filter(id => id !== fam.id);
+        console.log("Removed familiar:", fam.id); // Debug check
+      } else {
+        // Equip logic
+        if (newEquipped.length >= 3) {
+          alert("Sanctum Limit: You can only equip up to 3 Familiars!");
+          return;
+        }
+        newEquipped.push(fam.id);
+      }
     } else if (crystals >= fam.baseCost) {
+      // Buy logic (pareho pa rin)
       const newCrystals = crystals - fam.baseCost;
       const newUnlocked = [...unlockedFamiliars, fam.id];
       const newLevels = { ...familiarLevels, [fam.id]: 1 };
       
       setCrystals(newCrystals);
       setUnlockedFamiliars(newUnlocked);
-      setEquippedFamiliar(fam.id);
       setFamiliarLevels(newLevels);
+      if (newEquipped.length < 3) newEquipped.push(fam.id);
       
       localStorage.setItem('arcane_void_crystals', newCrystals);
       localStorage.setItem('arcane_unlocked_familiars', JSON.stringify(newUnlocked));
-      localStorage.setItem('arcane_equipped_familiar', fam.id);
       localStorage.setItem('arcane_familiar_levels', JSON.stringify(newLevels));
     }
+
+    // 🔥 SAVE ANG BAGONG ARRAY SA LOCAL STORAGE
+    setEquippedFamiliars(newEquipped);
+    localStorage.setItem('arcane_equipped_familiars', JSON.stringify(newEquipped));
   };
 
   const upgradeFamiliar = (fam) => {
@@ -1873,13 +1942,18 @@ export default function MetaShop({ screen, setScreen }) {
 
             {activeTab === 'familiars' && (
               <>
-                <button className="btn wizard-btn danger-theme" onClick={() => { setEquippedFamiliar('none'); localStorage.setItem('arcane_equipped_familiar', 'none'); }} style={{ marginBottom: '10px' }}>
-                  🚫 Unequip Companion
-                </button>
+               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ color: '#fef08a', fontWeight: 'bold', fontFamily: 'monospace' }}>
+                    Active Companions: {equippedFamiliars.length}/3
+                  </span>
+                  <button className="btn wizard-btn danger-theme" onClick={() => { setEquippedFamiliars([]); localStorage.setItem('arcane_equipped_familiars', '[]'); }} style={{ margin: 0, padding: '4px 10px' }}>
+                    🚫 Unequip All
+                  </button>
+                </div>
 
                 {FAMILIARS_DB.map(fam => {
                   const isUnlocked = unlockedFamiliars.includes(fam.id);
-                  const isEquipped = equippedFamiliar === fam.id;
+                  const isEquipped = equippedFamiliars.includes(fam.id);
                   const level = familiarLevels[fam.id] || 1;
                   const isMax = level >= fam.maxLevel;
                   const upgCost = fam.upgBase * level;
@@ -1907,15 +1981,24 @@ export default function MetaShop({ screen, setScreen }) {
                           </span>
                         </div>
                         
-                        <button className="shop-btn" onClick={() => buyOrEquipFamiliar(fam)} disabled={isEquipped || (!isUnlocked && !canAffordUnlock)}
-                          style={{
-                            background: isEquipped ? 'rgba(5, 2, 12, 0.8)' : (isUnlocked ? 'linear-gradient(180deg, #b45309 0%, #78350f 100%)' : (canAffordUnlock ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)')),
-                            border: `1px solid ${isEquipped ? '#475569' : (isUnlocked ? '#fef08a' : (canAffordUnlock ? '#a78bfa' : '#ef4444'))}`,
-                            color: isEquipped ? '#94a3b8' : (isUnlocked ? '#fef08a' : (canAffordUnlock ? '#fff' : '#f87171')),
-                            padding: '8px 14px', borderRadius: '6px', cursor: isEquipped || (!isUnlocked && !canAffordUnlock) ? 'not-allowed' : 'pointer',
+                        <button 
+                        className="shop-btn" 
+                        onClick={() => buyOrEquipFamiliar(fam)} 
+                        disabled={!isUnlocked && !canAffordUnlock}
+                        style={{
+                            // 🔥 DITO NAGBABAGO ANG KULAY: Kung Equipped, gawing RED (Danger Theme)
+                            background: isEquipped 
+                            ? 'linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%)' // Crimson Red
+                            : (isUnlocked ? 'linear-gradient(180deg, #b45309 0%, #78350f 100%)' : (canAffordUnlock ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)')),
+                            
+                            border: `1px solid ${isEquipped ? '#ef4444' : (isUnlocked ? '#fef08a' : (canAffordUnlock ? '#a78bfa' : '#ef4444'))}`,
+                            color: isEquipped ? '#f87171' : (isUnlocked ? '#fef08a' : (canAffordUnlock ? '#fff' : '#f87171')),
+                            
+                            padding: '8px 14px', borderRadius: '6px', 
+                            cursor: (!isUnlocked && !canAffordUnlock) ? 'not-allowed' : 'pointer',
                             fontFamily: 'monospace', fontWeight: 'bold', flexShrink: 0
-                          }}>
-                          {isEquipped ? 'EQUIPPED' : (isUnlocked ? 'EQUIP' : `💎 ${fam.baseCost}`)}
+                        }}>
+                        {isEquipped ? 'UNEQUIP' : (isUnlocked ? 'EQUIP' : `💎 ${fam.baseCost}`)}
                         </button>
                       </div>
 

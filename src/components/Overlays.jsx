@@ -993,7 +993,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             </button>
 
             <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => setScreen('metashop')}>
-              <span className="btn-icon">🌌</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Void Sanctum (Shop)</span>
+              <span className="btn-icon">🌌</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Void Sanctum (Upgrades)</span>
             </button>
             
             <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
