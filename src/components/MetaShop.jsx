@@ -1859,8 +1859,9 @@ const buyOrEquipFamiliar = (fam) => {
 
             <div className="council-tab-headers" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
               <button className={`council-tab-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')} style={{ flex: 1, maxWidth: '200px' }}>🔮 Arcane Stats</button>
-              <button className={`council-tab-btn ${activeTab === 'skins' ? 'active' : ''}`} onClick={() => setActiveTab('skins')} style={{ flex: 1, maxWidth: '200px' }}>🧥 Wardrobe</button>
               <button className={`council-tab-btn ${activeTab === 'familiars' ? 'active' : ''}`} onClick={() => setActiveTab('familiars')} style={{ flex: 1, maxWidth: '200px' }}>🐾 Familiars</button>
+              <button className={`council-tab-btn ${activeTab === 'skins' ? 'active' : ''}`} onClick={() => setActiveTab('skins')} style={{ flex: 1, maxWidth: '200px' }}>🧥 Wardrobe</button>
+              
             </div>
 
             <div className="divider mystic-divider" style={{ margin: '10px 0' }} />
