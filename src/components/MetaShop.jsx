@@ -25,31 +25,13 @@ export const SKINS_DB = [
 ];
 
 export const FAMILIARS_DB = [
-  { 
-    id: 'wisp', 
-    evolutions: { 1: '🔥 Ignis Wisp', 5: '🔥 Blaze Spirit', 10: '🔥 Inferno Lord' },
-    type: 'Summon / Mage',
-    desc: 'Fires realistic chaotic fire orbs. Damage scales with Level & Wave.', 
-    getStats: (lvl) => `+${lvl * 30} Damage | ${lvl >= 10 ? '3 Orbs' : (lvl >= 5 ? '2 Orbs' : '1 Orb')}`,
-    baseCost: 200, upgBase: 50, maxLevel: 10,
-    color: '#ef4444' 
-  },
-  { 
-    id: 'fairy', 
-    evolutions: { 1: '🧚 Sylvan Fairy', 5: '🧚 Forest Sprite', 10: '🧚 Nature Queen' },
-    type: 'Support / Healer',
-    desc: 'Passively heals the player. Healing output scales with your Max HP.', 
-    getStats: (lvl) => `+${lvl * 4} Base Heal`,
-    baseCost: 300, upgBase: 60, maxLevel: 10,
-    color: '#86efac' 
-  },
-  { 
+   { 
     id: 'voidling', 
     evolutions: { 1: '🌌 Voidling', 5: '🌌 Void Walker', 10: '🌌 Abyssal Maw' },
     type: 'Utility / Looter',
     desc: 'Creates a gravitational vacuum that automatically loots distant gems and potions.', 
     getStats: (lvl) => `+${lvl * 35} Vacuum Radius`,
-    baseCost: 400, upgBase: 70, maxLevel: 10,
+    baseCost: 200, upgBase: 50, maxLevel: 10,
     color: '#d946ef' 
   },
   { 
@@ -58,17 +40,17 @@ export const FAMILIARS_DB = [
     type: 'AoE / Control',
     desc: 'Summons a glowing cyan snowflake blizzard that slows and damages enemies.', 
     getStats: (lvl) => `+${lvl * 5} Radius | -${(lvl * 0.15).toFixed(2)}s Cooldown`,
-    baseCost: 500, upgBase: 80, maxLevel: 10,
+    baseCost: 400, upgBase: 70, maxLevel: 10,
     color: '#22d3ee' 
   },
-  { 
-    id: 'golem', 
-    evolutions: { 1: '🪨 Stone Golem', 5: '🪨 Earth Titan', 10: '🪨 Mountain Colossus' },
-    type: 'Heavy / Stun',
-    desc: 'Smashes the ground creating a massive crater, lava cracks, and 3D stone spikes.', 
-    getStats: (lvl) => `+${lvl * 50} Damage | +${lvl * 8} Radius`,
-    baseCost: 650, upgBase: 100, maxLevel: 10,
-    color: '#f59e0b' 
+    { 
+    id: 'wisp', 
+    evolutions: { 1: '🔥 Ignis Wisp', 5: '🔥 Blaze Spirit', 10: '🔥 Inferno Lord' },
+    type: 'Summon / Mage',
+    desc: 'Fires realistic chaotic fire orbs. Damage scales with Level & Wave.', 
+    getStats: (lvl) => `+${lvl * 30} Damage | ${lvl >= 10 ? '3 Orbs' : (lvl >= 5 ? '2 Orbs' : '1 Orb')}`,
+    baseCost: 500, upgBase: 80, maxLevel: 10,
+    color: '#ef4444' 
   },
   { 
     id: 'thunder', 
@@ -76,7 +58,7 @@ export const FAMILIARS_DB = [
     type: 'Chain Lightning',
     desc: 'Unleashes erratic violet plasma chain lightning that branches to multiple targets.', 
     getStats: (lvl) => `+${lvl * 45} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
-    baseCost: 800, upgBase: 120, maxLevel: 10,
+    baseCost: 650, upgBase: 100, maxLevel: 10,
     color: '#c084fc' 
   },
   { 
@@ -85,17 +67,17 @@ export const FAMILIARS_DB = [
     type: 'Burst / Physical',
     desc: 'Fires high-speed crimson shadow blades. Can critically hit and scales with Player Buffs.', 
     getStats: (lvl) => `+${lvl * 60} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
-    baseCost: 1000, upgBase: 150, maxLevel: 10,
+    baseCost: 800, upgBase: 120, maxLevel: 10,
     color: '#e11d48' 
   },
   { 
-    id: 'light', 
-    evolutions: { 1: '👼 Holy Seraph', 5: '👼 Divine Valkyrie', 10: '👼 Archangel' },
-    type: 'Defense / Shield',
-    desc: 'Grants a Divine Absorption Shield with golden wings. Shield capacity scales heavily with Wave.', 
-    getStats: (lvl) => `+${lvl * 250} Shield HP | -${(lvl * 1.0).toFixed(1)}s Cooldown`,
-    baseCost: 1200, upgBase: 200, maxLevel: 10,
-    color: '#fde047' 
+    id: 'golem', 
+    evolutions: { 1: '🪨 Stone Golem', 5: '🪨 Earth Titan', 10: '🪨 Mountain Colossus' },
+    type: 'Heavy / Stun',
+    desc: 'Smashes the ground creating a massive crater, lava cracks, and 3D stone spikes.', 
+    getStats: (lvl) => `+${lvl * 50} Damage | +${lvl * 8} Radius`,
+    baseCost: 900, upgBase: 130, maxLevel: 10,
+    color: '#f59e0b' 
   },
   { 
     id: 'wind', 
@@ -103,8 +85,26 @@ export const FAMILIARS_DB = [
     type: 'AoE / Sweep',
     desc: 'Summons dynamic green wind vortex tornados that sweep through the map and shred enemies.', 
     getStats: (lvl) => `+${lvl * 25} Damage | +${lvl * 5} Radius | ${lvl >= 5 ? '2 Tornados' : '1 Tornado'}`,
-    baseCost: 900, upgBase: 130, maxLevel: 10,
+    baseCost: 1000, upgBase: 150, maxLevel: 10,
     color: '#10b981' 
+  },
+  { 
+    id: 'fairy', 
+    evolutions: { 1: '🧚 Sylvan Fairy', 5: '🧚 Forest Sprite', 10: '🧚 Nature Queen' },
+    type: 'Support / Healer',
+    desc: 'Passively heals the player. Healing output scales with your Max HP.', 
+    getStats: (lvl) => `+${lvl * 6} Base Heal`,
+    baseCost: 1200, upgBase: 200, maxLevel: 10,
+    color: '#86efac' 
+  },
+    { 
+    id: 'light', 
+    evolutions: { 1: '👼 Holy Seraph', 5: '👼 Divine Valkyrie', 10: '👼 Archangel' },
+    type: 'Defense / Shield',
+    desc: 'Grants a Divine Absorption Shield with golden wings. Shield capacity scales heavily with Wave.', 
+    getStats: (lvl) => `+${lvl * 250} Shield HP | -${(lvl * 1.0).toFixed(1)}s Cooldown`,
+    baseCost: 1200, upgBase: 200, maxLevel: 10,
+    color: '#fde047' 
   }
 ];
 
