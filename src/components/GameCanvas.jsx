@@ -3707,10 +3707,33 @@ if (eng.gameStarted) {
                             const dy = pTarget.y - aoe.y;
                             const safeDistance = aoe.radius + pTarget.r;
                             if ((dx * dx + dy * dy) < (safeDistance * safeDistance)) {
+
                                 let damageTaken = aoe.dmg;
                                 const defStat = pTarget.baseDef || 0;
                                 damageTaken *= (100 / (100 + defStat));
+
+                                // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD ---
+                                if (pTarget.divineShield && pTarget.divineShield.active) {
+                                    if (pTarget.divineShield.hp >= damageTaken) {
+                                        pTarget.divineShield.hp -= damageTaken;
+                                        pTarget.divineShield.hitFlash = 0.2; 
+                                        damageTaken = 0;
+                                    } else {
+                                        damageTaken -= pTarget.divineShield.hp;
+                                        pTarget.divineShield.hp = 0;
+                                        pTarget.divineShield.active = false;
+                                        
+                                        for(let k=0; k<40; k++) {
+                                            const pa = Math.random() * Math.PI * 2;
+                                            const ps = Math.random() * 350 + 100;
+                                            eng.particles.push({ x: pTarget.x, y: pTarget.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 0.8, ml: 0.8, r: Math.random()*3+2 });
+                                        }
+                                    }
+                                }
+                                // -------------------------------------------------
+
                                 if (pTarget.potBuffs?.defense > 0) damageTaken *= 0.65;
+
                                 if (pTarget.skills?.shield?.duration > 0 && pTarget.skills?.shield?.enabled !== false) {
                                     damageTaken = 0;
                                 } else if (pTarget.skills?.fortify?.learned && pTarget.skills?.fortify?.enabled !== false) {
@@ -4301,10 +4324,33 @@ if (eng.gameStarted) {
               if (b.isEnemy) {
                 for (const pTarget of [eng.p, isCoopActive ? eng.p2 : null]) {
                   if (pTarget && !pTarget.dead && pTarget.inv <= 0 && Math.hypot(b.x - pTarget.x, b.y - pTarget.y) < b.r + pTarget.r) {
+
                     let damageTaken = b.dmg;
                     const defStat = pTarget.baseDef || 0;
                     damageTaken *= (100 / (100 + defStat));
+
+                    // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD ---
+                    if (pTarget.divineShield && pTarget.divineShield.active) {
+                        if (pTarget.divineShield.hp >= damageTaken) {
+                            pTarget.divineShield.hp -= damageTaken;
+                            pTarget.divineShield.hitFlash = 0.2; 
+                            damageTaken = 0;
+                        } else {
+                            damageTaken -= pTarget.divineShield.hp;
+                            pTarget.divineShield.hp = 0;
+                            pTarget.divineShield.active = false;
+                            
+                            for(let k=0; k<40; k++) {
+                                const pa = Math.random() * Math.PI * 2;
+                                const ps = Math.random() * 350 + 100;
+                                eng.particles.push({ x: pTarget.x, y: pTarget.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 0.8, ml: 0.8, r: Math.random()*3+2 });
+                            }
+                        }
+                    }
+                    // -------------------------------------------------
+
                     if (pTarget.potBuffs?.defense > 0) damageTaken *= 0.65;
+
                     if (pTarget.skills?.shield?.duration > 0 && pTarget.skills?.shield?.enabled !== false) {
                       damageTaken = 0;
                     } else if (pTarget.skills?.fortify?.learned && pTarget.skills?.fortify?.enabled !== false) {
@@ -4749,11 +4795,34 @@ if (eng.gameStarted) {
               }
               
               if (eng.p && !eng.p.dead && eng.p.inv <= 0 && Math.hypot(e.x - eng.p.x, e.y - eng.p.y) < e.r + eng.p.r) {
+
                 let damageTaken = e.dmg;
                 const defStatP1 = eng.p.baseDef || 0;
                 damageTaken *= (100 / (100 + defStatP1));
+
+                // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P1) ---
+                if (eng.p.divineShield && eng.p.divineShield.active) {
+                    if (eng.p.divineShield.hp >= damageTaken) {
+                        eng.p.divineShield.hp -= damageTaken;
+                        eng.p.divineShield.hitFlash = 0.2; 
+                        damageTaken = 0;
+                    } else {
+                        damageTaken -= eng.p.divineShield.hp;
+                        eng.p.divineShield.hp = 0;
+                        eng.p.divineShield.active = false;
+                        
+                        for(let k=0; k<40; k++) {
+                            const pa = Math.random() * Math.PI * 2;
+                            const ps = Math.random() * 350 + 100;
+                            eng.particles.push({ x: eng.p.x, y: eng.p.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 0.8, ml: 0.8, r: Math.random()*3+2 });
+                        }
+                    }
+                }
+                // -------------------------------------------------
+
                 if (e.voidExhaustTime > 0) damageTaken *= 0.5; 
                 if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65;
+
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
                   damageTaken = 0;
                 } else if (eng.p.skills?.fortify?.learned && eng.p.skills?.fortify?.enabled !== false) {
@@ -4771,11 +4840,34 @@ if (eng.gameStarted) {
                 }
               }
               if (isCoopActive && eng.p2 && !eng.p2.dead && eng.p2.inv <= 0 && Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) < e.r + eng.p2.r) {
+
                 let damageTakenp2 = e.dmg;
                 const defStatP2 = eng.p2.baseDef || 0;
                 damageTakenp2 *= (100 / (100 + defStatP2)); // 🔥 MOBA STYLE ARMOR P2
+
+                // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P2) ---
+                if (eng.p2.divineShield && eng.p2.divineShield.active) {
+                    if (eng.p2.divineShield.hp >= damageTakenp2) {
+                        eng.p2.divineShield.hp -= damageTakenp2;
+                        eng.p2.divineShield.hitFlash = 0.2; 
+                        damageTakenp2 = 0;
+                    } else {
+                        damageTakenp2 -= eng.p2.divineShield.hp;
+                        eng.p2.divineShield.hp = 0;
+                        eng.p2.divineShield.active = false;
+                        
+                        for(let k=0; k<40; k++) {
+                            const pa = Math.random() * Math.PI * 2;
+                            const ps = Math.random() * 350 + 100;
+                            eng.particles.push({ x: eng.p2.x, y: eng.p2.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 0.8, ml: 0.8, r: Math.random()*3+2 });
+                        }
+                    }
+                }
+                // -------------------------------------------------
+
                 if (e.voidExhaustTime > 0) damageTakenp2 *= 0.5;
                 if (eng.p2.potBuffs?.defense > 0) damageTakenp2 *= 0.65;
+
                 if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
                   damageTakenp2 = 0;
                 } else if (eng.p2.skills?.fortify?.learned && eng.p2.skills?.fortify?.enabled !== false) {
@@ -4982,6 +5074,19 @@ const tickFamiliars = (pObj, isP2) => {
   if (!pObj || pObj.dead || !pObj.familiars) return;
   
   pObj.familiars.forEach((f, index) => {
+
+    if (pObj.divineShield && pObj.divineShield.active) {
+        pObj.divineShield.duration -= dt;
+        if (pObj.divineShield.duration <= 0) {
+            pObj.divineShield.active = false;
+            // Shatter explosion
+            for(let k=0; k<20; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 150 + 50;
+                eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: 'rgba(254, 240, 138, 0.5)', life: 0.5, ml: 0.5, r: Math.random()*2+1 });
+            }
+        }
+    }
     // 1. Offsets para hindi magpatong ang 3 familiars
     let offsetX = -35, offsetY = -45;
     if (index === 1) { offsetX = 35; offsetY = -45; } // Right
@@ -5028,10 +5133,10 @@ const tickFamiliars = (pObj, isP2) => {
           const projCount = f.level >= 10 ? 3 : (f.level >= 5 ? 2 : 1);
           for (let i = 0; i < projCount; i++) {
             const ang = a + (i - (projCount - 1) / 2) * 0.2;
-            eng.bullets.push({ x: f.x, y: f.y, vx: Math.cos(ang) * 600, vy: Math.sin(ang) * 600, r: 7, life: 2, p2: isP2, dmg: famDmg, color: '#f97316', isFamiliar: true });
+            eng.bullets.push({ x: f.x, y: f.y, vx: Math.cos(ang) * 600, vy: Math.sin(ang) * 600, r: 8, life: 2, p2: isP2, dmg: famDmg, type: 'fire_orb', isFamiliar: true });
           }
         }
-      } 
+      }
       else if (f.id === 'fairy') {
         f.cd = 3.0; 
         const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01); 
@@ -5056,6 +5161,7 @@ const tickFamiliars = (pObj, isP2) => {
           eng.iceStorms.push({ x: target.x, y: target.y, radius: stormRadius, life: 2.0 });
         }
       }
+      // 🪨 STONE GOLEM (Earth Spikes)
       else if (f.id === 'golem') {
         f.cd = Math.max(1.5, 4.0 - (f.level * 0.2)); 
         let enemiesHit = 0;
@@ -5070,12 +5176,12 @@ const tickFamiliars = (pObj, isP2) => {
           }
         }
         if (enemiesHit > 0) {
-          eng.screenShake = 0.6;
-          if (!eng.cubeBashes) eng.cubeBashes = [];
-          eng.cubeBashes.push({ x: f.x, y: f.y, radius: 10, maxRadius: smashRadius, speed: 350 });
-          for(let k=0; k<15; k++) eng.particles.push({ x: f.x + Math.cos(Math.random()*Math.PI*2)*(Math.random()*(smashRadius*0.5)), y: f.y + Math.sin(Math.random()*Math.PI*2)*(Math.random()*(smashRadius*0.5)), vx: 0, vy: -10 - Math.random()*15, color: '#f59e0b', life: 0.5, ml: 0.5, r: 3 });
+          eng.screenShake = 1.0;
+          if (!eng.earthSmashes) eng.earthSmashes = [];
+          eng.earthSmashes.push({ x: f.x, y: f.y, radius: smashRadius, life: 1.2 });
         }
       }
+      // ⚡ THUNDER FOX (Branching Lightning)
       else if (f.id === 'thunder') {
         f.cd = Math.max(0.3, 1.5 - (f.level * 0.1)); 
         let target = null, minDist = Infinity;
@@ -5089,11 +5195,10 @@ const tickFamiliars = (pObj, isP2) => {
           target.hp -= boltDmg; target.flash = 0.8; target.instabTime = Math.max(target.instabTime || 0, 2.0);
           if (target.hp <= 0) target.deadTrigger = true;
           if (!eng.lightnings) eng.lightnings = [];
-          eng.lightnings.push({ pts: [{x: f.x, y: f.y}, {x: target.x, y: target.y}], life: 0.4 });
-          for(let k=0; k<8; k++) eng.particles.push({ x: target.x, y: target.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#e879f9', life: 0.3, ml: 0.3, r: 2 });
+          eng.lightnings.push({ pts: [{x: f.x, y: f.y}, {x: target.x, y: target.y}], life: 0.6, branching: true, isFamiliar: true });
         }
       }
-      // 🔥 NEW FAMILIARS AI:
+      // 🦇 UMBRAL BAT (Shadow Blades)
       else if (f.id === 'shadow') {
         f.cd = Math.max(0.2, 1.2 - (f.level * 0.1)); 
         let target = null, minDist = Infinity;
@@ -5104,16 +5209,20 @@ const tickFamiliars = (pObj, isP2) => {
         }
         if (target) {
            const a = Math.atan2(target.y - f.y, target.x - f.x);
-           if (!eng.slashes) eng.slashes = [];
-           eng.slashes.push({ x: f.x, y: f.y, vx: Math.cos(a) * 800, vy: Math.sin(a) * 800, angle: a, life: 1.0, hits: new Set(), p2: isP2, isFamiliar: true, dmg: 80 + (f.level*60) });
+           if (!eng.shadowBlades) eng.shadowBlades = []; 
+           eng.shadowBlades.push({ x: f.x, y: f.y, vx: Math.cos(a) * 1100, vy: Math.sin(a) * 1100, angle: a, life: 1.0, hits: new Set(), p2: isP2, dmg: 80 + (f.level*60) });
         }
       }
+      // 👼 HOLY SERAPH (Shield Spawner)
       else if (f.id === 'light') {
-        f.cd = Math.max(5.0, 15.0 - (f.level * 1.0)); 
-        if (!pObj.skills.shield) pObj.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
-        pObj.skills.shield.learned = true;
-        pObj.skills.shield.duration = Math.max(pObj.skills.shield.duration || 0, 3.0 + (f.level * 0.5));
-        for(let k=0; k<10; k++) eng.particles.push({ x: pObj.x, y: pObj.y, vx: (Math.random()-0.5)*100, vy: (Math.random()-0.5)*100, color: '#fde047', life: 1.0, ml: 1.0, r: 3 });
+        f.cd = Math.max(8.0, 20.0 - (f.level * 1.0)); 
+        const shieldCapacity = 400 + (f.level * 250) + ((eng.wave || 1) * 50);
+        pObj.divineShield = { hp: shieldCapacity, maxHp: shieldCapacity, active: true, hitFlash: 0, duration: 10.0 };
+        for(let k=0; k<25; k++) {
+            const pa = Math.random() * Math.PI * 2;
+            const ps = Math.random() * 200 + 50;
+            eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 1.0, ml: 1.0, r: Math.random()*4+2 });
+        }
       }
       else if (f.id === 'wind') {
         f.cd = Math.max(2.0, 6.0 - (f.level * 0.4)); 
@@ -5793,25 +5902,110 @@ if (eng.potions) {
       // ==========================================
 
       if (eng.tornados) {
-        for (const t of eng.tornados) {
-           ctx.save();
-           ctx.translate(t.x, t.y);
-           ctx.rotate(performance.now() * 0.015);
-           ctx.strokeStyle = '#f97316';
-           ctx.lineWidth = 10;
-           ctx.shadowBlur = 20;
-           ctx.shadowColor = '#ef4444';
-           ctx.beginPath();
-           ctx.arc(0, 0, t.r + Math.sin(performance.now() * 0.02) * 10, 0, Math.PI * 2);
-           ctx.stroke();
-           ctx.strokeStyle = '#fef08a';
-           ctx.lineWidth = 4;
-           ctx.beginPath();
-           ctx.arc(0, 0, t.r * 0.6 + Math.cos(performance.now() * 0.02) * 10, 0, Math.PI * 2);
-           ctx.stroke();
-           ctx.restore();
-        }
+  for (const t of eng.tornados) {
+    if (t.isFamiliar) {
+      // ==========================================================
+      // 🦅 ZEPHYR FALCON: TRUE GREEN WIND TORNADO VORTEX
+      // ==========================================================
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      const tTime = performance.now() * 0.015;
+      ctx.rotate(tTime);
+      ctx.globalAlpha = Math.min(1, t.life);
+      
+      // Layered green wind trails and airflow motion blur
+      ctx.shadowBlur = 25;
+      ctx.shadowColor = '#10b981';
+      
+      // Spiral vortex rings (Outer Layer)
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 4 + Math.sin(tTime * 0.5) * 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, t.r + Math.cos(tTime * 0.8) * 10, 0, Math.PI * 1.5);
+      ctx.stroke();
+
+      // Gust bursts (Middle Layer)
+      ctx.strokeStyle = '#059669';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(0, 0, t.r * 0.7, Math.PI, Math.PI * 2.5);
+      ctx.stroke();
+
+      // Swirling Energy Core
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
+      ctx.beginPath(); 
+      ctx.arc(0, 0, t.r * 0.4, 0, Math.PI * 2); 
+      ctx.fill();
+
+      // Flying Debris (Leaves, dust, and wind particles)
+      ctx.fillStyle = '#065f46';
+      for (let i = 0; i < 8; i++) {
+          const debrisAng = tTime * 2 + (i * Math.PI / 4);
+          const debrisDist = t.r * (0.3 + 0.6 * Math.abs(Math.sin(tTime + i)));
+          const dx = Math.cos(debrisAng) * debrisDist;
+          const dy = Math.sin(debrisAng) * debrisDist;
+          ctx.save(); 
+          ctx.translate(dx, dy); 
+          ctx.rotate(debrisAng * 3);
+          ctx.fillRect(-4, -2, 8, 4); // Leaf particles being pulled inside
+          ctx.restore();
       }
+      ctx.restore();
+
+    } else {
+      // ==========================================================
+      // 🔥 PLAYER: FLARE INFERNO (REALISTIC BURNING FIRE ORB VORTEX)
+      // ==========================================================
+      ctx.save();
+      ctx.translate(t.x, t.y);
+      const fTime = performance.now() * 0.02;
+      ctx.rotate(-fTime); // Reverse spin para sa fire chaos
+      ctx.globalAlpha = Math.min(1, t.life);
+
+      // Strong Fire Simulation Glow & Heat Distortion
+      ctx.shadowBlur = 35;
+      ctx.shadowColor = '#ef4444'; // Red glow anchor
+
+      // Outer Chaotic Fire Layers (Flickering flames)
+      const firePulse = Math.sin(fTime * 0.5) * 8;
+      ctx.strokeStyle = '#f97316'; // Orange flame trails
+      ctx.lineWidth = 12;
+      ctx.beginPath();
+      ctx.arc(0, 0, t.r + firePulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#ef4444'; // Red violent outer flames
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(0, 0, t.r * 1.2 - firePulse, Math.PI / 2, Math.PI * 1.8);
+      ctx.stroke();
+
+      // Glowing Fire Core
+      const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, t.r * 0.6);
+      coreGrad.addColorStop(0, '#ffffff'); // Blinding white center
+      coreGrad.addColorStop(0.4, '#fef08a'); // Yellow fire layer
+      coreGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = coreGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, t.r * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Lingering Embers & Ash Particles drifting off the projectile
+      ctx.fillStyle = '#fde047';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = '#f97316';
+      for (let i = 0; i < 6; i++) {
+          const emberAng = (i * Math.PI / 3) + (fTime * 0.5);
+          const emberDist = t.r * (0.8 + Math.random() * 0.4);
+          const ex = Math.cos(emberAng) * emberDist;
+          // Drifting upward like real ash/smoke physics
+          const ey = Math.sin(emberAng) * emberDist - (Math.random() * 12); 
+          ctx.fillRect(ex, ey, 3, 3);
+      }
+      ctx.restore();
+    }
+  }
+}
 
       if (eng.waves) {
         for (const w of eng.waves) {
@@ -5852,53 +6046,395 @@ if (eng.potions) {
         }
       }
 
-      if (eng.lightnings) {
-        for (const l of eng.lightnings) {
-           ctx.save();
-           ctx.strokeStyle = `rgba(167, 139, 250, ${l.life * 2})`;
-           ctx.lineWidth = 8;
-           ctx.shadowBlur = 20;
-           ctx.shadowColor = '#c084fc';
-           ctx.lineJoin = 'miter';
-           ctx.beginPath();
-           ctx.moveTo(l.pts[0].x, l.pts[0].y);
-           for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);
-           ctx.stroke();
-           ctx.strokeStyle = `rgba(255, 255, 255, ${l.life * 2})`;
-           ctx.lineWidth = 3;
-           ctx.beginPath();
-           ctx.moveTo(l.pts[0].x, l.pts[0].y);
-           for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y);
-           ctx.stroke();
-           ctx.restore();
-        }
-      }
+ // =========================================================================
+        // 🦇 UMBRAL BAT: SHADOW BLADES RENDERER (CRASH & BUG FIX)
+        // =========================================================================
+        if (eng.shadowBlades) {
+          const dt = 0.016; 
+          
+          // 🔧 FIX: Safe Host Check para maiwasan ang "isHost before initialization" error!
+          let canDealDamage = true;
+          try { 
+              canDealDamage = (isHost || !isCoopActive); 
+          } catch (e) {
+              // Kung nag-error dahil nasa itaas ang code, babagsak siya rito nang ligtas
+              canDealDamage = true; 
+          }
 
-      if (eng.iceStorms) {
+          for (let i = eng.shadowBlades.length - 1; i >= 0; i--) {
+            const sl = eng.shadowBlades[i];
+            sl.x += sl.vx * dt; sl.y += sl.vy * dt; sl.life -= dt;
+            if (sl.life <= 0) { eng.shadowBlades.splice(i, 1); continue; }
+
+            // Collision Physics
+            if (canDealDamage) {
+                for (const enemy of eng.enemies) {
+                    if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 24 && !sl.hits.has(enemy)) {
+                        sl.hits.add(enemy); 
+                        const shooterObj = sl.p2 ? eng.p2 : eng.p;
+                        let baseSkillDmg = (sl.dmg || 80) + ((eng?.wave || 1) * 20);
+                        if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
+                        if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.0; 
+                        if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
+                        let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                        if (Math.random() < (totalCrit / 100)) { baseSkillDmg *= 2; enemy.flash = 0.5; } 
+                        else { enemy.flash = 0.2; }
+                        enemy.hp -= baseSkillDmg;
+                        if (enemy.hp <= 0) enemy.deadTrigger = true;
+                        
+                        // Hit sparks
+                        for (let k = 0; k < 6; k++) {
+                            const pa = Math.random() * Math.PI * 2; const ps = Math.random() * 90 + 30;
+                            eng.particles.push({ x: sl.x, y: sl.y, vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, color: Math.random() > 0.5 ? '#000000' : '#e11d48', life: 0.3, ml: 0.3, r: Math.random() * 2 + 1 });
+                        }
+                    }
+                }
+            }
+
+            // Visual Draw
+            ctx.save(); ctx.translate(sl.x, sl.y); ctx.rotate(sl.angle);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.beginPath(); ctx.arc(-20, 0, 15 * sl.life, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#9f1239'; ctx.shadowBlur = 20; ctx.shadowColor = '#e11d48'; ctx.beginPath();
+            ctx.arc(0, 0, 24, -Math.PI / 1.5, Math.PI / 1.5); ctx.arc(-15, 0, 24, Math.PI / 1.5, -Math.PI / 1.5, true); 
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.arc(5, 0, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          }
+        }
+
+// =========================================================================
+        // 🪨 STONE GOLEM: ULTRA ELEVATED EARTH IMPACT SYSTEM (OVERHAULED)
+        // =========================================================================
+        if (eng.earthSmashes) {
+            const dt = 0.016; 
+            for (let i = eng.earthSmashes.length - 1; i >= 0; i--) {
+                const rock = eng.earthSmashes[i];
+                rock.life -= dt;
+                if (rock.life <= 0) { eng.earthSmashes.splice(i, 1); continue; }
+
+                ctx.save(); 
+                ctx.translate(rock.x, rock.y); 
+                ctx.globalAlpha = Math.min(1, rock.life * 2.5); 
+
+                // 1. 🕳️ NEW: DARK CRATER SHADOW (Para magmukhang bumagsak talaga ang lupa)
+                ctx.fillStyle = `rgba(0, 0, 0, ${rock.life * 0.7})`;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, rock.radius * 0.95, rock.radius * 0.8, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 2. 🔥 PULSING MOLTEN SHOCKWAVE BURST
+                const pulse = 1 + Math.sin(performance.now() * 0.015) * 0.15;
+                ctx.save(); 
+                ctx.globalCompositeOperation = 'lighter'; 
+                ctx.strokeStyle = `rgba(245, 158, 11, ${rock.life * 0.8})`; 
+                ctx.lineWidth = 30 * rock.life; 
+                ctx.shadowBlur = 40; 
+                ctx.shadowColor = '#f59e0b';
+                ctx.beginPath(); 
+                ctx.arc(0, 0, rock.radius * (1 - rock.life / 1.2) * pulse, 0, Math.PI * 2); 
+                ctx.stroke(); 
+                ctx.restore();
+
+                // 3. ⚡ SEVERE GROUND CRACKS (3 Layers ng Lava glow para mas nagbabaga)
+                ctx.shadowBlur = 0; 
+                for(let c = 0; c < 8; c++) {
+                    const cAng = (c * Math.PI * 2) / 8 + 0.1;
+                    const midDist = rock.radius * 0.35; 
+                    const endDist = rock.radius * 0.9;
+                    const jitterAng = cAng + (Math.random() * 0.15 - 0.075); // Jagged effect
+
+                    ctx.beginPath(); 
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(Math.cos(jitterAng) * midDist, Math.sin(jitterAng) * midDist);
+                    ctx.lineTo(Math.cos(cAng) * endDist, Math.sin(cAng) * endDist); 
+                    
+                    // Layer 1: Dark Base Crack
+                    ctx.strokeStyle = '#1c1917'; ctx.lineWidth = 10; ctx.stroke();
+                    // Layer 2: Orange Lava Core
+                    ctx.save(); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.shadowBlur = 15; ctx.shadowColor = '#ef4444'; ctx.stroke(); ctx.restore();
+                    // Layer 3: White-Hot Center
+                    ctx.save(); ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
+                }
+
+                // 4. ⛰️ MASSIVE 3D STONE SPIKES (Mas makapal at siksik)
+                ctx.shadowBlur = 35; ctx.shadowColor = 'rgba(0,0,0,0.85)'; 
+                const spikeCount = 10; // Ginawang 10 bato
+                for(let s = 0; s < spikeCount; s++) {
+                    const ang = (s * Math.PI * 2) / spikeCount; 
+                    const dist = rock.radius * 0.5; // Pinasok nang konti sa gitna
+                    ctx.save(); 
+                    ctx.translate(Math.cos(ang) * dist, Math.sin(ang) * dist); 
+                    ctx.rotate(ang + Math.PI / 2);
+                    
+                    const spikeHeight = 55 + (s % 3 * 25); // Mas matataas na bato
+                    
+                    // Kanang bahagi (Madilim)
+                    ctx.fillStyle = '#292524'; ctx.beginPath(); ctx.moveTo(0, -spikeHeight); ctx.lineTo(24, 0); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill();
+                    // Kaliwang bahagi (Maliwanag + Silver Edge Highlight)
+                    ctx.fillStyle = '#57534e'; ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = 2.5;
+                    ctx.beginPath(); ctx.moveTo(0, -spikeHeight); ctx.lineTo(-24, 0); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 5. ☄️ NEW: FLYING ROCK DEBRIS (Lumilipad na bato mula sa pagsabog)
+                ctx.fillStyle = '#44403c';
+                ctx.strokeStyle = '#a8a29e';
+                ctx.lineWidth = 1.5;
+                ctx.shadowBlur = 10; ctx.shadowColor = '#000000';
+                for (let b = 0; b < 6; b++) {
+                    const bAng = b * (Math.PI * 2 / 6) + rock.life;
+                    const bDist = rock.radius * (1.2 - rock.life); // Palayo
+                    ctx.save();
+                    // Tumataas pa-ere tapos babagsak
+                    ctx.translate(Math.cos(bAng) * bDist, Math.sin(bAng) * bDist - (rock.life * 50)); 
+                    ctx.rotate(rock.life * 15 + b); // Umiikot habang lumilipad
+                    ctx.beginPath(); ctx.rect(-6, -6, 12, 12); ctx.fill(); ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 6. ✨ LINGERING SMOKE/DUST CLOUDS
+                ctx.fillStyle = `rgba(120, 113, 108, ${rock.life * 0.6})`;
+                ctx.shadowBlur = 0;
+                for(let d = 0; d < 8; d++) {
+                    const dAng = d * (Math.PI / 4) + (1 - rock.life);
+                    const rX = Math.cos(dAng) * (rock.radius * 0.6);
+                    const rY = Math.sin(dAng) * (rock.radius * 0.6);
+                    ctx.beginPath();
+                    ctx.arc(rX, rY, 30 * (1.5 - rock.life), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+// =========================================================================
+        // ⚡ SPARK FOX: VIOLET PLASMA CHAIN LIGHTNING (ULTRA DESIGN)
+        // =========================================================================
+        if (eng.lightnings) {
+          for (const l of eng.lightnings) {
+            if (l.isFamiliar) {
+              ctx.save(); 
+              ctx.globalAlpha = Math.min(1, l.life * 2.5); // Fast erratic flash
+              
+              const startPt = l.pts[0];
+              const endPt = l.pts[l.pts.length - 1];
+
+              ctx.lineJoin = 'round';
+              ctx.lineCap = 'round';
+
+              // 1. Outer Massive Plasma Glow
+              ctx.strokeStyle = 'rgba(192, 132, 252, 0.4)'; // Faint violet radiation
+              ctx.lineWidth = 15;
+              ctx.shadowBlur = 30; 
+              ctx.shadowColor = '#d946ef';
+              ctx.beginPath(); ctx.moveTo(startPt.x, startPt.y);
+              for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); 
+              ctx.stroke();
+
+              // 2. Inner Heavy Lightning Core
+              ctx.strokeStyle = '#d946ef'; // Intense violet core
+              ctx.lineWidth = 6;
+              ctx.shadowBlur = 15;
+              ctx.beginPath(); ctx.moveTo(startPt.x, startPt.y);
+              for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); 
+              ctx.stroke();
+
+              // 3. Blinding White Electric Center
+              ctx.strokeStyle = '#ffffff'; 
+              ctx.lineWidth = 2; 
+              ctx.shadowBlur = 0;
+              ctx.beginPath(); ctx.moveTo(startPt.x, startPt.y);
+              for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); 
+              ctx.stroke();
+
+              // 4. Chaotic Zig-Zag Branching Sparks
+              if (l.branching) {
+                  for (let i = 0; i < l.pts.length - 1; i++) {
+                      // Mataas na chance mag-branch para mas agresibo
+                      if (Math.random() > 0.25) {
+                          const midX = (l.pts[i].x + l.pts[i+1].x) / 2; 
+                          const midY = (l.pts[i].y + l.pts[i+1].y) / 2;
+                          // Violent erratic jump
+                          const branchX = midX + (Math.random() - 0.5) * 120; 
+                          const branchY = midY + (Math.random() - 0.5) * 120;
+                          
+                          ctx.strokeStyle = '#f0abfc'; // Pinkish-violet sparks
+                          ctx.lineWidth = 1.5;
+                          ctx.shadowBlur = 10;
+                          ctx.beginPath(); 
+                          ctx.moveTo(midX, midY); 
+                          
+                          // Draw a jagged elbow joint para hindi straight line ang kuryente
+                          const elbowX = midX + (branchX - midX) * 0.5 + (Math.random() - 0.5) * 30;
+                          const elbowY = midY + (branchY - midY) * 0.5 + (Math.random() - 0.5) * 30;
+                          ctx.lineTo(elbowX, elbowY);
+                          ctx.lineTo(branchX, branchY); 
+                          ctx.stroke();
+                      }
+                  }
+              }
+
+              // 5. Electric Impact Explosion & Shockwave Ring at Target
+              ctx.fillStyle = '#ffffff'; 
+              ctx.shadowBlur = 20;
+              ctx.shadowColor = '#d946ef';
+              ctx.beginPath(); ctx.arc(endPt.x, endPt.y, 8 + Math.random() * 6, 0, Math.PI * 2); ctx.fill();
+
+              ctx.strokeStyle = `rgba(217, 70, 239, ${l.life})`;
+              ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.arc(endPt.x, endPt.y, 35 * (1.5 - l.life), 0, Math.PI * 2); ctx.stroke();
+
+              ctx.restore();
+            } else {
+              // 🧑‍🚀 OLD PLAYER LIGHTNING
+              ctx.save(); ctx.strokeStyle = `rgba(167, 139, 250, ${l.life * 2})`; ctx.lineWidth = 8;
+              ctx.shadowBlur = 20; ctx.shadowColor = '#c084fc'; ctx.lineJoin = 'miter'; ctx.beginPath();
+              ctx.moveTo(l.pts[0].x, l.pts[0].y); for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); ctx.stroke();
+              ctx.strokeStyle = `rgba(255, 255, 255, ${l.life * 2})`; ctx.lineWidth = 3; ctx.beginPath();
+              ctx.moveTo(l.pts[0].x, l.pts[0].y); for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); ctx.stroke(); ctx.restore();
+            }
+          }
+        }
+
+if (eng.iceStorms) {
         for (const s of eng.iceStorms) {
-           ctx.save();
-           ctx.fillStyle = `rgba(125, 211, 252, ${Math.min(0.2, s.life / 2)})`;
-           ctx.beginPath();
-           ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-           ctx.fill();
-           ctx.strokeStyle = `rgba(186, 230, 253, ${Math.min(0.8, s.life)})`;
-           ctx.lineWidth = 2;
-           ctx.setLineDash([15, 15]);
-           ctx.lineDashOffset = performance.now() * 0.05;
-           ctx.beginPath();
-           ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-           ctx.stroke();
-           ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, s.life)})`;
-           for (let i = 0; i < 15; i++) {
-             const a = Math.random() * Math.PI * 2;
-             const d = Math.random() * s.radius;
-             ctx.fillRect(s.x + Math.cos(a) * d, s.y + Math.sin(a) * d + (performance.now() * 0.2) % 20, 3, 8);
-           }
-           ctx.restore();
+          if (s.isFamiliar) {
+            // ==========================================================
+            // 🧚 FAMILIAR SKILL: FROST SPRITE (CYAN SNOWFLAKE + ICE STORM)
+            // ==========================================================
+            ctx.save();
+            
+            // 1. IYONG ORIGINAL BACKGROUND AURA (Kulay Cyan-Blue Variant)
+            ctx.fillStyle = `rgba(34, 211, 238, ${Math.min(0.25, s.life / 2)})`;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 2. IYONG ORIGINAL DASHED ROTATING PERIMETER BORDER
+            ctx.strokeStyle = `rgba(165, 243, 252, ${Math.min(0.8, s.life)})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([15, 15]);
+            ctx.lineDashOffset = performance.now() * 0.05;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset line dash agad
+
+            // 3. IYONG ORIGINAL FALLING ICE STORM PARTICLES LOOP
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, s.life)})`;
+            for (let i = 0; i < 15; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const d = Math.random() * s.radius;
+              ctx.fillRect(
+                s.x + Math.cos(a) * d, 
+                s.y + Math.sin(a) * d + (performance.now() * 0.2) % 20, 
+                3, 
+                8
+              );
+            }
+
+            // 4. ✨ ADDED: GLOWING NEON CYAN SNOWFLAKE CORE
+            ctx.translate(s.x, s.y);
+            ctx.rotate(performance.now() * 0.001); // Dahan-dahang umiikot na snowflake
+            ctx.strokeStyle = '#e0f2fe'; 
+            ctx.lineWidth = 2.5;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#0ea5e9'; // Intense cyan-blue neon glow
+            
+            for (let j = 0; j < 6; j++) {
+              ctx.rotate((Math.PI * 2) / 6);
+              ctx.beginPath();
+              ctx.moveTo(0, 0); ctx.lineTo(s.radius * 0.75, 0); // Main branch
+              ctx.moveTo(s.radius * 0.4, 0); ctx.lineTo(s.radius * 0.55, s.radius * 0.12);
+              ctx.moveTo(s.radius * 0.4, 0); ctx.lineTo(s.radius * 0.55, -s.radius * 0.12);
+              ctx.stroke();
+            }
+
+            ctx.restore();
+
+          } else {
+            // ==========================================================
+            // 🧑‍🚀 PLAYER SPELL: ORIGINAL ICE STORM (DEEP BLUE SNOWFLAKE)
+            // ==========================================================
+            ctx.save();
+            
+            // 1. IYONG ORIGINAL SPELL BACKGROUND AURA
+            ctx.fillStyle = `rgba(125, 211, 252, ${Math.min(0.2, s.life / 2)})`;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 2. IYONG ORIGINAL SPELL DASHED ROTATING BORDER
+            ctx.strokeStyle = `rgba(186, 230, 253, ${Math.min(0.8, s.life)})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([15, 15]);
+            ctx.lineDashOffset = performance.now() * 0.05;
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset line dash agad
+
+            // 3. IYONG ORIGINAL SPELL FALLING ICE STORM PARTICLES LOOP
+            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, s.life)})`;
+            for (let i = 0; i < 15; i++) {
+              const a = Math.random() * Math.PI * 2;
+              const d = Math.random() * s.radius;
+              ctx.fillRect(
+                s.x + Math.cos(a) * d, 
+                s.y + Math.sin(a) * d + (performance.now() * 0.2) % 20, 
+                3, 
+                8
+              );
+            }
+
+            // 4. ✨ ADDED: GLOWING HEAVY WHITE SNOWFLAKE CORE
+            ctx.translate(s.x, s.y);
+            ctx.rotate(performance.now() * -0.0006); // Baligtad na ikot naman sa player
+            ctx.strokeStyle = '#ffffff'; 
+            ctx.lineWidth = 3.5; // Mas makapal nang konti para sa player spell
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = '#2563eb'; // Deep royal blue glow anchor
+            
+            for (let j = 0; j < 6; j++) {
+              ctx.rotate((Math.PI * 2) / 6);
+              ctx.beginPath();
+              ctx.moveTo(0, 0); ctx.lineTo(s.radius * 0.8, 0); 
+              ctx.moveTo(s.radius * 0.35, 0); ctx.lineTo(s.radius * 0.55, s.radius * 0.16);
+              ctx.moveTo(s.radius * 0.35, 0); ctx.lineTo(s.radius * 0.55, -s.radius * 0.16);
+              ctx.moveTo(s.radius * 0.55, 0); ctx.lineTo(s.radius * 0.68, s.radius * 0.1);
+              ctx.moveTo(s.radius * 0.55, 0); ctx.lineTo(s.radius * 0.68, -s.radius * 0.1);
+              ctx.stroke();
+            }
+
+            ctx.restore();
+          }
         }
       }
 
 for (const b of eng.bullets) {
+
+        if (b.type === 'fire_orb') {
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#ea580c';
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.7)';
+          ctx.beginPath(); 
+          ctx.arc(-5, Math.sin(performance.now() * 0.02) * 3, b.r * 1.5, 0, Math.PI * 2); 
+          ctx.fill();
+
+          ctx.fillStyle = '#fef08a';
+          ctx.beginPath(); ctx.arc(0, 0, b.r * 0.8, 0, Math.PI * 2); ctx.fill();
+
+          for(let e=0; e<3; e++) {
+              ctx.fillStyle = '#f97316';
+              ctx.fillRect(-10 - Math.random()*15, (Math.random()-0.5)*10, 3, 3);
+          }
+          ctx.restore();
+          continue; // Wag nang i-draw ang normal bullet circle
+        }
+
         ctx.save();
         if (b.isEnemy) {
           ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 16;
@@ -8351,6 +8887,84 @@ for (const p of eng.particles) {
         if (eng.p.chatBubble && eng.p.chatBubble.life > 0) {
           renderRpgChatBubble(p1X, p1Y, eng.p.chatBubble.text);
         }
+
+if (eng.p.divineShield && eng.p.divineShield.active) {
+              ctx.save();
+              const dt = 0.016; // 🔧 FIX: Idinagdag ang dt dito!
+              const sTime = performance.now() * 0.002;
+              const shieldHealthPct = Math.max(0, eng.p.divineShield.hp / eng.p.divineShield.maxHp);
+              
+              // =======================================================
+              // ⏱️ DITO ILALAGAY ANG TIMER AT PAGKASIRA NG SHIELD
+              // =======================================================
+              if (eng.p.divineShield.duration !== undefined) {
+                  
+                  // 🔥 KAPAG UBOS NA ANG ORAS, KUSANG MAWAWALA ANG SHIELD!
+                  if (eng.p.divineShield.duration <= 0) {
+                      eng.p.divineShield.active = false;
+                      
+                      // Mag-trigger ng magandang shatter explosion kapag nag-expire
+                      for(let k=0; k<20; k++) {
+                          const pa = Math.random() * Math.PI * 2;
+                          const ps = Math.random() * 150 + 50;
+                          eng.particles.push({ x: p1X, y: p1Y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: 'rgba(254, 240, 138, 0.5)', life: 0.5, ml: 0.5, r: Math.random()*2+1 });
+                      }
+                  }
+              }
+              // =======================================================
+
+              if (eng.p.divineShield && eng.p.divineShield.hitFlash > 0) {
+                  eng.p.divineShield.hitFlash -= dt;
+                  ctx.globalCompositeOperation = 'lighter';
+              }
+              
+              // 1. Golden Shield Aura
+              ctx.fillStyle = `rgba(254, 240, 138, ${0.1 + Math.sin(sTime) * 0.05})`;
+              ctx.shadowBlur = 30; ctx.shadowColor = '#fde047';
+              ctx.beginPath(); ctx.arc(p1X, p1Y, pr + 18, 0, Math.PI * 2); ctx.fill();
+
+              // 2. Rotating Runes
+              ctx.strokeStyle = `rgba(250, 204, 21, ${0.6 + (eng.p.divineShield.hitFlash > 0 ? 0.4 : 0)})`;
+              ctx.lineWidth = 2; ctx.setLineDash([10, 15]); ctx.lineDashOffset = -sTime * 20;
+              ctx.beginPath(); ctx.arc(p1X, p1Y, pr + 22, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([]);
+
+              // 3. Ethereal Angel Wings
+              const wingFlap = Math.sin(sTime * 2) * 0.2;
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.shadowBlur = 15; ctx.shadowColor = '#ffffff';
+              for(let w = -1; w <= 1; w+=2) {
+                  ctx.save(); ctx.translate(p1X, p1Y - 5); ctx.scale(w, 1); ctx.rotate(0.2 + wingFlap);
+                  ctx.beginPath(); ctx.moveTo(pr, 0); ctx.quadraticCurveTo(pr + 25, -25, pr + 35, -5); ctx.quadraticCurveTo(pr + 20, 15, pr, 10); ctx.fill(); ctx.restore();
+              }
+
+              // 4. Cracks Kapag Paubos Na
+              if (shieldHealthPct < 0.5) {
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 1.5; ctx.beginPath();
+                  ctx.moveTo(p1X - pr - 10, p1Y); ctx.lineTo(p1X - pr - 5, p1Y - 10); ctx.lineTo(p1X, p1Y - 15); ctx.stroke();
+              }
+              
+              // 5. 🛡️ FLOATING SHIELD HP INDICATOR BAR UI
+              ctx.shadowBlur = 0; 
+              const barWidth = 60;
+              const barHeight = 6;
+              const uiY = p1Y - pr - 35;
+
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+              ctx.beginPath(); ctx.roundRect(p1X - barWidth/2, uiY, barWidth, barHeight, 3); ctx.fill();
+
+              ctx.fillStyle = '#fde047'; 
+              ctx.shadowBlur = 8; ctx.shadowColor = '#eab308';
+              ctx.beginPath(); ctx.roundRect(p1X - barWidth/2, uiY, barWidth * shieldHealthPct, barHeight, 3); ctx.fill();
+              
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 11px monospace';
+              ctx.textAlign = 'center';
+              ctx.fillText(`🛡️ ${Math.ceil(eng.p.divineShield.hp)}`, p1X, uiY - 5);
+
+              ctx.restore();
+          }
+
       }
 
       // --- DRAW PLAYER 2 ---
@@ -8421,6 +9035,83 @@ for (const p of eng.particles) {
         if (eng.p2.chatBubble && eng.p2.chatBubble.life > 0) {
           renderRpgChatBubble(p2X, p2Y, eng.p2.chatBubble.text);
         }
+
+// 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD UI (PLAYER 2)
+          if (eng.p2.divineShield && eng.p2.divineShield.active) {
+              ctx.save();
+              const dt = 0.016; 
+              const sTime = performance.now() * 0.002;
+              const shieldHealthPct = Math.max(0, eng.p2.divineShield.hp / eng.p2.divineShield.maxHp);
+              
+              // ⏱️ TIMER SYSTEM PARA KAY PLAYER 2
+              if (eng.p2.divineShield.duration !== undefined) {
+                  eng.p2.divineShield.duration -= dt;
+                  if (eng.p2.divineShield.duration <= 0) {
+                      eng.p2.divineShield.active = false;
+                      // Shatter Effect sa Player 2
+                      for(let k=0; k<20; k++) {
+                          const pa = Math.random() * Math.PI * 2;
+                          const ps = Math.random() * 150 + 50;
+                          eng.particles.push({ x: p2X, y: p2Y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: 'rgba(254, 240, 138, 0.5)', life: 0.5, ml: 0.5, r: Math.random()*2+1 });
+                      }
+                  }
+              }
+
+              if (eng.p2.divineShield.hitFlash > 0) {
+                  eng.p2.divineShield.hitFlash -= dt;
+                  ctx.globalCompositeOperation = 'lighter';
+              }
+              
+              // 1. Golden Shield Aura
+              ctx.fillStyle = `rgba(254, 240, 138, ${0.1 + Math.sin(sTime) * 0.05})`;
+              ctx.shadowBlur = 30; ctx.shadowColor = '#fde047';
+              ctx.beginPath(); ctx.arc(p2X, p2Y, pr + 18, 0, Math.PI * 2); ctx.fill();
+
+              // 2. Rotating Runes
+              ctx.strokeStyle = `rgba(250, 204, 21, ${0.6 + (eng.p2.divineShield.hitFlash > 0 ? 0.4 : 0)})`;
+              ctx.lineWidth = 2; ctx.setLineDash([10, 15]); ctx.lineDashOffset = -sTime * 20;
+              ctx.beginPath(); ctx.arc(p2X, p2Y, pr + 22, 0, Math.PI * 2); ctx.stroke();
+              ctx.setLineDash([]);
+
+              // 3. Ethereal Angel Wings (P2)
+              const wingFlap = Math.sin(sTime * 2) * 0.2;
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.shadowBlur = 15; ctx.shadowColor = '#ffffff';
+              for(let w = -1; w <= 1; w+=2) {
+                  ctx.save(); ctx.translate(p2X, p2Y - 5); ctx.scale(w, 1); ctx.rotate(0.2 + wingFlap);
+                  ctx.beginPath(); ctx.moveTo(pr, 0); ctx.quadraticCurveTo(pr + 25, -25, pr + 35, -5); ctx.quadraticCurveTo(pr + 20, 15, pr, 10); ctx.fill(); ctx.restore();
+              }
+
+              // 4. Cracks (P2)
+              if (shieldHealthPct < 0.5) {
+                  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.lineWidth = 1.5; ctx.beginPath();
+                  ctx.moveTo(p2X - pr - 10, p2Y); ctx.lineTo(p2X - pr - 5, p2Y - 10); ctx.lineTo(p2X, p2Y - 15); ctx.stroke();
+              }
+
+              // 5. 🛡️ FLOATING SHIELD HP INDICATOR BAR UI (P2)
+              ctx.shadowBlur = 0; 
+              const barWidth = 60;
+              const barHeight = 6;
+              const uiY = p2Y - pr - 35; // Lumulutang sa itaas ng ulo ni Player 2
+
+              // Background ng Bar (Dark)
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+              ctx.beginPath(); ctx.roundRect(p2X - barWidth/2, uiY, barWidth, barHeight, 3); ctx.fill();
+
+              // Foreground ng Bar (Golden HP)
+              ctx.fillStyle = '#fde047'; 
+              ctx.shadowBlur = 8; ctx.shadowColor = '#eab308';
+              ctx.beginPath(); ctx.roundRect(p2X - barWidth/2, uiY, barWidth * shieldHealthPct, barHeight, 3); ctx.fill();
+              
+              // Text Value ng Shield (Hal: 🛡️ 1000)
+              ctx.shadowBlur = 0;
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 11px monospace';
+              ctx.textAlign = 'center';
+              ctx.fillText(`🛡️ ${Math.ceil(eng.p2.divineShield.hp)}`, p2X, uiY - 5);
+
+              ctx.restore();
+          }
+
       }
 
 // 🔥 FAMILIAR RENDERER (NOW LOOPING THROUGH ARRAY)

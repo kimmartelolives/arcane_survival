@@ -26,67 +26,85 @@ export const SKINS_DB = [
 
 export const FAMILIARS_DB = [
   { 
-    id: 'wisp', name: 'Ignis Wisp', type: 'Attack',
-    desc: 'Shoots seeking fireballs at nearby enemies.', 
-    scaleDesc: '+30 Dmg, -0.05s Cooldown, +Projectiles at Lv5/10',
-    baseCost: 800, upgBase: 150, maxLevel: 10, color: '#f97316',
-    evolutions: { 1: 'Ignis Wisp', 5: 'Blaze Spirit', 10: 'Inferno Elemental' }
+    id: 'wisp', 
+    evolutions: { 1: '🔥 Ignis Wisp', 5: '🔥 Blaze Spirit', 10: '🔥 Inferno Lord' },
+    type: 'Summon / Mage',
+    desc: 'Fires realistic chaotic fire orbs. Damage scales with Level & Wave.', 
+    getStats: (lvl) => `+${lvl * 30} Damage | ${lvl >= 10 ? '3 Orbs' : (lvl >= 5 ? '2 Orbs' : '1 Orb')}`,
+    baseCost: 200, upgBase: 50, maxLevel: 10,
+    color: '#ef4444' 
   },
   { 
-    id: 'fairy', name: 'Sylph of Life', type: 'Support',
-    desc: 'Passively regenerates your HP over time.', 
-    scaleDesc: '+4 HP Heal amount per tick',
-    baseCost: 1000, upgBase: 200, maxLevel: 10, color: '#86efac',
-    evolutions: { 1: 'Sylph of Life', 5: 'Nature Pixie', 10: 'Yggdrasil Guardian' }
+    id: 'fairy', 
+    evolutions: { 1: '🧚 Sylvan Fairy', 5: '🧚 Forest Sprite', 10: '🧚 Nature Queen' },
+    type: 'Support / Healer',
+    desc: 'Passively heals the player. Healing output scales with your Max HP.', 
+    getStats: (lvl) => `+${lvl * 4} Base Heal`,
+    baseCost: 300, upgBase: 60, maxLevel: 10,
+    color: '#86efac' 
   },
   { 
-    id: 'voidling', name: 'Void Eye', type: 'Utility',
-    desc: 'Automatically pulls gems and potions towards you.', 
-    scaleDesc: '+35 Vacuum Radius per Level',
-    baseCost: 1500, upgBase: 250, maxLevel: 10, color: '#d946ef',
-    evolutions: { 1: 'Void Eye', 5: 'Abyssal Watcher', 10: 'Ender of Worlds' }
+    id: 'voidling', 
+    evolutions: { 1: '🌌 Voidling', 5: '🌌 Void Walker', 10: '🌌 Abyssal Maw' },
+    type: 'Utility / Looter',
+    desc: 'Creates a gravitational vacuum that automatically loots distant gems and potions.', 
+    getStats: (lvl) => `+${lvl * 35} Vacuum Radius`,
+    baseCost: 400, upgBase: 70, maxLevel: 10,
+    color: '#d946ef' 
   },
   { 
-    id: 'frost', name: 'Frost Sprite', type: 'Crowd Control',
-    desc: 'Casts a mini Ice Storm to freeze and damage enemies.', 
-    scaleDesc: '+5 Radius, -0.15s Cooldown per Level',
-    baseCost: 1200, upgBase: 220, maxLevel: 10, color: '#38bdf8',
-    evolutions: { 1: 'Frost Sprite', 5: 'Glacial Owl', 10: 'Winter Wyrm' }
+    id: 'frost', 
+    evolutions: { 1: '❄️ Frost Sprite', 5: '❄️ Winter Wraith', 10: '❄️ Glacial Sovereign' },
+    type: 'AoE / Control',
+    desc: 'Summons a glowing cyan snowflake blizzard that slows and damages enemies.', 
+    getStats: (lvl) => `+${lvl * 5} Radius | -${(lvl * 0.15).toFixed(2)}s Cooldown`,
+    baseCost: 500, upgBase: 80, maxLevel: 10,
+    color: '#22d3ee' 
   },
   { 
-    id: 'golem', name: 'Stone Golem', type: 'Defense',
-    desc: 'Smashes the ground, dealing AoE damage and stun.', 
-    scaleDesc: '+50 Dmg, +8 Radius, -0.2s Cooldown',
-    baseCost: 1800, upgBase: 300, maxLevel: 10, color: '#f59e0b',
-    evolutions: { 1: 'Stone Golem', 5: 'Earth Titan', 10: 'Obsidian Guardian' }
+    id: 'golem', 
+    evolutions: { 1: '🪨 Stone Golem', 5: '🪨 Earth Titan', 10: '🪨 Mountain Colossus' },
+    type: 'Heavy / Stun',
+    desc: 'Smashes the ground creating a massive crater, lava cracks, and 3D stone spikes.', 
+    getStats: (lvl) => `+${lvl * 50} Damage | +${lvl * 8} Radius`,
+    baseCost: 650, upgBase: 100, maxLevel: 10,
+    color: '#f59e0b' 
   },
   { 
-    id: 'thunder', name: 'Spark Fox', type: 'Burst Attack',
-    desc: 'Calls down piercing lightning strikes.', 
-    scaleDesc: '+45 Dmg, -0.1s Cooldown per Level',
-    baseCost: 2000, upgBase: 350, maxLevel: 10, color: '#e879f9',
-    evolutions: { 1: 'Spark Fox', 5: 'Storm Griffin', 10: 'Thunderbird' }
+    id: 'thunder', 
+    evolutions: { 1: '⚡ Spark Fox', 5: '⚡ Storm Wolf', 10: '⚡ Raiju' },
+    type: 'Chain Lightning',
+    desc: 'Unleashes erratic violet plasma chain lightning that branches to multiple targets.', 
+    getStats: (lvl) => `+${lvl * 45} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
+    baseCost: 800, upgBase: 120, maxLevel: 10,
+    color: '#c084fc' 
   },
   { 
-    id: 'shadow', name: 'Umbral Bat', type: 'Assassin',
-    desc: 'Fires fast, piercing shadow blades at enemies.', 
-    scaleDesc: '+60 Dmg, -0.1s Cooldown per Level',
-    baseCost: 2500, upgBase: 400, maxLevel: 10, color: '#6d28d9',
-    evolutions: { 1: 'Umbral Bat', 5: 'Void Vampire', 10: 'Nightmare Fiend' }
+    id: 'shadow', 
+    evolutions: { 1: '🦇 Umbral Bat', 5: '🦇 Night Terror', 10: '🦇 Vampire Lord' },
+    type: 'Burst / Physical',
+    desc: 'Fires high-speed crimson shadow blades. Can critically hit and scales with Player Buffs.', 
+    getStats: (lvl) => `+${lvl * 60} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
+    baseCost: 1000, upgBase: 150, maxLevel: 10,
+    color: '#e11d48' 
   },
   { 
-    id: 'light', name: 'Holy Seraph', type: 'Support Shield',
-    desc: 'Periodically grants a Divine Shield to block damage.', 
-    scaleDesc: '+0.5s Shield Duration, -1s Cooldown',
-    baseCost: 3000, upgBase: 500, maxLevel: 10, color: '#fde047',
-    evolutions: { 1: 'Holy Seraph', 5: 'Divine Angel', 10: 'Archangel of Hope' }
+    id: 'light', 
+    evolutions: { 1: '👼 Holy Seraph', 5: '👼 Divine Valkyrie', 10: '👼 Archangel' },
+    type: 'Defense / Shield',
+    desc: 'Grants a Divine Absorption Shield with golden wings. Shield capacity scales heavily with Wave.', 
+    getStats: (lvl) => `+${lvl * 250} Shield HP | -${(lvl * 1.0).toFixed(1)}s Cooldown`,
+    baseCost: 1200, upgBase: 200, maxLevel: 10,
+    color: '#fde047' 
   },
   { 
-    id: 'wind', name: 'Zephyr Falcon', type: 'AoE Control',
-    desc: 'Summons roaming tornadoes that sweep across the field.', 
-    scaleDesc: '+1 Tornado, +Damage, -0.5s Cooldown',
-    baseCost: 2800, upgBase: 450, maxLevel: 10, color: '#a7f3d0',
-    evolutions: { 1: 'Zephyr Falcon', 5: 'Storm Hawk', 10: 'Hurricane Roc' }
+    id: 'wind', 
+    evolutions: { 1: '🦅 Zephyr Falcon', 5: '🦅 Gale Gryphon', 10: '🦅 Tempest Roc' },
+    type: 'AoE / Sweep',
+    desc: 'Summons dynamic green wind vortex tornados that sweep through the map and shred enemies.', 
+    getStats: (lvl) => `+${lvl * 25} Damage | +${lvl * 5} Radius | ${lvl >= 5 ? '2 Tornados' : '1 Tornado'}`,
+    baseCost: 900, upgBase: 130, maxLevel: 10,
+    color: '#10b981' 
   }
 ];
 
@@ -1977,8 +1995,31 @@ const buyOrEquipFamiliar = (fam) => {
                           </span>
                           <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '4px' }}>Type: {fam.type} | {fam.desc}</span>
                           
-                          <span style={{ color: '#34d399', fontSize: '0.8rem', fontWeight: 'bold', fontFamily: 'monospace', marginTop: '6px', background: 'rgba(52, 211, 153, 0.1)', padding: '4px 6px', borderRadius: '4px', display: 'inline-block', width: 'fit-content' }}>
-                            ⏫ Upgrades: {fam.scaleDesc}
+                          {/* ✨ BAGONG UI: TOTAL BONUS STATS INDICATOR ✨ */}
+                          <span style={{ 
+                            color: '#34d399', 
+                            fontSize: '0.80rem', 
+                            fontWeight: 'bold', 
+                            fontFamily: 'monospace', 
+                            marginTop: '8px', 
+                            background: 'rgba(52, 211, 153, 0.15)', 
+                            border: '1px solid rgba(52, 211, 153, 0.3)',
+                            padding: '4px 8px', 
+                            borderRadius: '4px', 
+                            display: 'inline-block', 
+                            width: 'fit-content',
+                            boxShadow: '0 0 8px rgba(52, 211, 153, 0.2)'
+                          }}>
+                            📈 Bonus Stats: {isUnlocked ? fam.getStats(level) : fam.getStats(0)}
+                          </span>
+                          <span style={{ 
+                            color: '#64748b', 
+                            fontSize: '0.5rem', 
+                            fontStyle: 'italic', 
+                            fontFamily: 'monospace', 
+                            marginTop: '4px' 
+                          }}>
+                            *Note: Wave and level bonuses are not reflected in this total.
                           </span>
                         </div>
                         
