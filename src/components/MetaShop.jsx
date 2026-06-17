@@ -1,110 +1,83 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 const UPGRADES_DB = [
-  { id: 'hp', name: 'Vitality Core', desc: '+15 Max HP per level', baseCost: 50, costMult: 1.5, maxLevel: 20 },
-  { id: 'dmg', name: 'Arcane Amplifier', desc: '+3 Base Damage per level', baseCost: 75, costMult: 1.6, maxLevel: 20 },
-  { id: 'def', name: 'Aegis Plating', desc: '+2 Armor Rating per level', baseCost: 60, costMult: 1.5, maxLevel: 15 },
-  { id: 'crit', name: 'Fatal Precision', desc: '+1% Crit Chance per level', baseCost: 100, costMult: 1.8, maxLevel: 10 },
-  { id: 'speed', name: 'Windwalker', desc: '+5 Move Speed per level', baseCost: 40, costMult: 1.4, maxLevel: 10 },
-];
+  { id: 'hp', name: 'Vitality Core', desc: '+15 Max HP per level', statValue: 15, statSuffix: ' Max HP', baseCost: 50, costMult: 1.5, maxLevel: 20 },
+  { id: 'dmg', name: 'Arcane Amplifier', desc: '+3 Base Damage per level', statValue: 3, statSuffix: ' Base Damage', baseCost: 75, costMult: 1.6, maxLevel: 20 },
+  { id: 'def', name: 'Aegis Plating', desc: '+2 Armor Rating per level', statValue: 2, statSuffix: ' Armor Rating', baseCost: 60, costMult: 1.5, maxLevel: 15 },
+  { id: 'crit', name: 'Fatal Precision', desc: '+1% Crit Chance per level', statValue: 1, statSuffix: '% Crit Chance', baseCost: 100, costMult: 1.8, maxLevel: 10 },
+  { id: 'speed', name: 'Windwalker', desc: '+5 Move Speed per level', statValue: 5, statSuffix: ' Move Speed', baseCost: 40, costMult: 1.4, maxLevel: 10 },
+]
 
 export const SKINS_DB = [
   { id: 'default', name: 'Apprentice Robes', desc: 'The humble attire worn by aspiring mages beginning their journey into the arcane arts.', cost: 0, glow: '#a855f7', colors: { c: '#8b5cf6', robe: '#5b21b6', brim: '#c4b5fd' } },
-  { id: 'shadow', name: 'Harbinger of the Void Realm', desc: 'A master of forbidden sorcery who draws power from the endless depths of the Void.', cost: 1000, glow: '#ef4444', colors: { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d' } },
-  { id: 'igris', name: 'Abyssal Dreadlord', desc: 'A feared commander born from the endless abyss, clad in cursed armor and wreathed in crimson darkness.', cost: 1500, glow: '#dc2626', colors: { c: '#262626', robe: '#0a0a0a', brim: '#171717' } },
-  { id: 'pyro', name: 'Demon of the Ashen Flare', desc: 'An infernal entity forged within primordial flames, leaving only ash in its wake.', cost: 2000, glow: '#f97316', colors: { c: '#ef4444', robe: '#7f1d1d', brim: '#fca5a5' } },
-  { id: 'archmage', name: 'The Arcane Archon', desc: 'A legendary master of magic whose command over the arcane eclipses all mortal understanding.', cost: 2500, glow: '#fbbf24', colors: { c: '#fef08a', robe: '#b45309', brim: '#fef9c3' } },
-  { id: 'sakura', name: 'Roseheart Sovereign', desc: 'Commands an endless storm of enchanted petals.', cost: 2500, glow: '#ec4899', colors: { c: '#f472b6', robe: '#ec4899', brim: '#fdf2f8' } },
-  { id: 'pink_wings', name: 'Seraph of the Pink Eclipse', desc: 'A celestial sovereign whose wings paint the heavens in radiant pink light.', cost: 3000, glow: '#fb7185', colors: { c: '#fb7185', robe: '#f472b6', brim: '#fff5fa' } },
-  { id: 'remembrance', name: 'Starlit Elegy', desc: 'Beyond time, beyond fate. The supreme manifestation of ancient elven magic and eternal memories.', cost: 3500, glow: '#60a5fa', colors: { c: '#f8fafc', robe: '#1e1b4b', brim: '#e0f2fe' } },
-  { id: 'emperor', name: 'The Black Monarch', desc: 'A legendary tyrant whose shadow eclipsed the heavens themselves.', cost: 4500, glow: '#dc2626', colors: { c: '#171717', robe: '#0a0a0a', brim: '#050505' } },
-  { id: 'empress', name: 'Empress of the Blushing Petals', desc: 'A divine guardian shrouded in radiant petals. Entire battlefields fall silent beneath her breathtaking grace.', cost: 5000, glow: '#fb7185', colors: { c: '#ffe4e6', robe: '#ffffff', brim: '#fda4af' } },
-  { id: 'infernal', name: 'Infernal Eclipse Sovereign', desc: 'The supreme ruler of the Eternal Eclipse. Cloaked in abyssal flames, every step bends darkness itself to their command.', cost: 5500, glow: '#e11d48', colors: { c: '#1f101a', robe: '#09050e', brim: '#1f0510' } },
-  { id: 'leviathan', name: 'Leviathan Empress of the Sacred Tide', desc: 'A divine Valkyrie chosen by Leviathan. Surrounded by celestial oceans, floating crystals, and holy tides that embody absolute grace and overwhelming power.', cost: 6000, glow: '#38bdf8', colors: { c: '#e0f2fe', robe: '#ffffff', brim: '#0284c7' } },
-  { id: 'frieren', name: 'Mirrored Lotus: Eternal Remembrance', desc: 'A celestial relic born from mirrored lotus petals and drifting forget-me-not blossoms, reflecting an endless cycle of eternal promises and undying love.', cost: 7000, glow: '#60a5fa', colors: { c: '#f8fafc', robe: '#0f172a', brim: '#e0f2fe' } },
+  { id: 'shadow', name: 'Harbinger of the Void Realm', desc: 'A master of forbidden sorcery who draws power from the endless depths of the Void.', cost: 5000, glow: '#ef4444', colors: { c: '#991b1b', robe: '#450a0a', brim: '#7f1d1d' } },
+  { id: 'igris', name: 'Abyssal Dreadlord', desc: 'A feared commander born from the endless abyss, clad in cursed armor and wreathed in crimson darkness.', cost: 5000, glow: '#dc2626', colors: { c: '#262626', robe: '#0a0a0a', brim: '#171717' } },
+  { id: 'pyro', name: 'Demon of the Ashen Flare', desc: 'An infernal entity forged within primordial flames, leaving only ash in its wake.', cost: 6500, glow: '#f97316', colors: { c: '#ef4444', robe: '#7f1d1d', brim: '#fca5a5' } },
+  { id: 'archmage', name: 'The Arcane Archon', desc: 'A legendary master of magic whose command over the arcane eclipses all mortal understanding.', cost: 6500, glow: '#fbbf24', colors: { c: '#fef08a', robe: '#b45309', brim: '#fef9c3' } },
+  { id: 'sakura', name: 'Roseheart Sovereign', desc: 'Commands an endless storm of enchanted petals.', cost: 7500, glow: '#ec4899', colors: { c: '#f472b6', robe: '#ec4899', brim: '#fdf2f8' } },
+  { id: 'pink_wings', name: 'Seraph of the Pink Eclipse', desc: 'A celestial sovereign whose wings paint the heavens in radiant pink light.', cost: 8000, glow: '#fb7185', colors: { c: '#fb7185', robe: '#f472b6', brim: '#fff5fa' } },
+  { id: 'remembrance', name: 'Starlit Elegy', desc: 'Beyond time, beyond fate. The supreme manifestation of ancient elven magic and eternal memories.', cost: 9000, glow: '#60a5fa', colors: { c: '#f8fafc', robe: '#1e1b4b', brim: '#e0f2fe' } },
+  { id: 'emperor', name: 'The Black Monarch', desc: 'A legendary tyrant whose shadow eclipsed the heavens themselves.', cost: 9000, glow: '#dc2626', colors: { c: '#171717', robe: '#0a0a0a', brim: '#050505' } },
+  { id: 'infernal', name: 'Infernal Eclipse Sovereign', desc: 'The supreme ruler of the Eternal Eclipse. Cloaked in abyssal flames, every step bends darkness itself to their command.', cost: 9000, glow: '#e11d48', colors: { c: '#1f101a', robe: '#09050e', brim: '#1f0510' } },
+  { id: 'empress', name: 'Empress of the Blushing Petals', desc: 'A divine guardian shrouded in radiant petals. Entire battlefields fall silent beneath her breathtaking grace.', cost: 10000, glow: '#fb7185', colors: { c: '#ffe4e6', robe: '#ffffff', brim: '#fda4af' } },
+  { id: 'leviathan', name: 'Leviathan Empress of the Sacred Tide', desc: 'A divine Valkyrie chosen by Leviathan. Surrounded by celestial oceans, floating crystals, and holy tides that embody absolute grace and overwhelming power.', cost: 10000, glow: '#38bdf8', colors: { c: '#e0f2fe', robe: '#ffffff', brim: '#0284c7' } },
+  { id: 'frieren', name: 'Mirrored Lotus: Eternal Remembrance', desc: 'A celestial relic born from mirrored lotus petals and drifting forget-me-not blossoms, reflecting an endless cycle of eternal promises and undying love.', cost: 10000, glow: '#60a5fa', colors: { c: '#f8fafc', robe: '#0f172a', brim: '#e0f2fe' } },
 ];
 
 export const FAMILIARS_DB = [
    { 
-    id: 'voidling', 
-    evolutions: { 1: '🌌 Voidling', 5: '🌌 Void Walker', 10: '🌌 Abyssal Maw' },
-    type: 'Utility / Looter',
-    desc: 'Creates a gravitational vacuum that automatically loots distant gems and potions.', 
+    id: 'voidling', evolutions: { 1: '🌌 Voidling', 5: '🌌 Void Walker', 10: '🌌 Abyssal Maw' },
+    type: 'Utility / Looter', desc: 'Creates a gravitational vacuum that automatically loots distant gems and potions.', 
     getStats: (lvl) => `+${lvl * 35} Vacuum Radius`,
-    baseCost: 200, upgBase: 50, maxLevel: 10,
-    color: '#d946ef' 
+    baseCost: 500, upgBase: 200, upgMult: 1.7, maxLevel: 10, color: '#d946ef' 
   },
   { 
-    id: 'frost', 
-    evolutions: { 1: '❄️ Frost Sprite', 5: '❄️ Winter Wraith', 10: '❄️ Glacial Sovereign' },
-    type: 'AoE / Control',
-    desc: 'Summons a glowing cyan snowflake blizzard that slows and damages enemies.', 
-    getStats: (lvl) => `+${lvl * 5} Radius | -${(lvl * 0.15).toFixed(2)}s Cooldown`,
-    baseCost: 400, upgBase: 70, maxLevel: 10,
-    color: '#22d3ee' 
-  },
-    { 
-    id: 'wisp', 
-    evolutions: { 1: '🔥 Ignis Wisp', 5: '🔥 Blaze Spirit', 10: '🔥 Inferno Lord' },
-    type: 'Summon / Mage',
-    desc: 'Fires realistic chaotic fire orbs. Damage scales with Level & Wave.', 
-    getStats: (lvl) => `+${lvl * 30} Damage | ${lvl >= 10 ? '3 Orbs' : (lvl >= 5 ? '2 Orbs' : '1 Orb')}`,
-    baseCost: 500, upgBase: 80, maxLevel: 10,
-    color: '#ef4444' 
-  },
-  { 
-    id: 'thunder', 
-    evolutions: { 1: '⚡ Spark Fox', 5: '⚡ Storm Wolf', 10: '⚡ Raiju' },
-    type: 'Chain Lightning',
-    desc: 'Unleashes erratic violet plasma chain lightning that branches to multiple targets.', 
-    getStats: (lvl) => `+${lvl * 45} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
-    baseCost: 650, upgBase: 100, maxLevel: 10,
-    color: '#c084fc' 
-  },
-  { 
-    id: 'shadow', 
-    evolutions: { 1: '🦇 Umbral Bat', 5: '🦇 Night Terror', 10: '🦇 Vampire Lord' },
-    type: 'Burst / Physical',
-    desc: 'Fires high-speed crimson shadow blades. Can critically hit and scales with Player Buffs.', 
-    getStats: (lvl) => `+${lvl * 60} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
-    baseCost: 800, upgBase: 120, maxLevel: 10,
-    color: '#e11d48' 
-  },
-  { 
-    id: 'golem', 
-    evolutions: { 1: '🪨 Stone Golem', 5: '🪨 Earth Titan', 10: '🪨 Mountain Colossus' },
-    type: 'Heavy / Stun',
-    desc: 'Smashes the ground creating a massive crater, lava cracks, and 3D stone spikes.', 
-    getStats: (lvl) => `+${lvl * 50} Damage | +${lvl * 8} Radius`,
-    baseCost: 900, upgBase: 130, maxLevel: 10,
-    color: '#f59e0b' 
-  },
-  { 
-    id: 'wind', 
-    evolutions: { 1: '🦅 Zephyr Falcon', 5: '🦅 Gale Gryphon', 10: '🦅 Tempest Roc' },
-    type: 'AoE / Sweep',
-    desc: 'Summons dynamic green wind vortex tornados that sweep through the map and shred enemies.', 
-    getStats: (lvl) => `+${lvl * 25} Damage | +${lvl * 5} Radius | ${lvl >= 5 ? '2 Tornados' : '1 Tornado'}`,
-    baseCost: 1000, upgBase: 150, maxLevel: 10,
-    color: '#10b981' 
-  },
-  { 
-    id: 'fairy', 
-    evolutions: { 1: '🧚 Sylvan Fairy', 5: '🧚 Forest Sprite', 10: '🧚 Nature Queen' },
-    type: 'Support / Healer',
-    desc: 'Passively heals the player. Healing output scales with your Max HP.', 
+    id: 'fairy', evolutions: { 1: '🧚 Sylvan Fairy', 5: '🧚 Forest Sprite', 10: '🧚 Nature Queen' },
+    type: 'Support / Healer', desc: 'Passively heals the player. Healing output scales with your Max HP.', 
     getStats: (lvl) => `+${lvl * 6} Base Heal`,
-    baseCost: 1200, upgBase: 200, maxLevel: 10,
-    color: '#86efac' 
+    baseCost: 600, upgBase: 250, upgMult: 1.75, maxLevel: 10, color: '#86efac' 
   },
-    { 
-    id: 'light', 
-    evolutions: { 1: '👼 Holy Seraph', 5: '👼 Divine Valkyrie', 10: '👼 Archangel' },
-    type: 'Defense / Shield',
-    desc: 'Grants a Divine Absorption Shield with golden wings. Shield capacity scales heavily with Wave.', 
+  { 
+    id: 'wisp', evolutions: { 1: '🔥 Ignis Wisp', 5: '🔥 Blaze Spirit', 10: '🔥 Inferno Lord' },
+    type: 'Summon / Mage', desc: 'Fires realistic chaotic fire orbs. Damage scales with Level & Wave.', 
+    getStats: (lvl) => `+${lvl * 30} Damage | ${lvl >= 10 ? '3 Orbs' : (lvl >= 5 ? '2 Orbs' : '1 Orb')}`,
+    baseCost: 600, upgBase: 250, upgMult: 1.75, maxLevel: 10, color: '#ef4444' 
+  },
+  { 
+    id: 'frost', evolutions: { 1: '❄️ Frost Sprite', 5: '❄️ Winter Wraith', 10: '❄️ Glacial Sovereign' },
+    type: 'AoE / Control', desc: 'Summons a glowing cyan snowflake blizzard that slows and damages enemies.', 
+    getStats: (lvl) => `+${lvl * 5} Radius | -${(lvl * 0.15).toFixed(2)}s Cooldown`,
+    baseCost: 800, upgBase: 300, upgMult: 1.8, maxLevel: 10, color: '#22d3ee' 
+  },
+  { 
+    id: 'wind', evolutions: { 1: '🦅 Zephyr Falcon', 5: '🦅 Gale Gryphon', 10: '🦅 Tempest Roc' },
+    type: 'AoE / Sweep', desc: 'Summons dynamic green wind vortex tornados that sweep through the map and shred enemies.', 
+    getStats: (lvl) => `+${lvl * 25} Damage | +${lvl * 5} Radius | ${lvl >= 5 ? '2 Tornados' : '1 Tornado'}`,
+    baseCost: 900, upgBase: 350, upgMult: 1.85, maxLevel: 10, color: '#10b981' 
+  },
+  { 
+    id: 'golem', evolutions: { 1: '🪨 Stone Golem', 5: '🪨 Earth Titan', 10: '🪨 Mountain Colossus' },
+    type: 'Heavy / Stun', desc: 'Smashes the ground creating a massive crater, lava cracks, and 3D stone spikes.', 
+    getStats: (lvl) => `+${lvl * 50} Damage | +${lvl * 8} Radius`,
+    baseCost: 900, upgBase: 350, upgMult: 1.85, maxLevel: 10, color: '#f59e0b' 
+  },
+  { 
+    id: 'thunder', evolutions: { 1: '⚡ Spark Fox', 5: '⚡ Storm Wolf', 10: '⚡ Raiju' },
+    type: 'Chain Lightning', desc: 'Unleashes erratic violet plasma chain lightning that branches to multiple targets.', 
+    getStats: (lvl) => `+${lvl * 45} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
+    baseCost: 1000, upgBase: 400, upgMult: 1.9, maxLevel: 10, color: '#c084fc' 
+  },
+  { 
+    id: 'shadow', evolutions: { 1: '🦇 Umbral Bat', 5: '🦇 Night Terror', 10: '🦇 Vampire Lord' },
+    type: 'Burst / Physical', desc: 'Fires high-speed crimson shadow blades. Can critically hit and scales with Player Buffs.', 
+    getStats: (lvl) => `+${lvl * 60} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
+    baseCost: 1200, upgBase: 500, upgMult: 2.0, maxLevel: 10, color: '#e11d48' 
+  },
+  { 
+    id: 'light', evolutions: { 1: '👼 Holy Seraph', 5: '👼 Divine Valkyrie', 10: '👼 Archangel' },
+    type: 'Defense / Shield', desc: 'Grants a Divine Absorption Shield with golden wings. Shield capacity scales heavily with Wave.', 
     getStats: (lvl) => `+${lvl * 250} Shield HP | -${(lvl * 1.0).toFixed(1)}s Cooldown`,
-    baseCost: 1200, upgBase: 200, maxLevel: 10,
-    color: '#fde047' 
+    baseCost: 1200, upgBase: 500, upgMult: 2.0, maxLevel: 10, color: '#fde047' 
   }
 ];
 
@@ -1535,41 +1508,231 @@ export function LiveFamiliarPreview({ id, level }) {
 
       const f = { id, level };
 
-      if (f.id === 'wisp') {
-        const wispSize = 7 + (f.level >= 5 ? 3 : 0) + (f.level >= 10 ? 4 : 0);
-        ctx.shadowBlur = 10; ctx.shadowColor = '#ef4444';
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath(); ctx.arc(0, 0, wispSize * 0.6, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = `rgba(249, 115, 22, ${0.8 + Math.sin(t * 0.01) * 0.2})`;
-        ctx.beginPath(); ctx.moveTo(0, -wispSize * 1.5);
-        ctx.quadraticCurveTo(wispSize, 0, 0, wispSize);
-        ctx.quadraticCurveTo(-wispSize, 0, 0, -wispSize * 1.5); ctx.fill();
-        if (f.level >= 5) {
-          const orbCount = f.level >= 10 ? 3 : 1;
-          ctx.fillStyle = '#ef4444';
-          for(let i = 0; i < orbCount; i++) {
-            const oA = t * 0.005 + (i * Math.PI * 2 / orbCount);
-            ctx.beginPath(); ctx.arc(Math.cos(oA) * 18, Math.sin(oA) * 18, 3, 0, Math.PI * 2); ctx.fill();
-          }
-        }
-      } 
-      else if (f.id === 'fairy') {
-        ctx.shadowBlur = 10; ctx.shadowColor = '#22c55e';
-        ctx.fillStyle = '#86efac';
-        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
-        const flap = Math.abs(Math.sin(t * 0.015)) * 6 + 1;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.beginPath(); ctx.ellipse(-5, -3, 8, flap, Math.PI/4, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(5, -3, 8, flap, -Math.PI/4, 0, Math.PI*2); ctx.fill();
-        if (f.level >= 5) {
-          ctx.strokeStyle = 'rgba(134, 239, 172, 0.5)'; ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.ellipse(0, -8, 10, 3, 0, 0, Math.PI*2); ctx.stroke();
-        }
-        if (f.level >= 10) {
-          ctx.fillStyle = '#fef08a';
-          ctx.beginPath(); ctx.arc(Math.cos(t * 0.002) * 12, Math.sin(t * 0.002) * 12, 1.5, 0, Math.PI*2); ctx.fill();
-        }
-      }
+  if (f.id === 'wisp') {
+  // --- 1. FAKE GLOW (Heat Aura) ---
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.15)'; 
+  ctx.beginPath(); 
+  ctx.arc(0, 0, 18, 0, Math.PI * 2); 
+  ctx.fill();
+
+  // --- 2. BURN EMBERS (Lumulutang na Sparks) ---
+  // Mga baga na umaakyat pataas habang umiindayog
+  ctx.fillStyle = '#fca5a5';
+  for (let i = 0; i < 3; i++) {
+    const ex = Math.sin(t * 0.02 + i) * 12; // Sway left and right
+    const ey = 10 - ((t * 0.05 + i * 10) % 20); // Float upward reset logic
+    ctx.beginPath(); 
+    ctx.arc(ex, ey, 1.2, 0, Math.PI * 2); 
+    ctx.fill();
+  }
+
+  // ✨ LEVEL 5 TRANSFORMATION: Bat-like Fiery Wings
+  // Idodraw natin ang pakpak BAGO ang katawan para nasa likod ito
+  if (f.level >= 5) {
+    const wingFlap = Math.cos(t * 0.08) * 3;
+    ctx.fillStyle = 'rgba(185, 28, 28, 0.8)'; // Dark red demonic wings
+    
+    // Kaliwang Pakpak (Matulis / Bat-style)
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(-14, -8 - wingFlap);
+    ctx.lineTo(-12, -2 - wingFlap);
+    ctx.lineTo(-16, 4 - wingFlap);
+    ctx.lineTo(-4, 5);
+    ctx.fill();
+
+    // Kanang Pakpak
+    ctx.beginPath();
+    ctx.moveTo(4, 0);
+    ctx.lineTo(14, -8 - wingFlap);
+    ctx.lineTo(12, -2 - wingFlap);
+    ctx.lineTo(16, 4 - wingFlap);
+    ctx.lineTo(4, 5);
+    ctx.fill();
+  }
+
+  // --- 3. DEMON HORNS ---
+  ctx.fillStyle = '#450a0a'; // Dark reddish-black
+  // Kaliwang Sungay
+  ctx.beginPath(); ctx.moveTo(-3, -4); ctx.quadraticCurveTo(-8, -10, -5, -14); ctx.quadraticCurveTo(-2, -8, -1, -5); ctx.fill();
+  // Kanang Sungay
+  ctx.beginPath(); ctx.moveTo(3, -4); ctx.quadraticCurveTo(8, -10, 5, -14); ctx.quadraticCurveTo(2, -8, 1, -5); ctx.fill();
+
+  // --- 4. MAIN FLAME BODY (Demon Core) ---
+  const breath = Math.sin(t * 0.05) * 2; // Pulsing/Breathing animation
+  
+  // Katawang Apoy (Orange)
+  ctx.fillStyle = `rgba(249, 115, 22, ${0.8 + Math.sin(t * 0.01) * 0.2})`; 
+  ctx.beginPath();
+  ctx.moveTo(0, -10 - breath); // Apoy sa taas
+  ctx.quadraticCurveTo(8, -2, 6, 6 + breath/2); 
+  ctx.quadraticCurveTo(0, 10 + breath, -6, 6 + breath/2); 
+  ctx.quadraticCurveTo(-8, -2, 0, -10 - breath); 
+  ctx.fill();
+
+  // Inner Yellow Heat (Gitna ng apoy)
+  ctx.fillStyle = '#fef08a';
+  ctx.beginPath();
+  ctx.moveTo(0, -4 - breath);
+  ctx.quadraticCurveTo(4, 2, 3, 5);
+  ctx.quadraticCurveTo(0, 7, -3, 5);
+  ctx.quadraticCurveTo(-4, 2, 0, -4 - breath);
+  ctx.fill();
+
+  // --- 5. DEMON EYES ---
+  ctx.fillStyle = '#7f1d1d'; // Deep red eye sockets
+  ctx.beginPath();
+  ctx.ellipse(-2.5, 2, 1.5, 0.5, Math.PI/6, 0, Math.PI*2); // Left eye slanted
+  ctx.ellipse(2.5, 2, 1.5, 0.5, -Math.PI/6, 0, Math.PI*2); // Right eye slanted
+  ctx.fill();
+  
+  // Glowing yellow pupils
+  ctx.fillStyle = '#fde047'; 
+  ctx.beginPath(); ctx.arc(-2.5, 2, 0.6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2.5, 2, 0.6, 0, Math.PI*2); ctx.fill();
+
+  // ✨ LEVEL 10 TRANSFORMATION: Orbiting Hellfires & Wild Embers
+  if (f.level >= 10) {
+    // Extra intense embers (Mas maraming umuumbok pataas)
+    ctx.fillStyle = '#fde047'; // Yellow-hot embers
+    for (let i = 3; i < 7; i++) {
+      const ex = Math.sin(t * 0.03 + i * 5) * 16;
+      const ey = 15 - ((t * 0.08 + i * 8) % 30);
+      ctx.beginPath(); ctx.arc(ex, ey, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // 3 Umiikot na Hellfire Skulls/Orbs
+    const orbit = t * 0.004;
+    for(let i = 0; i < 3; i++) {
+      const oA = orbit + (i * Math.PI * 2 / 3);
+      const fx = Math.cos(oA) * 22;
+      const fy = Math.sin(oA) * 22;
+
+      // Mini Fake Glow
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+      ctx.beginPath(); ctx.arc(fx, fy, 6, 0, Math.PI*2); ctx.fill();
+
+      // Mini Hellfire shape
+      ctx.fillStyle = '#ea580c'; // Orange
+      ctx.beginPath();
+      ctx.moveTo(fx, fy - 6);
+      ctx.quadraticCurveTo(fx + 4, fy, fx + 3, fy + 3);
+      ctx.quadraticCurveTo(fx, fy + 5, fx - 3, fy + 3);
+      ctx.quadraticCurveTo(fx - 4, fy, fx, fy - 6);
+      ctx.fill();
+
+      // Core ng mini hellfire
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath(); ctx.arc(fx, fy + 2, 1.5, 0, Math.PI*2); ctx.fill();
+    }
+  }
+} 
+     else if (f.id === 'fairy') {
+  ctx.save(); 
+
+  // --- BASE FAIRY ---
+  // Base Green Glow
+  ctx.fillStyle = 'rgba(34, 197, 94, 0.3)'; 
+  ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+  
+  // Base Body
+  ctx.fillStyle = '#86efac';
+  ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill();
+
+  // Base Upper Wings
+  const flap = Math.abs(Math.sin(t * 0.015)) * 6 + 1;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  ctx.beginPath(); ctx.ellipse(-5, -3, 8, flap, Math.PI/4, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(5, -3, 8, flap, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+
+  // --- LEVEL 5 UPGRADES (GLOWING HALO) ---
+  if (f.level >= 5) {
+    // Lower Wings
+    const flapLower = Math.abs(Math.cos(t * 0.015)) * 4 + 1;
+    ctx.fillStyle = 'rgba(200, 255, 200, 0.6)';
+    ctx.beginPath(); ctx.ellipse(-3, 4, 6, flapLower, Math.PI/3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(3, 4, 6, flapLower, -Math.PI/3, 0, Math.PI*2); ctx.fill();
+
+    // Halo Animation Setup
+    const haloPulse = Math.abs(Math.sin(t * 0.005)) * 2;
+    const hX = 0;
+    const hY = -14 - haloPulse; // Itinaas ng konti para sa crown mamaya
+    const hRadiusX = 9 + (haloPulse / 2);
+    const hRadiusY = 2.5;
+
+    // LAYERED HALO GLOW (Neon Effect)
+    // Layer 1: Makapal at Malabong Outer Glow
+    ctx.strokeStyle = 'rgba(253, 224, 71, 0.2)';
+    ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.ellipse(hX, hY, hRadiusX, hRadiusY, 0, 0, Math.PI*2); ctx.stroke();
+
+    // Layer 2: Medium Glow
+    ctx.strokeStyle = 'rgba(253, 224, 71, 0.6)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(hX, hY, hRadiusX, hRadiusY, 0, 0, Math.PI*2); ctx.stroke();
+
+    // Layer 3: Maliwanag na Core (White-Yellow)
+    ctx.strokeStyle = '#fffbeb';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(hX, hY, hRadiusX, hRadiusY, 0, 0, Math.PI*2); ctx.stroke();
+  }
+
+  // --- LEVEL 10 UPGRADES (GLOWING CROWN & MINI FAERIES) ---
+  if (f.level >= 10) {
+    
+    // PATH NG CROWN (Ginawang function para ma-reuse sa glow at core)
+    const drawCrownPath = () => {
+      ctx.beginPath();
+      ctx.moveTo(-3, -5);   ctx.lineTo(-4.5, -9.5); ctx.lineTo(-1.5, -7.5); 
+      ctx.lineTo(0, -11);   ctx.lineTo(1.5, -7.5);  ctx.lineTo(4.5, -9.5); 
+      ctx.lineTo(3, -5);
+      ctx.closePath();
+    };
+
+    // LAYERED CROWN GLOW
+    ctx.lineJoin = 'round';
+    
+    // Layer 1: Malawak na Orange/Gold Glow sa likod
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+    ctx.lineWidth = 5;
+    drawCrownPath(); ctx.stroke();
+
+    // Layer 2: Mas matapang na Yellow Glow
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
+    ctx.lineWidth = 2.5;
+    drawCrownPath(); ctx.stroke();
+
+    // Layer 3: Solid Gold Core Fill
+    ctx.fillStyle = '#fef08a'; // Napakaliwanag na yellow/gold
+    drawCrownPath(); ctx.fill();
+
+
+    // ORBITING MINI FAERIES (May sarili ring mini-glow)
+    for (let i = 0; i < 2; i++) {
+      const offset = i * Math.PI; 
+      const orbitRadius = 18;     
+      const speed = t * 0.002;
+      const miniX = Math.cos(speed + offset) * orbitRadius;
+      const miniY = Math.sin(speed + offset) * orbitRadius;
+
+      // Mini Fairy Glow
+      ctx.fillStyle = 'rgba(103, 232, 249, 0.4)'; // Cyan glow
+      ctx.beginPath(); ctx.arc(miniX, miniY, 6, 0, Math.PI*2); ctx.fill();
+
+      // Mini Fairy Core Body
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath(); ctx.arc(miniX, miniY, 2.5, 0, Math.PI*2); ctx.fill();
+
+      // Mini Fairy Wings
+      const miniFlap = Math.abs(Math.sin(t * 0.03 + offset)) * 3 + 0.5;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.beginPath(); ctx.ellipse(miniX - 2.5, miniY - 1.5, 3.5, miniFlap, Math.PI/4, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(miniX + 2.5, miniY - 1.5, 3.5, miniFlap, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  ctx.restore(); 
+}
       else if (f.id === 'voidling') {
         const float = Math.sin(t * 0.005) * 4;
         ctx.shadowBlur = 10; ctx.shadowColor = '#a855f7';
@@ -1591,75 +1754,669 @@ export function LiveFamiliarPreview({ id, level }) {
           }
         }
       }
-      else if (f.id === 'frost') {
-        ctx.shadowBlur = 10; ctx.shadowColor = '#38bdf8';
-        ctx.fillStyle = '#bae6fd';
-        ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(6, 0); ctx.lineTo(0, 8); ctx.lineTo(-6, 0); ctx.fill();
-        if (f.level >= 5) {
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)'; ctx.lineWidth = 1.5;
-          ctx.beginPath(); ctx.arc(0, 0, 14, 0, Math.PI*2); ctx.stroke();
-        }
-        if (f.level >= 10) {
-          ctx.fillStyle = '#e0f2fe';
-          for(let i=0; i<3; i++) {
-             const a = t*0.003 + (i*Math.PI*2/3);
-             ctx.beginPath(); ctx.arc(Math.cos(a)*18, Math.sin(a)*18, 2.5, 0, Math.PI*2); ctx.fill();
-          }
-        }
+else if (f.id === 'frost') {
+  // --- 1. FAKE GLOW (Ice Aura - Performance Friendly) ---
+  ctx.fillStyle = 'rgba(56, 189, 248, 0.15)'; 
+  ctx.beginPath(); 
+  ctx.arc(0, 0, 18, 0, Math.PI * 2); 
+  ctx.fill();
+
+  // --- 2. SNOWFLAKE SA LIKOD (Background Layer) ---
+  // Dito tayo magdo-draw ng umiikot na snowflake BAGO idraw yung fairy
+  ctx.save();
+  ctx.rotate(t * 0.002); // Mabagal na pag-ikot
+  ctx.strokeStyle = 'rgba(186, 230, 253, 0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  // Paggawa ng 6-pointed snowflake
+  for (let i = 0; i < 6; i++) {
+    ctx.moveTo(0, 0); ctx.lineTo(0, -14); // Main line
+    ctx.moveTo(0, -6); ctx.lineTo(-3, -10); // Kaliwang sanga
+    ctx.moveTo(0, -6); ctx.lineTo(3, -10);  // Kanang sanga
+    ctx.rotate(Math.PI / 3); // 60 degrees rotation per spoke
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // --- 3. ICE FAIRY WINGS (Matulis / Crystalline) ---
+  const flap = Math.sin(t * 0.05) * 2;
+  ctx.fillStyle = 'rgba(186, 230, 253, 0.8)';
+  
+  // Kaliwang Pakpak
+  ctx.beginPath();
+  ctx.moveTo(-2, -2); 
+  ctx.lineTo(-10, -10 - flap); 
+  ctx.lineTo(-14, -2 - flap); 
+  ctx.lineTo(-4, 2);
+  ctx.fill();
+  
+  // Kanang Pakpak
+  ctx.beginPath();
+  ctx.moveTo(2, -2); 
+  ctx.lineTo(10, -10 - flap); 
+  ctx.lineTo(14, -2 - flap); 
+  ctx.lineTo(4, 2);
+  ctx.fill();
+
+  // --- 4. KATAWAN NG ICE FAIRY ---
+  ctx.fillStyle = '#38bdf8'; // Icy blue dress
+  ctx.beginPath();
+  ctx.moveTo(0, -4); // Leeg
+  ctx.lineTo(-4, 8); // Laylayan (Kaliwa)
+  ctx.lineTo(0, 11); // Matulis na ilalim (parang icicle)
+  ctx.lineTo(4, 8);  // Laylayan (Kanan)
+  ctx.fill();
+
+  // ULO
+  ctx.fillStyle = '#e0f2fe'; // Pale white/blue face
+  ctx.beginPath();
+  ctx.arc(0, -6, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // ✨ LEVEL 5 TRANSFORMATION: Hexagon Ice Shield
+  if (f.level >= 5) {
+    ctx.strokeStyle = 'rgba(14, 165, 233, 0.8)'; // Darker cyan border
+    ctx.lineWidth = 1.5;
+    ctx.save();
+    ctx.rotate(-t * 0.01); // Paatras na ikot kumpara sa likod
+    ctx.beginPath();
+    // Paggawa ng hugis Hexagon na parang crystal base
+    for(let i = 0; i < 6; i++) {
+      ctx.lineTo(Math.cos(i * Math.PI / 3) * 12, Math.sin(i * Math.PI / 3) * 12);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // ✨ LEVEL 10 TRANSFORMATION: Orbiting Mini Snowflakes
+  if (f.level >= 10) {
+    const orbit = t * 0.003;
+    
+    for (let i = 0; i < 3; i++) {
+      const a = orbit + (i * Math.PI * 2 / 3);
+      const fx = Math.cos(a) * 22; // Orbit x
+      const fy = Math.sin(a) * 22 + Math.cos(t * 0.05 + i) * 3; // Orbit y + konting pag-angat (bobbing)
+      
+      // Mini ice glow para lumitaw
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.4)';
+      ctx.beginPath(); 
+      ctx.arc(fx, fy, 5, 0, Math.PI * 2); 
+      ctx.fill();
+
+      // Pagguhit ng mabilis na umiikot na mini snowflakes
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(t * 0.05); // Fast spin
+      ctx.strokeStyle = '#bae6fd';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for(let j = 0; j < 6; j++) {
+        ctx.moveTo(0, 0); 
+        ctx.lineTo(0, -4);
+        ctx.rotate(Math.PI / 3);
       }
-      else if (f.id === 'golem') {
-        ctx.shadowBlur = 8; ctx.shadowColor = '#d97706';
-        const float = Math.sin(t * 0.005) * 2;
-        ctx.fillStyle = '#f59e0b'; ctx.fillRect(-8, -8 + float, 16, 16);
-        ctx.fillStyle = '#fffbeb'; ctx.fillRect(-4, -4 + float, 3, 3); ctx.fillRect(4, -4 + float, 3, 3);
-        if (f.level >= 5) { 
-           ctx.fillStyle = '#d97706'; const armSway = Math.cos(t * 0.005) * 5;
-           ctx.fillRect(-16, 0 + armSway, 6, 8); ctx.fillRect(10, 0 - armSway, 6, 8);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+else if (f.id === 'golem') {
+        ctx.save();
+        
+        // 🚀 CONSTANTS
+        const PI2 = 6.283;
+        const float = Math.sin(t * 0.005) * 3; 
+
+        // ✨ BASE FORM: ARCANE MECHA CORE & FLOATING ARMOR
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#06b6d4'; // High-tech Neon Cyan Glow
+
+        // Central Energy Reactor (Ang "Puso" ng Automaton)
+        ctx.fillStyle = '#cffafe';
+        ctx.beginPath(); 
+        ctx.arc(0, float, 4.5, 0, PI2); 
+        ctx.fill();
+
+        ctx.shadowBlur = 0; // Optimize performance
+
+        // Obsidian Carapace (Floating Segmented Metal Armor)
+        ctx.fillStyle = '#0f172a';   
+        ctx.strokeStyle = '#fbbf24'; // Gold trims
+        ctx.lineWidth = 1.5;
+
+        // Top Crown / Mantle Armor 
+        ctx.beginPath();
+        ctx.moveTo(-10, -5 + float); ctx.lineTo(0, -14 + float);
+        ctx.lineTo(10, -5 + float); ctx.lineTo(0, -9 + float);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        // Bottom Chassis Armor 
+        ctx.beginPath();
+        ctx.moveTo(-8, 5 + float); ctx.lineTo(0, 14 + float);
+        ctx.lineTo(8, 5 + float); ctx.lineTo(0, 9 + float);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+
+        // ✨ TRANSFORMATION: LEVEL 5 (Heavy Runic Gauntlets)
+        if (f.level >= 5) {
+          const sway = Math.cos(t * 0.005) * 4; 
+
+          // Left Mechanical Gauntlet
+          ctx.beginPath();
+          ctx.moveTo(-18, -4 + sway); ctx.lineTo(-12, -2 + sway);
+          ctx.lineTo(-10, 8 + sway); ctx.lineTo(-16, 12 + sway);
+          ctx.lineTo(-20, 6 + sway);
+          ctx.closePath();
+          ctx.fill(); ctx.stroke();
+          
+          // Left Gauntlet Cyan Energy Vent
+          ctx.fillStyle = '#22d3ee';
+          ctx.fillRect(-17, 2 + sway, 3, 5);
+
+          // Right Mechanical Gauntlet
+          ctx.fillStyle = '#0f172a'; 
+          ctx.beginPath();
+          ctx.moveTo(18, -4 - sway); ctx.lineTo(12, -2 - sway);
+          ctx.lineTo(10, 8 - sway); ctx.lineTo(16, 12 - sway);
+          ctx.lineTo(20, 6 - sway);
+          ctx.closePath();
+          ctx.fill(); ctx.stroke();
+          
+          // Right Gauntlet Cyan Energy Vent
+          ctx.fillStyle = '#22d3ee';
+          ctx.fillRect(14, 2 - sway, 3, 5);
         }
-        if (f.level >= 10) { 
-           ctx.fillStyle = '#ef4444'; ctx.fillRect(-2, 2 + float, 4, 4);
-           ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)'; ctx.lineWidth = 2;
-           ctx.beginPath(); ctx.arc(0, float, 24, 0, Math.PI*2); ctx.stroke();
+
+        // ✨ TRANSFORMATION: LEVEL 10 (Hexagon Forcefield Only)
+        if (f.level >= 10) {
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#06b6d4';
+
+          // 1. Holographic Hexagon Shield (Sci-Fi Hex Grid)
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.5)'; // Cyan color
+          ctx.lineWidth = 1.5;
+          const hexRot = t * 0.0015;
+          ctx.beginPath();
+          for (let i = 0; i <= 6; i++) {
+            const a = hexRot + (i * 1.047); // 1.047 rad = 60 degrees
+            const hx = Math.cos(a) * 26;
+            const hy = float + Math.sin(a) * 26;
+            if (i === 0) ctx.moveTo(hx, hy);
+            else ctx.lineTo(hx, hy);
+          }
+          ctx.stroke();
+
+          // 2. Inner Golden Tech-Triangle (Umiikot nang pabaliktad)
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)'; // Gold color
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          for (let i = 0; i <= 3; i++) {
+            const a = -hexRot + (i * 2.094); // 2.094 rad = 120 degrees
+            const tx = Math.cos(a) * 16;
+            const ty = float + Math.sin(a) * 16;
+            if (i === 0) ctx.moveTo(tx, ty);
+            else ctx.lineTo(tx, ty);
+          }
+          ctx.stroke();
         }
+
+        ctx.restore();
       }
       else if (f.id === 'thunder') {
-        ctx.shadowBlur = 10; ctx.shadowColor = '#e879f9';
-        ctx.fillStyle = '#fdf4ff';
-        const pulse = Math.sin(t * 0.01) * 2;
-        ctx.beginPath(); ctx.arc(0, 0, 6 + pulse, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, -12); ctx.lineTo(-2, -6); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(6, -2); ctx.lineTo(10, -12); ctx.lineTo(2, -6); ctx.fill();
+  // Mabilis na pulse para sa kuryente
+  const pulse = Math.sin(t * 0.1) * 2; 
+
+  // --- 1. FAKE GLOW (Neon Purple Aura) ---
+  ctx.fillStyle = `rgba(217, 70, 239, ${0.15 + pulse * 0.02})`;
+  ctx.beginPath(); 
+  ctx.arc(0, 0, 20 + pulse, 0, Math.PI*2); 
+  ctx.fill();
+
+  // ✨ LEVEL 10 TRANSFORMATION: Electric Wings (Nasa likod kaya unang idinraw)
+  if (f.level >= 10) {
+    const flap = Math.cos(t * 0.15) * 4; // Mabilis na pagkampay
+    ctx.strokeStyle = '#f0abfc'; // Bright pinkish-white
+    ctx.lineWidth = 2;
+    
+    // Left Electric Wing (Zig-zag)
+    ctx.beginPath();
+    ctx.moveTo(-4, 0); 
+    ctx.lineTo(-12, -8 - flap); 
+    ctx.lineTo(-10, -4 - flap); 
+    ctx.lineTo(-20, 2 - flap);
+    ctx.stroke();
+    
+    // Right Electric Wing (Zig-zag)
+    ctx.beginPath();
+    ctx.moveTo(4, 0); 
+    ctx.lineTo(12, -8 - flap); 
+    ctx.lineTo(10, -4 - flap); 
+    ctx.lineTo(20, 2 - flap);
+    ctx.stroke();
+  }
+
+  // --- 2. LIGHTNING HORNS (Mga sungay na parang kidlat) ---
+  ctx.fillStyle = '#fdf4ff'; // Bright neon white
+  // Left Horn
+  ctx.beginPath(); 
+  ctx.moveTo(-3, -6); ctx.lineTo(-8, -12); ctx.lineTo(-5, -14); ctx.lineTo(-10, -20); ctx.lineTo(-2, -8); 
+  ctx.fill();
+  // Right Horn
+  ctx.beginPath(); 
+  ctx.moveTo(3, -6); ctx.lineTo(8, -12); ctx.lineTo(5, -14); ctx.lineTo(10, -20); ctx.lineTo(2, -8); 
+  ctx.fill();
+
+  // --- 3. DEMON CORE BODY (Angular / Mecha-Demon Face) ---
+  ctx.fillStyle = '#701a75'; // Dark intense purple
+  ctx.beginPath();
+  ctx.moveTo(0, -8);  // Tuktok ng ulo
+  ctx.lineTo(7, -2);  // Kanang pisngi
+  ctx.lineTo(4, 8);   // Kanang panga
+  ctx.lineTo(0, 12);  // Matulis na baba
+  ctx.lineTo(-4, 8);  // Kaliwang panga
+  ctx.lineTo(-7, -2); // Kaliwang pisngi
+  ctx.fill();
+
+  // --- 4. DEMON EYES (Nagniningning na neon slits) ---
+  ctx.fillStyle = '#fdf4ff';
+  ctx.beginPath();
+  ctx.moveTo(-2, -1); ctx.lineTo(-6, -3); ctx.lineTo(-2, 1); ctx.fill(); // Left eye
+  ctx.beginPath();
+  ctx.moveTo(2, -1); ctx.lineTo(6, -3); ctx.lineTo(2, 1); ctx.fill(); // Right eye
+
+  // ✨ LEVEL 5 TRANSFORMATION: Rotating Electric Halo (Atom-style)
+  if (f.level >= 5) {
+    ctx.strokeStyle = '#d946ef'; // Neon Magenta
+    ctx.lineWidth = 1.5;
+    ctx.save();
+    ctx.rotate(t * 0.02); // Mabilis na pag-ikot
+    // Dalawang nagkrus na ellipse parang electron orbit
+    ctx.beginPath(); ctx.ellipse(0, 0, 16, 4, 0, 0, Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(0, 0, 16, 4, Math.PI/2, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+  }
+
+  // ✨ LEVEL 10 TRANSFORMATION: High Voltage Lightning Strikes
+  if (f.level >= 10 && Math.random() < 0.4) { // Tumaas ang chance pumitik
+    ctx.strokeStyle = '#ffffff'; 
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); 
+    ctx.moveTo(0,0); 
+    
+    // Imbes na isang diretso, ginawa nating "zig-zag" ang kidlat para mas realistic!
+    const midX = (Math.random() - 0.5) * 20;
+    const midY = (Math.random() - 0.5) * 20;
+    const endX = midX + (Math.random() - 0.5) * 25;
+    const endY = midY + (Math.random() - 0.5) * 25;
+    
+    ctx.lineTo(midX, midY); // Unang pitik ng kidlat
+    ctx.lineTo(endX, endY); // Pangalawang pitik ng kidlat
+    ctx.stroke();
+  }
+}
+
+else if (f.id === 'shadow') {
+        ctx.save(); // I-save ang state para hindi madamay ang ibang drawing sa lag/glow
+
+        // 🔥 BASE FORM: VAMPIRE DEMON (With GLOW & BLUR)
+        ctx.shadowBlur = 15; 
+        ctx.shadowColor = '#ef4444'; // Glowing red aura
+        
+        // Demon Wings
+        const flap = Math.sin(t * 0.015) * 6; 
+        ctx.fillStyle = '#3b0764'; // Deep dark purple
+        
+        ctx.beginPath(); 
+        // Left Wing
+        ctx.moveTo(-4, 0); ctx.lineTo(-16, -10 + flap); ctx.lineTo(-20, -2 + flap); ctx.lineTo(-10, 5); 
+        // Right Wing
+        ctx.moveTo(4, 0); ctx.lineTo(16, -10 + flap); ctx.lineTo(20, -2 + flap); ctx.lineTo(10, 5); 
+        ctx.fill();
+
+        // Demon Body & Horns
+        ctx.fillStyle = '#111827'; 
+        ctx.beginPath(); 
+        ctx.arc(0, 0, 6, 0, Math.PI*2); // Body
+        ctx.moveTo(-3, -4); ctx.lineTo(-6, -10); ctx.lineTo(-1, -5); // Left Horn
+        ctx.moveTo(3, -4); ctx.lineTo(6, -10); ctx.lineTo(1, -5); // Right Horn
+        ctx.fill();
+        
+        // Glowing Demonic Eyes
+        ctx.fillStyle = '#ff2424'; 
+        ctx.beginPath(); 
+        ctx.arc(-2, -1, 1.5, 0, Math.PI*2); 
+        ctx.arc(2, -1, 1.5, 0, Math.PI*2); 
+        ctx.fill();
+
+        // ✨ TRANSFORMATION: LEVEL 5
         if (f.level >= 5) {
-           ctx.strokeStyle = '#d946ef'; ctx.lineWidth = 2;
-           ctx.beginPath(); ctx.ellipse(0, 0, 16, 6, t*0.005, 0, Math.PI*2); ctx.stroke();
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#e11d48'; // Bright blood aura glow
+
+          // Rotating Bloody Ritual Ring
+          ctx.strokeStyle = 'rgba(225, 29, 72, 0.8)'; 
+          ctx.lineWidth = 2;
+          ctx.setLineDash([6, 4]); 
+          ctx.beginPath(); 
+          ctx.arc(0, 0, 16, t * 0.003, (Math.PI * 2) + (t * 0.003)); 
+          ctx.stroke();
+          ctx.setLineDash([]); 
+          
+          // Dripping Blood Particle
+          ctx.fillStyle = '#be123c';
+          const drip = (t * 0.04) % 12; 
+          ctx.beginPath(); 
+          ctx.arc(0, 6 + drip, 1.5 - (drip * 0.1), 0, Math.PI*2); 
+          ctx.fill();
         }
-        if (f.level >= 10 && Math.random() < 0.3) {
-            ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo((Math.random()-0.5)*35, (Math.random()-0.5)*35); ctx.stroke();
+
+        // ✨ TRANSFORMATION: LEVEL 10
+        if (f.level >= 10) {
+          ctx.shadowBlur = 25;
+          ctx.shadowColor = '#9f1239'; // Dark crimson glow para sa malaking ring
+
+          // Solid Dark Crimson Ring
+          ctx.strokeStyle = '#88042a'; 
+          ctx.lineWidth = 3;
+          ctx.beginPath(); 
+          ctx.arc(0, 0, 24, 0, Math.PI * 2); 
+          ctx.stroke();
+
+          // Orbiting Small Bats
+          ctx.shadowBlur = 10;
+          ctx.shadowColor = '#ef4444'; // Red glow sa paligid ng mga paniki
+          ctx.fillStyle = '#030712'; // Black bats
+          
+          for(let i = 0; i < 3; i++) {
+            const a = (t * 0.004) + (i * 2.094); 
+            const bx = Math.cos(a) * 24; 
+            const by = Math.sin(a) * 24;
+            
+            ctx.save();
+            ctx.translate(bx, by);
+            ctx.rotate(a + 1.57);
+            
+            const batFlap = Math.sin(t * 0.08) * 3.5;
+            ctx.beginPath();
+            ctx.arc(0, 0, 2, 0, Math.PI*2); // Bat Body
+            ctx.moveTo(-1, 0); ctx.lineTo(-7, -4 + batFlap); ctx.lineTo(-4, 2); // Left Wing
+            ctx.moveTo(1, 0); ctx.lineTo(7, -4 + batFlap); ctx.lineTo(4, 2); // Right Wing
+            ctx.fill();
+            
+            ctx.restore();
+          }
         }
+        
+        ctx.restore(); // I-reset pabalik sa normal ang canvas para walang blur 'yung ibang kalaban
+      }
+else if (f.id === 'light') {
+        ctx.save();
+        
+        // 🚀 HIGH-PERFORMANCE CONSTANTS & TIMING
+        const PI2 = 6.283;
+        const floatY = Math.sin(t * 0.004) * 5; // Mas marangyang paglutang
+        const wingFlap = Math.sin(t * 0.012);
+        
+        // 🎨 DIVINE GRADIENT (Pre-defined para mabilis i-render)
+        // Gumagawa ng dahan-dahang nagpapalitang kulay mula ginto patungong pilak at puti
+        let holyGrad = ctx.createLinearGradient(-20, floatY - 20, 20, floatY + 20);
+        holyGrad.addColorStop(0, '#fffbeb'); // Platinum White
+        holyGrad.addColorStop(0.5, '#fde047'); // Radiant Gold
+        holyGrad.addColorStop(1, '#eab308'); // Deep Gold
+
+        // ✨ BASE FORM: THE HOLY ARCHANGEL
+        // Central Body: Elegant Robed Figure (Mala-kapa/ginto ang hugis)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(0, floatY - 8);         // Ulo/Korona
+        ctx.bezierCurveTo(4, floatY - 4, 5, floatY + 4, 3, floatY + 10);  // Kanang bahagi ng katawan
+        ctx.lineTo(-3, floatY + 10);       // Laylayan ng roba
+        ctx.bezierCurveTo(-5, floatY + 4, -4, floatY - 4, 0, floatY - 8); // Kaliwang bahagi ng katawan
+        ctx.fill();
+
+        // Glowing Core Face (Isang maliit na ukit ng nakakasilaw na liwanag)
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath(); ctx.arc(0, floatY - 3, 2, 0, PI2); ctx.fill();
+
+        // Primary Archangel Wings (Malalaki at matutulis na pakpak ng liwanag)
+        ctx.fillStyle = holyGrad;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#fbbf24';
+        
+        ctx.beginPath();
+        // Left Main Wing (Sweeping Curve papataas)
+        ctx.moveTo(-2, floatY);
+        ctx.quadraticCurveTo(-15, floatY - 18 + wingFlap * 4, -24, floatY - 10 + wingFlap * 2);
+        ctx.quadraticCurveTo(-14, floatY + 2, -2, floatY + 4);
+        // Right Main Wing
+        ctx.moveTo(2, floatY);
+        ctx.quadraticCurveTo(15, floatY - 18 + wingFlap * 4, 24, floatY - 10 + wingFlap * 2);
+        ctx.quadraticCurveTo(14, floatY + 2, 2, floatY + 4);
+        ctx.fill();
+
+        // ✨ TRANSFORMATION: LEVEL 5 (Seraphim Form - 4 Wings & Crown of Light)
+        if (f.level >= 5) {
+          // Spiked Halo / Crown ( may apat na matutulis na sinag )
+          ctx.strokeStyle = '#fef08a';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(0, floatY - 12, 5, 0, PI2); // Halo Ring
+          // Mga Spikes ng Korona
+          ctx.moveTo(0, floatY - 17); ctx.lineTo(0, floatY - 21); // Top Spike
+          ctx.moveTo(-5, floatY - 12); ctx.lineTo(-9, floatY - 12); // Left Spike
+          ctx.moveTo(5, floatY - 12); ctx.lineTo(9, floatY - 12); // Right Spike
+          ctx.stroke();
+
+          // Secondary Lower Wings (4-Winged Seraphim State)
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.beginPath();
+          // Left Lower Wing (Nakaturo naman pababa para sa majestic framing)
+          ctx.moveTo(-2, floatY + 3);
+          ctx.quadraticCurveTo(-18, floatY + 4 - wingFlap * 2, -20, floatY + 14 - wingFlap * 3);
+          ctx.quadraticCurveTo(-10, floatY + 12, -2, floatY + 5);
+          // Right Lower Wing
+          ctx.moveTo(2, floatY + 3);
+          ctx.quadraticCurveTo(18, floatY + 4 - wingFlap * 2, 20, floatY + 14 - wingFlap * 3);
+          ctx.quadraticCurveTo(10, floatY + 12, 2, floatY + 5);
+          ctx.fill();
+
+          // Shimmering Star Particles (Floating Cross-Stars na nag-fa-fade)
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowBlur = 5;
+          ctx.shadowColor = '#ffffff';
+          for (let i = 0; i < 2; i++) {
+            const pOffset = (t * 0.02 + i * 10) % 24;
+            const px = Math.sin(t * 0.005 + i) * 14;
+            const py = floatY + 10 - pOffset;
+            
+            // 4-pointed Star drawing
+            ctx.beginPath();
+            ctx.moveTo(px, py - 3); ctx.lineTo(px + 1, py - 1); ctx.lineTo(px + 3, py);
+            ctx.lineTo(px + 1, py + 1); ctx.lineTo(px, py + 3); ctx.lineTo(px - 1, py + 1);
+            ctx.lineTo(px - 3, py); ctx.lineTo(px - 1, py - 1);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+
+        // ✨ TRANSFORMATION: LEVEL 10 (Supreme Judgment Form - 6 Wings & Judgement Wheel)
+        if (f.level >= 10) {
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = '#eab308';
+
+          // Sacred Judgement Wheel (Napakagandang geometric mandala sa likod ng Archangel)
+          ctx.strokeStyle = 'rgba(254, 240, 138, 0.25)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(0, floatY, 26, 0, PI2); // Outer thin ring
+          ctx.arc(0, floatY, 18, 0, PI2); // Inner thin ring
+          ctx.stroke();
+
+          // Spokes of Judgment (Umiikot na sinag sa loob ng gulong ng langit)
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+          ctx.beginPath();
+          const rot = t * 0.002;
+          for (let a = 0; a < PI2; a += 0.523) { // 12 Sinag ng liwanag (0.523 = 30 degrees)
+            ctx.moveTo(Math.cos(a + rot) * 18, floatY + Math.sin(a + rot) * 18);
+            ctx.lineTo(Math.cos(a + rot) * 26, floatY + Math.sin(a + rot) * 26);
+          }
+          ctx.stroke();
+
+          // 3rd Pair of Wings (6 Wings Total - God Tier / Supreme Archangel)
+          ctx.fillStyle = holyGrad;
+          ctx.beginPath();
+          // Topmost Majestic Wings (Malalaki at nakabuka nang todo sa itaas)
+          ctx.moveTo(-1, floatY - 4);
+          ctx.quadraticCurveTo(-12, floatY - 28 + wingFlap * 2, -28, floatY - 24 + wingFlap * 3);
+          ctx.quadraticCurveTo(-12, floatY - 12, -1, floatY - 2);
+          // Right Topmost Wing
+          ctx.moveTo(1, floatY - 4);
+          ctx.quadraticCurveTo(12, floatY - 28 + wingFlap * 2, 28, floatY - 24 + wingFlap * 3);
+          ctx.quadraticCurveTo(12, floatY - 12, 1, floatY - 2);
+          ctx.fill();
+
+          // Orbiting Blades of Light (Dalawang lumulutang na sagradong espada/relika ng liwanag)
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = '#ffffff';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+
+          const t004 = t * 0.004;
+          for (let i = 0; i < 2; i++) {
+            const angle = t004 + (i * 3.141);
+            const bx = Math.cos(angle) * 32;
+            const by = floatY + Math.sin(angle) * 10; // Ellistical orbit para sa Lalim/3D Effect
+
+            ctx.save();
+            ctx.translate(bx, by);
+            ctx.rotate(angle + 1.57); // Laging nakaturong paitaas o paikot ang relic
+
+            // Drawing a miniature glowing Light Blade/Rune
+            ctx.beginPath();
+            ctx.moveTo(0, -6);  // Tip ng blade
+            ctx.lineTo(2, 2);   // Kanan ng talim
+            ctx.lineTo(0, 5);   // Hilt/Hawakan
+            ctx.lineTo(-2, 2);  // Kaliwa ng talim
+            ctx.closePath();
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(254, 240, 138, 0.7)';
+            ctx.fill();
+
+            ctx.restore();
+          }
+        }
+        
+        ctx.restore();
       }
 
-      else if (f.id === 'shadow') {
-        ctx.shadowBlur = 10; ctx.shadowColor = '#7c3aed'; ctx.fillStyle = '#4c1d95';
-        ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI*2); ctx.fill();
-        const flap = Math.sin(t * 0.02) * 5; ctx.fillStyle = 'rgba(139, 92, 246, 0.8)';
-        ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-12, -8 + flap); ctx.lineTo(-10, 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(4, 0); ctx.lineTo(12, -8 + flap); ctx.lineTo(10, 2); ctx.fill();
-      }
-      else if (f.id === 'light') {
-        ctx.shadowBlur = 15; ctx.shadowColor = '#fde047'; ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(0, Math.sin(t*0.005)*3, 6, 0, Math.PI*2); ctx.fill();
-        const flap = Math.abs(Math.sin(t * 0.01)) * 4 + 2; ctx.fillStyle = 'rgba(254, 240, 138, 0.6)';
-        ctx.beginPath(); ctx.ellipse(-8, Math.sin(t*0.005)*3, 8, flap, -Math.PI/6, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(8, Math.sin(t*0.005)*3, 8, flap, Math.PI/6, 0, Math.PI*2); ctx.fill();
-      }
       else if (f.id === 'wind') {
-        ctx.shadowBlur = 10; ctx.shadowColor = '#6ee7b7'; ctx.fillStyle = '#a7f3d0';
-        ctx.beginPath(); ctx.moveTo(0, 8); ctx.lineTo(-6, -4); ctx.lineTo(6, -4); ctx.fill();
-        const wSway = Math.cos(t * 0.01) * 3; ctx.strokeStyle = '#34d399'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(-4, 0); ctx.quadraticCurveTo(-12, -8, -14, wSway); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(4, 0); ctx.quadraticCurveTo(12, -8, 14, -wSway); ctx.stroke();
-      }
+  // --- BASE SETUP ---
+  ctx.shadowBlur = 10; 
+  ctx.shadowColor = '#6ee7b7';
+
+  // Animasyon para sa pagkampay ng pakpak (flapping)
+  const wingFlap = Math.cos(t * 0.05) * 4;
+
+  // --- PAKPAK NG FAIRY (Wings) ---
+  ctx.fillStyle = 'rgba(167, 243, 208, 0.7)'; // Transparent na light green
+  ctx.beginPath();
+  // Kaliwang pakpak
+  ctx.ellipse(-5, -4, 4, 10 + wingFlap, Math.PI / 6, 0, Math.PI * 2); 
+  // Kanang pakpak
+  ctx.ellipse(5, -4, 4, 10 + wingFlap, -Math.PI / 6, 0, Math.PI * 2); 
+  ctx.fill();
+
+  // --- KATAWAN NG FAIRY (Body & Dress) ---
+  ctx.fillStyle = '#34d399'; // Emerald dress
+  ctx.beginPath();
+  ctx.moveTo(0, -5);  // Leeg
+  ctx.lineTo(-5, 9);  // Laylayan (Kaliwa)
+  ctx.quadraticCurveTo(0, 11, 5, 9); // Pakurbang ilalim ng dress
+  ctx.fill();
+
+  // --- ULO (Head) ---
+  ctx.fillStyle = '#a7f3d0';
+  ctx.beginPath();
+  ctx.arc(0, -7, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // --- WEAPON: LYRE ---
+  // Iguguhit natin sa bandang kaliwa ng fairy
+  ctx.shadowBlur = 5;
+  ctx.shadowColor = '#fef3c7'; // Glow ng lyre
+  ctx.strokeStyle = '#fbbf24'; // Gold na kulay ng lyre frame
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-8, -2);
+  ctx.quadraticCurveTo(-13, 4, -6, 8); // Hugis U ng lyre
+  ctx.lineTo(-4, 8);
+  ctx.stroke();
+  
+  // Strings ng Lyre
+  ctx.strokeStyle = '#fef3c7'; // Light strings
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(-7.5, 0); ctx.lineTo(-5.5, 7.5);
+  ctx.moveTo(-6.5, 0); ctx.lineTo(-4.5, 7.5);
+  ctx.stroke();
+
+  // Reset shadow para hindi magulo ang susunod na effects
+  ctx.shadowBlur = 0;
+
+  // ✨ LEVEL 5 TRANSFORMATION: Wind Aura & Cyclone Base
+  if (f.level >= 5) {
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = '#34d399';
+    ctx.strokeStyle = 'rgba(52, 211, 153, 0.8)';
+    ctx.lineWidth = 2;
+    
+    // Umiikot na cyclone sa paanan
+    const wSway = t * 0.02;
+    ctx.beginPath();
+    ctx.ellipse(0, 11, 14, 3 + Math.sin(wSway) * 2, 0, 0, Math.PI*2);
+    ctx.stroke();
+    
+    // Hanging dumadaloy sa paligid niya
+    ctx.beginPath();
+    ctx.moveTo(-10, 10);
+    ctx.quadraticCurveTo(-16, 0, -4, -10);
+    ctx.stroke();
+  }
+
+  // ✨ LEVEL 10 TRANSFORMATION: Little Fairy Companions
+  if (f.level >= 10) {
+    const orbitRadius = 22; // Gaano kalayo sa main fairy
+    const orbitSpeed = t * 0.002;
+    
+    // Gumawa ng 3 maliliit na fairies na umiikot
+    for (let i = 0; i < 3; i++) {
+      const angle = orbitSpeed + (i * (Math.PI * 2 / 3));
+      const fx = Math.cos(angle) * orbitRadius;
+      // Dagdag "bobbing" effect pataas-pababa habang umiikot
+      const fy = Math.sin(angle) * orbitRadius + Math.sin(t * 0.05 + i) * 4; 
+
+      // Katawan ng maliit na fairy (Glowy Gold/Green)
+      ctx.fillStyle = '#fef3c7'; 
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#fbbf24';
+      ctx.beginPath();
+      ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pakpak ng maliliit na fairies
+      const miniFlap = Math.cos(t * 0.1 + i) * 2;
+      ctx.fillStyle = 'rgba(167, 243, 208, 0.8)';
+      ctx.beginPath();
+      // Kaliwang mini-pakpak
+      ctx.ellipse(fx - 2, fy - 1, 1.5, 2.5 + miniFlap, Math.PI/4, 0, Math.PI*2);
+      // Kanang mini-pakpak
+      ctx.ellipse(fx + 2, fy - 1, 1.5, 2.5 + miniFlap, -Math.PI/4, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+}
 
       ctx.restore();
       animationFrameId = requestAnimationFrame(render);
@@ -1807,11 +2564,13 @@ const buyOrEquipFamiliar = (fam) => {
     localStorage.setItem('arcane_equipped_familiars', JSON.stringify(newEquipped));
   };
 
-  const upgradeFamiliar = (fam) => {
+const upgradeFamiliar = (fam) => {
     const currentLevel = familiarLevels[fam.id] || 1;
     if (currentLevel >= fam.maxLevel) return;
 
-    const cost = fam.upgBase * currentLevel;
+    // Exponential cost calculation: Base * (Multiplier ^ Level)
+    const cost = Math.floor(fam.upgBase * Math.pow(fam.upgMult, currentLevel));
+    
     if (crystals >= cost) {
       const newCrystals = crystals - cost;
       const newLevels = { ...familiarLevels, [fam.id]: currentLevel + 1 };
@@ -1873,6 +2632,19 @@ const buyOrEquipFamiliar = (fam) => {
               <div style={{ color: '#cbd5e1', fontSize: '11px', fontStyle: 'italic', marginTop: '2px' }}>
                 ✦ Slay bosses and claim Void Crystals. 💎
               </div>
+              <button 
+                onClick={() => {
+                  const newC = crystals + 10000000;
+                  setCrystals(newC);
+                  localStorage.setItem('arcane_void_crystals', newC);
+                }} 
+                style={{ 
+                  background: 'rgba(139, 92, 246, 0.2)', color: '#c084fc', border: '1px solid #8b5cf6', 
+                  padding: '4px 10px', borderRadius: '4px', marginTop: '6px', cursor: 'pointer', 
+                  fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' 
+                }}>
+                🛠️ +10M Crystals (Dev Mode)
+              </button>
             </div>
 
             <div className="council-tab-headers" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
@@ -1896,26 +2668,64 @@ const buyOrEquipFamiliar = (fam) => {
                   const canAfford = crystals >= cost;
 
                   return (
-                    <div key={item.id} className="shop-card" style={{ border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-                      <div className="shop-card-info" style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ color: isMax ? '#fef08a' : '#fff', fontWeight: 'bold', fontFamily: 'Georgia, serif', fontSize: '1.1rem' }}>
+                    <div key={item.id} className="shop-card" style={{ border: '1px solid rgba(139, 92, 246, 0.3)', flexDirection: 'column' }}>
+                      
+                      {/* Top Info Section */}
+                      <div style={{ display: 'flex', width: '100%', gap: '15px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                          <span style={{ color: isMax ? '#fef08a' : '#fff', fontWeight: 'bold', fontFamily: 'Georgia, serif', fontSize: '1.2rem' }}>
                             {item.name} <span style={{ color: '#a78bfa', fontSize: '0.9rem' }}>[Lv. {level}/{item.maxLevel}]</span>
                           </span>
-                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '4px', lineHeight: '1.4' }}>{item.desc}</span>
+                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '4px' }}>
+                            {item.desc}
+                          </span>
+                          <span style={{ 
+                            color: '#34d399', 
+                            fontSize: '0.80rem', 
+                            fontWeight: 'bold', 
+                            fontFamily: 'monospace', 
+                            marginTop: '8px', 
+                            background: 'rgba(52, 211, 153, 0.15)', 
+                            border: '1px solid rgba(52, 211, 153, 0.3)', 
+                            padding: '4px 8px', 
+                            borderRadius: '4px', 
+                            display: 'inline-block', // <-- Babaguhin ito
+                            width: 'fit-content',      // <-- Babaguhin ito
+                            boxShadow: '0 0 8px rgba(52, 211, 153, 0.2)',
+                            alignSelf: 'center'      // <-- Babaguhin ito
+                          }}>
+                            📈 Total Bonus: {level > 0 ? `+${level * item.statValue}${item.statSuffix}` : 'None'}
+                          </span>
+                          <span style={{ 
+                            color: '#64748b', 
+                            fontSize: '0.5rem', 
+                            fontStyle: 'italic', 
+                            fontFamily: 'monospace', 
+                            marginTop: '4px' 
+                          }}>
+                            *Note: Adds permanent bonuses to your core stats.
+                          </span>
                         </div>
                       </div>
-                      
-                      <button className="shop-btn" onClick={() => buyUpgrade(item.id)} disabled={isMax || !canAfford}
-                        style={{
-                          background: isMax ? 'rgba(5, 2, 12, 0.8)' : (canAfford ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)'),
-                          border: `1px solid ${isMax ? '#475569' : (canAfford ? '#a78bfa' : '#ef4444')}`,
-                          color: isMax ? '#94a3b8' : (canAfford ? '#fff' : '#f87171'),
-                          padding: '10px 16px', borderRadius: '6px', cursor: isMax || !canAfford ? 'not-allowed' : 'pointer',
-                          fontFamily: 'monospace', fontWeight: 'bold', boxShadow: canAfford && !isMax ? '0 0 10px rgba(124, 58, 237, 0.4)' : 'none'
-                        }}>
-                        {isMax ? 'MAXED' : `💎 ${cost}`}
-                      </button>
+
+                      {/* Bottom Upgrade Section (Familiar Style) */}
+                      <div style={{ width: '100%', marginTop: '12px', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '10px', display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        <span style={{ color: '#94a3b8', fontSize: '0.8rem', marginRight: 'auto', fontFamily: 'monospace' }}>
+                          Status: <span style={{color: isMax ? '#34d399' : '#fef08a'}}>{isMax ? 'Maximum Power' : 'Upgradeable'}</span>
+                        </span>
+                        
+                        <button className="shop-btn" onClick={() => buyUpgrade(item.id)} disabled={isMax || !canAfford}
+                          style={{
+                            background: isMax ? 'transparent' : (canAfford ? 'linear-gradient(180deg, #047857 0%, #064e3b 100%)' : 'rgba(239, 68, 68, 0.1)'),
+                            border: `1px solid ${isMax ? '#475569' : (canAfford ? '#34d399' : '#ef4444')}`,
+                            color: isMax ? '#94a3b8' : (canAfford ? '#fff' : '#f87171'),
+                            padding: '6px 14px', borderRadius: '4px', cursor: isMax || !canAfford ? 'not-allowed' : 'pointer',
+                            fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.9rem'
+                          }}>
+                          {isMax ? 'MAX LEVEL' : `⏫ UPGRADE: 💎 ${cost.toLocaleString()}`}
+                        </button>
+                      </div>
+
                     </div>
                   );
                 })}
@@ -1923,42 +2733,75 @@ const buyOrEquipFamiliar = (fam) => {
             )}
 
             {activeTab === 'skins' && (
-              <>
-                {SKINS_DB.map(skin => {
-                  const isUnlocked = unlockedSkins.includes(skin.id);
-                  const isEquipped = equippedSkin === skin.id;
-                  const canAfford = crystals >= skin.cost;
+            <>
+              {SKINS_DB.map(skin => {
+                const isUnlocked = unlockedSkins.includes(skin.id);
+                const isEquipped = equippedSkin === skin.id;
+                const canAfford = crystals >= skin.cost;
 
-                  return (
-                    <div key={skin.id} className="shop-card" style={{ border: `1px solid ${isEquipped ? skin.glow : 'rgba(139, 92, 246, 0.3)'}`, boxShadow: isEquipped ? `0 0 15px ${skin.glow}40` : 'none', textAlign: 'left' }}>
-                      
-                      <div className="shop-card-info" style={{ flex: 1 }}>
-                        <LiveSkinPreview skin={skin} />
+                return (
+                  <div key={skin.id} className="shop-card" style={{ 
+                    display: 'flex',            // Ginawang flexbox ang card
+                    flexDirection: 'row',       // Lahat ng laman (Preview, Text, Button) ay pahiga
+                    alignItems: 'center',       // Center vertical alignment
+                    border: `1px solid ${isEquipped ? skin.glow : 'rgba(139, 92, 246, 0.3)'}`, 
+                    boxShadow: isEquipped ? `0 0 15px ${skin.glow}40` : 'none', 
+                    textAlign: 'left',
+                    padding: '12px',
+                    marginBottom: '10px'
+                  }}>
+                    
+                    {/* Main Info Wrapper (Preview + Text) */}
+                    <div className="shop-card-info" style={{ 
+                      display: 'flex', 
+                      flexDirection: 'row', 
+                      alignItems: 'center', 
+                      flex: 1, 
+                      gap: '15px' 
+                    }}>
+                      <LiveSkinPreview skin={skin} />
 
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ color: isEquipped ? skin.glow : '#fff', fontWeight: 'bold', fontFamily: 'Georgia, serif', fontSize: '1.1rem', textShadow: isEquipped ? `0 0 8px ${skin.glow}` : 'none' }}>
-                            {skin.name} {isEquipped && '✓'}
-                          </span>
-                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '4px', lineHeight: '1.4' }}>{skin.desc}</span>
-                        </div>
-                      </div>
-                      
-                      <button className="shop-btn" onClick={() => buyOrEquipSkin(skin)} disabled={isEquipped || (!isUnlocked && !canAfford)}
-                        style={{
-                          background: isEquipped ? 'rgba(5, 2, 12, 0.8)' : (isUnlocked ? 'linear-gradient(180deg, #b45309 0%, #78350f 100%)' : (canAfford ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)')),
-                          border: `1px solid ${isEquipped ? '#475569' : (isUnlocked ? '#fef08a' : (canAfford ? '#a78bfa' : '#ef4444'))}`,
-                          color: isEquipped ? '#94a3b8' : (isUnlocked ? '#fef08a' : (canAfford ? '#fff' : '#f87171')),
-                          padding: '10px 16px', borderRadius: '6px', cursor: isEquipped || (!isUnlocked && !canAfford) ? 'not-allowed' : 'pointer',
-                          fontFamily: 'monospace', fontWeight: 'bold'
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ 
+                          color: isEquipped ? skin.glow : '#fff', 
+                          fontWeight: 'bold', 
+                          fontFamily: 'Georgia, serif', 
+                          fontSize: '1.1rem', 
+                          textShadow: isEquipped ? `0 0 8px ${skin.glow}` : 'none' 
                         }}>
-                        {isEquipped ? 'EQUIPPED' : (isUnlocked ? 'EQUIP' : `💎 ${skin.cost}`)}
-                      </button>
+                          {skin.name} {isEquipped && '✓'}
+                        </span>
+                        <span style={{ 
+                          color: '#94a3b8', 
+                          fontSize: '0.8rem', 
+                          fontFamily: 'monospace', 
+                          marginTop: '4px', 
+                          lineHeight: '1.4',
+                          textAlign: 'justify' 
+                        }}>
+                          {skin.desc}
+                        </span>
+                      </div>
                     </div>
-                  );
-                })}
-              </>
-            )}
-
+                    
+                    {/* Action Button */}
+                    <button className="shop-btn" onClick={() => buyOrEquipSkin(skin)} disabled={isEquipped || (!isUnlocked && !canAfford)}
+                      style={{
+                        flexShrink: 0, // Para hindi ma-squish ang button
+                        marginLeft: '15px',
+                        background: isEquipped ? 'rgba(5, 2, 12, 0.8)' : (isUnlocked ? 'linear-gradient(180deg, #b45309 0%, #78350f 100%)' : (canAfford ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)')),
+                        border: `1px solid ${isEquipped ? '#475569' : (isUnlocked ? '#fef08a' : (canAfford ? '#a78bfa' : '#ef4444'))}`,
+                        color: isEquipped ? '#94a3b8' : (isUnlocked ? '#fef08a' : (canAfford ? '#fff' : '#f87171')),
+                        padding: '10px 16px', borderRadius: '6px', cursor: isEquipped || (!isUnlocked && !canAfford) ? 'not-allowed' : 'pointer',
+                        fontFamily: 'monospace', fontWeight: 'bold'
+                      }}>
+                      {isEquipped ? 'EQUIPPED' : (isUnlocked ? 'EQUIP' : `💎 ${skin.cost.toLocaleString()}`)}
+                    </button>
+                  </div>
+                );
+              })}
+            </>
+          )}
             {activeTab === 'familiars' && (
               <>
                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
@@ -1975,7 +2818,8 @@ const buyOrEquipFamiliar = (fam) => {
                   const isEquipped = equippedFamiliars.includes(fam.id);
                   const level = familiarLevels[fam.id] || 1;
                   const isMax = level >= fam.maxLevel;
-                  const upgCost = fam.upgBase * level;
+
+                    const upgCost = Math.floor(fam.upgBase * Math.pow(fam.upgMult, level * 1.15));
                   const canAffordUnlock = crystals >= fam.baseCost;
                   const canAffordUpg = crystals >= upgCost;
 
@@ -1993,7 +2837,16 @@ const buyOrEquipFamiliar = (fam) => {
                           <span style={{ color: isEquipped ? fam.color : '#fff', fontWeight: 'bold', fontFamily: 'Georgia, serif', fontSize: '1.2rem' }}>
                             {evoName} <span style={{ color: '#a78bfa', fontSize: '0.9rem' }}>[Lv. {isUnlocked ? level : 0}/{fam.maxLevel}]</span> {isEquipped && '✓'}
                           </span>
-                          <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontFamily: 'monospace', marginTop: '4px' }}>Type: {fam.type} | {fam.desc}</span>
+                          <span style={{ 
+                            color: '#94a3b8', 
+                            fontSize: '0.8rem', 
+                            fontFamily: 'monospace', 
+                            marginTop: '4px',
+                            display: 'block',      // <-- Idinagdag para kumalat sa buong lapad
+                            textAlign: 'justify'   // <-- Idinagdag para pumantay ang text
+                          }}>
+                            Type: {fam.type} | {fam.desc}
+                          </span>
                           
                           {/* ✨ BAGONG UI: TOTAL BONUS STATS INDICATOR ✨ */}
                           <span style={{ 
@@ -2006,8 +2859,9 @@ const buyOrEquipFamiliar = (fam) => {
                             border: '1px solid rgba(52, 211, 153, 0.3)',
                             padding: '4px 8px', 
                             borderRadius: '4px', 
-                            display: 'inline-block', 
-                            width: 'fit-content',
+                            display: 'block',          // Ginawang block para sakupin ang buong linya
+                            width: '100%',             // Siniguradong 100% ang lapad
+                            boxSizing: 'border-box',   // Para hindi lumampas ang box dahil sa padding
                             boxShadow: '0 0 8px rgba(52, 211, 153, 0.2)'
                           }}>
                             📈 Bonus Stats: {isUnlocked ? fam.getStats(level) : fam.getStats(0)}
@@ -2040,7 +2894,7 @@ const buyOrEquipFamiliar = (fam) => {
                             cursor: (!isUnlocked && !canAffordUnlock) ? 'not-allowed' : 'pointer',
                             fontFamily: 'monospace', fontWeight: 'bold', flexShrink: 0
                         }}>
-                        {isEquipped ? 'UNEQUIP' : (isUnlocked ? 'EQUIP' : `💎 ${fam.baseCost}`)}
+                       {isEquipped ? 'UNEQUIP' : (isUnlocked ? 'EQUIP' : `💎 ${fam.baseCost.toLocaleString()}`)}
                         </button>
                       </div>
 
@@ -2057,7 +2911,7 @@ const buyOrEquipFamiliar = (fam) => {
                               padding: '6px 14px', borderRadius: '4px', cursor: isMax || !canAffordUpg ? 'not-allowed' : 'pointer',
                               fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.9rem'
                             }}>
-                            {isMax ? 'MAX LEVEL' : `⏫ UPGRADE: 💎 ${upgCost}`}
+                            {isMax ? 'MAX LEVEL' : `⏫ UPGRADE: 💎 ${upgCost.toLocaleString()}`}
                           </button>
                         </div>
                       )}
