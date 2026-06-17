@@ -1693,15 +1693,22 @@ const equipItem = (item, index) => {
 
   const currentEquipped = target.equipment[item.type];
   
-  // Swap HP logic safely so equipping HP doesn't heal you infinitely, but taking it off removes it
-  if (currentEquipped?.stats?.hp) {
+// const hpPercent = target.maxHp > 0 ? (target.hp / target.maxHp) : 1;
+
+if (currentEquipped?.stats?.hp) {
     target.maxHp -= currentEquipped.stats.hp;
-    target.hp = Math.min(target.hp, target.maxHp);
   }
+  
+  // Add stats of the new item
   if (item.stats?.hp) {
     target.maxHp += item.stats.hp;
-    target.hp += item.stats.hp; // Give them the current HP boost immediately
   }
+  
+  // Cap current HP just in case removing the old item made their max HP lower than current HP
+  target.hp = Math.min(target.hp, target.maxHp);
+  
+  // Re-apply the percentage to the new Max HP
+  // target.hp = target.maxHp * hpPercent;
 
   // Swap
   target.equipment[item.type] = item;
@@ -1723,8 +1730,9 @@ const unequipItem = (type) => {
   const item = target.equipment[type];
   if (!item) return;
 
-  if (item.stats?.hp) {
+if (item.stats?.hp) {
     target.maxHp -= item.stats.hp;
+    // Ensure their current HP doesn't overflow their new, lower Max HP
     target.hp = Math.min(target.hp, target.maxHp);
   }
 
@@ -1799,6 +1807,7 @@ const engineRef = useRef({
     p: null, p2: null, bullets: [], enemies: [], particles: [], gems: [], ambs: [],
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
     tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [], aoeZones: [], // 🔥 DINAGDAG: aoeZones
+    floatingTexts: [],
     keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
     bossIntro: {
         active: false,
@@ -1868,6 +1877,31 @@ const engineRef = useRef({
     }
   };
 
+// 💥 FLOATING COMBAT TEXT HELPER
+  const spawnFCT = (eng, x, y, amount, type, isCrit = false) => {
+    if (!eng.floatingTexts) eng.floatingTexts = [];
+    if (eng.floatingTexts.length > 100) eng.floatingTexts.shift(); // Cap sa 100 para iwas lag
+    
+    let textDisplay = Math.ceil(amount).toString(); // Gawing string agad yung number
+    
+    if (type === 'shield') textDisplay = `Shield -${Math.ceil(amount)}`; // 💥 Para malinaw ang bawas sa shield
+    if (type === 'damageTaken') textDisplay = `-${Math.ceil(amount)}`; // 💥 Minus sign sa damage na pumapasok
+    if (type === 'miss') textDisplay = 'Miss';
+    
+    // 🔥 INALIS NA NATIN ANG SALITANG "CRITICAL" DITO
+    // Dahil sa rendering na natin siya idinadagdag! Number na lang ang iiwan natin.
+    // if (isCrit) textDisplay = `CRITICAL ${Math.ceil(amount)}`; <--- BINURA NA ITO
+
+    eng.floatingTexts.push({
+      x: x + (Math.random() * 30 - 15), // Random horizontal scatter
+      y: y + (Math.random() * 10 - 5),
+      text: textDisplay,
+      type: type, 
+      isCrit: isCrit,
+      life: 1.0, // 1 second bago mawala
+      vy: isCrit ? 90 : 45 // Bounce speed (mas mabilis pag crit)
+    });
+  };
 const castElementalSigil = (sigilType, forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng) return;
@@ -1920,23 +1954,40 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
         target.chatBubble = { text: "TIDAL WAVE!", life: 1.5 };
         currentEng.waves.push({ x: -200, y: H/2, vx: 450, life: 5.0, width: 300 });
 
-      } else if (sigilType === 'fissureSlam') {
+} else if (sigilType === 'fissureSlam') {
         target.chatBubble = { text: "FISSURE SLAM!", life: 1.5 };
         const angle = Math.random() * Math.PI * 2;
-        currentEng.fissures.push({ x: target.x, y: target.y, angle, length: W, life: 1.5 });
-        const cos = Math.cos(angle), sin = Math.sin(angle);
         
-        // 🔥 SCALED DAMAGE: Base + Wave Scaling + (Player Dmg * 5)
-        // const fissureDmg = 1500 + ((currentEng.wave || 1) * 200) + ((target.dmg || 0) * 5);
-        // 🔥 BALANCED SCALED DAMAGE: Base 150 + (Wave * 15) + (Player Dmg * 3.0)
-           const fissureDmg = 150 + ((currentEng.wave || 1) * 15) + ((target.dmg || 0) * 3.0);
+        // Siguraduhing may variable para sa haba ng fissure (halimbawa 800 pixels)
+        const fLength = 800; 
+        currentEng.fissures.push({ x: target.x, y: target.y, angle, length: fLength, life: 1.5 });
+
+        // =======================================================
+        // 💥 FISSURE SLAM TRAIL DECALS (Linya ng mga basag sa lupa)
+        // =======================================================
+        if (!currentEng.decals) currentEng.decals = [];
+        
+        // Gagawa ng lamat kada 60 pixels kasunod ng direksyon ng angle
+        for (let dist = 0; dist < fLength; dist += 60) {
+          currentEng.decals.push({ 
+            x: target.x + Math.cos(angle) * dist, 
+            y: target.y + Math.sin(angle) * dist, 
+            r: 35 + Math.random() * 20, // Random ang laki para mukhang natural na basag
+            life: 6.0, 
+            maxLife: 6.0 
+          });
+        }
+        // =======================================================
+
+        const fissureDmg = 150 + ((currentEng.wave || 1) * 15) + ((target.dmg || 0) * 3.0);
 
         for (const e of currentEng.enemies) {
           const dx = e.x - target.x, dy = e.y - target.y;
           const proj = dx * cos + dy * sin;
           const perp = Math.abs(dx * sin - dy * cos); 
           if (proj > 0 && perp < 60) {
-             e.hp -= fissureDmg; // <--- Gumagamit na ng Scaled Damage
+             e.hp -= fissureDmg; 
+             spawnFCT(currentEng, e.x, e.y, fissureDmg, 'damage', false); // 💥 ADDED FCT
              e.stunnedTime = 5.0;
              e.flash = 0.5;
              if(e.hp <= 0) e.deadTrigger = true;
@@ -1948,9 +1999,6 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
         let current = target;
         let hits = new Set();
         
-        // 🔥 SCALED DAMAGE: Mas mataas ang damage kasi nag-ba-bounce per target
-        // const lightningDmg = 2500 + ((currentEng.wave || 1) * 350) + ((target.dmg || 0) * 8);
-        // 🔥 BALANCED SCALED DAMAGE: Base 200 + (Wave * 20) + (Player Dmg * 3.5)
         const lightningDmg = 200 + ((currentEng.wave || 1) * 20) + ((target.dmg || 0) * 3.5);
 
         for (let i = 0; i < 8; i++) {
@@ -1965,7 +2013,17 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
             hits.add(best);
             pts.push({x: best.x, y: best.y});
             current = best;
-            best.hp -= lightningDmg; // <--- Gumagamit na ng Scaled Damage
+            best.hp -= lightningDmg; 
+            // 💥 ITO YUNG PARA SA LIGHTNING SURGE (Paso ng kuryente kung saan tinamaan yung kalaban)
+            if (!currentEng.decals) currentEng.decals = [];
+            currentEng.decals.push({ 
+              x: best.x, 
+              y: best.y, 
+              r: 25, 
+              life: 4.0, 
+              maxLife: 4.0 
+            });
+            spawnFCT(currentEng, best.x, best.y, lightningDmg, 'damage', false); // 💥 ADDED FCT
             best.stunnedTime = 1.0;
             best.flash = 0.5;
             if (best.hp <= 0) best.deadTrigger = true;
@@ -2012,6 +2070,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     // Heal 50% of CURRENT HP (If you want 50% of Max HP instead, change 'target.hp' to 'target.maxHp' in the math below)
     const healAmount = target.maxHp * 0.5;
     target.hp = Math.min(target.maxHp, target.hp + healAmount);
+    spawnFCT(eng, target.x, target.y, healAmount, 'heal');
 
     // Apply Regen Buff for 10 seconds
     if (!target.potBuffs) target.potBuffs = { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 };
@@ -2079,16 +2138,19 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
       if (enemy.instabTime > 0) colPulseDmg *= 1.5;
 
       let totalCrit = (target.baseCrit || 0) + (target.potBuffs?.crit > 0 ? 35 : 0);
+      let isCrit = false;
       if (Math.random() < (totalCrit / 100)) {
         colPulseDmg *= 2;
         enemy.flash = 0.5;
+        isCrit = true;
       } else {
         enemy.flash = 0.35;
       }
 
       enemy.hp -= colPulseDmg;
+      spawnFCT(eng, enemy.x, enemy.y, colPulseDmg, 'damage', isCrit); // 💥 ADDED FCT
       
-      enemy.stunnedTime = enemy.boss ? 1.5 : 8.0;       
+      enemy.stunnedTime = enemy.boss ? 1.5 : 8.0;     
       enemy.temporalSlowTime = enemy.boss ? 2.0 : 8.0; 
       enemy.arcaneBurnTime = 8.0;
       enemy.voidExhaustTime = 8.0;   
@@ -2215,7 +2277,8 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
     caster.chatBubble = { text: "FORBIDDEN: RESURRECTION!!!", life: 2.5 };
 
     ally.dead = false;
-    ally.hp = ally.maxHp * 0.70; 
+    ally.hp = ally.maxHp * 0.70;
+    spawnFCT(eng, ally.x, ally.y, ally.maxHp * 0.70, 'heal'); 
     
     if (!ally.skills) ally.skills = initSkills();
     if (!ally.skills.shield) ally.skills.shield = { learned: true, enabled: true, cd: 0, duration: 0 };
@@ -2819,6 +2882,7 @@ useEffect(() => {
       eng.bullets = []; eng.enemies = []; eng.particles = []; eng.gems = [];
       eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
       eng.tornados = []; eng.waves = []; eng.fissures = []; eng.lightnings = []; eng.iceStorms = [];
+      eng.floatingTexts = [];
       eng.gameStarted = false; 
       setHasStarted(false);
 
@@ -3123,6 +3187,18 @@ useEffect(() => {
         if (eng.screenShake > 0) {
           eng.screenShake -= dt;
         }
+
+        // 💥 FCT PHYSICS LOOP
+        if (eng.floatingTexts) {
+          for (let i = eng.floatingTexts.length - 1; i >= 0; i--) {
+            const ft = eng.floatingTexts[i];
+            ft.life -= dt;
+            ft.y -= ft.vy * dt; // Float up
+            ft.vy *= 0.92;      // Unti-unting babagal ang pag-angat
+            if (ft.life <= 0) eng.floatingTexts.splice(i, 1);
+          }
+        }
+
 if (eng.gameStarted) {
         // 1. Detect if The Abyss or Primordial is currently on the map
         const isMajorBossAlive = eng.enemies.some(e => e.boss && (e.type === 'abyss' || e.type === 'primordial' || e.type === 'abyss_awakened'));
@@ -3398,27 +3474,51 @@ if (eng.gameStarted) {
         //     }
         //   }
         // }
+        // 💥 DECAL LIFECYCLE UPDATE (Unti-unting pagkawala ng burn marks)
+        if (eng.decals) {
+          for (let i = eng.decals.length - 1; i >= 0; i--) {
+            eng.decals[i].life -= dt;
+            if (eng.decals[i].life <= 0) eng.decals.splice(i, 1);
+          }
+        }
 
-        if (eng.tornados) {
+if (eng.tornados) {
           for (let i = eng.tornados.length - 1; i >= 0; i--) {
             const t = eng.tornados[i];
+            if (!t) continue;
             t.life -= dt;
             t.x += (t.vx || 0) * dt; 
-            t.y += (t.vy || 0) * dt; 
+            t.y += (t.vy || 0) * dt;
+            // 💥 ITO YUNG PARA SA FLARE INFERNO (Mag-iiwan ng trail ng paso sa sahig)
+            if (Math.random() < 0.15) { 
+              if (!eng.decals) eng.decals = [];
+              eng.decals.push({ 
+                x: t.x + (Math.random() - 0.5) * 20, 
+                y: t.y + (Math.random() - 0.5) * 20, 
+                r: 25 + Math.random() * 15, 
+                life: 3.0, 
+                maxLife: 3.0 
+              });
+            } 
             if (t.life <= 0) {
               eng.tornados.splice(i, 1);
             } else if (isHost || !isCoopActive) {
               
               // 🟢 DYNAMIC SCALED DPS: Flare Inferno
-              const dynamicBaseDmg = 1000 + (eng.wave * 100); 
-              const casterDmg = eng.boltDmg + (eng.p?.dmg || 0);
+              const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
+              const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
               const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
 
               for (const e of eng.enemies) {
-                if (Math.hypot(e.x - t.x, e.y - t.y) < t.r + e.r) {
+                if (!e) continue;
+                // 🔥 ITO ANG TAMA PARA SA TORNADOS (Gumagamit ng t.x at t.y)
+                if (Math.hypot(e.x - t.x, e.y - t.y) < (t.r || 50) + (e.r || 15)) {
                   e.hp -= tornadoDps * dt;        
                   e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
-                  if (Math.random() < 0.15) e.flash = 0.5;
+                  if (Math.random() < 0.15) {
+                     e.flash = 0.5;
+                     spawnFCT(eng, e.x, e.y, tornadoDps * 0.15, 'damage', false); // 💥 ADDED FCT
+                  }
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
               }
@@ -3428,24 +3528,31 @@ if (eng.gameStarted) {
 
         if (eng.waves) {
           for (let i = eng.waves.length - 1; i >= 0; i--) {
-            const w = eng.waves[i];
-            w.life -= dt;
-            w.x += (w.vx || 0) * dt; 
-            if (w.life <= 0) {
+            const waveObj = eng.waves[i];
+            if (!waveObj) continue;
+            waveObj.life -= dt;
+            waveObj.x += (waveObj.vx || 0) * dt; 
+            if (waveObj.life <= 0) {
               eng.waves.splice(i, 1);
             } else if (isHost || !isCoopActive) {
 
               // 🟢 DYNAMIC SCALED DPS: Tidal Wave
-              const dynamicBaseDmg = 1000 + (eng.wave * 100); 
-              const casterDmg = eng.boltDmg + (eng.p?.dmg || 0);
+              const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
+              const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
               const waveDps = (dynamicBaseDmg * 1.5) + (casterDmg * 20); 
+              const wWidth = waveObj.width || 100;
 
               for (const e of eng.enemies) {
-                if (e.x > w.x - w.width / 2 && e.x < w.x + w.width / 2) {
+                if (!e) continue;
+                // 🔥 ITO ANG TAMA PARA SA WAVES (Gumagamit ng waveObj.x)
+                if (e.x > waveObj.x - wWidth / 2 && e.x < waveObj.x + wWidth / 2) {
                   e.hp -= waveDps * dt;      
-                  if (!e.boss) e.x += (w.vx * 0.4) * dt; 
+                  if (!e.boss) e.x += ((waveObj.vx || 0) * 0.4) * dt; 
                   e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 2.0);
-                  if (Math.random() < 0.15) e.flash = 0.5;
+                  if (Math.random() < 0.15) {
+                      e.flash = 0.5;
+                      spawnFCT(eng, e.x, e.y, waveDps * 0.15, 'damage', false); // 💥 ADDED FCT
+                  }
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
               }
@@ -3480,10 +3587,13 @@ if (eng.gameStarted) {
 
               for (const e of eng.enemies) {
                 if (Math.hypot(e.x - s.x, e.y - s.y) < s.radius + e.r) {
-                  e.hp -= iceDps * dt; // <--- Gumagamit na ng Scaled DPS
+                  e.hp -= iceDps * dt; 
                   e.stigmaTime = 1.0; 
                   e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0); 
-                  if (Math.random() < 0.1) e.flash = 0.5;
+                  if (Math.random() < 0.1) {
+                     e.flash = 0.5;
+                     spawnFCT(eng, e.x, e.y, iceDps * 0.1, 'damage', false); // 💥 ADDED FCT
+                  }
                   if (e.hp <= 0) e.deadTrigger = true;
                 }
               }
@@ -3570,6 +3680,7 @@ if (eng.gameStarted) {
                   if (Math.hypot(enemy.x - cbX, enemy.y - cbY) <= 160) {
                     enemy.stunnedTime = 1.6;
                     enemy.hp -= cbDmg;
+                    spawnFCT(eng, enemy.x, enemy.y, cbDmg, 'damage', false); // 💥 ADDED FCT
                     if (enemy.hp <= 0) enemy.deadTrigger = true;
                   }
                 }
@@ -3652,13 +3763,16 @@ if (eng.gameStarted) {
                   if (enemy.instabTime > 0) cbDmg *= 1.5;
                   
                   let totalCrit = (playerObj?.baseCrit || 0) + (playerObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  let isCrit = false;
                   if (Math.random() < (totalCrit / 100)) {
                     cbDmg *= 2; enemy.flash = 0.5;
+                    isCrit = true;
                   } else {
                     enemy.flash = 0.2;
                   }
                   
                   enemy.hp -= cbDmg;
+                  spawnFCT(eng, enemy.x, enemy.y, cbDmg, 'damage', isCrit); // 💥 ADDED FCT
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
@@ -3710,15 +3824,19 @@ if (eng.gameStarted) {
 
                                 let damageTaken = aoe.dmg;
                                 const defStat = pTarget.baseDef || 0;
-                                damageTaken *= (100 / (100 + defStat));
+                                let reduction = defStat / (100 + defStat);
+                                reduction = Math.min(0.85, reduction); // Hard cap at 85% mitigation
+                                damageTaken *= (1 - reduction);
 
                                 // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD ---
                                 if (pTarget.divineShield && pTarget.divineShield.active) {
                                     if (pTarget.divineShield.hp >= damageTaken) {
-                                        pTarget.divineShield.hp -= damageTaken;
-                                        pTarget.divineShield.hitFlash = 0.2; 
-                                        damageTaken = 0;
+                                    pTarget.divineShield.hp -= damageTaken;
+                                    pTarget.divineShield.hitFlash = 0.2; 
+                                    spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'shield'); // 💥 TRIGGER
+                                    damageTaken = 0;
                                     } else {
+                                        spawnFCT(eng, pTarget.x, pTarget.y, pTarget.divineShield.hp, 'shield'); // 💥 TRIGGER
                                         damageTaken -= pTarget.divineShield.hp;
                                         pTarget.divineShield.hp = 0;
                                         pTarget.divineShield.active = false;
@@ -3840,6 +3958,33 @@ if (eng.gameStarted) {
             eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
           }
 
+          // 💥 UNIVERSAL PLAYER DAMAGE TAKEN TRACKER (BULLETPROOF RED TEXT)
+        for (const pObj of [eng.p, eng.p2]) {
+          if (pObj && !pObj.dead) {
+            // I-check kung bumaba ang HP kumpara sa nakaraang frame
+            if (pObj.prevHpFrame !== undefined && pObj.hp < pObj.prevHpFrame) {
+                const damageDiff = pObj.prevHpFrame - pObj.hp;
+                
+                // Trigger lang kung malaki sa 0.5 ang bawas (para iwas false alarm sa regen decimals)
+                if (damageDiff > 0.5) { 
+                    if (eng.floatingTexts) {
+                        eng.floatingTexts.push({
+                          x: pObj.x + (Math.random() * 30 - 15),
+                          y: pObj.y + (Math.random() * 10 - 5),
+                          text: `-${Math.ceil(damageDiff)}`,
+                          type: 'damageTaken', 
+                          isCrit: false,
+                          life: 1.0, 
+                          vy: 45 
+                        });
+                    }
+                }
+            }
+            // I-save ang current HP para may pagbasehan sa susunod na frame
+            pObj.prevHpFrame = pObj.hp; 
+          }
+        }
+        
         const localTrackedObj = (isCoopActive && !isHost) ? eng.p2 : eng.p;
           if (localTrackedObj) {
           setPlayerLevel(localTrackedObj.level);
@@ -3906,7 +4051,9 @@ if (eng.gameStarted) {
 
            if (statAtkRef.current) statAtkRef.current.textContent = formatLargeNumber(currentAtk);
           if (statDefRef.current) {
-            const damageBlockedPct = ((currentDef / (100 + currentDef)) * 100).toFixed(1);
+            let uiReduction = currentDef / (100 + currentDef);
+            uiReduction = Math.min(0.85, uiReduction); // Visual display of the 85% cap
+            const damageBlockedPct = (uiReduction * 100).toFixed(1);
             statDefRef.current.textContent = `${currentDef} (${damageBlockedPct}% Block)`;
           }
           if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
@@ -4012,14 +4159,17 @@ if (eng.gameStarted) {
                   if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
                   
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  let isCrit = false;
                   if (Math.random() < (totalCrit / 100)) {
                     baseSkillDmg *= 2;
                     enemy.flash = 0.45;
+                    isCrit = true;
                   } else {
                     enemy.flash = 0.15;
                   }
 
                   enemy.hp -= baseSkillDmg;
+                  spawnFCT(eng, enemy.x, enemy.y, baseSkillDmg, 'damage', isCrit); // 💥 ADDED FCT
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
@@ -4033,6 +4183,15 @@ if (eng.gameStarted) {
             star.progress += dt * 2.5;
             star.currentY = star.targetY - 400 * (1 - star.progress);
             if (star.progress >= 1) {
+              // 💥 ITO YUNG PARA SA SHOOTING STAR (Malaking crater pagkabagsak)
+            if (!eng.decals) eng.decals = [];
+            eng.decals.push({ 
+              x: star.x, 
+              y: star.targetY, 
+              r: star.radius * 0.9, 
+              life: 6.0, 
+              maxLife: 6.0 
+            });
                 for (const enemy of eng.enemies) {
                 if (Math.hypot(enemy.x - star.x, enemy.y - star.targetY) <= star.radius) {
                   // Kunin muna kung sino ang nag-cast para magamit ang stats niya
@@ -4046,14 +4205,17 @@ if (eng.gameStarted) {
                   if (enemy.instabTime > 0) splashDmg *= 1.5;
                   
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  let isCrit = false;
                   if (Math.random() < (totalCrit / 100)) {
                     splashDmg *= 2;
                     enemy.flash = 0.5;
+                    isCrit = true;
                   } else {
                     enemy.flash = 0.2;
                   }
 
                   enemy.hp -= splashDmg;
+                  spawnFCT(eng, enemy.x, enemy.y, splashDmg, 'damage', isCrit); // 💥 ADDED FCT
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
               }
@@ -4089,13 +4251,14 @@ if (eng.gameStarted) {
               col.pulseCount++;
               eng.screenShake = 1.0;
 
+              if (!eng.decals) eng.decals = [];
+              eng.decals.push({ x: col.x, y: col.y, r: col.radius, life: 5.0, maxLife: 5.0 });
+
               for (const enemy of eng.enemies) {
-                // 🔥 SCALING: Arcane Collapse Pulses
-                // let colPulseDmg = 2500 + ((eng.wave || 1) * 400) + ((eng.p?.dmg || 0) * 15);
-                // 🔥 BALANCED SCALING: Arcane Collapse Pulses (Mas mahina ang pulse kaysa sa initial burst)
                 let colPulseDmg = 200 + ((eng.wave || 1) * 25) + ((eng.p?.dmg || 0) * 3.5);
                 if (enemy.instabTime > 0) colPulseDmg *= 1.5;
                 enemy.hp -= colPulseDmg;
+                spawnFCT(eng, enemy.x, enemy.y, colPulseDmg, 'damage', false); // 💥 ADDED FCT
                 enemy.flash = 0.35;
                 if (enemy.hp <= 0) enemy.deadTrigger = true;
               }
@@ -4134,7 +4297,9 @@ if (eng.gameStarted) {
 
               if (pot.type === 'health') {
                   // 🔥 PERCENTAGE HEAL: Maghe-heal ng 25% ng Max HP ng nakapulot
-                  targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + (targetPlayer.maxHp * 0.25));
+                  const healAmount = targetPlayer.maxHp * 0.25;
+                  targetPlayer.hp = Math.min(targetPlayer.maxHp, targetPlayer.hp + healAmount);
+                  spawnFCT(eng, targetPlayer.x, targetPlayer.y, healAmount, 'heal'); // 💥 TRIGGER
                 } else if (pot.type === 'regen') {
                 targetPlayer.potBuffs.regen = 10.0;
               } else if (pot.type === 'freeze') {
@@ -4327,15 +4492,19 @@ if (eng.gameStarted) {
 
                     let damageTaken = b.dmg;
                     const defStat = pTarget.baseDef || 0;
-                    damageTaken *= (100 / (100 + defStat));
+                    let reduction = defStat / (100 + defStat);
+                    reduction = Math.min(0.85, reduction);
+                    damageTaken *= (1 - reduction);
 
                     // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD ---
                     if (pTarget.divineShield && pTarget.divineShield.active) {
                         if (pTarget.divineShield.hp >= damageTaken) {
                             pTarget.divineShield.hp -= damageTaken;
                             pTarget.divineShield.hitFlash = 0.2; 
+                            spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'shield'); // 💥 TRIGGER
                             damageTaken = 0;
                         } else {
+                            spawnFCT(eng, pTarget.x, pTarget.y, pTarget.divineShield.hp, 'shield'); // 💥 TRIGGER
                             damageTaken -= pTarget.divineShield.hp;
                             pTarget.divineShield.hp = 0;
                             pTarget.divineShield.active = false;
@@ -4352,12 +4521,14 @@ if (eng.gameStarted) {
                     if (pTarget.potBuffs?.defense > 0) damageTaken *= 0.65;
 
                     if (pTarget.skills?.shield?.duration > 0 && pTarget.skills?.shield?.enabled !== false) {
+                      if (damageTaken > 0) spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'shield'); // 💥 LALABAS NA ANG SHIELD TEXT
                       damageTaken = 0;
                     } else if (pTarget.skills?.fortify?.learned && pTarget.skills?.fortify?.enabled !== false) {
-                      damageTaken *= 0.75;
+                        damageTaken *= 0.75;
                     }
-
                     pTarget.hp -= damageTaken;
+                    if (damageTaken > 0) spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'damageTaken'); // 💥 TRIGGER
+                    
                     pTarget.inv = 0.7;
                     if (pTarget.hp <= 0) {
                       pTarget.dead = true;
@@ -4393,14 +4564,18 @@ if (eng.gameStarted) {
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                  let isCrit = false;
                   if (Math.random() < (totalCrit / 100)) {
                     calculatedDmg *= 2;
                     e.flash = 0.45;
+                    isCrit = true;
                   } else {
                     e.flash = 0.1;
                   }
 
                   e.hp -= calculatedDmg;
+                  spawnFCT(eng, e.x, e.y, calculatedDmg, 'damage', isCrit); // 💥 TRIGGER FCT
+
                   const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
                   if (hasBodyCutter) e.stigmaTime = 4.0;
 
@@ -4537,17 +4712,16 @@ if (eng.gameStarted) {
                   e.prevHpFrame = e.hp;
                 }
               }
-                if (e.stigmaTime > 0) {
-                e.stigmaTime -= dt;
-                
-                // 🔥 DYNAMIC SCALED DPS: Body Cutter Stigma DoT
-                e.hp -= (20 + ((eng?.wave || 1) * 15)) * dt; 
-                
-                if (Math.random() < 0.15) {
-                  eng.particles.push({ x: e.x + (Math.random() - 0.5) * 10, y: e.y + (Math.random() - 0.5) * 10, vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
-                }
-                if (e.hp <= 0) e.deadTrigger = true;
-              }
+        if (e.stigmaTime > 0) {
+          e.stigmaTime -= dt;
+          const stigmaDps = 20 + ((eng?.wave || 1) * 15);
+          e.hp -= stigmaDps * dt;
+          if (Math.random() < 0.1) spawnFCT(eng, e.x, e.y, stigmaDps * 0.1, 'damage', false); // 💥 ADDED FCT
+          if (Math.random() < 0.15) {
+            eng.particles.push({ x: e.x + (Math.random() - 0.5) * 10, y: e.y + (Math.random() - 0.5) * 10, vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
+          }
+          if (e.hp <= 0) e.deadTrigger = true;
+        }
 
               if (e.temporalSlowTime > 0) e.temporalSlowTime -= dt;
               if (e.voidExhaustTime > 0) e.voidExhaustTime -= dt;
@@ -4798,18 +4972,22 @@ if (eng.gameStarted) {
 
                 let damageTaken = e.dmg;
                 const defStatP1 = eng.p.baseDef || 0;
-                damageTaken *= (100 / (100 + defStatP1));
+                let reductionP1 = defStatP1 / (100 + defStatP1);
+                reductionP1 = Math.min(0.85, reductionP1);
+                damageTaken *= (1 - reductionP1);
 
                 // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P1) ---
-                if (eng.p.divineShield && eng.p.divineShield.active) {
-                    if (eng.p.divineShield.hp >= damageTaken) {
-                        eng.p.divineShield.hp -= damageTaken;
-                        eng.p.divineShield.hitFlash = 0.2; 
-                        damageTaken = 0;
-                    } else {
-                        damageTaken -= eng.p.divineShield.hp;
-                        eng.p.divineShield.hp = 0;
-                        eng.p.divineShield.active = false;
+                        if (eng.p.divineShield && eng.p.divineShield.active) {
+                        if (eng.p.divineShield.hp >= damageTaken) {
+                            eng.p.divineShield.hp -= damageTaken;
+                            eng.p.divineShield.hitFlash = 0.2; 
+                            spawnFCT(eng, eng.p.x, eng.p.y, damageTaken, 'shield'); // 💥 LALABAS NA
+                            damageTaken = 0;
+                        } else {
+                            spawnFCT(eng, eng.p.x, eng.p.y, eng.p.divineShield.hp, 'shield'); // 💥 LALABAS NA
+                            damageTaken -= eng.p.divineShield.hp;
+                            eng.p.divineShield.hp = 0;
+                            eng.p.divineShield.active = false;
                         
                         for(let k=0; k<40; k++) {
                             const pa = Math.random() * Math.PI * 2;
@@ -4824,6 +5002,7 @@ if (eng.gameStarted) {
                 if (eng.p.potBuffs?.defense > 0) damageTaken *= 0.65;
 
                 if (eng.p.skills?.shield?.duration > 0 && eng.p.skills?.shield?.enabled !== false) {
+                  if (damageTaken > 0) spawnFCT(eng, eng.p.x, eng.p.y, damageTaken, 'shield'); // 💥 LALABAS NA
                   damageTaken = 0;
                 } else if (eng.p.skills?.fortify?.learned && eng.p.skills?.fortify?.enabled !== false) {
                   damageTaken *= 0.75;
@@ -4843,18 +5022,22 @@ if (eng.gameStarted) {
 
                 let damageTakenp2 = e.dmg;
                 const defStatP2 = eng.p2.baseDef || 0;
-                damageTakenp2 *= (100 / (100 + defStatP2)); // 🔥 MOBA STYLE ARMOR P2
+                let reductionP2 = defStatP2 / (100 + defStatP2);
+                reductionP2 = Math.min(0.85, reductionP2);
+                damageTakenp2 *= (1 - reductionP2);
 
-                // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P2) ---
-                if (eng.p2.divineShield && eng.p2.divineShield.active) {
-                    if (eng.p2.divineShield.hp >= damageTakenp2) {
-                        eng.p2.divineShield.hp -= damageTakenp2;
-                        eng.p2.divineShield.hitFlash = 0.2; 
-                        damageTakenp2 = 0;
-                    } else {
-                        damageTakenp2 -= eng.p2.divineShield.hp;
-                        eng.p2.divineShield.hp = 0;
-                        eng.p2.divineShield.active = false;
+                    // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P2) ---
+                    if (eng.p2.divineShield && eng.p2.divineShield.active) {
+                        if (eng.p2.divineShield.hp >= damageTakenp2) {
+                            eng.p2.divineShield.hp -= damageTakenp2;
+                            eng.p2.divineShield.hitFlash = 0.2; 
+                            spawnFCT(eng, eng.p2.x, eng.p2.y, damageTakenp2, 'shield'); // 💥 LALABAS NA
+                            damageTakenp2 = 0;
+                        } else {
+                            spawnFCT(eng, eng.p2.x, eng.p2.y, eng.p2.divineShield.hp, 'shield'); // 💥 LALABAS NA
+                            damageTakenp2 -= eng.p2.divineShield.hp;
+                            eng.p2.divineShield.hp = 0;
+                            eng.p2.divineShield.active = false;
                         
                         for(let k=0; k<40; k++) {
                             const pa = Math.random() * Math.PI * 2;
@@ -4869,6 +5052,7 @@ if (eng.gameStarted) {
                 if (eng.p2.potBuffs?.defense > 0) damageTakenp2 *= 0.65;
 
                 if (eng.p2.skills?.shield?.duration > 0 && eng.p2.skills?.shield?.enabled !== false) {
+                  if (damageTakenp2 > 0) spawnFCT(eng, eng.p2.x, eng.p2.y, damageTakenp2, 'shield'); // 💥 LALABAS NA
                   damageTakenp2 = 0;
                 } else if (eng.p2.skills?.fortify?.learned && eng.p2.skills?.fortify?.enabled !== false) {
                   damageTakenp2 *= 0.75;
@@ -5136,11 +5320,11 @@ const tickFamiliars = (pObj, isP2) => {
             eng.bullets.push({ x: f.x, y: f.y, vx: Math.cos(ang) * 600, vy: Math.sin(ang) * 600, r: 8, life: 2, p2: isP2, dmg: famDmg, type: 'fire_orb', isFamiliar: true });
           }
         }
-      }
-      else if (f.id === 'fairy') {
-        f.cd = 3.0; 
-        const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01); 
-        pObj.hp = Math.min(pObj.maxHp, pObj.hp + healAmount);
+      } else if (f.id === 'fairy') {
+          f.cd = 3.0;
+          const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01);
+          pObj.hp = Math.min(pObj.maxHp, pObj.hp + healAmount);
+          spawnFCT(eng, pObj.x, pObj.y, healAmount, 'heal'); // 💥 ADDED FCT
         for(let k=0; k<6; k++) eng.particles.push({ x: pObj.x + (Math.random()-0.5)*30, y: pObj.y + (Math.random()-0.5)*30, vx: 0, vy: -40 - Math.random()*20, color: '#86efac', life: 0.8, ml: 0.8, r: 2.5 });
       }
       else if (f.id === 'voidling') {
@@ -5162,19 +5346,36 @@ const tickFamiliars = (pObj, isP2) => {
         }
       }
       // 🪨 STONE GOLEM (Earth Spikes)
-      else if (f.id === 'golem') {
-        f.cd = Math.max(1.5, 4.0 - (f.level * 0.2)); 
-        let enemiesHit = 0;
-        const smashRadius = 120 + (f.level * 8);
-        const smashDmg = 150 + (f.level * 50) + ((eng.wave || 1) * 20);
-        for (const e of eng.enemies) {
-          if (e.hp <= 0 || e.y < -50) continue;
-          if (Math.hypot(e.x - f.x, e.y - f.y) < smashRadius) {
-            e.hp -= smashDmg; e.stunnedTime = Math.max(e.stunnedTime || 0, 1.5); e.flash = 0.5;
-            if (e.hp <= 0) e.deadTrigger = true;
-            enemiesHit++;
+        else if (f.id === 'golem') {
+          f.cd = Math.max(1.5, 4.0 - (f.level * 0.2));
+          let enemiesHit = 0;
+          const smashRadius = 120 + (f.level * 8);
+          const smashDmg = 150 + (f.level * 50) + ((eng.wave || 1) * 20);
+          let decalSpawned = false;
+          
+          for (const e of eng.enemies) {
+            if (e.hp <= 0 || e.y < -50) continue;
+            if (Math.hypot(e.x - f.x, e.y - f.y) < smashRadius) {
+              if (!decalSpawned) {
+                if (!eng.decals) eng.decals = [];
+                eng.decals.push({ 
+                  x: f.x, 
+                  y: f.y + 10, 
+                  r: smashRadius * 0.6, 
+                  life: 4.0, 
+                  maxLife: 4.0 
+                });
+                decalSpawned = true;
+              }
+              
+              e.hp -= smashDmg;
+              spawnFCT(eng, e.x, e.y, smashDmg, 'damage', false); // 💥 ADDED FCT
+              e.stunnedTime = Math.max(e.stunnedTime || 0, 1.5);
+              e.flash = 0.5;
+              if (e.hp <= 0) e.deadTrigger = true;
+              enemiesHit++;
+            }
           }
-        }
         if (enemiesHit > 0) {
           eng.screenShake = 1.0;
           if (!eng.earthSmashes) eng.earthSmashes = [];
@@ -5192,7 +5393,7 @@ const tickFamiliars = (pObj, isP2) => {
         }
         if (target) {
           const boltDmg = 200 + (f.level * 45) + ((eng.wave || 1) * 25);
-          target.hp -= boltDmg; target.flash = 0.8; target.instabTime = Math.max(target.instabTime || 0, 2.0);
+          target.hp -= boltDmg; spawnFCT(eng, target.x, target.y, boltDmg, 'damage', false); target.flash = 0.8; target.instabTime = Math.max(target.instabTime || 0, 2.0);
           if (target.hp <= 0) target.deadTrigger = true;
           if (!eng.lightnings) eng.lightnings = [];
           eng.lightnings.push({ pts: [{x: f.x, y: f.y}, {x: target.x, y: target.y}], life: 0.6, branching: true, isFamiliar: true });
@@ -5224,14 +5425,40 @@ const tickFamiliars = (pObj, isP2) => {
             eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 1.0, ml: 1.0, r: Math.random()*4+2 });
         }
       }
-      else if (f.id === 'wind') {
+else if (f.id === 'wind') {
         f.cd = Math.max(2.0, 6.0 - (f.level * 0.4)); 
-        const a = Math.random() * Math.PI * 2;
+        
+        let target = null;
+        let minDist = Infinity;
+        
+        // Hahanapin ang pinakamalapit na kalaban sa PLAYER (pObj)
+        for (const e of eng.enemies) {
+          if (e.hp <= 0 || e.y < -50) continue;
+          let d = Math.hypot(e.x - pObj.x, e.y - pObj.y); 
+          if (d < minDist && d < 600) { // Limitado sa 600 range mula sa player para hindi pumunta sa malayo
+            minDist = d; 
+            target = e; 
+          }
+        }
+
+        // Kung may target, kukunin ang angle papunta sa kanya. Kung wala, fallback sa random angle.
+        const a = target ? Math.atan2(target.y - f.y, target.x - f.x) : Math.random() * Math.PI * 2;
+        
         if (!eng.tornados) eng.tornados = [];
         const tornadoCount = f.level >= 5 ? 2 : 1;
-        for (let i=0; i<tornadoCount; i++) {
+        
+        for (let i = 0; i < tornadoCount; i++) {
            const spreadA = a + (i * Math.PI);
-           eng.tornados.push({ x: f.x, y: f.y, vx: Math.cos(spreadA) * 150, vy: Math.sin(spreadA) * 150, life: 4.0, r: 50 + (f.level*5), isFamiliar: true, dmg: 40 + (f.level*25) });
+           eng.tornados.push({ 
+             x: f.x, 
+             y: f.y, 
+             vx: Math.cos(spreadA) * 150, 
+             vy: Math.sin(spreadA) * 150, 
+             life: 4.0, 
+             r: 50 + (f.level * 5), 
+             isFamiliar: true, 
+             dmg: 40 + (f.level * 25) 
+           });
         }
       }
     }
@@ -5296,6 +5523,8 @@ if (isHost || !isCoopActive) {
         const dy = (Math.random() - 0.5) * 9;
         ctx.translate(dx, dy);
       }
+
+
 
       // ==========================================
       // 🌟 DYNAMIC EQUIPMENT AURA LOGIC 🌟
@@ -5714,6 +5943,200 @@ if (eng.potions) {
       }
 
 
+if (eng.decals) {
+  // Stable randomizer para hindi mag-jitter ang mga bato at bitak
+  const random = (seed) => {
+    let x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  };
+
+  while (eng.decals.length > 80) {
+    eng.decals.shift();
+  }
+
+  for (const d of eng.decals) {
+    ctx.save();
+    
+    const lifePct = d.life / d.maxLife;
+    const invLife = 1.0 - lifePct;
+    const stableSeed = d.x * 13.37 + d.y * 42.0; 
+    const time = Date.now();
+    const flicker = (Math.sin(time * 0.02 + stableSeed) + 1) / 2;
+
+    // 💥 1. DOUBLE SONIC BOOM SHOCKWAVE (Super Saiyan style)
+    if (lifePct > 0.8) {
+      const shockPct = (lifePct - 0.8) / 0.2; 
+      ctx.globalCompositeOperation = 'lighter';
+      
+      // Inner Heavy Ring
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r * (0.5 + invLife * 8), 0, Math.PI * 2);
+      ctx.lineWidth = 3 + shockPct * 5;
+      ctx.strokeStyle = `rgba(255, 200, 100, ${shockPct * 0.8})`; 
+      ctx.stroke();
+
+      // Outer Fast Ring (Chromatic / Energy feel)
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.r * (1 + invLife * 12), 0, Math.PI * 2);
+      ctx.lineWidth = 1 + shockPct * 2;
+      ctx.strokeStyle = `rgba(100, 255, 255, ${shockPct * 0.5})`; 
+      ctx.stroke();
+    }
+
+    // 🕳️ 2. BRUTAL SCORCHED GROUND (Mas dark, mas jagged)
+    ctx.globalCompositeOperation = 'multiply'; 
+    ctx.globalAlpha = Math.max(0, lifePct) * 0.9;
+
+    const charGrad = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 1.2);
+    charGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');       // Pitch black ground zero
+    charGrad.addColorStop(0.4, 'rgba(15, 10, 10, 0.9)'); // Sunog na lupa
+    charGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = charGrad;
+    ctx.beginPath();
+    const points = 14; // Mas maraming points, mas jagged
+    for (let i = 0; i < points; i++) {
+      const angle = (i / points) * Math.PI * 2;
+      const noise = random(stableSeed + i) * 0.4 - 0.2; // +/- 20% distortion
+      const rOffset = d.r * (1 + noise);
+      const px = d.x + Math.cos(angle) * rOffset;
+      const py = d.y + Math.sin(angle) * rOffset;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over'; 
+
+    // 🪨 3. SHATTERED DEBRIS (Mga basag na bato na TUMA-TALSIC/GUMAGALAW)
+    ctx.globalAlpha = lifePct * 0.8;
+    const numDebris = 4 + Math.floor(random(stableSeed + 100) * 4);
+    for (let i = 0; i < numDebris; i++) {
+      const debSeed = stableSeed + i * 50;
+      const angle = random(debSeed) * Math.PI * 2;
+      
+      // DITO ANG MAGIC: Dinagdag ang pushDist para umabante ang bato base sa oras (invLife)
+      const pushDist = invLife * d.r * random(debSeed + 3) * 0.8; 
+      const dist = d.r * (0.7 + random(debSeed + 1) * 0.5) + pushDist;
+      
+      const bx = d.x + Math.cos(angle) * dist;
+      const by = d.y + Math.sin(angle) * dist;
+      const bSize = d.r * (0.1 + random(debSeed + 2) * 0.15);
+      
+      // Iikot din ang bato habang tumatalsik
+      const rot = random(debSeed + 4) * Math.PI * (1 + invLife * 2);
+
+      ctx.save();
+      // Gamitin natin ang translate at rotate para mas madali i-draw ang umiikot na bato
+      ctx.translate(bx, by);
+      ctx.rotate(rot);
+
+      // Shadow ng bato (naka-base na ngayon sa 0,0)
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.beginPath();
+      ctx.arc(2, 2, bSize, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Katawan ng bato (Jagged polygon)
+      ctx.fillStyle = 'rgba(40, 35, 35, 1)';
+      ctx.beginPath();
+      ctx.moveTo(bSize, 0);
+      ctx.lineTo(0, bSize);
+      ctx.lineTo(-bSize * 0.5, 0);
+      ctx.lineTo(0, -bSize * 0.8);
+      ctx.closePath();
+      ctx.fill();
+
+      // Highlight ng bato (Fake 3D lighting sa taas)
+      ctx.strokeStyle = 'rgba(100, 90, 90, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      
+      ctx.restore();
+    }
+
+    // ⚡ 4. GLOWING MAGMA FISSURES (Mga bitak na may apoy sa loob)
+    const emberAlpha = Math.max(0, (lifePct - 0.3) / 0.7); 
+    const numCracks = 4 + Math.floor(random(stableSeed + 200) * 3);
+    
+    for(let i = 0; i < numCracks; i++) {
+      const crackSeed = stableSeed + i * 15;
+      const angle = random(crackSeed) * Math.PI * 2;
+      const length = d.r * (0.8 + random(crackSeed + 1) * 0.8);
+      
+      const startX = d.x + Math.cos(angle) * d.r * 0.1;
+      const startY = d.y + Math.sin(angle) * d.r * 0.1;
+      const midX = d.x + Math.cos(angle + 0.4) * length * 0.5;
+      const midY = d.y + Math.sin(angle + 0.4) * length * 0.5;
+      const endX = d.x + Math.cos(angle) * length;
+      const endY = d.y + Math.sin(angle) * length;
+
+      // Base Black Crack (Kahit patay na ang baga, nandito 'to)
+      ctx.globalAlpha = lifePct * 0.7;
+      ctx.strokeStyle = 'rgba(5, 0, 0, 0.9)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(midX, midY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // Inner Glowing Magma (Pumipintig at nawawala)
+      if (emberAlpha > 0) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = emberAlpha * (0.6 + flicker * 0.4);
+        ctx.strokeStyle = 'rgba(255, 100, 0, 0.9)';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(midX, midY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over'; // Reset agad per line
+      }
+    }
+
+    // 🔥 5. SUPERHEATED CORE & UPWARD PARTICLES
+    if (emberAlpha > 0) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = emberAlpha * (0.8 + flicker * 0.2); 
+      
+      const coreR = d.r * 0.5;
+      const emberGrad = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, coreR);
+      emberGrad.addColorStop(0, 'rgba(255, 255, 200, 1)');   // Blinding white center
+      emberGrad.addColorStop(0.3, 'rgba(255, 80, 0, 0.9)');  // Intense Orange
+      emberGrad.addColorStop(0.8, 'rgba(100, 0, 0, 0.4)');   // Dark rim
+      emberGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      
+      ctx.fillStyle = emberGrad;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, coreR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ✨ Hyper-active Sparks (Umaakyat paitaas at nagfe-fade)
+      ctx.globalAlpha = emberAlpha;
+      ctx.fillStyle = 'rgba(255, 200, 50, 1)';
+      for (let i = 0; i < 8; i++) {
+        const sparkSeed = stableSeed + i * 77;
+        const sAngle = random(sparkSeed) * Math.PI * 2;
+        const sDist = random(sparkSeed + 1) * d.r * 0.9;
+        const speedY = invLife * d.r * 3 * random(sparkSeed + 2);
+        
+        const sparkX = d.x + Math.cos(sAngle) * sDist + (Math.sin(time*0.01 + sparkSeed)*3); // Wave motion
+        const sparkY = d.y + Math.sin(sAngle) * sDist - speedY;
+
+        if (speedY < d.r * 2) {
+          ctx.beginPath();
+          ctx.arc(sparkX, sparkY, 0.5 + random(sparkSeed)*1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    
+    ctx.restore();
+  }
+}
+
 // ==========================================
       // 🎒 EQUIPMENT RENDER LOGIC (MAANGAS EFFECTS: MYTHIC, LEGENDARY, EPIC)
       // ==========================================
@@ -6077,9 +6500,11 @@ if (eng.potions) {
                         if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.0; 
                         if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
                         let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                        let isCrit = false;
                         if (Math.random() < (totalCrit / 100)) { baseSkillDmg *= 2; enemy.flash = 0.5; } 
                         else { enemy.flash = 0.2; }
                         enemy.hp -= baseSkillDmg;
+                        spawnFCT(eng, enemy.x, enemy.y, baseSkillDmg, 'damage', isCrit);
                         if (enemy.hp <= 0) enemy.deadTrigger = true;
                         
                         // Hit sparks
@@ -6552,6 +6977,7 @@ for (const b of eng.bullets) {
               ctx.restore();
           }
       }
+
 
       for (const e of eng.enemies) {
         ctx.save();
@@ -9256,6 +9682,74 @@ renderFamiliars(eng.p);
 if (isCoopActive && eng.p2) renderFamiliars(eng.p2);
 
 // ==============================================================================
+// 💥 FLOATING COMBAT TEXT RENDERER (RO STYLE)
+// ==============================================================================
+if (eng.floatingTexts) {
+  ctx.save();
+  for (const ft of eng.floatingTexts) {
+    // Fade out nang makinis sa huling 0.5 seconds
+    const alpha = Math.max(0, Math.min(1, ft.life / 0.5)); 
+    ctx.globalAlpha = alpha;
+    
+    // Bounce / Pop Scale Effect sa unang litaw
+    const popScale = ft.life > 0.8 ? 1 + (ft.life - 0.8) * 2.5 : 1; 
+
+    ctx.save();
+    ctx.translate(ft.x, ft.y);
+    ctx.scale(popScale, popScale);
+
+    if (ft.type === 'damage') {
+      ctx.fillStyle = ft.isCrit ? '#fde047' : '#ffffff'; // Gold pag crit, White pag normal
+      ctx.font = ft.isCrit ? '900 16px monospace' : 'bold 11px monospace';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2.5;
+    } else if (ft.type === 'damageTaken') {
+      ctx.fillStyle = '#ef4444'; // Red
+      ctx.font = 'bold 13px monospace';
+      ctx.strokeStyle = '#450a0a';
+      ctx.lineWidth = 2.5;
+    } else if (ft.type === 'heal') {
+      ctx.fillStyle = '#4ade80'; // Green
+      ctx.font = 'bold 13px monospace';
+      ctx.strokeStyle = '#064e3b';
+      ctx.lineWidth = 2.5;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#4ade80';
+    } else if (ft.type === 'shield') {
+      ctx.fillStyle = '#38bdf8'; // Cyan
+      ctx.font = 'bold 11px monospace';
+      ctx.strokeStyle = '#082f49';
+      ctx.lineWidth = 2.5;
+    }
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Balangkas at mismong sulat ng number
+    ctx.strokeText(ft.text, 0, 0);
+    ctx.fillText(ft.text, 0, 0);
+
+    // 🔥 DITO IPAPASOK ANG "Critical!" TEXT
+    if (ft.isCrit) {
+      // Tanggalin pansamantala ang shadow effect para malinis tingnan ang font
+      ctx.shadowBlur = 0; 
+      
+      ctx.font = 'italic 10px sans-serif'; // Maliit at italic
+      ctx.fillStyle = '#f87171'; // Red/Orange color
+      ctx.lineWidth = 2; // Manipis na outline
+      ctx.strokeStyle = '#000000';
+      
+      // I-offset nang paakyat (-14) para nasa ibabaw ng number
+      ctx.strokeText("Critical!", 0, -14);
+      ctx.fillText("Critical!", 0, -14);
+    }
+
+    ctx.restore(); // Tapos na i-render itong isang text
+  }
+  ctx.restore(); // Ibabalik sa normal ang buong context
+}
+
+// ==============================================================================
       // 🔥 UPDATED STEP 4: INTENSE & SCARY CINEMATIC BOSS INTRO EFFECTS
       // ==============================================================================
       if (eng.bossIntro && eng.bossIntro.active) {
@@ -9765,8 +10259,8 @@ if (e.key === 'm' || e.key === 'M') {
              target.multiShot = 20;     // Max Split Bolt Cap
 
              // 4. Max out NEW STATS: Crit and Defense
-             target.baseCrit = 60;      // Max Crit Chance Cap (60%)
-             target.baseDef = 60;       // Max Defense Block Cap (60%)
+             target.baseCrit = 100;      // Max Crit Chance Cap (60%)
+             target.baseDef = 11185;       // Max Defense Block Cap (60%)
 
              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
              setPlayerLevel(target.level);
