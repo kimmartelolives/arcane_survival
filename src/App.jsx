@@ -55,12 +55,12 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
     window.arcaneAudio.postBossBgm.currentTime = 0;
   };
 
-  window.arcaneAudio.menuBgm.volume = 0.4;
-  window.arcaneAudio.gameBgm.volume = 0.4;
-  window.arcaneAudio.levelUpSfx.volume = 0.4;       // Setup ang volume para sa SFX
-  window.arcaneAudio.selectUpgradeSfx.volume = 0.4;
-  window.arcaneAudio.gameOverSfx.volume = 0.6;
-  window.arcaneAudio.bossBgm.volume = 0.6
+  window.arcaneAudio.menuBgm.volume = 1.0;
+  window.arcaneAudio.gameBgm.volume = 1.0;
+  window.arcaneAudio.levelUpSfx.volume = 0.8;       // Setup ang volume para sa SFX
+  window.arcaneAudio.selectUpgradeSfx.volume = 0.8;
+  window.arcaneAudio.gameOverSfx.volume = 1.6;
+  window.arcaneAudio.bossBgm.volume = 1.5
 }
 
 export default function App() {
