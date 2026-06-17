@@ -1,33 +1,255 @@
-# Arcane Survival
+# 🔮 Arcane Survival
 
-*Arcane Survival* is a fantasy co-op survival game where arcane wizards fight endless waves of magic and chaos. Forge covenants, survive the last stand, and rise in the Council of Fallen. Built with React and Supabase, this game features real-time multiplayer, a persistent leaderboard, and a dynamic skill system.
+> **Master the Arcane. Defy the Abyss. Survive the Endless Horde.**
 
-## Features
+Arcane Survival is a browser-based fantasy action-survival game where powerful mages battle endless waves of monsters, collect legendary artifacts, unlock devastating spells, and challenge ancient bosses born from the Abyss.
 
--   **Live Co-op & Solo Modes**: Play alone or team up with a friend in real-time. Create a lobby, share a room code, and face the chaos together.
--   **Dynamic RPG Progression**: Defeat enemies to gain experience, level up, and choose from a random selection of powerful upgrades to enhance your wizard's abilities.
--   **Extensive Skill System**: Unlock a deep skill tree with over 10 unique abilities. Toggle passive auras, auto-cast offensive spells, and unleash devastating Ultimate skills like `Arcane Collapse` and the reality-bending `Arcane Instinct`.
--   **Real-time Backend**: Powered by Supabase for:
-    -   WebSocket-based multiplayer for seamless co-op synchronization.
-    -   A persistent online leaderboard to immortalize the most legendary wizards.
-    -   An in-game "Council Chronicles" system for announcements and patch notes.
--   **Arcane Hotbar**: Manage your unlocked skills with an MMO-style hotbar, complete with cooldown timers and status indicators.
--   **Integrated Party Chat**: Coordinate with your ally using the built-in chat system in co-op mode.
--   **Secret Admin Portal**: A hidden `/scribe-portal` allows administrators to manage game announcements and patch notes directly into the Supabase database.
+Inspired by magical fantasy worlds, roguelite progression systems, and cinematic boss encounters, Arcane Survival combines fast-paced combat, strategic builds, companion summons, and epic endgame battles into a single magical experience.
 
-## How to Play
+---
 
-The goal is to survive for as long as possible against increasingly difficult waves of enemies while leveling up your wizard.
+## ✨ Features
 
--   **Movement**: `WASD` or `Arrow Keys`
--   **Pause Game**: `Escape` or `P`
--   **Level Up Choice**: `1`, `2`, or `3`
--   **Skill Hotkeys**: `1` through `6`
--   **Toggle Skill Panel**: `K`
+### ⚔️ Fast-Paced Survival Combat
+- Battle endless waves of enemies
+- Dodge, kite, and outplay dangerous monsters
+- Face increasingly difficult encounters
 
-## Tech Stack
+### 🧙 Powerful Magic System
+- Cast devastating arcane abilities
+- Unlock unique magical upgrades
+- Create powerful spell combinations
 
--   **Frontend**: React (with Hooks), Vite
--   **Backend & Realtime**: Supabase
--   **Game Engine**: HTML5 Canvas with a Web Worker for the game loop.
--   **Styling**: Custom CSS with a "magical neon" theme.
+### 👹 Epic Boss Battles
+- Challenge elite enemies and mini-bosses
+- Defeat world-ending Abyssal entities
+- Earn rare rewards from legendary foes
+
+### 🐉 Companion System
+- Summon magical companions to aid you
+- Unlock unique companion abilities
+- Build powerful companion synergies
+
+### 💎 Progression & Rewards
+- Collect gold and rare resources
+- Obtain powerful artifacts
+- Unlock permanent upgrades
+- Earn Void Crystals from bosses
+
+### 🌌 The Abyss Awakened
+- Face the ultimate embodiment of destruction
+- Experience cinematic boss encounters
+- Survive against overwhelming power
+
+### 🎨 Fantasy Visual Effects
+- Arcane spell animations
+- Magical particle effects
+- Cinematic combat moments
+- Immersive fantasy atmosphere
+
+---
+
+## 🎮 How To Play
+
+### Controls
+
+| Action | Key |
+|----------|----------|
+| Move | WASD |
+| Aim | Mouse |
+| Attack | Automatic |
+| Interact | Mouse |
+| Pause | ESC |
+
+---
+
+## 🏹 Gameplay Loop
+
+1. Enter the battlefield.
+2. Defeat enemies to gain experience.
+3. Level up and choose upgrades.
+4. Strengthen your spells and companions.
+5. Defeat mini-bosses for rare rewards.
+6. Collect Void Crystals.
+7. Challenge powerful bosses.
+8. Survive as long as possible.
+9. Confront **The Abyss Awakened**.
+
+---
+
+## 🌟 Upgrade Your Build
+
+Choose your path to power:
+
+### 🔥 Destruction Mage
+Focus on:
+- High damage
+- Critical strikes
+- Explosive spells
+
+### ❄️ Frost Mage
+Focus on:
+- Crowd control
+- Slows and freezes
+- Defensive gameplay
+
+### ⚡ Storm Mage
+Focus on:
+- Chain attacks
+- Mobility
+- Area damage
+
+### 🌑 Abyssal Mage
+Focus on:
+- Dark magic
+- Lifesteal
+- High-risk, high-reward gameplay
+
+---
+
+## 🐾 Companions
+
+Summon powerful allies to fight by your side.
+
+### 🌪 Zephyr Falcon
+Master of wind and storm magic.
+
+### ✨ Holy Seraph
+Protective celestial guardian capable of shielding allies.
+
+### 🌑 Umbral Bat
+A shadow-born familiar that strikes from darkness.
+
+Each companion offers unique abilities and can dramatically change your playstyle.
+
+---
+
+## 👑 Bosses
+
+Prepare to face terrifying enemies:
+
+- Elite monsters
+- Mini-boss encounters
+- Legendary adversaries
+- The Abyss Awakened
+
+Every boss introduces new mechanics, attack patterns, and challenges.
+
+---
+
+## 💎 Void Crystals
+
+Void Crystals are rare resources obtained by defeating bosses and mini-bosses.
+
+Use them to:
+- Unlock powerful upgrades
+- Strengthen future runs
+- Progress further into the endgame
+
+> ✦ Defeat bosses and mini-bosses to claim Void Crystals from their shattered essence.
+
+---
+
+## 🌌 Lore
+
+For centuries, ancient seals kept the darkness beneath the world imprisoned.
+
+But now...
+
+### THE ABYSS HAS AWOKEN.
+
+Its corruption spreads across the land, consuming kingdoms, magic, and life itself.
+
+As one of the last surviving Arcane Masters, you must gather forbidden power, forge legendary builds, and stand against the coming annihilation.
+
+The fate of the world rests in your hands.
+
+---
+
+## 🚀 Getting Started
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/kimmartelolives/arcane_survival.git
+```
+
+### Run Locally
+
+Simply open:
+
+```bash
+index.html
+```
+
+or serve the project using:
+
+```bash
+npx serve
+```
+
+or
+
+```bash
+python -m http.server
+```
+
+---
+
+## 🛠 Built With
+
+- HTML5
+- CSS3
+- JavaScript
+- Canvas API
+
+---
+
+## 🎯 Roadmap
+
+Planned features:
+
+- Additional companion types
+- New bosses
+- More spells
+- Talent tree system
+- Achievement system
+- Endless challenge mode
+- New maps and environments
+- Multiplayer support
+
+---
+
+## 📸 Screenshots
+
+Add gameplay screenshots here.
+
+```md
+![Gameplay](screenshots/gameplay1.png)
+![Boss Fight](screenshots/boss1.png)
+![Companions](screenshots/companions.png)
+```
+
+---
+
+## ❤️ Support The Project
+
+If you enjoy Arcane Survival and want to support development:
+
+☕ Support me on Ko-fi
+
+Your support helps fund future updates, features, and improvements.
+
+---
+
+## 📜 License
+
+This project is licensed under the MIT License.
+
+---
+
+# ✦ "The Abyss Has Awoken. Prepare To Die." ✦
+
+Will you become a legendary Arcane Master...
+
+or be consumed by the darkness?
