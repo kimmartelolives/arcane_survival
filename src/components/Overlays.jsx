@@ -30,8 +30,7 @@ export default function Overlays({
   const [loadingNews, setLoadingNews] = useState(false);
 
   const [voidCrystals, setVoidCrystals] = useState(0);
-  const [gameOverPhase, setGameOverPhase] = useState('continue');
-  
+  const [gameOverPhase, setGameOverPhase] = useState('continue');  
 
 useEffect(() => {
     if (screen === 'levelup' || screen === 'gameover') {
@@ -890,6 +889,22 @@ const getUpgradeMeta = (rawString, wave = 1) => {
           animation: robeSway 4s infinite ease-in-out; border-bottom: 2px solid;
           box-shadow: inset 0 -3px 6px rgba(0,0,0,0.6);
         }
+
+        /* 🔥 GLOWING ANIMATION PARA SA KO-FI LINK */
+        @keyframes arcaneGlow {
+          0%, 100% {
+            text-shadow: 0 0 8px rgba(197, 160, 89, 0.6), 0 0 15px rgba(197, 160, 89, 0.3);
+            transform: scale(1);
+          }
+          50% {
+            text-shadow: 0 0 15px rgba(255, 230, 163, 1), 0 0 30px rgba(255, 230, 163, 0.8), 0 0 45px rgba(217, 119, 6, 0.6);
+            transform: scale(1.02); /* Konting umbok para mas mapansin */
+          }
+        }
+
+        .tribute-glow-effect {
+          animation: arcaneGlow 2.5s infinite ease-in-out !important;
+        }
       `}</style>
 
 
@@ -1006,15 +1021,26 @@ const getUpgradeMeta = (rawString, wave = 1) => {
               </button>
             </div>
 
-            {/* 🔮 MYSTIC WITCHCRAFT LINK (AT THE BOTTOM OF THE PANEL) */}
-            <div className="mystic-tribute-container">
+      <div className="mystic-tribute-container">
               <a 
                 href="https://ko-fi.com/zidaneee" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="mystic-tribute-link"
+                className="mystic-tribute-link tribute-glow-effect" /* 🔥 Idinagdag ang glow class dito */
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textDecoration: 'none' }}
               >
-                ✦ OFFER ARCANE TRIBUTE TO THE ARCHMAGE ✦
+                <span style={{ lineHeight: '1' }}>✦ OFFER ARCANE TRIBUTE TO THE ARCHMAGE ✦</span>
+                <span style={{ 
+                  fontSize: '11px',     /* Pinaliit nang konti */
+                  fontStyle: 'italic',  
+                  marginTop: '-4px',    /* 🔥 Negative margin para dikit na dikit! */
+                  lineHeight: '1',      /* 🔥 Tinatanggal ang default spacing ng text */
+                  opacity: 0.9,         
+                  fontWeight: 'normal',
+                  letterSpacing: '1px'  /* Konting awang sa letters para madaling basahin kahit maliit */
+                }}>
+                  Buy me a coffee on Ko-fi — click here.
+                </span>
               </a>
             </div>
 

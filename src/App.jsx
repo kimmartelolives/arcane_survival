@@ -17,6 +17,7 @@ import CustomCursor from './components/CustomCursor';
 const MENU_BGM_URL = '../main.mp3';
 const GAME_BGM_URL = "../game.mp3";
 const BOSS_BGM_URL = "../boss.mp3";
+const POST_BOSS_BGM_URL = "../post1.mp3";
 // 🔊 MAGDAGDAG NG MGA URL PARA SA UPGRADE SCREEN SFX DITO
 const LEVEL_UP_SFX_URL = '../level.mp3'; 
 const SELECT_SFX_URL = '../select.mp3';
@@ -28,6 +29,7 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
     menuBgm: new Audio(MENU_BGM_URL),
     gameBgm: new Audio(GAME_BGM_URL),
     bossBgm: new Audio(BOSS_BGM_URL),
+    postBossBgm: new Audio(POST_BOSS_BGM_URL),
     levelUpSfx: new Audio(LEVEL_UP_SFX_URL),       // 🔥 Bagong SFX kapag lumabas ang screen
     selectUpgradeSfx: new Audio(SELECT_SFX_URL), // 🔥 Bagong SFX kapag may piniling upgrade
     gameOverSfx: new Audio(GAME_OVER_SFX_URL),
@@ -37,13 +39,28 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
   window.arcaneAudio.menuBgm.loop = true;
   window.arcaneAudio.gameBgm.loop = true;
   window.arcaneAudio.bossBgm.loop = true;
+  window.arcaneAudio.postBossBgm.loop = true;
 
-  window.arcaneAudio.menuBgm.volume = 0.2;
-  window.arcaneAudio.gameBgm.volume = 0.2;
+  window.arcaneAudio.stopAllBgm = () => {
+    // I-pause ang lahat ng BGM
+    window.arcaneAudio.menuBgm.pause();
+    window.arcaneAudio.gameBgm.pause();
+    window.arcaneAudio.bossBgm.pause();
+    window.arcaneAudio.postBossBgm.pause();
+    
+    // I-reset ang oras pabalik sa simula para sariwa kapag i-play ulit
+    window.arcaneAudio.menuBgm.currentTime = 0;
+    window.arcaneAudio.gameBgm.currentTime = 0;
+    window.arcaneAudio.bossBgm.currentTime = 0;
+    window.arcaneAudio.postBossBgm.currentTime = 0;
+  };
+
+  window.arcaneAudio.menuBgm.volume = 0.4;
+  window.arcaneAudio.gameBgm.volume = 0.4;
   window.arcaneAudio.levelUpSfx.volume = 0.4;       // Setup ang volume para sa SFX
   window.arcaneAudio.selectUpgradeSfx.volume = 0.4;
   window.arcaneAudio.gameOverSfx.volume = 0.6;
-  window.arcaneAudio.bossBgm.volume = 0.4
+  window.arcaneAudio.bossBgm.volume = 0.6
 }
 
 export default function App() {
@@ -69,99 +86,118 @@ export default function App() {
     onCanvasMsg: null 
   });
 
-  // ==========================================================================
-  // 🔥 STEP 2: GLOBAL AUDIO MUTING & ROUTING CONTROLLERS
-  // ==========================================================================
 const toggleGlobalMute = (e) => {
-  e.stopPropagation();
-  const nextMute = !isMuted;
-  setIsMuted(nextMute);
-  localStorage.setItem('arcane_muted', String(nextMute));
-  
-  if (window.arcaneAudio) {
-    window.arcaneAudio.isMuted = nextMute;
-    window.arcaneAudio.menuBgm.muted = nextMute;
-    window.arcaneAudio.gameBgm.muted = nextMute;
-    window.arcaneAudio.levelUpSfx.muted = nextMute;
-    window.arcaneAudio.selectUpgradeSfx.muted = nextMute;
-    window.arcaneAudio.gameOverSfx.muted = nextMute; // 🔥 Isama sa pag-mute
+    e.stopPropagation();
+    const nextMute = !isMuted;
+    setIsMuted(nextMute);
+    localStorage.setItem('arcane_muted', String(nextMute));
     
-    if (nextMute) {
-      window.arcaneAudio.menuBgm.pause();
-      window.arcaneAudio.gameBgm.pause();
-      window.arcaneAudio.levelUpSfx.pause();
-      window.arcaneAudio.selectUpgradeSfx.pause();
-      window.arcaneAudio.gameOverSfx.pause(); // 🛑 Patayin kapag pinindot ang mute
-      window.arcaneAudio.bossBgm.pause();
-    } else {
-  if (screen === 'playing') {
-      // 🔥 Palitan ang playing logic:
-      if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(()=>{});
-      else window.arcaneAudio.gameBgm.play().catch(()=>{});
-  }
-  else if (screen === 'gameover') window.arcaneAudio.gameOverSfx.play().catch(()=>{});
-  else window.arcaneAudio.menuBgm.play().catch(()=>{});
-}
-  }
-};
-
-// Tagalipat ng kanta tuwing nagpapalit ng operational system windows
-useEffect(() => {
-  if (!window.arcaneAudio) return;
-  const { menuBgm, gameBgm, levelUpSfx, selectUpgradeSfx, gameOverSfx, isMuted: globalMute } = window.arcaneAudio;
-
-  menuBgm.muted = globalMute;
-  gameBgm.muted = globalMute;
-  levelUpSfx.muted = globalMute;
-  selectUpgradeSfx.muted = globalMute;
-  gameOverSfx.muted = globalMute;
-
-  if (globalMute) return;
-
-  if (screen === 'playing') {
-    menuBgm.pause();
-    gameOverSfx.pause();
-    gameOverSfx.onended = null; // 🔥 I-clear ang listener para ligtas
-    if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(() => {});
-    else gameBgm.play().catch(() => {});
-
-  } else if (screen === 'levelup') {
-    menuBgm.pause();
-    levelUpSfx.currentTime = 0;
-    levelUpSfx.play().catch(() => {});
-  } else if (screen === 'gameover') {
-    gameBgm.pause();
-    window.arcaneAudio.bossBgm.pause(); // 🔥 Idagdag ito
-    window.arcaneAudio.isBossActive = false; // 🔥 I-reset ang boss flag kapag namatay
-    menuBgm.pause();
-    
-    gameOverSfx.currentTime = 0;
-    gameOverSfx.play().catch(() => {});
-
-    // ==========================================================================
-    // 🔥 BAGONG DAGDAG: EVENT LISTENER KAPAG NATAPOS ANG GAME OVER SFX
-    // ==========================================================================
-    gameOverSfx.onended = () => {
-      // Siguraduhing hindi naka-mute at nasa gameover screen pa rin ang player
-      if (!window.arcaneAudio.isMuted && screen === 'gameover') {
-        menuBgm.currentTime = 0; // Patugtugin mula sa simula ang Menu BGM
-        menuBgm.play().catch(() => {});
+    if (window.arcaneAudio) {
+      window.arcaneAudio.isMuted = nextMute;
+      window.arcaneAudio.menuBgm.muted = nextMute;
+      window.arcaneAudio.gameBgm.muted = nextMute;
+      
+      // 🔥 DAGDAG: Siguraduhing na-mu-mute ang mga boss BGM
+      if (window.arcaneAudio.bossBgm) window.arcaneAudio.bossBgm.muted = nextMute; 
+      if (window.arcaneAudio.postBossBgm) window.arcaneAudio.postBossBgm.muted = nextMute; 
+      
+      window.arcaneAudio.levelUpSfx.muted = nextMute;
+      window.arcaneAudio.selectUpgradeSfx.muted = nextMute;
+      window.arcaneAudio.gameOverSfx.muted = nextMute; 
+      
+      if (nextMute) {
+        window.arcaneAudio.menuBgm.pause();
+        window.arcaneAudio.gameBgm.pause();
+        window.arcaneAudio.levelUpSfx.pause();
+        window.arcaneAudio.selectUpgradeSfx.pause();
+        window.arcaneAudio.gameOverSfx.pause(); 
+        
+        // 🔥 DAGDAG: I-pause din kapag pinindot ang mute
+        if (window.arcaneAudio.bossBgm) window.arcaneAudio.bossBgm.pause();
+        if (window.arcaneAudio.postBossBgm) window.arcaneAudio.postBossBgm.pause(); 
+      } else {
+        if (screen === 'playing') {
+            // 🔥 FIX: Piliin ang tamang kanta kapag in-unmute sa gitna ng laro
+            if (window.arcaneAudio.isPostBossActive && window.arcaneAudio.postBossBgm) {
+                window.arcaneAudio.postBossBgm.play().catch(()=>{});
+            } else if (window.arcaneAudio.isBossActive && window.arcaneAudio.bossBgm) {
+                window.arcaneAudio.bossBgm.play().catch(()=>{});
+            } else {
+                window.arcaneAudio.gameBgm.play().catch(()=>{});
+            }
+        }
+        else if (screen === 'gameover') window.arcaneAudio.gameOverSfx.play().catch(()=>{});
+        else window.arcaneAudio.menuBgm.play().catch(()=>{});
       }
-    };
-
-  } else {
-    // Kapag nasa Menu o ibang screens (lobby, etc.)
-    gameBgm.pause();
-    gameOverSfx.pause();
-    gameOverSfx.onended = null; // 🔥 I-clear ang listener para ligtas
-    menuBgm.play().catch(() => {});
-  }
-
-  // 🔥 CLEANUP FUNCTION: Tinatanggal ang event listener kapag umalis sa screen
-  return () => {
-    gameOverSfx.onended = null;
+    }
   };
-}, [screen]);
+// Tagalipat ng kanta tuwing nagpapalit ng operational system windows
+  useEffect(() => {
+    if (!window.arcaneAudio) return;
+    const { menuBgm, gameBgm, bossBgm, postBossBgm, levelUpSfx, selectUpgradeSfx, gameOverSfx, isMuted: globalMute } = window.arcaneAudio;
+
+    menuBgm.muted = globalMute;
+    gameBgm.muted = globalMute;
+    levelUpSfx.muted = globalMute;
+    selectUpgradeSfx.muted = globalMute;
+    gameOverSfx.muted = globalMute;
+    
+    // 🔥 DAGDAG: I-sync ang mute status sa screen change
+    if (bossBgm) bossBgm.muted = globalMute;
+    if (postBossBgm) postBossBgm.muted = globalMute;
+
+    if (globalMute) return;
+
+    if (screen === 'playing') {
+      menuBgm.pause();
+      gameOverSfx.pause();
+      gameOverSfx.onended = null; 
+      
+      // 🔥 Play Logic
+      if (window.arcaneAudio.isPostBossActive && postBossBgm) {
+          postBossBgm.play().catch(() => {});
+      } else if (window.arcaneAudio.isBossActive && bossBgm) {
+          bossBgm.play().catch(() => {});
+      } else {
+          gameBgm.play().catch(() => {});
+      }
+
+    } else if (screen === 'levelup') {
+      menuBgm.pause();
+      levelUpSfx.currentTime = 0;
+      levelUpSfx.play().catch(() => {});
+    } else if (screen === 'gameover') {
+      gameBgm.pause();
+      if (bossBgm) bossBgm.pause(); 
+      if (postBossBgm) postBossBgm.pause(); // 🔥 I-pause rin kapag namatay
+      
+      window.arcaneAudio.isBossActive = false; 
+      window.arcaneAudio.isPostBossActive = false; // 🔥 I-reset kapag game over
+      menuBgm.pause();
+      
+      gameOverSfx.currentTime = 0;
+      gameOverSfx.play().catch(() => {});
+
+      gameOverSfx.onended = () => {
+        if (!window.arcaneAudio.isMuted && screen === 'gameover') {
+          menuBgm.currentTime = 0; 
+          menuBgm.play().catch(() => {});
+        }
+      };
+
+    } else {
+      gameBgm.pause();
+      gameOverSfx.pause();
+      if (bossBgm) bossBgm.pause();
+      if (postBossBgm) postBossBgm.pause();
+      gameOverSfx.onended = null; 
+      menuBgm.play().catch(() => {});
+    }
+
+    return () => {
+      gameOverSfx.onended = null;
+    };
+  }, [screen]);
 
   // ==========================================================================
   // EXISTING CORE EFFECTS ENGINE
