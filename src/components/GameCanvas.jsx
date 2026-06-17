@@ -1957,8 +1957,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
 } else if (sigilType === 'fissureSlam') {
         target.chatBubble = { text: "FISSURE SLAM!", life: 1.5 };
         const angle = Math.random() * Math.PI * 2;
-        
-        // Siguraduhing may variable para sa haba ng fissure (halimbawa 800 pixels)
+
         const fLength = 800; 
         currentEng.fissures.push({ x: target.x, y: target.y, angle, length: fLength, life: 1.5 });
 
@@ -1980,11 +1979,13 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
         // =======================================================
 
         const fissureDmg = 150 + ((currentEng.wave || 1) * 15) + ((target.dmg || 0) * 3.0);
+        const cosAng = Math.cos(angle);
+        const sinAng = Math.sin(angle);
 
         for (const e of currentEng.enemies) {
           const dx = e.x - target.x, dy = e.y - target.y;
-          const proj = dx * cos + dy * sin;
-          const perp = Math.abs(dx * sin - dy * cos); 
+          const proj = dx * cosAng + dy * sinAng; 
+          const perp = Math.abs(dx * sinAng - dy * cosAng)
           if (proj > 0 && perp < 60) {
              e.hp -= fissureDmg; 
              spawnFCT(currentEng, e.x, e.y, fissureDmg, 'damage', false); // 💥 ADDED FCT
@@ -2002,11 +2003,13 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
         const lightningDmg = 200 + ((currentEng.wave || 1) * 20) + ((target.dmg || 0) * 3.5);
 
         for (let i = 0; i < 8; i++) {
-          let best = null, minDist = 400;
+          let best = null, minDistSq = 160000; // ✅ 400 * 400 (Squared max distance)
           for (const e of currentEng.enemies) {
             if (!hits.has(e)) {
-              const d = Math.hypot(e.x - current.x, e.y - current.y);
-              if (d < minDist) { minDist = d; best = e; }
+              const dx = e.x - current.x;
+              const dy = e.y - current.y;
+              const distSq = (dx * dx) + (dy * dy); // ✅ MAS MABILIS SA CPU
+              if (distSq < minDistSq) { minDistSq = distSq; best = e; }
             }
           }
           if (best) {
@@ -3483,48 +3486,67 @@ if (eng.gameStarted) {
         }
 
 if (eng.tornados) {
-          for (let i = eng.tornados.length - 1; i >= 0; i--) {
-            const t = eng.tornados[i];
-            if (!t) continue;
-            t.life -= dt;
-            t.x += (t.vx || 0) * dt; 
-            t.y += (t.vy || 0) * dt;
-            // 💥 ITO YUNG PARA SA FLARE INFERNO (Mag-iiwan ng trail ng paso sa sahig)
-            if (Math.random() < 0.15) { 
-              if (!eng.decals) eng.decals = [];
-              eng.decals.push({ 
-                x: t.x + (Math.random() - 0.5) * 20, 
-                y: t.y + (Math.random() - 0.5) * 20, 
-                r: 25 + Math.random() * 15, 
-                life: 3.0, 
-                maxLife: 3.0 
-              });
-            } 
-            if (t.life <= 0) {
-              eng.tornados.splice(i, 1);
-            } else if (isHost || !isCoopActive) {
-              
-              // 🟢 DYNAMIC SCALED DPS: Flare Inferno
-              const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
-              const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
-              const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
+  for (let i = eng.tornados.length - 1; i >= 0; i--) {
+    const t = eng.tornados[i];
+    if (!t) continue;
+    t.life -= dt;
+    t.x += (t.vx || 0) * dt; 
+    t.y += (t.vy || 0) * dt;
 
-              for (const e of eng.enemies) {
-                if (!e) continue;
-                // 🔥 ITO ANG TAMA PARA SA TORNADOS (Gumagamit ng t.x at t.y)
-                if (Math.hypot(e.x - t.x, e.y - t.y) < (t.r || 50) + (e.r || 15)) {
-                  e.hp -= tornadoDps * dt;        
-                  e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
-                  if (Math.random() < 0.15) {
-                     e.flash = 0.5;
-                     spawnFCT(eng, e.x, e.y, tornadoDps * 0.15, 'damage', false); // 💥 ADDED FCT
-                  }
-                  if (e.hp <= 0) e.deadTrigger = true;
-                }
-              }
-            }
+    // 💥 OPTIMIZED FLARE INFERNO DECALS
+    if (Math.random() < 0.15) { 
+      if (!eng.decals) eng.decals = [];
+      // ✅ HARD CAP: Limitahan ang decals sa screen para hindi ma-overwhelm ang memory
+      if (eng.decals.length < 250) {
+        eng.decals.push({ 
+          // ✅ Gawaing Integer (Math.floor) para mas mabilis i-render ng HTML5 Canvas
+          x: Math.floor(t.x + (Math.random() - 0.5) * 20), 
+          y: Math.floor(t.y + (Math.random() - 0.5) * 20), 
+          r: Math.floor(25 + Math.random() * 15), 
+          life: 3.0, 
+          maxLife: 3.0 
+        });
+      }
+    } 
+
+    if (t.life <= 0) {
+      eng.tornados.splice(i, 1);
+    } else if (isHost || !isCoopActive) {
+      
+      const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
+      const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
+      const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
+
+      const tornadoRadius = t.r || 50;
+
+      for (const e of eng.enemies) {
+        if (!e) continue;
+
+        // ✅ OPTIMIZATION 1: Squared Distance (Inalis ang Math.hypot)
+        // Mas mabilis sa CPU ang pagpaparami (multiplication) kaysa sa Square Root
+        const dx = e.x - t.x;
+        const dy = e.y - t.y;
+        const maxDist = tornadoRadius + (e.r || 15);
+        const distSq = (dx * dx) + (dy * dy);
+
+        if (distSq < (maxDist * maxDist)) {
+          e.hp -= tornadoDps * dt;        
+          e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
+          
+          // ✅ OPTIMIZATION 2: Konting bawas sa FCT Spam (Ginawang 0.08 mula 0.15)
+          // Hindi ito mapapansin sa mata ng player dahil sa bilis ng tama ng tornado, 
+          // pero malaki ang tulong nito para hindi mag-lag kapag x2 na ang tornado.
+          if (Math.random() < 0.08) {
+             e.flash = 0.5;
+             // ✅ Gawaing buong numero (Math.floor) ang damage para iwas lag sa text rendering
+             spawnFCT(eng, e.x, e.y, Math.floor(tornadoDps * 0.15), 'damage', false); 
           }
+          if (e.hp <= 0) e.deadTrigger = true;
         }
+      }
+    }
+  }
+}
 
         if (eng.waves) {
           for (let i = eng.waves.length - 1; i >= 0; i--) {
@@ -5257,20 +5279,27 @@ if (localTarget) {
 const tickFamiliars = (pObj, isP2) => {
   if (!pObj || pObj.dead || !pObj.familiars) return;
   
-  pObj.familiars.forEach((f, index) => {
+  // 🛡️ NILABAS DITO: Isang beses lang mababawasan ang duration kada tick, kahit ilan ang familiars.
+// 🛡️ SHIELD DURATION LOGIC
+  if (pObj.divineShield) {
+      pObj.divineShield.duration -= dt;
+      if (pObj.divineShield.duration <= 0) {
+          
+          // Shatter explosion effect para kita mong nawala
+          for(let k=0; k<20; k++) {
+              const pa = Math.random() * Math.PI * 2;
+              const ps = Math.random() * 150 + 50;
+              eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: 'rgba(254, 240, 138, 0.5)', life: 0.5, ml: 0.5, r: Math.random()*2+1 });
+          }
 
-    if (pObj.divineShield && pObj.divineShield.active) {
-        pObj.divineShield.duration -= dt;
-        if (pObj.divineShield.duration <= 0) {
-            pObj.divineShield.active = false;
-            // Shatter explosion
-            for(let k=0; k<20; k++) {
-                const pa = Math.random() * Math.PI * 2;
-                const ps = Math.random() * 150 + 50;
-                eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: 'rgba(254, 240, 138, 0.5)', life: 0.5, ml: 0.5, r: Math.random()*2+1 });
-            }
-        }
-    }
+          // 🛑 ITO ANG SUSI: Burahin nang tuluyan ang shield object para mawala sa screen!
+          pObj.divineShield = null; 
+      }
+  }
+  
+  pObj.familiars.forEach((f, index) => {
+    // ❌ TINANGGAL DITO ang divineShield check para hindi mag-multiply ang bawas ng duration.
+
     // 1. Offsets para hindi magpatong ang 3 familiars
     let offsetX = -35, offsetY = -45;
     if (index === 1) { offsetX = 35; offsetY = -45; } // Right
@@ -5324,7 +5353,7 @@ const tickFamiliars = (pObj, isP2) => {
           f.cd = 3.0;
           const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01);
           pObj.hp = Math.min(pObj.maxHp, pObj.hp + healAmount);
-          spawnFCT(eng, pObj.x, pObj.y, healAmount, 'heal'); // 💥 ADDED FCT
+          spawnFCT(eng, pObj.x, pObj.y, healAmount, 'heal'); 
         for(let k=0; k<6; k++) eng.particles.push({ x: pObj.x + (Math.random()-0.5)*30, y: pObj.y + (Math.random()-0.5)*30, vx: 0, vy: -40 - Math.random()*20, color: '#86efac', life: 0.8, ml: 0.8, r: 2.5 });
       }
       else if (f.id === 'voidling') {
@@ -5346,7 +5375,7 @@ const tickFamiliars = (pObj, isP2) => {
         }
       }
       // 🪨 STONE GOLEM (Earth Spikes)
-        else if (f.id === 'golem') {
+      else if (f.id === 'golem') {
           f.cd = Math.max(1.5, 4.0 - (f.level * 0.2));
           let enemiesHit = 0;
           const smashRadius = 120 + (f.level * 8);
@@ -5369,7 +5398,7 @@ const tickFamiliars = (pObj, isP2) => {
               }
               
               e.hp -= smashDmg;
-              spawnFCT(eng, e.x, e.y, smashDmg, 'damage', false); // 💥 ADDED FCT
+              spawnFCT(eng, e.x, e.y, smashDmg, 'damage', false); 
               e.stunnedTime = Math.max(e.stunnedTime || 0, 1.5);
               e.flash = 0.5;
               if (e.hp <= 0) e.deadTrigger = true;
@@ -5414,34 +5443,41 @@ const tickFamiliars = (pObj, isP2) => {
            eng.shadowBlades.push({ x: f.x, y: f.y, vx: Math.cos(a) * 1100, vy: Math.sin(a) * 1100, angle: a, life: 1.0, hits: new Set(), p2: isP2, dmg: 80 + (f.level*60) });
         }
       }
-      // 👼 HOLY SERAPH (Shield Spawner)
       else if (f.id === 'light') {
-        f.cd = Math.max(8.0, 20.0 - (f.level * 1.0)); 
-        const shieldCapacity = 400 + (f.level * 250) + ((eng.wave || 1) * 50);
-        pObj.divineShield = { hp: shieldCapacity, maxHp: shieldCapacity, active: true, hitFlash: 0, duration: 10.0 };
-        for(let k=0; k<25; k++) {
-            const pa = Math.random() * Math.PI * 2;
-            const ps = Math.random() * 200 + 50;
-            eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 1.0, ml: 1.0, r: Math.random()*4+2 });
+        
+        // 🛑 BAGO: Siguraduhing may HP pa at hindi pa tapos ang duration!
+        const hasValidShield = pObj.divineShield && pObj.divineShield.duration > 0 && pObj.divineShield.hp > 0;
+        
+        if (hasValidShield) {
+            f.cd = 0.5; // Kung may buhay pang shield, pause muna yung cast timer ng familiar
+        } else {
+            // ✅ Kung wala na talaga, saka lang gagawa ng bago
+            f.cd = Math.max(8.0, 20.0 - (f.level * 1.0)); 
+            const shieldCapacity = 400 + (f.level * 250) + ((eng.wave || 1) * 50);
+            pObj.divineShield = { hp: shieldCapacity, maxHp: shieldCapacity, active: true, hitFlash: 0, duration: 7.0 };
+            for(let k=0; k<25; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 200 + 50;
+                eng.particles.push({ x: pObj.x, y: pObj.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#fef08a', life: 1.0, ml: 1.0, r: Math.random()*4+2 });
+            }
         }
       }
-else if (f.id === 'wind') {
-        f.cd = Math.max(2.0, 6.0 - (f.level * 0.4)); 
+      else if (f.id === 'wind') {
+        // f.cd = Math.max(2.0, 6.0 - (f.level * 0.4)); 
+        f.cd = Math.max(5.0, 6.5 - (f.level * 0.15));
         
         let target = null;
         let minDist = Infinity;
         
-        // Hahanapin ang pinakamalapit na kalaban sa PLAYER (pObj)
         for (const e of eng.enemies) {
           if (e.hp <= 0 || e.y < -50) continue;
           let d = Math.hypot(e.x - pObj.x, e.y - pObj.y); 
-          if (d < minDist && d < 600) { // Limitado sa 600 range mula sa player para hindi pumunta sa malayo
+          if (d < minDist && d < 600) { 
             minDist = d; 
             target = e; 
           }
         }
 
-        // Kung may target, kukunin ang angle papunta sa kanya. Kung wala, fallback sa random angle.
         const a = target ? Math.atan2(target.y - f.y, target.x - f.x) : Math.random() * Math.PI * 2;
         
         if (!eng.tornados) eng.tornados = [];
@@ -10122,150 +10158,150 @@ if (eng.floatingTexts) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 400, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 100;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 11185;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 100;      // Max Crit Chance Cap (60%)
+             target.baseDef = 11185;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+          }
+        }
         
         // END CHEAT CODES
 
