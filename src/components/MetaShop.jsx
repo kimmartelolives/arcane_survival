@@ -2632,7 +2632,8 @@ const upgradeFamiliar = (fam) => {
               <div style={{ color: '#cbd5e1', fontSize: '11px', fontStyle: 'italic', marginTop: '2px' }}>
                 ✦ Slay bosses and claim Void Crystals. 💎
               </div>
-              <button 
+              {/*  DEVELOPER TOOLS */}
+              {/* <button 
                 onClick={() => {
                   const newC = crystals + 10000000;
                   setCrystals(newC);
@@ -2644,7 +2645,7 @@ const upgradeFamiliar = (fam) => {
                   fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' 
                 }}>
                 🛠️ +10M Crystals (Dev Mode)
-              </button>
+              </button> */}
             </div>
 
             <div className="council-tab-headers" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
