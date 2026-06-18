@@ -38,7 +38,17 @@ export default function Overlays({
   const [grimoirePage, setGrimoirePage] = useState('cover'); // 'cover' | 'video'
   const [grimoireVideoPlaying, setGrimoireVideoPlaying] = useState(false);
   const [isIdleTransitioning, setIsIdleTransitioning] = useState(false);
+  // 🌌 Universal Transition State
   const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // 🪄 Helper function para sa Frieren effect
+  const executeWithTransition = (callback) => {
+    setIsTransitioning(true); // I-trigger ang animation
+    setTimeout(() => {
+      callback(); // Patakbuhin ang action (setScreen o onAction) pagkatapos ng 1 second
+      setIsTransitioning(false); // I-reset para mawala ang dark overlay sa bagong screen
+    }, 1000);
+  };
 
 useEffect(() => {
     if (screen === 'levelup' || screen === 'gameover') {
@@ -84,41 +94,33 @@ useEffect(() => {
     return cached === null ? null : cached === 'true';
   });
 
- useEffect(() => {
+ // 🕒 10 SECONDS IDLE DETECTION
+  useEffect(() => {
     let timeoutId;
 
     const resetIdleTimer = () => {
       clearTimeout(timeoutId);
-      // Tatakbo lang ang timer kung nasa 'menu' screen tayo at hindi pa nagta-transition
-      if (screen === 'menu' && !isIdleTransitioning) {
+      // Tatakbo lang timer kung nasa 'menu' at hindi pa nagta-transition
+      if (screen === 'menu' && !isTransitioning) {
         timeoutId = setTimeout(() => {
-          setIsIdleTransitioning(true); // Simulan ang fade-to-black transition
-          
-          // Pagkatapos ng 1 second (1000ms) animation, ibalik sa IntroScreen
-          setTimeout(() => {
-            setScreen('intro'); // 🔥 Sisiguraduhin nitong ibabato ka pabalik sa IntroScreen
-            setIsIdleTransitioning(false); // I-reset ang transition state
-          }, 1000); 
-        }, 10000); // 10,000 milliseconds = 10 SECONDS
+          // Gagamitin na natin ang helper function dito!
+          executeWithTransition(() => setScreen('intro'));
+        }, 12000); // 10 SECONDS
       }
     };
 
-    // Kapag may gumalaw na user, i-reset ang timer
-    const handleUserActivity = () => {
-      resetIdleTimer();
-    };
+    const handleUserActivity = () => resetIdleTimer();
 
     if (screen === 'menu') {
       window.addEventListener('mousemove', handleUserActivity);
       window.addEventListener('keydown', handleUserActivity);
       window.addEventListener('touchstart', handleUserActivity);
       window.addEventListener('click', handleUserActivity);
-      resetIdleTimer(); // Simulan agad ang timer pagpasok sa Main Menu
+      resetIdleTimer(); 
     } else {
       clearTimeout(timeoutId);
     }
 
-    // Cleanup listeners para iwas memory leak
     return () => {
       clearTimeout(timeoutId);
       window.removeEventListener('mousemove', handleUserActivity);
@@ -126,7 +128,7 @@ useEffect(() => {
       window.removeEventListener('touchstart', handleUserActivity);
       window.removeEventListener('click', handleUserActivity);
     };
-  }, [screen, isIdleTransitioning, setScreen]);
+  }, [screen, isTransitioning, setScreen]);
 
   useEffect(() => {
     const fetchCoopStatus = () => {
@@ -163,7 +165,7 @@ useEffect(() => {
   }, []);
 
 
-  // 🔊 AWTOMATIKONG CLICK SOUND EFFECT PARA SA LAHAT NG BUTTONS
+// 🔊 AWTOMATIKONG CLICK SOUND EFFECT PARA SA LAHAT NG BUTTONS
   useEffect(() => {
     // Helper function para mag-play ng audio nang hindi napuputol
     const playSound = (src, volume = 0.5) => {
@@ -175,16 +177,15 @@ useEffect(() => {
     const handleClick = (e) => {
       // Targetin lahat ng <button> at pati na rin ang custom thumbnails ng Grimoire
       if (e.target.closest('button') || e.target.closest('.grimoire-video-thumb')) {
-        playSound('/btn-click.mp3', 0.6); // Siguraduhing tama ang filename ng audio mo
+        playSound('/btn-click.mp3', 0.6); 
       }
     };
 
-    // I-attach ang tagapakinig kapag nag-load ang Overlays (CLICK LANG)
-    document.addEventListener('click', handleClick);
+    // 🔥 Idinagdag ang 'true' para saluhin agad ang click signal BAGO pa gumana ang stopPropagation
+    document.addEventListener('click', handleClick, true);
 
-    // Linisin kapag umalis sa component para hindi dumoble
     return () => {
-      document.removeEventListener('click', handleClick);
+      document.removeEventListener('click', handleClick, true);
     };
   }, []);
 
@@ -1157,7 +1158,8 @@ const renderDamageRecap = () => {
               />
             </div>
 
-            <button className="btn wizard-btn" onClick={() => onAction('start-solo', { name: wizardName })}>
+            <button className="btn wizard-btn" onClick={() => executeWithTransition(() => onAction('start-solo', { name: wizardName }))}>
+              
               <span className="btn-icon">🧙</span><span className="btn-label">Solo Trial</span>
             </button>
 {/* 🔥 FIX 2: 3-Way Conditional Handling para iwas click-spamming habang nagre-refresh */}
@@ -1468,9 +1470,9 @@ const renderDamageRecap = () => {
               )}
             </div>
             
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '14px', width: '100%', margin: '14px 0 0 0' }} onClick={() => setCouncilNewsOpen(false)}>
-              ✕ Dismiss Scroll
-            </button>
+           <button className="btn wizard-btn danger-theme" style={{ marginTop: '14px', width: '100%', margin: '14px 0 0 0' }} onClick={() => executeWithTransition(() => setCouncilNewsOpen(false))}>
+               ✕ Dismiss Scroll
+          </button>
           </div>
         </div>
       )}
@@ -1500,7 +1502,7 @@ const renderDamageRecap = () => {
                 style={{ textAlign: 'center', marginBottom: '12px' }}
               />
             </div>
-            <button className="btn wizard-btn gold-theme" onClick={() => onAction('host-game', { name: wizardName })}>HOST SANCTUM</button>
+            <button className="btn wizard-btn gold-theme" onClick={() => executeWithTransition(() => onAction('host-game', { name: wizardName }))}>HOST SANCTUM</button>
             
             <div style={{ margin: '12px 0', fontSize: '.7rem', color: '#c4b5fd', fontFamily: 'monospace', letterSpacing: '2px', textAlign: 'center' }}>— OR —</div>
             
@@ -1517,8 +1519,8 @@ const renderDamageRecap = () => {
                 style={{ textAlign: 'center', letterSpacing: '.2em', marginBottom: '12px' }} 
               />
             </div>
-            <button className="btn wizard-btn" onClick={() => onAction('join-game', { name: wizardName, code: joinCode })}>Step Into Sanctum</button>
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => setScreen('menu')}>← Leave Sanctum</button>
+            <button className="btn wizard-btn" onClick={() => executeWithTransition(() => onAction('join-game', { name: wizardName, code: joinCode }))}>Step Into Sanctum</button>
+            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
           </div>
         </div>
       )}
@@ -1630,7 +1632,7 @@ const renderDamageRecap = () => {
             </div>
             
             {/* LEAVE BUTTON - Swak na sa pinakailalim nang may saktong awang sa kahon */}
-            <button className="btn wizard-btn danger-theme lb-bottom-btn" onClick={() => setScreen('menu')}>← Leave Sanctum</button>
+            <button className="btn wizard-btn danger-theme lb-bottom-btn" onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
           </div>
         </div>
       )}
@@ -1812,10 +1814,10 @@ const renderDamageRecap = () => {
                   </button>
                 )}
 
-                <button className="btn wizard-btn gold-theme" onClick={() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName })}>
+                <button className="btn wizard-btn gold-theme" onClick={() => executeWithTransition(() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName }))}>
                   🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
                 </button>
-                <button className="btn wizard-btn" onClick={() => setScreen('menu')}>🏠 Main Menu</button>
+                <button className="btn wizard-btn" onClick={() => executeWithTransition(() => setScreen('menu'))}>🏠 Main Menu</button>
               </>
             )}
           </div>
@@ -1854,14 +1856,16 @@ const renderDamageRecap = () => {
             <button 
               className="btn wizard-btn danger-theme" 
               onClick={() => {
-                if (window.executeNetworkExitAction) {
-                  window.executeNetworkExitAction();
-                } else {
-                  setScreen('menu');
-                  if (onAction) {
-                    try { onAction('exit-match'); } catch(e) {}
+                executeWithTransition(() => {
+                  if (window.executeNetworkExitAction) {
+                    window.executeNetworkExitAction();
+                  } else {
+                    setScreen('menu');
+                    if (onAction) {
+                      try { onAction('exit-match'); } catch(e) {}
+                    }
                   }
-                }
+                });
               }}
             >
               Break Covenant
@@ -2079,12 +2083,18 @@ const renderDamageRecap = () => {
 
                 {/* Close button */}
                 <button
-                  className="btn wizard-btn danger-theme"
-                  style={{ marginTop: 'auto', marginBottom: 0, fontSize: '0.72rem', padding: '8px 14px', position: 'relative', zIndex: 10, pointerEvents: 'all' }}
-                  onClick={(e) => { e.stopPropagation(); setShowGrimoireModal(false); setGrimoireVideoPlaying(false); }}
-                >
-                  ✕ Seal the Grimoire
-                </button>
+                    className="btn wizard-btn danger-theme"
+                    style={{ marginTop: 'auto', marginBottom: 0, fontSize: '0.72rem', padding: '8px 14px', position: 'relative', zIndex: 10, pointerEvents: 'all' }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      executeWithTransition(() => {
+                        setShowGrimoireModal(false); 
+                        setGrimoireVideoPlaying(false);
+                      }); 
+                    }}
+                  >
+                    ✕ Seal the Grimoire
+                  </button>
 
                 {/* Rune strip bottom */}
                 <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
@@ -2245,7 +2255,7 @@ const renderDamageRecap = () => {
  {/* ====================================================================
           🌌 IDLE TRANSITION TO INTROSCREEN (ARCANE / FRIEREN STYLE)
           ==================================================================== */}
-      {isIdleTransitioning && (
+      {isTransitioning && (
         <div className="arcane-idle-transition" style={{
           position: 'fixed',
           inset: 0,

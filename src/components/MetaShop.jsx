@@ -2441,6 +2441,18 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
   const [equippedFamiliars, setEquippedFamiliars] = useState([]);
   const [familiarLevels, setFamiliarLevels] = useState({});
 
+ // 🌌 Universal Transition State
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  // 🪄 Helper function para sa Frieren effect
+  const executeWithTransition = (callback) => {
+    setIsTransitioning(true); // I-trigger ang animation
+    setTimeout(() => {
+      callback(); // Patakbuhin ang action pagkatapos ng 1 second
+      setIsTransitioning(false); // I-reset
+    }, 1000);
+  };
+
 
   // ANTI-INSPECT AT ANTI-RIGHT CLICK SECURITY
   useEffect(() => {
@@ -2925,12 +2937,117 @@ const upgradeFamiliar = (fam) => {
 
           <div style={{ flexShrink: 0, marginTop: 'auto' }}>
             <div className="divider mystic-divider" style={{ margin: '15px 0 10px 0' }} />
-            <button className="btn wizard-btn danger-theme" onClick={() => setScreen('menu')} style={{ width: '100%', maxWidth: '200px', margin: '0 auto', display: 'block' }}>
-              ← Return to Menu
-            </button>
+            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
           </div>
         </div>
       </div>
+
+
+            {/* ====================================================================
+          🌌 UNIVERSAL TRANSITION (ARCANE / FRIEREN STYLE)
+          ==================================================================== */}
+      {isTransitioning && (
+        <div className="arcane-idle-transition" style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999999,
+          pointerEvents: 'all',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden'
+        }}>
+          {/* Ethereal Spell Rings */}
+          <div className="idle-magic-ring outer"></div>
+          <div className="idle-magic-ring inner"></div>
+          <div className="idle-magic-flash"></div>
+
+          {/* Drifting Mana Particles */}
+          <div className="mana-particle p1"></div>
+          <div className="mana-particle p2"></div>
+          <div className="mana-particle p3"></div>
+          <div className="mana-particle p4"></div>
+          <div className="mana-particle p5"></div>
+
+          <style>{`
+            /* 1. Deep Void Gradient Fade */
+            .arcane-idle-transition {
+              background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
+              animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 2. Expanding Ethereal Rings */
+            .idle-magic-ring {
+              position: absolute;
+              border-radius: 50%;
+              opacity: 0;
+            }
+            .idle-magic-ring.outer {
+              width: 80px;
+              height: 80px;
+              border: 2px solid rgba(255, 230, 163, 0.9);
+              box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4);
+              animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+            }
+            .idle-magic-ring.inner {
+              width: 40px;
+              height: 40px;
+              border: 1px dashed rgba(192, 132, 252, 0.8);
+              animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+              animation-delay: 0.05s;
+            }
+
+            /* 3. Central Flash */
+            .idle-magic-flash {
+              position: absolute;
+              width: 4px;
+              height: 4px;
+              background: #fff;
+              border-radius: 50%;
+              box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
+              animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 4. Drifting Mana Particles */
+            .mana-particle {
+              position: absolute;
+              background: #ffe6a3;
+              border-radius: 50%;
+              box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
+              opacity: 0;
+            }
+            .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
+            .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
+            .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
+            .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
+            .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
+
+            /* ================= ANIMATIONS ================= */
+            @keyframes voidFadeIn {
+              0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
+              100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
+            }
+            @keyframes spellExpand {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
+              100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
+            }
+            @keyframes spellExpandInner {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
+              100% { transform: scale(10) rotate(-180deg); opacity: 0; }
+            }
+            @keyframes starFlash {
+              0% { transform: scale(0); opacity: 1; }
+              40% { transform: scale(2); opacity: 1; }
+              100% { transform: scale(0); opacity: 0; }
+            }
+            @keyframes floatMana {
+              0% { transform: translateY(0) scale(1); opacity: 1; }
+              100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
+            }
+          `}</style>
+        </div>
+      )}
+      
     </>
   );
 }
