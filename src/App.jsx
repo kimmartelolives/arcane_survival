@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import GameCanvas from './components/GameCanvas';
 import Overlays from './components/Overlays';
+import IntroScreen from './components/IntroScreen';
 import PartyChat from './components/PartyChat';
 import Toast from './components/Toast';
 import AdminPortal from './components/AdminPortal';
@@ -60,11 +61,11 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
   window.arcaneAudio.levelUpSfx.volume = 0.5;       // Setup ang volume para sa SFX
   window.arcaneAudio.selectUpgradeSfx.volume = 0.5;
   window.arcaneAudio.gameOverSfx.volume = 1.0;
-  window.arcaneAudio.bossBgm.volume = 1.0
+  window.arcaneAudio.bossBgm.volume = 1.0;
 }
 
 export default function App() {
-  const [screen, setScreen] = useState('menu');
+  const [screen, setScreen] = useState('intro');
   const [hud, setHud] = useState({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
   const [coop, setCoop] = useState({ isEnabled: false, isHost: false, channel: null, roomCode: '', p2Name: 'Player 2', status: '' });
   
@@ -86,7 +87,7 @@ export default function App() {
     onCanvasMsg: null 
   });
 
-const toggleGlobalMute = (e) => {
+  const toggleGlobalMute = (e) => {
     e.stopPropagation();
     const nextMute = !isMuted;
     setIsMuted(nextMute);
@@ -97,7 +98,6 @@ const toggleGlobalMute = (e) => {
       window.arcaneAudio.menuBgm.muted = nextMute;
       window.arcaneAudio.gameBgm.muted = nextMute;
       
-      // 🔥 DAGDAG: Siguraduhing na-mu-mute ang mga boss BGM
       if (window.arcaneAudio.bossBgm) window.arcaneAudio.bossBgm.muted = nextMute; 
       if (window.arcaneAudio.postBossBgm) window.arcaneAudio.postBossBgm.muted = nextMute; 
       
@@ -112,12 +112,10 @@ const toggleGlobalMute = (e) => {
         window.arcaneAudio.selectUpgradeSfx.pause();
         window.arcaneAudio.gameOverSfx.pause(); 
         
-        // 🔥 DAGDAG: I-pause din kapag pinindot ang mute
         if (window.arcaneAudio.bossBgm) window.arcaneAudio.bossBgm.pause();
         if (window.arcaneAudio.postBossBgm) window.arcaneAudio.postBossBgm.pause(); 
       } else {
         if (screen === 'playing') {
-            // 🔥 FIX: Piliin ang tamang kanta kapag in-unmute sa gitna ng laro
             if (window.arcaneAudio.isPostBossActive && window.arcaneAudio.postBossBgm) {
                 window.arcaneAudio.postBossBgm.play().catch(()=>{});
             } else if (window.arcaneAudio.isBossActive && window.arcaneAudio.bossBgm) {
@@ -127,11 +125,26 @@ const toggleGlobalMute = (e) => {
             }
         }
         else if (screen === 'gameover') window.arcaneAudio.gameOverSfx.play().catch(()=>{});
+        else if (screen === 'intro') return;
         else window.arcaneAudio.menuBgm.play().catch(()=>{});
       }
     }
   };
-// Tagalipat ng kanta tuwing nagpapalit ng operational system windows
+
+  useEffect(() => {
+    /*
+    const hasPlayed = sessionStorage.getItem('arcane_intro_played');
+    if (hasPlayed && screen === 'intro') {
+      setScreen('menu');
+    }
+    */
+  }, [screen]);
+
+  const handleIntroFinish = () => {
+    sessionStorage.setItem('arcane_intro_played', 'true');
+    setScreen('menu');
+  };
+
   useEffect(() => {
     if (!window.arcaneAudio) return;
     const { menuBgm, gameBgm, bossBgm, postBossBgm, levelUpSfx, selectUpgradeSfx, gameOverSfx, isMuted: globalMute } = window.arcaneAudio;
@@ -142,7 +155,6 @@ const toggleGlobalMute = (e) => {
     selectUpgradeSfx.muted = globalMute;
     gameOverSfx.muted = globalMute;
     
-    // 🔥 DAGDAG: I-sync ang mute status sa screen change
     if (bossBgm) bossBgm.muted = globalMute;
     if (postBossBgm) postBossBgm.muted = globalMute;
 
@@ -153,7 +165,6 @@ const toggleGlobalMute = (e) => {
       gameOverSfx.pause();
       gameOverSfx.onended = null; 
       
-      // 🔥 Play Logic
       if (window.arcaneAudio.isPostBossActive && postBossBgm) {
           postBossBgm.play().catch(() => {});
       } else if (window.arcaneAudio.isBossActive && bossBgm) {
@@ -169,10 +180,10 @@ const toggleGlobalMute = (e) => {
     } else if (screen === 'gameover') {
       gameBgm.pause();
       if (bossBgm) bossBgm.pause(); 
-      if (postBossBgm) postBossBgm.pause(); // 🔥 I-pause rin kapag namatay
+      if (postBossBgm) postBossBgm.pause(); 
       
       window.arcaneAudio.isBossActive = false; 
-      window.arcaneAudio.isPostBossActive = false; // 🔥 I-reset kapag game over
+      window.arcaneAudio.isPostBossActive = false; 
       menuBgm.pause();
       
       gameOverSfx.currentTime = 0;
@@ -185,6 +196,11 @@ const toggleGlobalMute = (e) => {
         }
       };
 
+    } else if (screen === 'intro') {
+      menuBgm.pause();
+      gameBgm.pause();
+      if (bossBgm) bossBgm.pause();
+      if (postBossBgm) postBossBgm.pause();
     } else {
       gameBgm.pause();
       gameOverSfx.pause();
@@ -199,9 +215,6 @@ const toggleGlobalMute = (e) => {
     };
   }, [screen]);
 
-  // ==========================================================================
-  // EXISTING CORE EFFECTS ENGINE
-  // ==========================================================================
   useEffect(() => {
     localStorage.setItem('wizardName', wizardName);
     wizardNameRef.current = wizardName;
@@ -227,7 +240,6 @@ const toggleGlobalMute = (e) => {
   const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
 
   const handleSelectUpgrade = (choice) => {
-    // 🔥 BAGONG DAGDAG: Patugtugin ang selection upgrade SFX kapag pumili na ng option ang player
     if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
       window.arcaneAudio.selectUpgradeSfx.currentTime = 0;
       window.arcaneAudio.selectUpgradeSfx.play().catch(() => {});
@@ -369,104 +381,111 @@ const toggleGlobalMute = (e) => {
   }
 
   return (
-    <div 
-        style={{ position: 'relative', width: '100vw', height: '100dvh', overflow: 'hidden', cursor: 'none' }}
-        onClick={() => {
-          if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
-            if (screen === 'playing') {
-              // 🔥 Piliin kung anong BGM ang itutuloy
-              if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(()=>{});
-              else window.arcaneAudio.gameBgm.play().catch(()=>{});
-            }
-            else if (screen === 'levelup') return;
-            else window.arcaneAudio.menuBgm.play().catch(()=>{});
+   <div 
+      data-screen={screen}
+      style={{ 
+        position: 'relative', 
+        width: '100vw', 
+        height: '100dvh', 
+        overflow: 'hidden', 
+        cursor: 'none' // 🌟 BINAGO: Ginawang permanenteng 'none' para laging tago ang default mouse
+      }}
+      onClick={() => {
+        if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
+          if (screen === 'playing') {
+            if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(()=>{});
+            else window.arcaneAudio.gameBgm.play().catch(()=>{});
           }
-        }}
-      >
-      
+          else if (screen === 'levelup' || screen === 'intro') return;
+          else window.arcaneAudio.menuBgm.play().catch(()=>{});
+        }
+      }}
+    >
+      {/* 🌟 BINAGO: Inilagay sa pinakataas para render agad kahit anong screen ang active! */}
       <CustomCursor />
-
-      {/* ==========================================================================
-          🔥 STEP 4: ENCHANTED GLOBAL TRANSPARENT MUTE BUTTON (FLOATING UPPER LEFT)
-          ========================================================================== */}
-      <button 
-        onClick={toggleGlobalMute}
-        style={{
-          position: 'fixed',
-          top: '16px',
-          left: '24px',
-          zIndex: 999999,
-          background: 'transparent',
-          border: 'none',
-          fontSize: '1.4rem',
-          cursor: 'pointer',
-          opacity: 0.35,
-          transition: 'opacity 0.2s ease, transform 0.1s ease',
-          pointerEvents: 'auto',
-          userSelect: 'none',
-          WebkitTapHighlightColor: 'transparent'
-        }}
-        onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-        onMouseOut={(e) => e.currentTarget.style.opacity = '0.35'}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        {isMuted ? '🔇' : '🔊'}
-      </button>
-
-      <GameCanvas 
-        screen={screen}
-        setScreen={setScreen}
-        hudRef={hudRef}
-        netRef={netRef}
-        playerName={wizardName}
-        allyName={coop.p2Name}
-        isCoop={coop.isEnabled}
-        onLevelUpOffer={(options) => { 
-          const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
-          const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
-          setLevelUpOptions(uniqueChoices); 
-          setScreen('levelup'); 
-        }}
-      />
-      {screen === 'playing' && (
+      {screen === 'intro' ? (
+        <IntroScreen onFinish={handleIntroFinish} />
+      ) : (
         <>
+
+          {/* GLOBAL TRANSPARENT MUTE BUTTON */}
           <button 
-            id="btn-pause-exit" 
-            onClick={() => {
-              if (window.executeNetworkExitAction) {
-                window.executeNetworkExitAction();
-              } else {
-                setScreen('menu');
-              }
+            onClick={toggleGlobalMute}
+            style={{
+              position: 'fixed',
+              top: '16px',
+              left: '24px',
+              zIndex: 999999,
+              background: 'transparent',
+              border: 'none',
+              fontSize: '1.4rem',
+              cursor: 'pointer',
+              opacity: 0.35,
+              transition: 'opacity 0.2s ease, transform 0.1s ease',
+              pointerEvents: 'auto',
+              userSelect: 'none',
+              WebkitTapHighlightColor: 'transparent'
             }}
+            onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
+            onMouseOut={(e) => e.currentTarget.style.opacity = '0.35'}
+            onPointerDown={(e) => e.stopPropagation()}
           >
-            Exit
+            {isMuted ? '🔇' : '🔊'}
           </button>
+
+          <GameCanvas 
+            screen={screen}
+            setScreen={setScreen}
+            hudRef={hudRef}
+            netRef={netRef}
+            playerName={wizardName}
+            allyName={coop.p2Name}
+            isCoop={coop.isEnabled}
+            onLevelUpOffer={(options) => { 
+              const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+              const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
+              setLevelUpOptions(uniqueChoices); 
+              setScreen('levelup'); 
+            }}
+          />
           
-          {coop.isEnabled && <div id="coop-hud" className="active">⚔️ {wizardName} & {coop.p2Name}</div>}
+          {screen === 'playing' && (
+            <>
+              <button 
+                id="btn-pause-exit" 
+                onClick={() => {
+                  if (window.executeNetworkExitAction) {
+                    window.executeNetworkExitAction();
+                  } else {
+                    setScreen('menu');
+                  }
+                }}
+              >
+                Exit
+              </button>
+              
+              {coop.isEnabled && <div id="coop-hud" className="active">⚔️ {wizardName} & {coop.p2Name}</div>}
+            </>
+          )}
+
+          <Overlays 
+            screen={screen}
+            setScreen={setScreen}
+            hudData={hud}
+            roomCode={coop.roomCode}
+            p2Status={coop.status}
+            isCoop={coop.isEnabled}
+            initialWizardName={wizardName}
+            levelUpOptions={levelUpOptions} 
+            onSelectUpgrade={handleSelectUpgrade}
+            onAction={handleAction}
+          />
+
+          <MetaShop screen={screen} setScreen={setScreen} />
+          <PartyChat enabled={coop.isEnabled} channel={netRef.current.channel} localName={wizardName} />
+          <Toast message={toast.message} isError={toast.isError} onClose={() => setToast({ message: '', isError: false })} />
         </>
       )}
-
-      <Overlays 
-        screen={screen}
-        setScreen={setScreen}
-        hudData={hud}
-        roomCode={coop.roomCode}
-        p2Status={coop.status}
-        isCoop={coop.isEnabled}
-        initialWizardName={wizardName}
-        levelUpOptions={levelUpOptions} 
-        onSelectUpgrade={handleSelectUpgrade}
-        onAction={handleAction}
-      />
-
-      <MetaShop 
-        screen={screen} 
-        setScreen={setScreen} 
-      />
-
-      <PartyChat enabled={coop.isEnabled} channel={netRef.current.channel} localName={wizardName} />
-      <Toast message={toast.message} isError={toast.isError} onClose={() => setToast({ message: '', isError: false })} />
     </div>
   );
 }

@@ -105,7 +105,7 @@ export default function CustomCursor() {
               : `0 0 6px ${p.color}, 0 0 12px ${p.color}, 0 0 20px #ffffff`,
             position: 'fixed', // Make sure absolute/fixed positioning is correct
             pointerEvents: 'none',
-            zIndex: 9999
+            zIndex: 99999999
           }}
         />
       ))}
@@ -117,7 +117,7 @@ export default function CustomCursor() {
           left: `${position.x}px`, 
           top: `${position.y}px`,
           pointerEvents: 'none', // Prevents the image from blocking clicks
-          zIndex: 10000,
+          zIndex: 100000000,
           background: 'transparent' // Ensures no background color is applied
         }}
       >

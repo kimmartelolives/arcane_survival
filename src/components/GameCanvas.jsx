@@ -2015,6 +2015,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
           const perp = Math.abs(dx * sinAng - dy * cosAng)
           if (proj > 0 && perp < 60) {
              e.hp -= fissureDmg; 
+             window.recordArcaneDamage('Fissure Slam', fissureDmg);
              spawnFCT(currentEng, e.x, e.y, fissureDmg, 'damage', false); // 💥 ADDED FCT
              e.stunnedTime = 5.0;
              e.flash = 0.5;
@@ -2044,6 +2045,7 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
             pts.push({x: best.x, y: best.y});
             current = best;
             best.hp -= lightningDmg; 
+            window.recordArcaneDamage('Lightning Surge', lightningDmg);
             // 💥 ITO YUNG PARA SA LIGHTNING SURGE (Paso ng kuryente kung saan tinamaan yung kalaban)
             if (!currentEng.decals) currentEng.decals = [];
             currentEng.decals.push({ 
@@ -2916,6 +2918,23 @@ useEffect(() => {
       eng.gameStarted = false; 
       setHasStarted(false);
 
+      // 🔥 RESET DAMAGE TRACKER FOR NEW RUN
+      window.arcaneDamageMetrics = {}; 
+      window.arcaneDamageTaken = 0; 
+      
+      // 👇 DAGDAG ITO PARA SA MGA UTILITY PETS (HEAL, SHIELD, LOOT)
+      window.arcaneUtilityMetrics = { 'Fairy Heal': 0, 'Light Shield': 0, 'Voidling Loot': 0 };
+      window.recordArcaneUtility = (type, amount) => {
+        if (!window.arcaneUtilityMetrics[type]) window.arcaneUtilityMetrics[type] = 0;
+        window.arcaneUtilityMetrics[type] += amount;
+      };
+
+      window.recordArcaneDamage = (source, amount) => {
+        if (isNaN(amount) || amount <= 0) return;
+        if (!window.arcaneDamageMetrics[source]) window.arcaneDamageMetrics[source] = 0;
+        window.arcaneDamageMetrics[source] += amount;
+      };
+
       const eqFamsStr = localStorage.getItem('arcane_equipped_familiars');
       let eqFamsArray = [];
       if (eqFamsStr) {
@@ -3541,7 +3560,8 @@ if (eng.tornados) {
       
       const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
       const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
-      const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
+      // const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
+      const tornadoDps = t.isFamiliar ? t.dmg : (1000 + ((eng.wave || 1) * 100) + ((eng.boltDmg || 0) + (eng.p?.dmg || 0)) * 10);
 
       const tornadoRadius = t.r || 50;
 
@@ -3556,7 +3576,8 @@ if (eng.tornados) {
         const distSq = (dx * dx) + (dy * dy);
 
         if (distSq < (maxDist * maxDist)) {
-          e.hp -= tornadoDps * dt;        
+          e.hp -= tornadoDps * dt;
+          window.recordArcaneDamage(t.isFamiliar ? 'Zephyr Falcon' : 'Flare Inferno', tornadoDps * dt); // 👈 FIXED 
           e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
           
           // ✅ OPTIMIZATION 2: Konting bawas sa FCT Spam (Ginawang 0.08 mula 0.15)
@@ -3594,7 +3615,8 @@ if (eng.tornados) {
                 if (!e) continue;
                 // 🔥 ITO ANG TAMA PARA SA WAVES (Gumagamit ng waveObj.x)
                 if (e.x > waveObj.x - wWidth / 2 && e.x < waveObj.x + wWidth / 2) {
-                  e.hp -= waveDps * dt;      
+                  e.hp -= waveDps * dt;
+                  window.recordArcaneDamage('Tidal Wave', waveDps * dt);      
                   if (!e.boss) e.x += ((waveObj.vx || 0) * 0.4) * dt; 
                   e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 2.0);
                   if (Math.random() < 0.15) {
@@ -3631,11 +3653,14 @@ if (eng.tornados) {
             } else if (isHost || !isCoopActive) {
               
               // 🔥 SCALED DPS: Base DPS + Wave Scaling + (Player Dmg * 4)
-              const iceDps = 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4);
+              // const iceDps = 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4);
+              const iceDps = s.isFamiliar ? s.dmg : 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4);
 
               for (const e of eng.enemies) {
                 if (Math.hypot(e.x - s.x, e.y - s.y) < s.radius + e.r) {
                   e.hp -= iceDps * dt; 
+                  window.recordArcaneDamage(s.isFamiliar ? 'Frost Sprite' : 'Ice Storm', iceDps * dt); // 👈 FIXED
+                  // window.recordArcaneDamage('Ice Storm', iceDps * dt);
                   e.stigmaTime = 1.0; 
                   e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0); 
                   if (Math.random() < 0.1) {
@@ -3728,6 +3753,7 @@ if (eng.tornados) {
                   if (Math.hypot(enemy.x - cbX, enemy.y - cbY) <= 160) {
                     enemy.stunnedTime = 1.6;
                     enemy.hp -= cbDmg;
+                    window.recordArcaneDamage('Cube Bash', cbDmg);
                     spawnFCT(eng, enemy.x, enemy.y, cbDmg, 'damage', false); // 💥 ADDED FCT
                     if (enemy.hp <= 0) enemy.deadTrigger = true;
                   }
@@ -3879,11 +3905,17 @@ if (eng.tornados) {
                                 // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD ---
                                 if (pTarget.divineShield && pTarget.divineShield.active) {
                                     if (pTarget.divineShield.hp >= damageTaken) {
+
+                                    window.recordArcaneUtility('Light Shield', damageTaken)
+
                                     pTarget.divineShield.hp -= damageTaken;
                                     pTarget.divineShield.hitFlash = 0.2; 
                                     spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'shield'); // 💥 TRIGGER
                                     damageTaken = 0;
                                     } else {
+
+                                        window.recordArcaneUtility('Light Shield', pTarget.divineShield.hp);
+
                                         spawnFCT(eng, pTarget.x, pTarget.y, pTarget.divineShield.hp, 'shield'); // 💥 TRIGGER
                                         damageTaken -= pTarget.divineShield.hp;
                                         pTarget.divineShield.hp = 0;
@@ -3906,6 +3938,8 @@ if (eng.tornados) {
                                     damageTaken *= 0.75;
                                 }
                                 pTarget.hp -= damageTaken;
+                                const isCoopLocal = Boolean(netRef.current && netRef.current.channel) && !netRef.current.isHost ? eng.p2 : eng.p;
+                                if (pTarget === isCoopLocal) window.arcaneDamageTaken = (window.arcaneDamageTaken || 0) + damageTaken;
                                 pTarget.inv = 0.7;
                                 if (pTarget.hp <= 0) {
                                     pTarget.dead = true;
@@ -4006,15 +4040,19 @@ if (eng.tornados) {
             eng.p1Render.y += (eng.p1Target.y - eng.p1Render.y) * f;
           }
 
-          // 💥 UNIVERSAL PLAYER DAMAGE TAKEN TRACKER (BULLETPROOF RED TEXT)
+// 💥 UNIVERSAL PLAYER DAMAGE TAKEN TRACKER (BULLETPROOF RED TEXT)
         for (const pObj of [eng.p, eng.p2]) {
-          if (pObj && !pObj.dead) {
+          if (pObj) { // 🔥 FIXED: Tinanggal natin ang `!pObj.dead` para mabilang ang fatal hit!
+            
             // I-check kung bumaba ang HP kumpara sa nakaraang frame
             if (pObj.prevHpFrame !== undefined && pObj.hp < pObj.prevHpFrame) {
                 const damageDiff = pObj.prevHpFrame - pObj.hp;
                 
-                // Trigger lang kung malaki sa 0.5 ang bawas (para iwas false alarm sa regen decimals)
+                // Trigger lang kung malaki sa 0.5 ang bawas
                 if (damageDiff > 0.5) { 
+                    
+                    // 🔥 FIXED: Inalis na dito ang window.arcaneDamageTaken
+                    // Para iwas double-count. Dito na lang ang floating text!
                     if (eng.floatingTexts) {
                         eng.floatingTexts.push({
                           x: pObj.x + (Math.random() * 30 - 15),
@@ -4028,7 +4066,7 @@ if (eng.tornados) {
                     }
                 }
             }
-            // I-save ang current HP para may pagbasehan sa susunod na frame
+            // I-save ang current HP
             pObj.prevHpFrame = pObj.hp; 
           }
         }
@@ -4217,6 +4255,7 @@ if (eng.tornados) {
                   }
 
                   enemy.hp -= baseSkillDmg;
+                  window.recordArcaneDamage('Vacuum Slash', baseSkillDmg);
                   spawnFCT(eng, enemy.x, enemy.y, baseSkillDmg, 'damage', isCrit); // 💥 ADDED FCT
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
@@ -4267,6 +4306,7 @@ if (eng.tornados) {
                   }
 
                   enemy.hp -= splashDmg;
+                  window.recordArcaneDamage('Shooting Star', splashDmg);
                   spawnFCT(eng, enemy.x, enemy.y, splashDmg, 'damage', isCrit); 
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
@@ -4328,7 +4368,8 @@ if (eng.tornados) {
 
                   // Apply Damage
                   enemy.hp -= bashDmg;
-                  spawnFCT(eng, enemy.x, enemy.y, bashDmg, 'damage', isCrit); 
+                  spawnFCT(eng, enemy.x, enemy.y, bashDmg, 'damage', isCrit);
+                  window.recordArcaneDamage('Cube Bash', bashDmg); 
                   
                   if (enemy.hp <= 0) enemy.deadTrigger = true;
                 }
@@ -4361,6 +4402,7 @@ if (eng.tornados) {
                 let colPulseDmg = 200 + ((eng.wave || 1) * 25) + ((eng.p?.dmg || 0) * 3.5);
                 if (enemy.instabTime > 0) colPulseDmg *= 1.5;
                 enemy.hp -= colPulseDmg;
+                window.recordArcaneDamage('Arcane Collapse', colPulseDmg);
                 spawnFCT(eng, enemy.x, enemy.y, colPulseDmg, 'damage', false); // 💥 ADDED FCT
                 enemy.flash = 0.35;
                 if (enemy.hp <= 0) enemy.deadTrigger = true;
@@ -4455,7 +4497,7 @@ if (eng.tornados) {
                   eng.particles.push({ x: pot.x, y: pot.y, vx: (Math.random()-0.5)*120, vy: (Math.random()-0.5)*120, color: '#f472b6', life: 0.25, ml: 0.25, r: 2 });
                 }
               }
-              
+              if (pot.isPulled) window.recordArcaneUtility('Voidling Loot', 1);
               eng.potions.splice(pot.type === 'xp' ? eng.potions.indexOf(pot) : pIdx, 1);
             }
           }
@@ -4602,11 +4644,17 @@ if (eng.tornados) {
                     // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD ---
                     if (pTarget.divineShield && pTarget.divineShield.active) {
                         if (pTarget.divineShield.hp >= damageTaken) {
+
+                            window.recordArcaneUtility('Light Shield', damageTaken);
+
                             pTarget.divineShield.hp -= damageTaken;
                             pTarget.divineShield.hitFlash = 0.2; 
                             spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'shield'); // 💥 TRIGGER
                             damageTaken = 0;
                         } else {
+
+                            window.recordArcaneUtility('Light Shield', pTarget.divineShield.hp);
+
                             spawnFCT(eng, pTarget.x, pTarget.y, pTarget.divineShield.hp, 'shield'); // 💥 TRIGGER
                             damageTaken -= pTarget.divineShield.hp;
                             pTarget.divineShield.hp = 0;
@@ -4630,6 +4678,8 @@ if (eng.tornados) {
                         damageTaken *= 0.75;
                     }
                     pTarget.hp -= damageTaken;
+                    const isCoopLocal = Boolean(netRef.current && netRef.current.channel) && !netRef.current.isHost ? eng.p2 : eng.p;
+                    if (pTarget === isCoopLocal) window.arcaneDamageTaken = (window.arcaneDamageTaken || 0) + damageTaken;
                     if (damageTaken > 0) spawnFCT(eng, pTarget.x, pTarget.y, damageTaken, 'damageTaken'); // 💥 TRIGGER
                     
                     pTarget.inv = 0.7;
@@ -4661,7 +4711,8 @@ if (eng.tornados) {
                 if (Math.hypot(b.x - e.x, b.y - e.y) < b.r + e.r) {
                   const shooterObj = b.p2 ? eng.p2 : eng.p;
                   const isBerserkActive = b.p2 ? (eng.p2?.skills?.berserk?.duration > 0 && eng.p2?.skills?.berserk?.enabled !== false) : (eng.p?.skills?.berserk?.duration > 0 && eng.p?.skills?.berserk?.enabled !== false);
-                  let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
+                  // let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
+                  let calculatedDmg = b.isFamiliar ? b.dmg : (isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0)));
                   if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); 
                   if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.0); // 🔥 BUFF: Final bullet damage x5.0
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
@@ -4677,6 +4728,7 @@ if (eng.tornados) {
                   }
 
                   e.hp -= calculatedDmg;
+                  window.recordArcaneDamage(b.isFamiliar ? 'Ignis Wisp' : 'Basic Attack', calculatedDmg); // 👈 FIXED
                   spawnFCT(eng, e.x, e.y, calculatedDmg, 'damage', isCrit); // 💥 TRIGGER FCT
 
                   const hasBodyCutter = b.p2 ? (eng.p2?.skills?.bodyCutter?.learned && eng.p2?.skills?.bodyCutter?.enabled !== false) : (eng.p?.skills?.bodyCutter?.learned && eng.p?.skills?.bodyCutter?.enabled !== false);
@@ -4819,6 +4871,7 @@ if (eng.tornados) {
           e.stigmaTime -= dt;
           const stigmaDps = 20 + ((eng?.wave || 1) * 15);
           e.hp -= stigmaDps * dt;
+          window.recordArcaneDamage('Body Cutter', stigmaDps * dt);
           if (Math.random() < 0.1) spawnFCT(eng, e.x, e.y, stigmaDps * 0.1, 'damage', false); // 💥 ADDED FCT
           if (Math.random() < 0.15) {
             eng.particles.push({ x: e.x + (Math.random() - 0.5) * 10, y: e.y + (Math.random() - 0.5) * 10, vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
@@ -5085,17 +5138,19 @@ if (eng.tornados) {
                 damageTaken *= (1 - reductionP1);
 
                 // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P1) ---
-                        if (eng.p.divineShield && eng.p.divineShield.active) {
-                        if (eng.p.divineShield.hp >= damageTaken) {
-                            eng.p.divineShield.hp -= damageTaken;
-                            eng.p.divineShield.hitFlash = 0.2; 
-                            spawnFCT(eng, eng.p.x, eng.p.y, damageTaken, 'shield'); // 💥 LALABAS NA
-                            damageTaken = 0;
-                        } else {
-                            spawnFCT(eng, eng.p.x, eng.p.y, eng.p.divineShield.hp, 'shield'); // 💥 LALABAS NA
-                            damageTaken -= eng.p.divineShield.hp;
-                            eng.p.divineShield.hp = 0;
-                            eng.p.divineShield.active = false;
+                if (eng.p.divineShield && eng.p.divineShield.active) {
+                    if (eng.p.divineShield.hp >= damageTaken) {
+                        window.recordArcaneUtility('Light Shield', damageTaken); // 👈 DAGDAG ITO
+                        eng.p.divineShield.hp -= damageTaken;
+                        eng.p.divineShield.hitFlash = 0.2; 
+                        spawnFCT(eng, eng.p.x, eng.p.y, damageTaken, 'shield'); 
+                        damageTaken = 0;
+                    } else {
+                        window.recordArcaneUtility('Light Shield', eng.p.divineShield.hp); // 👈 DAGDAG ITO
+                        spawnFCT(eng, eng.p.x, eng.p.y, eng.p.divineShield.hp, 'shield'); 
+                        damageTaken -= eng.p.divineShield.hp;
+                        eng.p.divineShield.hp = 0;
+                        eng.p.divineShield.active = false;
                         
                         for(let k=0; k<40; k++) {
                             const pa = Math.random() * Math.PI * 2;
@@ -5117,6 +5172,8 @@ if (eng.tornados) {
                 }
 
                 eng.p.hp -= damageTaken;
+                const isCoopLocal = Boolean(netRef.current && netRef.current.channel) && !netRef.current.isHost ? eng.p2 : eng.p;
+                if (eng.p === isCoopLocal) window.arcaneDamageTaken = (window.arcaneDamageTaken || 0) + damageTaken;
                 eng.p.inv = 0.7;
                 if (eng.p.hp <= 0) { 
                   eng.p.dead = true;
@@ -5134,15 +5191,17 @@ if (eng.tornados) {
                 reductionP2 = Math.min(0.85, reductionP2);
                 damageTakenp2 *= (1 - reductionP2);
 
-                    // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P2) ---
+                 // --- 👼 HOLY SERAPH: DIVINE ABSORPTION SHIELD (P2) ---
                     if (eng.p2.divineShield && eng.p2.divineShield.active) {
                         if (eng.p2.divineShield.hp >= damageTakenp2) {
+                            window.recordArcaneUtility('Light Shield', damageTakenp2); // 👈 DAGDAG ITO
                             eng.p2.divineShield.hp -= damageTakenp2;
                             eng.p2.divineShield.hitFlash = 0.2; 
-                            spawnFCT(eng, eng.p2.x, eng.p2.y, damageTakenp2, 'shield'); // 💥 LALABAS NA
+                            spawnFCT(eng, eng.p2.x, eng.p2.y, damageTakenp2, 'shield'); 
                             damageTakenp2 = 0;
                         } else {
-                            spawnFCT(eng, eng.p2.x, eng.p2.y, eng.p2.divineShield.hp, 'shield'); // 💥 LALABAS NA
+                            window.recordArcaneUtility('Light Shield', eng.p2.divineShield.hp); // 👈 DAGDAG ITO
+                            spawnFCT(eng, eng.p2.x, eng.p2.y, eng.p2.divineShield.hp, 'shield'); 
                             damageTakenp2 -= eng.p2.divineShield.hp;
                             eng.p2.divineShield.hp = 0;
                             eng.p2.divineShield.active = false;
@@ -5167,6 +5226,8 @@ if (eng.tornados) {
                 }
 
                 eng.p2.hp -= damageTakenp2;
+                const isCoopLocal = Boolean(netRef.current && netRef.current.channel) && !netRef.current.isHost ? eng.p2 : eng.p;
+                if (eng.p2 === isCoopLocal) window.arcaneDamageTaken = (window.arcaneDamageTaken || 0) + damageTakenp2;
                 eng.p2.inv = 0.7;
                 if (eng.p2.hp <= 0) {
                   eng.p2.dead = true;
@@ -5240,7 +5301,7 @@ if (eng.tornados) {
                     eng.p.pendingLevelUps = (eng.p.pendingLevelUps || 0) + 1;
                   }
                 }
-                
+                if (g.isPulled) window.recordArcaneUtility('Voidling Loot', 1)
                 eng.gems.splice(i, 1);
               }
             }
@@ -5445,6 +5506,7 @@ const tickFamiliars = (pObj, isP2) => {
             if (distSq < vacRadiusSq) {
                g.x += dx * higopSpeed * dt; 
                g.y += dy * higopSpeed * dt;
+               g.isPulled = true; // 👈 DAGDAG ITO
             }
           }
         }
@@ -5459,6 +5521,7 @@ const tickFamiliars = (pObj, isP2) => {
             if (distSq < vacRadiusSq) {
                p.x += dx * higopSpeed * dt;
                p.y += dy * higopSpeed * dt;
+               p.isPulled = true; // 👈 DAGDAG ITO
             }
           }
         }
@@ -5469,7 +5532,10 @@ const tickFamiliars = (pObj, isP2) => {
         f.cd = 3.0;
         const healAmount = 5 + (f.level * 4) + (pObj.maxHp * 0.01);
         pObj.hp = Math.min(pObj.maxHp, pObj.hp + healAmount);
-        spawnFCT(eng, pObj.x, pObj.y, healAmount, 'heal'); 
+        
+        window.recordArcaneUtility('Fairy Heal', healAmount);
+        
+        spawnFCT(eng, pObj.x, pObj.y, healAmount, 'heal');
         for(let k=0; k<6; k++) eng.particles.push({ x: pObj.x + (Math.random()-0.5)*30, y: pObj.y + (Math.random()-0.5)*30, vx: 0, vy: -40 - Math.random()*20, color: '#86efac', life: 0.8, ml: 0.8, r: 2.5 });
       }
       else if (f.id === 'frost') {
@@ -5488,7 +5554,8 @@ const tickFamiliars = (pObj, isP2) => {
         if (target) {
           const stormRadius = 80 + (f.level * 5); 
           if (!eng.iceStorms) eng.iceStorms = [];
-          eng.iceStorms.push({ x: target.x, y: target.y, radius: stormRadius, life: 2.0 });
+          // eng.iceStorms.push({ x: target.x, y: target.y, radius: stormRadius, life: 2.0 });
+          eng.iceStorms.push({ x: target.x, y: target.y, radius: stormRadius, life: 2.0, isFamiliar: true, dmg: 120 + (f.level * 40) });
         }
       }
       // 🪨 STONE GOLEM (Earth Spikes)
@@ -5525,6 +5592,7 @@ else if (f.id === 'golem') {
               }
               
               e.hp -= smashDmg;
+              window.recordArcaneDamage('Familiar: Golem', smashDmg);
               
               // 🔥 OPTIMIZATION 4: FCT Throttling
               // Magpapakita lang ng damage text sa unang 6 na tinamaan, o kung suwertehin sa random (pampabawas text spam)
@@ -5561,7 +5629,9 @@ else if (f.id === 'golem') {
         }
         if (target) {
           const boltDmg = 200 + (f.level * 45) + ((eng.wave || 1) * 25);
-          target.hp -= boltDmg; spawnFCT(eng, target.x, target.y, boltDmg, 'damage', false); target.flash = 0.8; target.instabTime = Math.max(target.instabTime || 0, 2.0);
+          target.hp -= boltDmg; 
+          window.recordArcaneDamage('Spark Fox', boltDmg);
+          spawnFCT(eng, target.x, target.y, boltDmg, 'damage', false); target.flash = 0.8; target.instabTime = Math.max(target.instabTime || 0, 2.0);
           if (target.hp <= 0) target.deadTrigger = true;
           if (!eng.lightnings) eng.lightnings = [];
           eng.lightnings.push({ pts: [{x: f.x, y: f.y}, {x: target.x, y: target.y}], life: 0.6, branching: true, isFamiliar: true });
@@ -6697,7 +6767,8 @@ if (eng.decals) {
                     if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 24 && !sl.hits.has(enemy)) {
                         sl.hits.add(enemy); 
                         const shooterObj = sl.p2 ? eng.p2 : eng.p;
-                        let baseSkillDmg = (sl.dmg || 80) + ((eng?.wave || 1) * 20);
+                        // let baseSkillDmg = (sl.dmg || 80) + ((eng?.wave || 1) * 20);
+                        let baseSkillDmg = sl.dmg ? sl.dmg : (80 + ((eng?.wave || 1) * 20));
                         if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
                         if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.0; 
                         if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
@@ -6706,6 +6777,7 @@ if (eng.decals) {
                         if (Math.random() < (totalCrit / 100)) { baseSkillDmg *= 2; enemy.flash = 0.5; } 
                         else { enemy.flash = 0.2; }
                         enemy.hp -= baseSkillDmg;
+                        window.recordArcaneDamage('Umbral Bat', baseSkillDmg);
                         spawnFCT(eng, enemy.x, enemy.y, baseSkillDmg, 'damage', isCrit);
                         if (enemy.hp <= 0) enemy.deadTrigger = true;
                         
@@ -8219,6 +8291,38 @@ if (skin === 'shadow') {
           ctx.fillText(e.nameTag, e.x, e.y - e.r - 18);
           ctx.shadowBlur = 0;
         }
+        
+// 🔥 VISUAL STATUS DEBUFFS (OPTIMIZED - NO SHADOW BLUR) 🔥
+      if (e.hp > 0 && e.hp < e.maxHp) { 
+        let activeDebuffs = [];
+        if (e.arcaneBurnTime > 0) activeDebuffs.push('💥');
+        if (e.temporalSlowTime > 0) activeDebuffs.push('❄️');
+        if (e.stunnedTime > 0) activeDebuffs.push('💫');
+        if (e.stigmaTime > 0) activeDebuffs.push('🩸');
+        if (e.voidExhaustTime > 0) activeDebuffs.push('🌌');
+        if (e.instabTime > 0) activeDebuffs.push('💔');
+
+        if (activeDebuffs.length > 0) {
+          const spacing = 14; 
+          const totalWidth = activeDebuffs.length * spacing;
+          const startY = e.nameTag ? (e.y - e.r - 34) : (e.y - e.r - 20); 
+          
+          // 1. Lagyan ng simpleng dark background para mabasa agad (Sobrang bilis i-render)
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.fillRect(e.x - totalWidth / 2 - 2, startY - 7, totalWidth + 4, 15);
+
+          // 2. I-render ang mga Emojis
+          ctx.font = `12px Arial`; 
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          let startX = e.x - totalWidth / 2 + (spacing / 2);
+          activeDebuffs.forEach((icon) => {
+            ctx.fillText(icon, startX, startY);
+            startX += spacing;
+          });
+        }
+      }
 
         ctx.restore();
       }

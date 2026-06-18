@@ -32,6 +32,12 @@ export default function Overlays({
   const [voidCrystals, setVoidCrystals] = useState(0);
   const [gameOverPhase, setGameOverPhase] = useState('continue');  
 
+  const [showDamageRecap, setShowDamageRecap] = useState(false);
+  const [showLoreVideo, setShowLoreVideo] = useState(false);
+  const [showGrimoireModal, setShowGrimoireModal] = useState(false);
+  const [grimoirePage, setGrimoirePage] = useState('cover'); // 'cover' | 'video'
+  const [grimoireVideoPlaying, setGrimoireVideoPlaying] = useState(false);
+
 useEffect(() => {
     if (screen === 'levelup' || screen === 'gameover') {
       setVoidCrystals(parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10));
@@ -323,6 +329,150 @@ const getUpgradeMeta = (rawString, wave = 1) => {
     councilTab === 'decrees' ? item.type === 'decree' : item.type === 'grimoire'
   );
 
+  const formatDamage = (num) => {
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+    return Math.floor(num).toLocaleString();
+  };
+
+const renderDamageRecap = () => {
+    const metrics = window.arcaneDamageMetrics || {};
+    const damageTaken = window.arcaneDamageTaken || 0;
+    const utility = window.arcaneUtilityMetrics || {};
+    
+    // Kunin ang grand total
+    const totalDamage = Object.values(metrics).reduce((sum, dmg) => sum + dmg, 0);
+
+    if (totalDamage === 0) {
+      return <div style={{ color: '#9ca3af', textAlign: 'center', margin: '20px 0' }}>The Void consumed you before you could strike.</div>;
+    }
+
+    // 🔥 I-GROUP ANG DATA
+    const grouped = {
+      'Basic Attack': [],
+      'Spells & Skills': [],
+      'Familiars': []
+    };
+
+    // 🔥 LISTAHAN NG LAHAT NG FAMILIARS PARA SURE CATCH
+    const familiarNames = [
+      'Ignis Wisp', 'Frost Sprite', 'Zephyr Falcon', 
+      'Stone Golem', 'Spark Fox', 'Umbral Bat'
+    ];
+
+    Object.entries(metrics).forEach(([source, dmg]) => {
+      if (source === 'Basic Attack') {
+        grouped['Basic Attack'].push({ source, dmg });
+      } else if (source.startsWith('Familiar:') || familiarNames.includes(source)) {
+        // Saluhin kung may 'Familiar: ' man sa unahan O KAYA nasa listahan sa taas
+        const cleanName = source.replace('Familiar: ', '');
+        grouped['Familiars'].push({ source: cleanName, dmg });
+      } else {
+        grouped['Spells & Skills'].push({ source, dmg });
+      }
+    });
+
+    // I-sort ang bawat group (Highest damage sa taas)
+    Object.keys(grouped).forEach(k => {
+       grouped[k].sort((a, b) => b.dmg - a.dmg);
+    });
+
+    return (
+      <div style={{ maxHeight: '280px', overflowY: 'auto', paddingRight: '10px', marginTop: '15px' }}>
+        
+        <div style={{ textAlign: 'center', color: '#f87171', fontWeight: '900', marginBottom: '4px', fontSize: '1.2rem', letterSpacing: '2px' }}>
+          TOTAL DAMAGE DEALT: {formatDamage(totalDamage)}
+        </div>
+        <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', marginBottom: '18px', fontSize: '0.8rem', fontFamily: 'monospace' }}>
+          🩸 DAMAGE TAKEN: <span style={{ color: '#fca5a5' }}>{formatDamage(damageTaken)}</span>
+        </div>
+
+        {/* 🔥 RENDER BAWAT CATEGORY */}
+        {['Basic Attack', 'Spells & Skills', 'Familiars'].map(category => {
+          if (grouped[category].length === 0) return null; // Wag ipakita kung walang laman
+          
+          // Compute ng total per category
+          const catTotal = grouped[category].reduce((sum, item) => sum + item.dmg, 0);
+          const catPercent = ((catTotal / totalDamage) * 100).toFixed(1);
+
+          return (
+            <div key={category} style={{ marginBottom: '15px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              
+              {/* CATEGORY HEADER */}
+              <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '10px', letterSpacing: '1px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{category.toUpperCase()}</span>
+                <span style={{ color: '#94a3b8' }}>{formatDamage(catTotal)} ({catPercent}%)</span>
+              </div>
+
+              {/* MGA SKILLS/ITEMS SA LOOB NG CATEGORY */}
+              {grouped[category].map(({ source, dmg }) => {
+                const percent = ((dmg / totalDamage) * 100).toFixed(1);
+                const isFamiliar = category === 'Familiars';
+                const isBasic = category === 'Basic Attack';
+                
+                return (
+                  <div key={source} style={{ marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '4px', fontFamily: 'monospace' }}>
+                      <span>{source}</span>
+                      <span style={{ color: '#fbbf24' }}>{formatDamage(dmg)}</span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ 
+                        height: '100%', 
+                        width: `${percent}%`, 
+                        background: isBasic ? 'linear-gradient(90deg, #64748b, #94a3b8)' : 
+                                    isFamiliar ? 'linear-gradient(90deg, #ea580c, #facc15)' : 
+                                    source === 'Body Cutter' ? 'linear-gradient(90deg, #b91c1c, #f43f5e)' :
+                                    source === 'Shooting Star' ? 'linear-gradient(90deg, #2563eb, #60a5fa)' :
+                                    source === 'Cube Bash' ? 'linear-gradient(90deg, #059669, #34d399)' :
+                                    source === 'Vacuum Slash' ? 'linear-gradient(90deg, #d97706, #fbbf24)' :
+                                    'linear-gradient(90deg, #7c3aed, #d946ef)',
+                        boxShadow: !isBasic ? `0 0 8px ${isFamiliar ? 'rgba(250, 204, 21, 0.4)' : 'rgba(217, 70, 239, 0.4)'}` : 'none',
+                        borderRadius: '2px'
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* 🔥 SUPPORT & UTILITY STATS BOX (NAKASINGIT SA PINAKA-ILALIM) */}
+        {(utility['Fairy Heal'] > 0 || utility['Light Shield'] > 0 || utility['Voidling Loot'] > 0) && (
+            <div style={{ marginBottom: '15px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              
+              <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '10px', letterSpacing: '1px' }}>
+                SUPPORT & UTILITY
+              </div>
+              
+              {utility['Fairy Heal'] > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
+                  <span>🧚 Fairy Healing</span>
+                  <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{formatDamage(utility['Fairy Heal'])} HP</span>
+                </div>
+              )}
+              
+              {utility['Light Shield'] > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
+                  <span>👼 Holy Shield Absorbed</span>
+                  <span style={{ color: '#facc15', fontWeight: 'bold' }}>{formatDamage(utility['Light Shield'])} DMG</span>
+                </div>
+              )}
+              
+              {utility['Voidling Loot'] > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
+                  <span>🌌 Voidling Vacuumed</span>
+                  <span style={{ color: '#c084fc', fontWeight: 'bold' }}>{utility['Voidling Loot']} Items</span>
+                </div>
+              )}
+            </div>
+        )}
+
+      </div>
+    );
+  };
   return (
     <div id="overlays">
 <style>{`
@@ -968,22 +1118,37 @@ const getUpgradeMeta = (rawString, wave = 1) => {
               >
                 <span className="btn-icon">⚔️</span>
                 <span className="btn-label">Co-op Covenant</span>
-                <span style={{
+                      <span
+                style={{
                   position: 'absolute',
                   right: '12px',
-                  fontSize: '0.52rem',
-                  background: 'linear-gradient(180deg, #b45309 0%, #78350f 100%)',
-                  color: '#ffe6a3',
-                  border: '1px solid #c5a059',
-                  padding: '2px 6px',
-                  borderRadius: '3px',
+                  width: '33px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.5rem',
+                  color: '#ffe9b5',
                   fontWeight: 'bold',
-                  letterSpacing: '0.5px',
+                  letterSpacing: '1px',
                   fontFamily: 'monospace',
-                  lineHeight: '1',
-                  textShadow: 'none',
-                  boxShadow: '0 0 6px rgba(197, 160, 89, 0.4)'
-                }}>BETA</span>
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 215, 120, 0.8)',
+                  background:
+                    'linear-gradient(180deg, #6a3a0f 0%, #2a1203 60%, #1a0b02 100%)',
+                  boxSizing: 'border-box',
+                  /* ✨ MAIN MAGIC GLOW */
+                  boxShadow:
+                    '0 0 6px rgba(255, 210, 120, 0.35), 0 0 14px rgba(197, 160, 89, 0.25), inset 0 0 6px rgba(255, 230, 160, 0.15)',
+                  /* ✨ TEXT MAGIC */
+                  textShadow:
+                    '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
+                  /* ✨ subtle depth */
+                  backdropFilter: 'blur(2px)',
+                }}
+              >
+                BETA
+              </span>
               </button>
             ) : (
               /* PHASE C: Kapag CONFIRMED ng Supabase na FALSE / SEALED ang coop */
@@ -1005,21 +1170,164 @@ const getUpgradeMeta = (rawString, wave = 1) => {
             )}
             <button className="btn wizard-btn" onClick={() => setScreen('leaderboard')}>
               <span className="btn-icon">🏆</span><span className="btn-label">Arcane Tombstones</span>
-            </button>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  width: '33px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.5rem',
+                  color: '#ffe9b5',
+                  fontWeight: 'bold',
+                  letterSpacing: '1px',
+                  fontFamily: 'monospace',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 215, 120, 0.8)',
+                  background:
+                    'linear-gradient(180deg, #6a3a0f 0%, #2a1203 60%, #1a0b02 100%)',
+                  boxSizing: 'border-box',
+                  /* ✨ MAIN MAGIC GLOW */
+                  boxShadow:
+                    '0 0 6px rgba(255, 210, 120, 0.35), 0 0 14px rgba(197, 160, 89, 0.25), inset 0 0 6px rgba(255, 230, 160, 0.15)',
+                  /* ✨ TEXT MAGIC */
+                  textShadow:
+                    '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
+                  /* ✨ subtle depth */
+                  backdropFilter: 'blur(2px)',
+                }}
+              >
+                RANKS
+              </span>    
+
+          </button>
 
             <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => setScreen('metashop')}>
-              <span className="btn-icon">🌌</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Void Sanctum (Upgrades)</span>
+              <span className="btn-icon">🌌</span><span className="btn-label">The Mage's Codex</span>
+               <span
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  width: '33px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.5rem',
+                  color: '#ffe9b5',
+                  fontWeight: 'bold',
+                  letterSpacing: '1px',
+                  fontFamily: 'monospace',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 215, 120, 0.8)',
+                  background:
+                    'linear-gradient(180deg, #6a3a0f 0%, #2a1203 60%, #1a0b02 100%)',
+                  boxSizing: 'border-box',
+                  /* ✨ MAIN MAGIC GLOW */
+                  boxShadow:
+                    '0 0 6px rgba(255, 210, 120, 0.35), 0 0 14px rgba(197, 160, 89, 0.25), inset 0 0 6px rgba(255, 230, 160, 0.15)',
+                  /* ✨ TEXT MAGIC */
+                  textShadow:
+                    '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
+                  /* ✨ subtle depth */
+                  backdropFilter: 'blur(2px)',
+                }}
+              >
+                SHOP
+              </span> 
             </button>
             
             <div style={{ display: 'flex', width: '100%', gap: '10px' }}>
               <button 
-                className="btn wizard-btn council-btn" 
+                className="btn wizard-btn" 
                 style={{ flex: 1, margin: 0 }}
                 onClick={() => { setCouncilTab('decrees'); setCouncilNewsOpen(true); }}
               >
-                <span className="btn-icon">🏛️</span><span className="btn-label">Council Chronicles</span>
+                <span className="btn-icon">🏛️</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Council Chronicles</span>
+                <span
+                  style={{
+                    position: 'absolute',
+                    right: '12px',
+                    width: '33px',
+                    height: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.5rem',
+                    color: '#ffe9b5',
+                    fontWeight: 'bold',
+                    letterSpacing: '1px',
+                    fontFamily: 'monospace',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(255, 215, 120, 0.8)',
+                    background:
+                      'linear-gradient(180deg, #6a3a0f 0%, #2a1203 60%, #1a0b02 100%)',
+                    boxSizing: 'border-box',
+                    /* ✨ MAIN MAGIC GLOW */
+                    boxShadow:
+                      '0 0 6px rgba(255, 210, 120, 0.35), 0 0 14px rgba(197, 160, 89, 0.25), inset 0 0 6px rgba(255, 230, 160, 0.15)',
+                    /* ✨ TEXT MAGIC */
+                    textShadow:
+                      '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
+                    /* ✨ subtle depth */
+                    backdropFilter: 'blur(2px)',
+                  }}
+                >
+                  NEWS
+                </span> 
               </button>
             </div>
+
+            {/* 📖 GRIMOIRE BUTTON */}
+            <button
+              className="btn wizard-btn"
+              style={{
+                marginTop: '6px',
+                borderColor: 'rgba(197, 160, 89, 0.7)',
+                background: 'linear-gradient(180deg, #1c0e05 0%, #0b0602 100%)',
+                color: '#e9c47a',
+                letterSpacing: '0.14em',
+                position: 'relative',
+                overflow: 'hidden',
+              }}
+              onClick={() => { setGrimoirePage('cover'); setGrimoireVideoPlaying(false); setShowGrimoireModal(true); }}
+            >
+              <span style={{ fontSize: '1.1rem' }}>📖</span>
+              <span className="btn-label" style={{ color: '#e9c47a' }}>The Archmage's Grimoire</span>
+              <span
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  width: '33px',
+                  height: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.5rem',
+                  color: '#ffe9b5',
+                  fontWeight: 'bold',
+                  letterSpacing: '1px',
+                  fontFamily: 'monospace',
+                  borderRadius: '4px',
+                  border: '1px solid rgba(255, 215, 120, 0.8)',
+                  background:
+                    'linear-gradient(180deg, #6a3a0f 0%, #2a1203 60%, #1a0b02 100%)',
+                  boxSizing: 'border-box',
+                  /* ✨ MAIN MAGIC GLOW */
+                  boxShadow:
+                    '0 0 6px rgba(255, 210, 120, 0.35), 0 0 14px rgba(197, 160, 89, 0.25), inset 0 0 6px rgba(255, 230, 160, 0.15)',
+                  /* ✨ TEXT MAGIC */
+                  textShadow:
+                    '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
+                  /* ✨ subtle depth */
+                  backdropFilter: 'blur(2px)',
+                }}
+              >
+                LORE
+              </span> 
+            </button>
 
       <div className="mystic-tribute-container">
               <a 
@@ -1365,24 +1673,40 @@ const getUpgradeMeta = (rawString, wave = 1) => {
                 <div className="menu-title" style={{ color: '#ef4444', textShadow: '0 0 15px rgba(239,68,68,0.4)' }}>YOU PERISHED</div>
                 <div className="divider mystic-divider" />
 
-                <div id="go-score" style={{ fontSize: '1.45rem', margin: '12px 0', fontFamily: 'Georgia', color: '#ffe6a3', textAlign: 'center' }}>
-                  Final Score: {(hudData?.score || 0).toLocaleString()}
-                </div>
-                <div style={{ fontSize: '.88rem', color: '#cbd5e1', marginBottom: '18px', fontFamily: 'monospace', textAlign: 'center' }}>
-                  Survived to Wave {hudData?.wave || 1}
-                </div>
+                {/* 🔥 DAMAGE RECAP TOGGLE WRAPPER */}
+                {showDamageRecap ? renderDamageRecap() : (
+                  <>
+                    <div id="go-score" style={{ fontSize: '1.45rem', margin: '12px 0', fontFamily: 'Georgia', color: '#ffe6a3', textAlign: 'center' }}>
+                      Final Score: {(hudData?.score || 0).toLocaleString()}
+                    </div>
+                    <div style={{ fontSize: '.88rem', color: '#cbd5e1', marginBottom: '18px', fontFamily: 'monospace', textAlign: 'center' }}>
+                      Survived to Wave {hudData?.wave || 1}
+                    </div>
 
-                {hudData?.p?.voidCrystals > 0 && (
-                   <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)' }}>
-                     💎 +{hudData.p.voidCrystals} Void Crystals Retrieved
-                   </div>
+                    {hudData?.p?.voidCrystals > 0 && (
+                       <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)' }}>
+                         💎 +{hudData.p.voidCrystals} Void Crystals Retrieved
+                       </div>
+                    )}
+
+                    {isCoop && (
+                      <div style={{ fontSize: '.85rem', color: '#fca5a5', marginBottom: '10px', fontStyle: 'italic', textAlign: 'center' }}>
+                        {restartVotes} / 2 voted to restart the game
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {isCoop && (
-                  <div style={{ fontSize: '.85rem', color: '#fca5a5', marginBottom: '10px', fontStyle: 'italic', textAlign: 'center' }}>
-                    {restartVotes} / 2 voted to restart the game
-                  </div>
-                )}
+                <div className="divider mystic-divider" style={{ margin: '15px 0' }} />
+
+                {/* 🔥 THE TOGGLE BUTTON */}
+                <button 
+                  className="btn wizard-btn" 
+                  onClick={() => setShowDamageRecap(!showDamageRecap)}
+                  style={{ marginBottom: '15px', borderStyle: 'dashed' }}
+                >
+                  {showDamageRecap ? '↶ Return to Summary' : '📊 View Damage Recap'}
+                </button>
 
                 {hasSupabase && (
                   <div id="go-submit" style={{ marginBottom: '14px', width: '100%' }}>
@@ -1473,6 +1797,379 @@ const getUpgradeMeta = (rawString, wave = 1) => {
           </div>
         </div>
       )}
+
+      {/* ====================================================================
+          📖 THE ARCHMAGE'S GRIMOIRE — BOOK MODAL
+          ==================================================================== */}
+      {showGrimoireModal && (
+     <div
+          onClick={(e) => {
+            // 1. Pipigilan nitong umapaw ang click event
+            e.stopPropagation(); 
+            // 2. Isasara ang modal kapag kinlick ang dark background
+            setShowGrimoireModal(false);
+          }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 99999,
+            background: 'rgba(3,1,7,0.88)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            padding: '12px',
+            // 👉 3. ITO ANG MAGIGING "PISIKAL NA HARANG" PARA HINDI TUMAGOS ANG CLICK SA LIKOD:
+            pointerEvents: 'auto'
+          }}
+        >
+          {/* Grimoire Book Container */}
+          <div
+            className="grimoire-book"
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              width: 'min(700px, 96vw)',
+              minHeight: 'min(500px, 80vh)',
+              maxHeight: '90vh',
+              display: 'flex',
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* ── LEFT PAGE (always visible) ── */}
+            <div className="grimoire-page grimoire-left">
+              <div className="grimoire-page-inner">
+                {/* Rune border top */}
+                <div className="grimoire-rune-strip" style={{ marginBottom: 12 }}>
+                  ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ
+                </div>
+
+                {/* Book title */}
+                <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                  <div style={{ fontSize: '0.6rem', letterSpacing: '0.35em', color: '#a0784a', fontFamily: 'Georgia, serif', textTransform: 'uppercase', marginBottom: 4 }}>
+                    Codex Arcanum • Vol. I
+                  </div>
+                  <div style={{
+                    fontFamily: 'Georgia, serif', fontSize: 'clamp(1rem, 3vw, 1.5rem)',
+                    color: '#e9c47a', fontWeight: 'bold',
+                    textShadow: '0 0 12px rgba(233,196,122,0.5)',
+                    lineHeight: 1.2, letterSpacing: '0.05em',
+                  }}>
+                    The Archmage's<br/>Grimoire
+                  </div>
+                </div>
+
+                <div className="grimoire-divider" />
+
+                {/* Sigil / seal illustration */}
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
+                  <svg width="90" height="90" viewBox="0 0 90 90" style={{ opacity: 0.85 }}>
+                    <circle cx="45" cy="45" r="42" fill="none" stroke="#c5a059" strokeWidth="0.8" />
+                    <circle cx="45" cy="45" r="34" fill="none" stroke="#a0784a" strokeWidth="0.5" strokeDasharray="3 4" />
+                    <circle cx="45" cy="45" r="22" fill="none" stroke="#c5a059" strokeWidth="0.8" />
+                    <polygon points="45,8 52,32 77,32 56,48 64,72 45,57 26,72 34,48 13,32 38,32" fill="none" stroke="#e9c47a" strokeWidth="0.7" />
+                    <circle cx="45" cy="45" r="5" fill="#c5a059" opacity="0.6" />
+                    <text x="45" y="84" textAnchor="middle" fill="#a0784a" fontSize="7" fontFamily="serif" letterSpacing="2">✦ ARCANA ✦</text>
+                  </svg>
+                </div>
+
+                {/* Lore text */}
+                <div style={{
+                  fontFamily: 'Georgia, serif', fontSize: 'clamp(0.62rem, 1.5vw, 0.78rem)',
+                  color: '#c9a96e', lineHeight: 1.7, textAlign: 'justify',
+                  flex: 1, overflow: 'hidden',
+                }}>
+                  <p style={{ marginBottom: 8, marginTop: 0 }}>
+                    <em>"In the age before the Shattering, the Archmage sealed the forbidden rites within these pages — bound by seven layers of celestial rune-lock, warded against unworthy eyes..."</em>
+                  </p>
+                  <p style={{ marginTop: 0, marginBottom: 0 }}>
+                    You who hold this tome: the Last Covenant awaits. The Void stirs beyond the veil. 
+                    Read well, apprentice — for knowledge is the only armor that endures.
+                  </p>
+                </div>
+
+                <div className="grimoire-divider" style={{ marginTop: 'auto', paddingTop: 10 }} />
+
+                {/* Rune strip bottom */}
+                <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
+                  ᛟ ✦ ᛞ ᛜ ᛚ ᛗ ᛖ ᛒ ᛏ ᛊ ᛉ ᛈ ᛇ ᛃ ᛁ ᚾ ᚺ ᚹ ✦ ᛟ
+                </div>
+                <div className="grimoire-page-num">I</div>
+              </div>
+            </div>
+
+            {/* ── SPINE ── */}
+            <div className="grimoire-spine">
+              <div className="grimoire-spine-inner">
+                <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.2em', fontSize: '0.55rem', color: '#a0784a', fontFamily: 'Georgia, serif', whiteSpace: 'nowrap' }}>
+                  ✦ CODEX ARCANUM ✦
+                </div>
+              </div>
+            </div>
+
+            {/* ── RIGHT PAGE ── */}
+            <div className="grimoire-page grimoire-right">
+              <div className="grimoire-page-inner">
+                {/* Rune strip top */}
+                <div className="grimoire-rune-strip" style={{ marginBottom: 10 }}>
+                  ᚠ ᚢ ᛁ ᛃ ᛇ ᚱ ᚲ ᚷ ✦ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ ᛞ ᛜ ✦ ᚦ
+                </div>
+
+                {/* Section heading */}
+                <div style={{
+                  textAlign: 'center', fontFamily: 'Georgia, serif',
+                  fontSize: '0.75rem', letterSpacing: '0.25em', color: '#e9c47a',
+                  textTransform: 'uppercase', marginBottom: 10,
+                  textShadow: '0 0 8px rgba(233,196,122,0.3)',
+                }}>
+                  ✦ Chronicle of the Sanctum ✦
+                </div>
+
+                {/* VIDEO PLAYER area */}
+                <div style={{ position: 'relative', marginBottom: 10, zIndex: 10 }}>
+                  {!grimoireVideoPlaying ? (
+                    /* Thumbnail / cover before play */
+                    <div
+                      className="grimoire-video-thumb"
+                      onClick={(e) => { e.stopPropagation(); setGrimoireVideoPlaying(true); }}
+                      role="button"
+                      aria-label="Play intro cinematic"
+                      style={{ cursor: 'pointer', position: 'relative', zIndex: 10 }}
+                    >
+                      {/* Background — pointerEvents none so it doesn't swallow the click */}
+                      <div style={{
+                        position: 'absolute', inset: 0, borderRadius: 4,
+                        background: 'radial-gradient(ellipse at 50% 40%, #2a1060 0%, #0d0520 60%, #050110 100%)',
+                        pointerEvents: 'none',
+                      }} />
+                      {/* Spinning portal sigil */}
+                      <svg
+                        width="64" height="64" viewBox="0 0 64 64"
+                        style={{ position: 'relative', zIndex: 2, animation: 'grimoire-spin 8s linear infinite', pointerEvents: 'none' }}
+                      >
+                        <circle cx="32" cy="32" r="30" fill="none" stroke="#7c3aed" strokeWidth="0.8" strokeDasharray="4 3" />
+                        <circle cx="32" cy="32" r="22" fill="none" stroke="#c5a059" strokeWidth="0.8" />
+                        <circle cx="32" cy="32" r="12" fill="none" stroke="#a855f7" strokeWidth="0.6" strokeDasharray="2 2" />
+                        <circle cx="32" cy="32" r="5" fill="#7c3aed" opacity="0.8" />
+                        <polygon points="32,4 36,22 54,22 40,34 46,52 32,42 18,52 24,34 10,22 28,22" fill="none" stroke="#ffe6a3" strokeWidth="0.6" />
+                      </svg>
+                      {/* Play label */}
+                      <div style={{
+                        position: 'relative', zIndex: 2, marginTop: 8,
+                        fontFamily: 'Georgia, serif', fontSize: '0.75rem',
+                        color: '#ffe6a3', letterSpacing: '0.15em', textTransform: 'uppercase',
+                        textShadow: '0 0 10px rgba(255,230,163,0.6)',
+                        pointerEvents: 'none',
+                      }}>
+                        ▶ Reveal the Sanctum
+                      </div>
+                      <div style={{ position: 'relative', zIndex: 2, fontSize: '0.6rem', color: '#a0784a', fontFamily: 'monospace', marginTop: 4, pointerEvents: 'none' }}>
+                        tap to unveil the arcane vision
+                      </div>
+                    </div>
+                  ) : (
+                    /* Actual video */
+                    <div style={{ position: 'relative', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(197,160,89,0.4)', zIndex: 10 }}>
+                      <video
+                        autoPlay
+                        playsInline
+                        controls
+                        src="/intro.mov"
+                        style={{ width: '100%', display: 'block', maxHeight: '200px', objectFit: 'cover', background: '#030107', position: 'relative', zIndex: 10 }}
+                        onEnded={() => setGrimoireVideoPlaying(false)}
+                      />
+                      {/* Gold vignette overlay — pointerEvents none so video controls work */}
+                      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: 'inset 0 0 18px rgba(197,160,89,0.15)', borderRadius: 4, zIndex: 11 }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Caption */}
+                <div style={{
+                  fontFamily: 'Georgia, serif', fontSize: 'clamp(0.6rem, 1.4vw, 0.72rem)',
+                  color: '#a0784a', textAlign: 'center', fontStyle: 'italic',
+                  marginBottom: 8, lineHeight: 1.5,
+                }}>
+                  A vision from the Age of the Arcane War.<br/>
+                  <em>"The last citadel fell on the night of the Black Moon..."</em>
+                </div>
+
+                <div className="grimoire-divider" />
+
+                {/* Arcane notes */}
+                <div style={{
+                  fontFamily: 'Georgia, serif', fontSize: 'clamp(0.6rem, 1.4vw, 0.72rem)',
+                  color: '#c9a96e', lineHeight: 1.65, flex: 1,
+                  textAlign: 'justify', overflow: 'hidden',
+                }}>
+                  <p style={{ margin: '8px 0 0 0' }}>
+                    The Void does not sleep. Each wave that crashes upon the Sanctum walls is a test — 
+                    a decree from the Ancient Council that only the worthy shall survive the Trial of Echoes.
+                  </p>
+                </div>
+
+                {/* Close button */}
+                <button
+                  className="btn wizard-btn danger-theme"
+                  style={{ marginTop: 'auto', marginBottom: 0, fontSize: '0.72rem', padding: '8px 14px', position: 'relative', zIndex: 10, pointerEvents: 'all' }}
+                  onClick={(e) => { e.stopPropagation(); setShowGrimoireModal(false); setGrimoireVideoPlaying(false); }}
+                >
+                  ✕ Seal the Grimoire
+                </button>
+
+                {/* Rune strip bottom */}
+                <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
+                  ᛟ ✦ ᛞ ᛜ ᛚ ᛗ ᛖ ᛒ ᛏ ᛊ ᛉ ᛈ ᛇ ᛃ ᛁ ᚾ ᚺ ᚹ ✦ ᛟ
+                </div>
+                <div className="grimoire-page-num">II</div>
+              </div>
+            </div>
+
+            {/* Close X corner — must be OUTSIDE grimoire-page divs, z-index 100 */}
+            <button
+              onClick={() => { setShowGrimoireModal(false); setGrimoireVideoPlaying(false); }}
+              style={{
+                position: 'absolute', top: -14, right: -14, zIndex: 100,
+                width: 32, height: 32, borderRadius: '50%',
+                background: '#1a0833', border: '1px solid #c5a059',
+                color: '#ffe6a3', cursor: 'pointer', fontSize: '0.8rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 0 10px rgba(197,160,89,0.3)',
+                pointerEvents: 'all',
+              }}
+              aria-label="Close grimoire"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* ── GRIMOIRE STYLES ── */}
+          <style>{`
+            @keyframes grimoire-spin {
+              from { transform: rotate(0deg); }
+              to   { transform: rotate(360deg); }
+            }
+            @keyframes grimoire-glow-pulse {
+              0%, 100% { box-shadow: 0 0 20px rgba(197,160,89,0.25), inset 0 0 20px rgba(0,0,0,0.9); }
+              50%       { box-shadow: 0 0 40px rgba(197,160,89,0.45), inset 0 0 25px rgba(124,58,237,0.1); }
+            }
+
+            /* FIX: Removed filter — it creates a stacking context that traps the X button */
+            .grimoire-book {
+              box-shadow: 0 0 40px rgba(124,58,237,0.35), 0 8px 32px rgba(0,0,0,0.9);
+            }
+
+            .grimoire-page {
+              flex: 1;
+              background: radial-gradient(circle at 50% 20%, #1e1005 0%, #120a03 60%, #0a0601 100%);
+              border: 1.5px solid #c5a059;
+              box-sizing: border-box;
+              position: relative;
+              /* FIX: overflow visible so buttons/video are not clipped */
+              overflow: visible;
+              animation: grimoire-glow-pulse 6s ease-in-out infinite;
+            }
+            .grimoire-page::before {
+              content: '';
+              position: absolute; inset: 5px;
+              border: 0.5px dashed rgba(197,160,89,0.18);
+              border-radius: 2px; pointer-events: none; z-index: 0;
+            }
+
+            .grimoire-left  { border-radius: 8px 0 0 8px; border-right: none; overflow: hidden; }
+            .grimoire-right {
+              border-radius: 0 8px 8px 0; border-left: none;
+              /* FIX: right page must stay visible so button/video inside are clickable */
+              overflow: visible;
+            }
+
+            /* Parchment texture via repeating gradient */
+            .grimoire-left::after, .grimoire-right::after {
+              content: '';
+              position: absolute; inset: 0; pointer-events: none; z-index: 0;
+              background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 22px,
+                rgba(197,160,89,0.03) 22px,
+                rgba(197,160,89,0.03) 23px
+              );
+            }
+
+            .grimoire-page-inner {
+              position: relative;
+              /* FIX: high z-index so inner content sits above all pseudo-elements */
+              z-index: 5;
+              padding: clamp(12px, 3vw, 22px);
+              height: 100%; box-sizing: border-box;
+              display: flex; flex-direction: column;
+            }
+
+            .grimoire-spine {
+              width: clamp(14px, 3vw, 22px);
+              background: linear-gradient(90deg, #0a0601 0%, #2a1a06 40%, #1a0e03 60%, #0a0601 100%);
+              border-top: 1.5px solid #c5a059;
+              border-bottom: 1.5px solid #c5a059;
+              position: relative; z-index: 2;
+              box-shadow: inset 2px 0 8px rgba(0,0,0,0.8), inset -2px 0 8px rgba(0,0,0,0.8);
+              display: flex; align-items: center; justify-content: center;
+            }
+            .grimoire-spine-inner {
+              width: 100%; height: 100%;
+              display: flex; align-items: center; justify-content: center;
+              border-left:  0.5px solid rgba(197,160,89,0.3);
+              border-right: 0.5px solid rgba(197,160,89,0.3);
+            }
+
+            .grimoire-rune-strip {
+              font-family: serif; font-size: 0.55rem; color: rgba(160,120,74,0.55);
+              letter-spacing: 0.1em; text-align: center; line-height: 1;
+              user-select: none; white-space: nowrap; overflow: hidden;
+            }
+
+            .grimoire-divider {
+              height: 1px;
+              background: linear-gradient(90deg, transparent 0%, #c5a059 30%, #e9c47a 50%, #c5a059 70%, transparent 100%);
+              opacity: 0.5; width: 100%; margin: 4px 0;
+            }
+
+            .grimoire-page-num {
+              text-align: center; font-family: 'Georgia', serif;
+              font-size: 0.6rem; color: rgba(160,120,74,0.5);
+              letter-spacing: 0.3em; margin-top: 4px;
+            }
+
+            .grimoire-video-thumb {
+              width: 100%; aspect-ratio: 16/9; min-height: 100px;
+              border: 1px solid rgba(197,160,89,0.4); border-radius: 4px;
+              display: flex; flex-direction: column; align-items: center; justify-content: center;
+              cursor: pointer; position: relative;
+              /* FIX: overflow visible so nothing inside clips the click target */
+              overflow: hidden;
+              transition: border-color 0.3s ease, box-shadow 0.3s ease;
+              /* FIX: explicit pointer events and z-index */
+              pointer-events: all;
+              z-index: 10;
+              -webkit-tap-highlight-color: rgba(197,160,89,0.2);
+            }
+            .grimoire-video-thumb:hover {
+              border-color: #e9c47a;
+              box-shadow: 0 0 18px rgba(197,160,89,0.3), inset 0 0 20px rgba(124,58,237,0.15);
+            }
+            .grimoire-video-thumb:active {
+              border-color: #ffe6a3;
+              box-shadow: 0 0 28px rgba(197,160,89,0.5);
+            }
+
+            /* Mobile: stack pages vertically on very small screens */
+            @media (max-width: 480px) {
+              .grimoire-book   { flex-direction: column !important; }
+              .grimoire-left   { border-radius: 8px 8px 0 0 !important; border-right: 1.5px solid #c5a059 !important; border-bottom: none !important; }
+              .grimoire-right  { border-radius: 0 0 8px 8px !important; border-left:  1.5px solid #c5a059 !important; border-top:    none !important; }
+              .grimoire-spine  { width: 100% !important; height: clamp(12px, 3vw, 18px) !important; flex-direction: row !important; }
+              .grimoire-spine div { writing-mode: horizontal-tb !important; transform: none !important; }
+            }
+          `}</style>
+        </div>
+      )}
+
     </div>
   );
 }

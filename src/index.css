@@ -694,3 +694,14 @@ button, a, input, select, textarea, [role="button"] {
     opacity: 0;
   }
 }
+
+/* 🌟 BINAGO: Idinagdag ang mismong parent div sa unahan para itago ang cursor kahit sa background */
+div[data-screen]:not([data-screen="intro"]),
+div[data-screen]:not([data-screen="intro"]) *,
+div[data-screen]:not([data-screen="intro"]) button,
+div[data-screen]:not([data-screen="intro"]) input,
+div[data-screen]:not([data-screen="intro"]) select,
+div[data-screen]:not([data-screen="intro"]) a {
+  cursor: none !important;
+}
+
