@@ -18,7 +18,7 @@ import CustomCursor from './components/CustomCursor';
 const MENU_BGM_URL = '../post1.mp3';
 const GAME_BGM_URL = "../game.mp3";
 const BOSS_BGM_URL = "../boss.mp3";
-const POST_BOSS_BGM_URL = "../post.mp3";
+const POST_BOSS_BGM_URL = "../post.wav";
 // 🔊 MAGDAGDAG NG MGA URL PARA SA UPGRADE SCREEN SFX DITO
 const LEVEL_UP_SFX_URL = '../level.mp3'; 
 const SELECT_SFX_URL = '../select.mp3';
