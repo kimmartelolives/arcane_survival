@@ -2657,7 +2657,7 @@ const upgradeFamiliar = (fam) => {
                   padding: '4px 10px', borderRadius: '4px', marginTop: '6px', cursor: 'pointer', 
                   fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' 
                 }}>
-                🛠️ +10M Crystals (Dev Mode)
+                🛠️ +10M Crystals (Test Mode)
               </button> 
              
             </div>
