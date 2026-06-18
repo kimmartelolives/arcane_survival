@@ -2646,7 +2646,7 @@ const upgradeFamiliar = (fam) => {
               </div>
               {/*  DEVELOPER TOOLS */}
               
-              {/* <button 
+              <button 
                 onClick={() => {
                   const newC = crystals + 10000000;
                   setCrystals(newC);
@@ -2658,7 +2658,7 @@ const upgradeFamiliar = (fam) => {
                   fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' 
                 }}>
                 🛠️ +10M Crystals (Dev Mode)
-              </button>  */}
+              </button> 
              
             </div>
 

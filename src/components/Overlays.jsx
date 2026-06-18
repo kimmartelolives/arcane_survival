@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { sbGet, sbPost, hasSupabase, supabase, sbWatchTable } from '../services/supabase';
 import { SKINS_DB, LiveSkinPreview } from './MetaShop';
+import Bestiary from './Bestiary';
 
 
 export default function Overlays({ 
@@ -40,6 +41,7 @@ export default function Overlays({
   const [isIdleTransitioning, setIsIdleTransitioning] = useState(false);
   // 🌌 Universal Transition State
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [activeGrimoireTab, setActiveGrimoireTab] = useState('lore');
 
   // 🪄 Helper function para sa Frieren effect
   const executeWithTransition = (callback) => {
@@ -94,7 +96,7 @@ useEffect(() => {
     return cached === null ? null : cached === 'true';
   });
 
- // 🕒 10 SECONDS IDLE DETECTION
+ // 🕒 180 SECONDS IDLE DETECTION
   useEffect(() => {
     let timeoutId;
 
@@ -105,7 +107,7 @@ useEffect(() => {
         timeoutId = setTimeout(() => {
           // Gagamitin na natin ang helper function dito!
           executeWithTransition(() => setScreen('intro'));
-        }, 12000); // 10 SECONDS
+        }, 180000); // 180 SECONDS
       }
     };
 
@@ -1873,15 +1875,13 @@ const renderDamageRecap = () => {
         </div>
       )}
 
-      {/* ====================================================================
+{/* ====================================================================
           📖 THE ARCHMAGE'S GRIMOIRE — BOOK MODAL
           ==================================================================== */}
       {showGrimoireModal && (
-     <div
+        <div
           onClick={(e) => {
-            // 1. Pipigilan nitong umapaw ang click event
             e.stopPropagation(); 
-            // 2. Isasara ang modal kapag kinlick ang dark background
             setShowGrimoireModal(false);
           }}
           style={{
@@ -1891,7 +1891,6 @@ const renderDamageRecap = () => {
             backdropFilter: 'blur(6px)',
             WebkitBackdropFilter: 'blur(6px)',
             padding: '12px',
-            // 👉 3. ITO ANG MAGIGING "PISIKAL NA HARANG" PARA HINDI TUMAGOS ANG CLICK SA LIKOD:
             pointerEvents: 'auto'
           }}
         >
@@ -1908,217 +1907,228 @@ const renderDamageRecap = () => {
               boxSizing: 'border-box',
             }}
           >
-            {/* ── LEFT PAGE (always visible) ── */}
-            <div className="grimoire-page grimoire-left">
-              <div className="grimoire-page-inner">
-                {/* Rune border top */}
-                <div className="grimoire-rune-strip" style={{ marginBottom: 12 }}>
-                  ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ
-                </div>
-
-                {/* Book title */}
-                <div style={{ textAlign: 'center', marginBottom: 14 }}>
-                  <div style={{ fontSize: '0.6rem', letterSpacing: '0.35em', color: '#a0784a', fontFamily: 'Georgia, serif', textTransform: 'uppercase', marginBottom: 4 }}>
-                    Codex Arcanum • Vol. I
-                  </div>
-                  <div style={{
-                    fontFamily: 'Georgia, serif', fontSize: 'clamp(1rem, 3vw, 1.5rem)',
-                    color: '#e9c47a', fontWeight: 'bold',
-                    textShadow: '0 0 12px rgba(233,196,122,0.5)',
-                    lineHeight: 1.2, letterSpacing: '0.05em',
-                  }}>
-                    The Archmage's<br/>Grimoire
-                  </div>
-                </div>
-
-                <div className="grimoire-divider" />
-
-                {/* Sigil / seal illustration */}
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
-                  <svg width="90" height="90" viewBox="0 0 90 90" style={{ opacity: 0.85 }}>
-                    <circle cx="45" cy="45" r="42" fill="none" stroke="#c5a059" strokeWidth="0.8" />
-                    <circle cx="45" cy="45" r="34" fill="none" stroke="#a0784a" strokeWidth="0.5" strokeDasharray="3 4" />
-                    <circle cx="45" cy="45" r="22" fill="none" stroke="#c5a059" strokeWidth="0.8" />
-                    <polygon points="45,8 52,32 77,32 56,48 64,72 45,57 26,72 34,48 13,32 38,32" fill="none" stroke="#e9c47a" strokeWidth="0.7" />
-                    <circle cx="45" cy="45" r="5" fill="#c5a059" opacity="0.6" />
-                    <text x="45" y="84" textAnchor="middle" fill="#a0784a" fontSize="7" fontFamily="serif" letterSpacing="2">✦ ARCANA ✦</text>
-                  </svg>
-                </div>
-
-                {/* Lore text */}
-                <div style={{
-                  fontFamily: 'Georgia, serif', fontSize: 'clamp(0.62rem, 1.5vw, 0.78rem)',
-                  color: '#c9a96e', lineHeight: 1.7, textAlign: 'justify',
-                  flex: 1, overflow: 'hidden',
+            {/* 📌 BOOKMARK TABS SA KALIWANG GILID */}
+            <div style={{ position: 'absolute', left: '-42px', top: '40px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 0 }}>
+              <button 
+                onClick={() => setActiveGrimoireTab('lore')}
+                style={{
+                  padding: '20px 8px', writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                  background: activeGrimoireTab === 'lore' ? '#1e1005' : '#0a0601',
+                  color: activeGrimoireTab === 'lore' ? '#ffe6a3' : '#a0784a',
+                  border: '1.5px solid #c5a059', borderRight: 'none', borderRadius: '8px 0 0 8px',
+                  fontFamily: 'Georgia, serif', fontWeight: 'bold', letterSpacing: '2px', cursor: 'pointer',
+                  boxShadow: activeGrimoireTab === 'lore' ? '-4px 0 10px rgba(197,160,89,0.3)' : 'none',
+                  transition: 'all 0.3s'
                 }}>
-                  <p style={{ marginBottom: 8, marginTop: 0 }}>
-                    <em>"In the age before the Shattering, the Archmage sealed the forbidden rites within these pages — bound by seven layers of celestial rune-lock, warded against unworthy eyes..."</em>
-                  </p>
-                  <p style={{ marginTop: 0, marginBottom: 0 }}>
-                    You who hold this tome: the Last Covenant awaits. The Void stirs beyond the veil. 
-                    Read well, apprentice — for knowledge is the only armor that endures.
-                  </p>
-                </div>
-
-                <div className="grimoire-divider" style={{ marginTop: 'auto', paddingTop: 10 }} />
-
-                {/* Rune strip bottom */}
-                <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
-                  ᛟ ✦ ᛞ ᛜ ᛚ ᛗ ᛖ ᛒ ᛏ ᛊ ᛉ ᛈ ᛇ ᛃ ᛁ ᚾ ᚺ ᚹ ✦ ᛟ
-                </div>
-                <div className="grimoire-page-num">I</div>
-              </div>
+                CHRONICLES
+              </button>
+              <button 
+                onClick={() => setActiveGrimoireTab('bestiary')}
+                style={{
+                  padding: '20px 8px', writingMode: 'vertical-rl', transform: 'rotate(180deg)',
+                  background: activeGrimoireTab === 'bestiary' ? '#1e1005' : '#0a0601',
+                  color: activeGrimoireTab === 'bestiary' ? '#ffe6a3' : '#a0784a',
+                  border: '1.5px solid #c5a059', borderRight: 'none', borderRadius: '8px 0 0 8px',
+                  fontFamily: 'Georgia, serif', fontWeight: 'bold', letterSpacing: '2px', cursor: 'pointer',
+                  boxShadow: activeGrimoireTab === 'bestiary' ? '-4px 0 10px rgba(197,160,89,0.3)' : 'none',
+                  transition: 'all 0.3s'
+                }}>
+                BESTIARY
+              </button>
             </div>
 
-            {/* ── SPINE ── */}
-            <div className="grimoire-spine">
-              <div className="grimoire-spine-inner">
-                <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.2em', fontSize: '0.55rem', color: '#a0784a', fontFamily: 'Georgia, serif', whiteSpace: 'nowrap' }}>
-                  ✦ CODEX ARCANUM ✦
-                </div>
-              </div>
-            </div>
+            {/* 🔄 CONDITIONAL RENDERING NG CONTENT */}
+            {activeGrimoireTab === 'lore' ? (
+              <>
+                {/* ── LEFT PAGE (LORE) ── */}
+                <div className="grimoire-page grimoire-left">
+                  <div className="grimoire-page-inner">
+                    {/* Rune border top */}
+                    <div className="grimoire-rune-strip" style={{ marginBottom: 12 }}>
+                      ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ
+                    </div>
 
-            {/* ── RIGHT PAGE ── */}
-            <div className="grimoire-page grimoire-right">
-              <div className="grimoire-page-inner">
-                {/* Rune strip top */}
-                <div className="grimoire-rune-strip" style={{ marginBottom: 10 }}>
-                  ᚠ ᚢ ᛁ ᛃ ᛇ ᚱ ᚲ ᚷ ✦ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ ᛞ ᛜ ✦ ᚦ
-                </div>
-
-                {/* Section heading */}
-                <div style={{
-                  textAlign: 'center', fontFamily: 'Georgia, serif',
-                  fontSize: '0.75rem', letterSpacing: '0.25em', color: '#e9c47a',
-                  textTransform: 'uppercase', marginBottom: 10,
-                  textShadow: '0 0 8px rgba(233,196,122,0.3)',
-                }}>
-                  ✦ Chronicle of the Sanctum ✦
-                </div>
-
-                {/* VIDEO PLAYER area */}
-                <div style={{ position: 'relative', marginBottom: 10, zIndex: 10 }}>
-                  {!grimoireVideoPlaying ? (
-                    /* Thumbnail / cover before play */
-                    <div
-                      className="grimoire-video-thumb"
-                      onClick={(e) => { e.stopPropagation(); setGrimoireVideoPlaying(true); }}
-                      role="button"
-                      aria-label="Play intro cinematic"
-                      style={{ cursor: 'pointer', position: 'relative', zIndex: 10 }}
-                    >
-                      {/* Background — pointerEvents none so it doesn't swallow the click */}
+                    {/* Book title */}
+                    <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                      <div style={{ fontSize: '0.6rem', letterSpacing: '0.35em', color: '#a0784a', fontFamily: 'Georgia, serif', textTransform: 'uppercase', marginBottom: 4 }}>
+                        Codex Arcanum • Vol. I
+                      </div>
                       <div style={{
-                        position: 'absolute', inset: 0, borderRadius: 4,
-                        background: 'radial-gradient(ellipse at 50% 40%, #2a1060 0%, #0d0520 60%, #050110 100%)',
-                        pointerEvents: 'none',
-                      }} />
-                      {/* Spinning portal sigil */}
-                      <svg
-                        width="64" height="64" viewBox="0 0 64 64"
-                        style={{ position: 'relative', zIndex: 2, animation: 'grimoire-spin 8s linear infinite', pointerEvents: 'none' }}
-                      >
-                        <circle cx="32" cy="32" r="30" fill="none" stroke="#7c3aed" strokeWidth="0.8" strokeDasharray="4 3" />
-                        <circle cx="32" cy="32" r="22" fill="none" stroke="#c5a059" strokeWidth="0.8" />
-                        <circle cx="32" cy="32" r="12" fill="none" stroke="#a855f7" strokeWidth="0.6" strokeDasharray="2 2" />
-                        <circle cx="32" cy="32" r="5" fill="#7c3aed" opacity="0.8" />
-                        <polygon points="32,4 36,22 54,22 40,34 46,52 32,42 18,52 24,34 10,22 28,22" fill="none" stroke="#ffe6a3" strokeWidth="0.6" />
-                      </svg>
-                      {/* Play label */}
-                      <div style={{
-                        position: 'relative', zIndex: 2, marginTop: 8,
-                        fontFamily: 'Georgia, serif', fontSize: '0.75rem',
-                        color: '#ffe6a3', letterSpacing: '0.15em', textTransform: 'uppercase',
-                        textShadow: '0 0 10px rgba(255,230,163,0.6)',
-                        pointerEvents: 'none',
+                        fontFamily: 'Georgia, serif', fontSize: 'clamp(1rem, 3vw, 1.5rem)',
+                        color: '#e9c47a', fontWeight: 'bold',
+                        textShadow: '0 0 12px rgba(233,196,122,0.5)',
+                        lineHeight: 1.2, letterSpacing: '0.05em',
                       }}>
-                        ▶ Reveal the Sanctum
-                      </div>
-                      <div style={{ position: 'relative', zIndex: 2, fontSize: '0.6rem', color: '#a0784a', fontFamily: 'monospace', marginTop: 4, pointerEvents: 'none' }}>
-                        tap to unveil the arcane vision
+                        The Archmage's<br/>Grimoire
                       </div>
                     </div>
-                  ) : (
-                    /* Actual video */
-                    <div style={{ position: 'relative', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(197,160,89,0.4)', zIndex: 10 }}>
-                      <video
-                        autoPlay
-                        playsInline
-                        controls
-                        src="/intro.mov"
-                        style={{ width: '100%', display: 'block', maxHeight: '200px', objectFit: 'cover', background: '#030107', position: 'relative', zIndex: 10 }}
-                        onEnded={() => setGrimoireVideoPlaying(false)}
-                      />
-                      {/* Gold vignette overlay — pointerEvents none so video controls work */}
-                      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: 'inset 0 0 18px rgba(197,160,89,0.15)', borderRadius: 4, zIndex: 11 }} />
+
+                    <div className="grimoire-divider" />
+
+                    {/* Sigil / seal illustration */}
+                    <div style={{ display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
+                      <svg width="90" height="90" viewBox="0 0 90 90" style={{ opacity: 0.85 }}>
+                        <circle cx="45" cy="45" r="42" fill="none" stroke="#c5a059" strokeWidth="0.8" />
+                        <circle cx="45" cy="45" r="34" fill="none" stroke="#a0784a" strokeWidth="0.5" strokeDasharray="3 4" />
+                        <circle cx="45" cy="45" r="22" fill="none" stroke="#c5a059" strokeWidth="0.8" />
+                        <polygon points="45,8 52,32 77,32 56,48 64,72 45,57 26,72 34,48 13,32 38,32" fill="none" stroke="#e9c47a" strokeWidth="0.7" />
+                        <circle cx="45" cy="45" r="5" fill="#c5a059" opacity="0.6" />
+                        <text x="45" y="84" textAnchor="middle" fill="#a0784a" fontSize="7" fontFamily="serif" letterSpacing="2">✦ ARCANA ✦</text>
+                      </svg>
                     </div>
-                  )}
+
+                    {/* Lore text */}
+                    <div style={{
+                      fontFamily: 'Georgia, serif', fontSize: 'clamp(0.62rem, 1.5vw, 0.78rem)',
+                      color: '#c9a96e', lineHeight: 1.7, textAlign: 'justify',
+                      flex: 1, overflow: 'hidden',
+                    }}>
+                      <p style={{ marginBottom: 8, marginTop: 0 }}>
+                        <em>"In the age before the Shattering, the Archmage sealed the forbidden rites within these pages — bound by seven layers of celestial rune-lock, warded against unworthy eyes..."</em>
+                      </p>
+                      <p style={{ marginTop: 0, marginBottom: 0 }}>
+                        You who hold this tome: the Last Covenant awaits. The Void stirs beyond the veil. 
+                        Read well, apprentice — for knowledge is the only armor that endures.
+                      </p>
+                    </div>
+
+                    <div className="grimoire-divider" style={{ marginTop: 'auto', paddingTop: 10 }} />
+
+                    {/* Rune strip bottom */}
+                    <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
+                      ᛟ ✦ ᛞ ᛜ ᛚ ᛗ ᛖ ᛒ ᛏ ᛊ ᛉ ᛈ ᛇ ᛃ ᛁ ᚾ ᚺ ᚹ ✦ ᛟ
+                    </div>
+                    <div className="grimoire-page-num">I</div>
+                  </div>
                 </div>
 
-                {/* Caption */}
-                <div style={{
-                  fontFamily: 'Georgia, serif', fontSize: 'clamp(0.6rem, 1.4vw, 0.72rem)',
-                  color: '#a0784a', textAlign: 'center', fontStyle: 'italic',
-                  marginBottom: 8, lineHeight: 1.5,
-                }}>
-                  A vision from the Age of the Arcane War.<br/>
-                  <em>"The last citadel fell on the night of the Black Moon..."</em>
+                {/* ── SPINE ── */}
+                <div className="grimoire-spine">
+                  <div className="grimoire-spine-inner">
+                    <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: '0.2em', fontSize: '0.55rem', color: '#a0784a', fontFamily: 'Georgia, serif', whiteSpace: 'nowrap' }}>
+                      ✦ CODEX ARCANUM ✦
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grimoire-divider" />
+                {/* ── RIGHT PAGE (VIDEO) ── */}
+                <div className="grimoire-page grimoire-right">
+                  <div className="grimoire-page-inner">
+                    {/* Rune strip top */}
+                    <div className="grimoire-rune-strip" style={{ marginBottom: 10 }}>
+                      ᚠ ᚢ ᛁ ᛃ ᛇ ᚱ ᚲ ᚷ ✦ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ ᛞ ᛜ ✦ ᚦ
+                    </div>
 
-                {/* Arcane notes */}
-                <div style={{
-                  fontFamily: 'Georgia, serif', fontSize: 'clamp(0.6rem, 1.4vw, 0.72rem)',
-                  color: '#c9a96e', lineHeight: 1.65, flex: 1,
-                  textAlign: 'justify', overflow: 'hidden',
-                }}>
-                  <p style={{ margin: '8px 0 0 0' }}>
-                    The Void does not sleep. Each wave that crashes upon the Sanctum walls is a test — 
-                    a decree from the Ancient Council that only the worthy shall survive the Trial of Echoes.
-                  </p>
+                    {/* Section heading */}
+                    <div style={{
+                      textAlign: 'center', fontFamily: 'Georgia, serif',
+                      fontSize: '0.75rem', letterSpacing: '0.25em', color: '#e9c47a',
+                      textTransform: 'uppercase', marginBottom: 10,
+                      textShadow: '0 0 8px rgba(233,196,122,0.3)',
+                    }}>
+                      ✦ Chronicle of the Sanctum ✦
+                    </div>
+
+                    {/* VIDEO PLAYER area */}
+                    <div style={{ position: 'relative', marginBottom: 10, zIndex: 10 }}>
+                      {!grimoireVideoPlaying ? (
+                        <div
+                          className="grimoire-video-thumb"
+                          onClick={(e) => { e.stopPropagation(); setGrimoireVideoPlaying(true); }}
+                          role="button"
+                          aria-label="Play intro cinematic"
+                          style={{ cursor: 'pointer', position: 'relative', zIndex: 10 }}
+                        >
+                          <div style={{
+                            position: 'absolute', inset: 0, borderRadius: 4,
+                            background: 'radial-gradient(ellipse at 50% 40%, #2a1060 0%, #0d0520 60%, #050110 100%)',
+                            pointerEvents: 'none',
+                          }} />
+                          <svg
+                            width="64" height="64" viewBox="0 0 64 64"
+                            style={{ position: 'relative', zIndex: 2, animation: 'grimoire-spin 8s linear infinite', pointerEvents: 'none' }}
+                          >
+                            <circle cx="32" cy="32" r="30" fill="none" stroke="#7c3aed" strokeWidth="0.8" strokeDasharray="4 3" />
+                            <circle cx="32" cy="32" r="22" fill="none" stroke="#c5a059" strokeWidth="0.8" />
+                            <circle cx="32" cy="32" r="12" fill="none" stroke="#a855f7" strokeWidth="0.6" strokeDasharray="2 2" />
+                            <circle cx="32" cy="32" r="5" fill="#7c3aed" opacity="0.8" />
+                            <polygon points="32,4 36,22 54,22 40,34 46,52 32,42 18,52 24,34 10,22 28,22" fill="none" stroke="#ffe6a3" strokeWidth="0.6" />
+                          </svg>
+                          <div style={{
+                            position: 'relative', zIndex: 2, marginTop: 8,
+                            fontFamily: 'Georgia, serif', fontSize: '0.75rem',
+                            color: '#ffe6a3', letterSpacing: '0.15em', textTransform: 'uppercase',
+                            textShadow: '0 0 10px rgba(255,230,163,0.6)',
+                            pointerEvents: 'none',
+                          }}>
+                            ▶ Reveal the Sanctum
+                          </div>
+                          <div style={{ position: 'relative', zIndex: 2, fontSize: '0.6rem', color: '#a0784a', fontFamily: 'monospace', marginTop: 4, pointerEvents: 'none' }}>
+                            tap to unveil the arcane vision
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ position: 'relative', borderRadius: 4, overflow: 'hidden', border: '1px solid rgba(197,160,89,0.4)', zIndex: 10 }}>
+                          <video
+                            autoPlay
+                            playsInline
+                            controls
+                            src="/intro.mov"
+                            style={{ width: '100%', display: 'block', maxHeight: '200px', objectFit: 'cover', background: '#030107', position: 'relative', zIndex: 10 }}
+                            onEnded={() => setGrimoireVideoPlaying(false)}
+                          />
+                          <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: 'inset 0 0 18px rgba(197,160,89,0.15)', borderRadius: 4, zIndex: 11 }} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{
+                      fontFamily: 'Georgia, serif', fontSize: 'clamp(0.6rem, 1.4vw, 0.72rem)',
+                      color: '#a0784a', textAlign: 'center', fontStyle: 'italic',
+                      marginBottom: 8, lineHeight: 1.5,
+                    }}>
+                      A vision from the Age of the Arcane War.<br/>
+                      <em>"The last citadel fell on the night of the Black Moon..."</em>
+                    </div>
+
+                    <div className="grimoire-divider" />
+
+                    <div style={{
+                      fontFamily: 'Georgia, serif', fontSize: 'clamp(0.6rem, 1.4vw, 0.72rem)',
+                      color: '#c9a96e', lineHeight: 1.65, flex: 1,
+                      textAlign: 'justify', overflow: 'hidden',
+                    }}>
+                      <p style={{ margin: '8px 0 0 0' }}>
+                        The Void does not sleep. Each wave that crashes upon the Sanctum walls is a test — 
+                        a decree from the Ancient Council that only the worthy shall survive the Trial of Echoes.
+                      </p>
+                    </div>
+
+                    <button
+                        className="btn wizard-btn danger-theme"
+                        style={{ marginTop: 'auto', marginBottom: 0, fontSize: '0.72rem', padding: '8px 14px', position: 'relative', zIndex: 10, pointerEvents: 'all' }}
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          executeWithTransition(() => {
+                            setShowGrimoireModal(false); 
+                            setGrimoireVideoPlaying(false);
+                          }); 
+                        }}
+                      >
+                        ✕ Seal the Grimoire
+                      </button>
+
+                    <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
+                      ᛟ ✦ ᛞ ᛜ ᛚ ᛗ ᛖ ᛒ ᛏ ᛊ ᛉ ᛈ ᛇ ᛃ ᛁ ᚾ ᚺ ᚹ ✦ ᛟ
+                    </div>
+                    <div className="grimoire-page-num">II</div>
+                  </div>
                 </div>
+              </>
+            ) : (
+              <Bestiary /> /* 🩸 DITO PAPASOK YUNG GINAWA NATING MONSTER LOGBOOK FILE */
+            )}
 
-                {/* Close button */}
-                <button
-                    className="btn wizard-btn danger-theme"
-                    style={{ marginTop: 'auto', marginBottom: 0, fontSize: '0.72rem', padding: '8px 14px', position: 'relative', zIndex: 10, pointerEvents: 'all' }}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      executeWithTransition(() => {
-                        setShowGrimoireModal(false); 
-                        setGrimoireVideoPlaying(false);
-                      }); 
-                    }}
-                  >
-                    ✕ Seal the Grimoire
-                  </button>
-
-                {/* Rune strip bottom */}
-                <div className="grimoire-rune-strip" style={{ marginTop: 8 }}>
-                  ᛟ ✦ ᛞ ᛜ ᛚ ᛗ ᛖ ᛒ ᛏ ᛊ ᛉ ᛈ ᛇ ᛃ ᛁ ᚾ ᚺ ᚹ ✦ ᛟ
-                </div>
-                <div className="grimoire-page-num">II</div>
-              </div>
-            </div>
-
-            {/* Close X corner — must be OUTSIDE grimoire-page divs, z-index 100 */}
-            <button
-              onClick={() => { setShowGrimoireModal(false); setGrimoireVideoPlaying(false); }}
-              style={{
-                position: 'absolute', top: -14, right: -14, zIndex: 100,
-                width: 32, height: 32, borderRadius: '50%',
-                background: '#1a0833', border: '1px solid #c5a059',
-                color: '#ffe6a3', cursor: 'pointer', fontSize: '0.8rem',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 0 10px rgba(197,160,89,0.3)',
-                pointerEvents: 'all',
-              }}
-              aria-label="Close grimoire"
-            >
-              ✕
-            </button>
           </div>
 
           {/* ── GRIMOIRE STYLES ── */}
@@ -2132,7 +2142,6 @@ const renderDamageRecap = () => {
               50%       { box-shadow: 0 0 40px rgba(197,160,89,0.45), inset 0 0 25px rgba(124,58,237,0.1); }
             }
 
-            /* FIX: Removed filter — it creates a stacking context that traps the X button */
             .grimoire-book {
               box-shadow: 0 0 40px rgba(124,58,237,0.35), 0 8px 32px rgba(0,0,0,0.9);
             }
@@ -2143,7 +2152,6 @@ const renderDamageRecap = () => {
               border: 1.5px solid #c5a059;
               box-sizing: border-box;
               position: relative;
-              /* FIX: overflow visible so buttons/video are not clipped */
               overflow: visible;
               animation: grimoire-glow-pulse 6s ease-in-out infinite;
             }
@@ -2157,11 +2165,9 @@ const renderDamageRecap = () => {
             .grimoire-left  { border-radius: 8px 0 0 8px; border-right: none; overflow: hidden; }
             .grimoire-right {
               border-radius: 0 8px 8px 0; border-left: none;
-              /* FIX: right page must stay visible so button/video inside are clickable */
               overflow: visible;
             }
 
-            /* Parchment texture via repeating gradient */
             .grimoire-left::after, .grimoire-right::after {
               content: '';
               position: absolute; inset: 0; pointer-events: none; z-index: 0;
@@ -2176,7 +2182,6 @@ const renderDamageRecap = () => {
 
             .grimoire-page-inner {
               position: relative;
-              /* FIX: high z-index so inner content sits above all pseudo-elements */
               z-index: 5;
               padding: clamp(12px, 3vw, 22px);
               height: 100%; box-sizing: border-box;
@@ -2222,10 +2227,8 @@ const renderDamageRecap = () => {
               border: 1px solid rgba(197,160,89,0.4); border-radius: 4px;
               display: flex; flex-direction: column; align-items: center; justify-content: center;
               cursor: pointer; position: relative;
-              /* FIX: overflow visible so nothing inside clips the click target */
               overflow: hidden;
               transition: border-color 0.3s ease, box-shadow 0.3s ease;
-              /* FIX: explicit pointer events and z-index */
               pointer-events: all;
               z-index: 10;
               -webkit-tap-highlight-color: rgba(197,160,89,0.2);
@@ -2239,7 +2242,6 @@ const renderDamageRecap = () => {
               box-shadow: 0 0 28px rgba(197,160,89,0.5);
             }
 
-            /* Mobile: stack pages vertically on very small screens */
             @media (max-width: 480px) {
               .grimoire-book   { flex-direction: column !important; }
               .grimoire-left   { border-radius: 8px 8px 0 0 !important; border-right: 1.5px solid #c5a059 !important; border-bottom: none !important; }
