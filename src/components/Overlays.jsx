@@ -1182,12 +1182,11 @@ const renderDamageRecap = () => {
               </button>
             ) : coopActiveInDb ? (
               /* PHASE B: Kapag CONFIRMED ng Supabase na totoong TRUE / OPEN ang coop */
-              <button 
+             <button 
                 className="btn gold wizard-btn gold-theme" 
                 onClick={() => {
-                  // 🔥 HARD GUARD: Haharangin ang click event kung hindi pa tapos ang system synchronization
                   if (coopActiveInDb !== true) return;
-                  setScreen('coop-menu');
+                  executeWithTransition(() => setScreen('coop-menu'));
                 }}
               >
                 <span className="btn-icon">⚔️</span>
@@ -1242,7 +1241,7 @@ const renderDamageRecap = () => {
                 <span className="btn-label" style={{ color: '#64748b' }}>Co-op Gates Sealed by Council</span>
               </button>
             )}
-            <button className="btn wizard-btn" onClick={() => setScreen('leaderboard')}>
+            <button className="btn wizard-btn" onClick={() => executeWithTransition(() => setScreen('leaderboard'))}>
               <span className="btn-icon">🏆</span><span className="btn-label">Arcane Tombstones</span>
               <span
                 style={{
@@ -1278,7 +1277,7 @@ const renderDamageRecap = () => {
 
           </button>
 
-            <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => setScreen('metashop')}>
+            <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => executeWithTransition(() => setScreen('metashop'))}>
               <span className="btn-icon">🌌</span><span className="btn-label">The Mage's Codex</span>
                <span
                 style={{
@@ -1317,7 +1316,7 @@ const renderDamageRecap = () => {
               <button 
                 className="btn wizard-btn" 
                 style={{ flex: 1, margin: 0 }}
-                onClick={() => { setCouncilTab('decrees'); setCouncilNewsOpen(true); }}
+                onClick={() => executeWithTransition(() => { setCouncilTab('decrees'); setCouncilNewsOpen(true); })}
               >
                 <span className="btn-icon">🏛️</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Council Chronicles</span>
                 <span
@@ -1366,7 +1365,7 @@ const renderDamageRecap = () => {
                 position: 'relative',
                 overflow: 'hidden',
               }}
-              onClick={() => { setGrimoirePage('cover'); setGrimoireVideoPlaying(false); setShowGrimoireModal(true); }}
+              onClick={() => executeWithTransition(() => { setGrimoirePage('cover'); setGrimoireVideoPlaying(false); setShowGrimoireModal(true); })}
             >
               <span style={{ fontSize: '1.1rem' }}>📖</span>
               <span className="btn-label" style={{ color: '#e9c47a' }}>The Archmage's Grimoire</span>
