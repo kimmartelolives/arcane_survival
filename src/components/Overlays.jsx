@@ -37,6 +37,8 @@ export default function Overlays({
   const [showGrimoireModal, setShowGrimoireModal] = useState(false);
   const [grimoirePage, setGrimoirePage] = useState('cover'); // 'cover' | 'video'
   const [grimoireVideoPlaying, setGrimoireVideoPlaying] = useState(false);
+  const [isIdleTransitioning, setIsIdleTransitioning] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
 useEffect(() => {
     if (screen === 'levelup' || screen === 'gameover') {
@@ -81,6 +83,50 @@ useEffect(() => {
     const cached = localStorage.getItem('arcane_coop_enabled');
     return cached === null ? null : cached === 'true';
   });
+
+ useEffect(() => {
+    let timeoutId;
+
+    const resetIdleTimer = () => {
+      clearTimeout(timeoutId);
+      // Tatakbo lang ang timer kung nasa 'menu' screen tayo at hindi pa nagta-transition
+      if (screen === 'menu' && !isIdleTransitioning) {
+        timeoutId = setTimeout(() => {
+          setIsIdleTransitioning(true); // Simulan ang fade-to-black transition
+          
+          // Pagkatapos ng 1 second (1000ms) animation, ibalik sa IntroScreen
+          setTimeout(() => {
+            setScreen('intro'); // 🔥 Sisiguraduhin nitong ibabato ka pabalik sa IntroScreen
+            setIsIdleTransitioning(false); // I-reset ang transition state
+          }, 1000); 
+        }, 10000); // 10,000 milliseconds = 10 SECONDS
+      }
+    };
+
+    // Kapag may gumalaw na user, i-reset ang timer
+    const handleUserActivity = () => {
+      resetIdleTimer();
+    };
+
+    if (screen === 'menu') {
+      window.addEventListener('mousemove', handleUserActivity);
+      window.addEventListener('keydown', handleUserActivity);
+      window.addEventListener('touchstart', handleUserActivity);
+      window.addEventListener('click', handleUserActivity);
+      resetIdleTimer(); // Simulan agad ang timer pagpasok sa Main Menu
+    } else {
+      clearTimeout(timeoutId);
+    }
+
+    // Cleanup listeners para iwas memory leak
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+    };
+  }, [screen, isIdleTransitioning, setScreen]);
 
   useEffect(() => {
     const fetchCoopStatus = () => {
@@ -2196,6 +2242,111 @@ const renderDamageRecap = () => {
         </div>
       )}
 
+ {/* ====================================================================
+          🌌 IDLE TRANSITION TO INTROSCREEN (ARCANE / FRIEREN STYLE)
+          ==================================================================== */}
+      {isIdleTransitioning && (
+        <div className="arcane-idle-transition" style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999999,
+          pointerEvents: 'all',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden'
+        }}>
+          {/* Ethereal Spell Rings */}
+          <div className="idle-magic-ring outer"></div>
+          <div className="idle-magic-ring inner"></div>
+          <div className="idle-magic-flash"></div>
+
+          {/* Drifting Mana Particles */}
+          <div className="mana-particle p1"></div>
+          <div className="mana-particle p2"></div>
+          <div className="mana-particle p3"></div>
+          <div className="mana-particle p4"></div>
+          <div className="mana-particle p5"></div>
+
+          <style>{`
+            /* 1. Deep Void Gradient Fade */
+            .arcane-idle-transition {
+              background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
+              animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 2. Expanding Ethereal Rings */
+            .idle-magic-ring {
+              position: absolute;
+              border-radius: 50%;
+              opacity: 0;
+            }
+            .idle-magic-ring.outer {
+              width: 80px;
+              height: 80px;
+              border: 2px solid rgba(255, 230, 163, 0.9); /* Pale Gold */
+              box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4); /* Purple Aura */
+              animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+            }
+            .idle-magic-ring.inner {
+              width: 40px;
+              height: 40px;
+              border: 1px dashed rgba(192, 132, 252, 0.8);
+              animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+              animation-delay: 0.05s;
+            }
+
+            /* 3. Central Flash (Like casting a sleep spell) */
+            .idle-magic-flash {
+              position: absolute;
+              width: 4px;
+              height: 4px;
+              background: #fff;
+              border-radius: 50%;
+              box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
+              animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 4. Drifting Mana Particles (Frieren Vibe) */
+            .mana-particle {
+              position: absolute;
+              background: #ffe6a3;
+              border-radius: 50%;
+              box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
+              opacity: 0;
+            }
+            .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
+            .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
+            .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
+            .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
+            .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
+
+            /* ================= ANIMATIONS ================= */
+            @keyframes voidFadeIn {
+              0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
+              100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
+            }
+            @keyframes spellExpand {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
+              100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
+            }
+            @keyframes spellExpandInner {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
+              100% { transform: scale(10) rotate(-180deg); opacity: 0; }
+            }
+            @keyframes starFlash {
+              0% { transform: scale(0); opacity: 1; }
+              40% { transform: scale(2); opacity: 1; }
+              100% { transform: scale(0); opacity: 0; }
+            }
+            @keyframes floatMana {
+              0% { transform: translateY(0) scale(1); opacity: 1; }
+              100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
+            }
+          `}</style>
+        </div>
+      )}
+    
     </div>
   );
 }
