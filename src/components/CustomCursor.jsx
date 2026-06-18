@@ -20,15 +20,15 @@ export default function CustomCursor() {
       setPosition({ x: e.clientX, y: e.clientY });
 
       const trailColors = ['#ffd700', '#ffffff', '#e5e7eb'];
-      const newParticles = Array.from({ length: 2 }).map(() => ({
-        id: Math.random() + Date.now(),
-        x: e.clientX + (Math.random() * 16 - 8), 
-        y: e.clientY + (Math.random() * 16 - 8),
-        size: Math.random() * 5 + 3, 
-        color: trailColors[Math.floor(Math.random() * trailColors.length)],
-        createdAt: Date.now(),
-        type: 'glitter-particle' 
-      }));
+const newParticles = Array.from({ length: 3 }).map(() => ({
+  id: crypto.randomUUID(), // ✅ FIX: Unique key para iwas bug
+  x: e.clientX + (Math.random() * 20 - 10), 
+  y: e.clientY + (Math.random() * 20 - 10),
+  size: Math.random() * 6 + 2, // Iba-iba ang laki
+  color: trailColors[Math.floor(Math.random() * trailColors.length)],
+  createdAt: Date.now(),
+  type: 'glitter-particle'
+}));
 
       setParticles((prev) => [...prev.slice(-50), ...newParticles]);
     };

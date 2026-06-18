@@ -15,10 +15,10 @@ import CustomCursor from './components/CustomCursor';
 // ==========================================================================
 // 🔥 STEP 1: GLOBAL AUDIO SINGLETON INSTANCE INITIALIZATION
 // ==========================================================================
-const MENU_BGM_URL = '../main.mp3';
+const MENU_BGM_URL = '../post1.mp3';
 const GAME_BGM_URL = "../game.mp3";
 const BOSS_BGM_URL = "../boss.mp3";
-const POST_BOSS_BGM_URL = "../post1.mp3";
+const POST_BOSS_BGM_URL = "../post.mp3";
 // 🔊 MAGDAGDAG NG MGA URL PARA SA UPGRADE SCREEN SFX DITO
 const LEVEL_UP_SFX_URL = '../level.mp3'; 
 const SELECT_SFX_URL = '../select.mp3';
@@ -56,10 +56,10 @@ if (typeof window !== 'undefined' && !window.arcaneAudio) {
     window.arcaneAudio.postBossBgm.currentTime = 0;
   };
 
-  window.arcaneAudio.menuBgm.volume = 0.8;
-  window.arcaneAudio.gameBgm.volume = 0.8;
-  window.arcaneAudio.levelUpSfx.volume = 0.5;       // Setup ang volume para sa SFX
-  window.arcaneAudio.selectUpgradeSfx.volume = 0.5;
+  window.arcaneAudio.menuBgm.volume = 0.7;
+  window.arcaneAudio.gameBgm.volume = 0.7;
+  window.arcaneAudio.levelUpSfx.volume = 1.0;       // Setup ang volume para sa SFX
+  window.arcaneAudio.selectUpgradeSfx.volume = 1.0;
   window.arcaneAudio.gameOverSfx.volume = 1.0;
   window.arcaneAudio.bossBgm.volume = 1.0;
 }

@@ -1001,17 +1001,94 @@ export default function IntroScreen({ onFinish }) {
   const [phase,   setPhase]   = useState('idle');
   const [hovered, setHovered] = useState(false);
 
+// Panatilihin lang ang mga SFX mo dito
+  const unlockSfxRef = useRef(typeof Audio !== "undefined" ? new Audio('/rune-unlock.mp3') : null);
+  const warpSfxRef = useRef(typeof Audio !== "undefined" ? new Audio('/warp-portal.wav') : null);
+
+useEffect(() => {
+    const globalMenuBgm = window.arcaneAudio?.menuBgm;
+
+    if (globalMenuBgm) {
+      globalMenuBgm.loop = true;
+      globalMenuBgm.volume = 0.5;
+
+      // 1. Subukan munang i-play agad (kung papayagan ng browser)
+      globalMenuBgm.play().catch(() => {
+        console.log("Autoplay blocked. Aabangan natin ang click kahit saan sa screen...");
+      });
+    }
+
+    // 2. 👉 PANG-ALAM NA FUNCTION KAPAG PUMINDOT KAHIT SAAN
+    const handleGlobalClick = () => {
+      if (globalMenuBgm && globalMenuBgm.paused) {
+        globalMenuBgm.play()
+          .then(() => {
+            // Kapag matagumpay nang tumutugtog, tatanggalin na natin ang mga listeners
+            // para hindi na paulit-ulit na ma-trigger tuwing may iki-click ang user.
+            cleanupListeners();
+          })
+          .catch(err => console.log("Hindi pa rin ma-play ang audio:", err));
+      }
+    };
+
+    // Helper para maglinis ng listeners
+    const cleanupListeners = () => {
+      window.removeEventListener('click', handleGlobalClick);
+      window.removeEventListener('keydown', handleGlobalClick);
+      window.removeEventListener('touchstart', handleGlobalClick);
+    };
+
+    // 3. 👉 MAG-ABANG NG INTERACTION KAHIT SAAN SA WINDOW
+    window.addEventListener('click', handleGlobalClick);
+    window.addEventListener('keydown', handleGlobalClick);
+    window.addEventListener('touchstart', handleGlobalClick); // Para sa mga mobile/touch devices
+
+    // Linisin ang mga listeners kapag umalis na sa IntroScreen component
+    return () => {
+      cleanupListeners();
+    };
+  }, []);
+
   useCinzelFont();
   useInjectKeyframes();
 
-  const handleEnter = () => {
+const handleEnter = () => {
     if (phase !== 'idle') return;
+
+    // 1. Siguraduhing tumutugtog ang GLOBAL BGM kung sakaling na-block ng browser
+    const globalMenuBgm = window.arcaneAudio?.menuBgm;
+    if (globalMenuBgm) {
+      globalMenuBgm.play().catch(()=>{});
+    }
+
+    // 2. Play Unlock SFX
+    if (unlockSfxRef.current) {
+      unlockSfxRef.current.currentTime = 0;
+      unlockSfxRef.current.volume = 0.8;
+      unlockSfxRef.current.play().catch(e => console.log("SFX error:", e));
+    }
+
     setPhase('unlocking');
     setTimeout(() => setPhase('unlocked'),  550);
     setTimeout(() => setPhase('charging'), 1150);
-    setTimeout(() => setPhase('warping'),  1680);
-    setTimeout(() => setPhase('white'),    2500);
-    setTimeout(() => onFinish?.(),         2800);
+    
+    setTimeout(() => {
+      setPhase('warping');
+      // Play Warp SFX
+      if (warpSfxRef.current) {
+        warpSfxRef.current.currentTime = 0;
+        warpSfxRef.current.volume = 1.0;
+        warpSfxRef.current.play().catch(e => console.log("Warp SFX error:", e));
+      }
+    }, 1680);
+    
+    setTimeout(() => {
+      setPhase('white');
+      // WALA NANG FADE OUT DITO! 
+      // Hahayaan lang nating tumugtog ang globalMenuBgm.
+    }, 2500);
+    
+    setTimeout(() => onFinish?.(), 2800);
   };
 
   const isWarping  = phase === 'warping' || phase === 'white';
@@ -1091,7 +1168,7 @@ export default function IntroScreen({ onFinish }) {
           }}>ARCANE SURVIVAL</p>
           <h1 style={{
             fontFamily: "'Cinzel Decorative',serif",
-            fontSize: 'clamp(22px,4.5vw,32px)', fontWeight: 700,
+            fontSize: 'clamp(22px,4.5vw,32px)', fontWeight: 600,
             color: '#ffe6a3',
             textShadow: '0 0 28px rgba(251,191,36,.48), 0 0 56px rgba(251,191,36,.16)',
             letterSpacing: '.06em', lineHeight: 1.25, margin: 0,
@@ -1133,7 +1210,9 @@ export default function IntroScreen({ onFinish }) {
               fontFamily: "'Cinzel',serif",
               fontSize: 13, letterSpacing: '.18em',
               color: '#ffe6a3', background: 'transparent',
-              border: '1px solid rgba(255,230,163,.26)',
+              borderWidth: '1px',                           // 👈 Bagong format
+              borderStyle: 'solid',                         // 👈 Bagong format
+              borderColor: 'rgba(255,230,163,0.33)',        // 👈 Bagong format
               borderRadius: 1, padding: '16px 52px',
               cursor: isIdle ? 'pointer' : 'default',
               outline: 'none',

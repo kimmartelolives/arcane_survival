@@ -116,6 +116,32 @@ useEffect(() => {
     return () => watcher.close();
   }, []);
 
+
+  // 🔊 AWTOMATIKONG CLICK SOUND EFFECT PARA SA LAHAT NG BUTTONS
+  useEffect(() => {
+    // Helper function para mag-play ng audio nang hindi napuputol
+    const playSound = (src, volume = 0.5) => {
+      const audio = new Audio(src);
+      audio.volume = volume;
+      audio.play().catch(() => {});
+    };
+
+    const handleClick = (e) => {
+      // Targetin lahat ng <button> at pati na rin ang custom thumbnails ng Grimoire
+      if (e.target.closest('button') || e.target.closest('.grimoire-video-thumb')) {
+        playSound('/btn-click.mp3', 0.6); // Siguraduhing tama ang filename ng audio mo
+      }
+    };
+
+    // I-attach ang tagapakinig kapag nag-load ang Overlays (CLICK LANG)
+    document.addEventListener('click', handleClick);
+
+    // Linisin kapag umalis sa component para hindi dumoble
+    return () => {
+      document.removeEventListener('click', handleClick);
+    };
+  }, []);
+
 useEffect(() => {
     if (screen === 'leaderboard') {
       // Create a fetch function that accepts a 'silent' parameter

@@ -2622,7 +2622,7 @@ const upgradeFamiliar = (fam) => {
 
       <div style={{ flexShrink: 0 }}>
             <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#d946ef', textAlign: 'center', fontSize: '1.5rem', textShadow: '0 0 15px rgba(217, 70, 239, 0.6)' }}>
-              🌌 THE VOID SANCTUM
+              🌌 THE MAGE'S CODEX
             </div>
             
             <div style={{ textAlign: 'center', margin: '15px 0' }}>
