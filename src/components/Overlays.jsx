@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { sbGet, sbPost, hasSupabase, supabase, sbWatchTable } from '../services/supabase';
 import { SKINS_DB, LiveSkinPreview } from './MetaShop';
 import Bestiary from './Bestiary';
-
 
 export default function Overlays({ 
   screen, 
@@ -42,6 +41,13 @@ export default function Overlays({
   // 🌌 Universal Transition State
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [activeGrimoireTab, setActiveGrimoireTab] = useState('lore');
+  const upgradeLockRef = useRef(false);
+
+  useEffect(() => {
+    if (screen === 'levelup') {
+      upgradeLockRef.current = false;
+    }
+  }, [screen]);
 
   // 🪄 Helper function para sa Frieren effect
   const executeWithTransition = (callback) => {
@@ -68,10 +74,14 @@ useEffect(() => {
 
   const handleReroll = (e) => {
     e.stopPropagation();
-    const REROLL_COST = 50; // Presyo ng pag-reroll (Maaaring baguhin kung gusto mo)
+    if (upgradeLockRef.current) return; // 🛑 PIGILAN ANG SPAM
+
+    const REROLL_COST = 50; 
     let currentCrystals = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
     
     if (currentCrystals >= REROLL_COST) {
+      upgradeLockRef.current = true; // 🔒 I-LOCK HABANG NAG-REROLL
+
       currentCrystals -= REROLL_COST;
       localStorage.setItem('arcane_void_crystals', currentCrystals);
       setVoidCrystals(currentCrystals);
@@ -79,6 +89,11 @@ useEffect(() => {
       if (window.requestLevelUpReroll) {
         window.requestLevelUpReroll();
       }
+
+      // 🔓 I-unlock agad pagkatapos ng maliit na delay para makapili na ulit ng cards
+      setTimeout(() => {
+         upgradeLockRef.current = false;
+      }, 100);
     }
   };
 
@@ -88,7 +103,6 @@ useEffect(() => {
       setWizardName(initialWizardName);
     }
   }, [initialWizardName]);
-
 
 // 🔥 FIX 1: Basahin agad ang huling alam na status mula sa localStorage para iwas visual flash
   const [coopActiveInDb, setCoopActiveInDb] = useState(() => {
@@ -166,7 +180,6 @@ useEffect(() => {
     return () => watcher.close();
   }, []);
 
-
 // 🔊 AWTOMATIKONG CLICK SOUND EFFECT PARA SA LAHAT NG BUTTONS
   useEffect(() => {
     // Helper function para mag-play ng audio nang hindi napuputol
@@ -198,7 +211,6 @@ useEffect(() => {
         if (!isSilent) setLoadingLb(true);
         
         // Added mode filter to the endpoint based on the active tab
-        // sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
         sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode,skin&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
           .then(data => { 
             setLeaderboard(data || []); 
@@ -260,10 +272,14 @@ useEffect(() => {
     if (screen !== 'levelup') return;
     
     const handleHotkey = (e) => {
+
+      if (upgradeLockRef.current) return;
+
       if (['1', '2', '3'].includes(e.key)) {
         const index = parseInt(e.key, 10) - 1;
         const choices = levelUpOptions || [];
         if (choices[index]) {
+          upgradeLockRef.current = true;
           onSelectUpgrade(choices[index]);
         }
       }
@@ -335,30 +351,244 @@ const handleSubmitScore = async () => {
     }
   };
 
-  // const getUpgradeMeta = (rawString) => {
-  //   const normalize = String(rawString || '').toLowerCase().trim();
-    
-  //   if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
-  //     return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s' };
-  //   }
-  //   if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
-  //     return { icon: '🔮', title: 'ARCANE MIGHT', desc: 'BOLT DAMAGE +14 POINTS' };
-  //   }
-  //   if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
-  //     return { icon: '💛', title: 'VITALITY', desc: 'MAX HP +25 & FULL HEAL' };
-  //   }
-  //   if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
-  //     return { icon: '🏹', title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE' };
-  //   }
-  //   return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
-  // };
+// ============================================================================
+// 🜂 CUSTOM ARCANE UPGRADE ICONS — Pure inline SVG (vector, no emoji/image
+// loading, no animation loop). Lightweight at GPU-friendly, zero impact sa
+// game performance kahit ilang beses na re-render ang level up modal.
+// ============================================================================
+const IconVortex = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4C9.373 4 4 9.373 4 16s5.373 12 12 12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M16 8c-4.418 0-8 3.582-8 8s3.582 8 8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
+    <path d="M16 12c-2.21 0-4 1.79-4 4s1.79 4 4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.5" />
+    <circle cx="16" cy="16" r="1.6" fill="currentColor" />
+  </svg>
+);
+
+const IconFlame = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3c2 4-2 6-2 10a4 4 0 008 0c0-1.4-.5-2.3-1-3 .3 2-.8 3.4-2.2 3.4-1.6 0-2.6-1.3-2.6-2.9C16.2 8 18 6.6 16 3z" fill="currentColor" />
+    <path d="M16 29c5.5 0 10-3.8 10-8.6 0-3.2-1.6-5.4-3.2-7 .7 3.4-1.4 5.9-4.3 5.9-2.9 0-4.8-2.1-4.8-4.9 0-1.7.7-2.9 1.4-3.8-3.9 1.9-6.7 5.6-6.7 9.8 0 4.8 3.9 8.6 7.6 8.6z" fill="currentColor" opacity="0.85" />
+  </svg>
+);
+
+const IconHeart = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 28s-11-6.8-11-15.2C5 8.6 8.1 5 12 5c2 0 3.6 1 4 2.4C16.4 6 18 5 20 5c3.9 0 7 3.6 7 7.8C27 21.2 16 28 16 28z" fill="currentColor" />
+    <path d="M16 11l1.4 3h3l-2.4 2.1.9 3.1L16 17.4 13.1 19.2l.9-3.1L11.6 14h3z" fill="#1a0b2e" opacity="0.65" />
+  </svg>
+);
+
+const IconWand = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="14.4" y="13" width="3.2" height="16" rx="1.4" fill="currentColor" transform="rotate(45 16 21)" />
+    <path d="M16 3l1.2 3.2 3.2 1.2-3.2 1.2L16 11.8l-1.2-3.2-3.2-1.2 3.2-1.2L16 3z" fill="currentColor" />
+    <circle cx="23" cy="9" r="1.1" fill="currentColor" />
+    <circle cx="9" cy="9" r="0.9" fill="currentColor" opacity="0.7" />
+  </svg>
+);
+
+const IconWind = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 11h16a3 3 0 10-2.8-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M4 16h20a3.2 3.2 0 11-3 4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M4 21h13a2.4 2.4 0 11-2.2 3.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const IconDagger = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3l2.4 9.6h-4.8L16 3z" fill="currentColor" />
+    <rect x="15" y="12.6" width="2" height="10.4" fill="currentColor" />
+    <rect x="11" y="21" width="10" height="2.2" rx="1" fill="currentColor" />
+    <path d="M16 23.2v5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const IconShield = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3l10 3.6v8c0 7.4-4.6 12-10 14.4C10.6 26.6 6 22 6 14.6v-8L16 3z" fill="currentColor" opacity="0.92" />
+    <path d="M16 8l5.4 2v5.4c0 4-2.4 6.8-5.4 8.2-3-1.4-5.4-4.2-5.4-8.2V10L16 8z" fill="#1a0b2e" opacity="0.55" />
+  </svg>
+);
+
+const IconBat = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 11c-2-4-7-6-12-5 3 1.4 4.6 3.4 5.2 5.4-2.4 0-4.6 1-6.2 3 3 .2 5 1.4 6.2 2.8-1.6.6-2.8 1.8-3.4 3 2.6 0 5-.8 6.8-2.4.6 1.4 1.8 2.6 3.4 3.2 1.6-.6 2.8-1.8 3.4-3.2 1.8 1.6 4.2 2.4 6.8 2.4-.6-1.2-1.8-2.4-3.4-3 1.2-1.4 3.2-2.6 6.2-2.8-1.6-2-3.8-3-6.2-3 .6-2 2.2-4 5.2-5.4-5 0-10 1-12 5z" fill="currentColor" />
+    <circle cx="14" cy="14.5" r="0.6" fill="#1a0b2e" />
+    <circle cx="18" cy="14.5" r="0.6" fill="#1a0b2e" />
+  </svg>
+);
+
+const IconScroll = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="7" y="6" width="18" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M11 11h10M11 15h10M11 19h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="7" cy="9" r="2.2" fill="currentColor" />
+    <circle cx="7" cy="23" r="2.2" fill="currentColor" />
+    <circle cx="25" cy="9" r="2.2" fill="currentColor" />
+    <circle cx="25" cy="23" r="2.2" fill="currentColor" />
+  </svg>
+);
+
+const IconTrophy = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 5h12v6.4a6 6 0 01-12 0V5z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M10 7.2H6.4a2.6 2.6 0 000 5.2H10M22 7.2h3.6a2.6 2.6 0 010 5.2H22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M16 17.4v4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M10.5 26h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M16 21.8c-2.2 0-4 1.2-4.4 4.2h8.8c-.4-3-2.2-4.2-4.4-4.2z" fill="currentColor" />
+  </svg>
+);
+
+const IconWizardHat = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4l6.6 17.2H9.4L16 4z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <ellipse cx="16" cy="22.4" rx="9.4" ry="2.2" stroke="currentColor" strokeWidth="1.6" fill="none" />
+    <path d="M16 4c1.4 2.4 1 4-1 5.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+    <circle cx="19.2" cy="11.6" r="1" fill="currentColor" />
+  </svg>
+);
+
+const IconSwordsCrossed = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <line x1="6" y1="6" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M22 22l3.2-1.8-1.2 5-2-3.2z" fill="currentColor" />
+    <line x1="26" y1="6" x2="10" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M10 22l-3.2-1.8 1.2 5 2-3.2z" fill="currentColor" />
+  </svg>
+);
+
+
+const IconMegaphone = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 13v6h5l10 5V8L10 13H5z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M22 11.4a5.6 5.6 0 010 9.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.75" />
+    <path d="M8 19l1.4 5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const IconSparkleStar = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3l2 9.5L28 15l-10 2.5L16 27l-2-9.5L4 15l10-2.5L16 3z" fill="currentColor" opacity="0.9" />
+  </svg>
+);
+
+// ============================================================================
+// 🜂 CUSTOM IN-GAME UI ICONS — Pure inline SVG (gameover, level-up, damage
+// recap). Kapalit ng dating emoji icons sa loob mismo ng game.
+// ============================================================================
+const IconWarningRune = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4L29.5 27H2.5L16 4z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <rect x="14.7" y="12.4" width="2.6" height="8" rx="1.3" fill="currentColor" />
+    <circle cx="16" cy="23.2" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+const IconVoidCrystal = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 12L16 4l10 8-10 16L6 12z" fill="currentColor" opacity="0.85" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M6 12h20M11 12L16 4M21 12L16 4M16 12l-3.5 8M16 12l3.5 8" stroke="#1a0b2e" strokeWidth="1" opacity="0.4" />
+  </svg>
+);
+
+const IconRuneDie = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="5" y="5" width="22" height="22" rx="4" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="11" cy="11" r="1.8" fill="currentColor" />
+    <circle cx="21" cy="11" r="1.8" fill="currentColor" />
+    <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+    <circle cx="11" cy="21" r="1.8" fill="currentColor" />
+    <circle cx="21" cy="21" r="1.8" fill="currentColor" />
+  </svg>
+);
+
+const IconReturnArrow = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22 10H13a7 7 0 100 14h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M16 5l-6 5 6 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconRecapChart = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="5" y="18" width="5" height="9" fill="currentColor" opacity="0.7" />
+    <rect x="13.5" y="11" width="5" height="16" fill="currentColor" />
+    <rect x="22" y="6" width="5" height="21" fill="currentColor" opacity="0.85" />
+    <path d="M3 27h26" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const IconSpectateEye = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9-13-9-13-9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <circle cx="16" cy="16" r="4.2" fill="currentColor" />
+    <circle cx="16" cy="16" r="1.4" fill="#1a0b2e" />
+  </svg>
+);
+
+const IconRestartCycle = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 14a10 10 0 0117-6.3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M26 18a10 10 0 01-17 6.3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M23 4v6h-6M9 28v-6h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconSanctumHome = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 15L16 5l12 10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7 13v13h18V13" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8" />
+    <rect x="13.5" y="18" width="5" height="8" fill="currentColor" />
+  </svg>
+);
+
+const IconBloodDrop = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4c5 7 9 12.4 9 17a9 9 0 11-18 0c0-4.6 4-10 9-17z" fill="currentColor" opacity="0.9" />
+    <path d="M12 20a5 5 0 003 4.6" stroke="#1a0b2e" strokeWidth="1.4" strokeLinecap="round" opacity="0.4" fill="none" />
+  </svg>
+);
+
+const IconFairyWings = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 14c-2-6-8-9-13-7 2 3 2 8 6 10-3 1-5 4-5 7 5 0 9-2 11-6 1 3 1 5 1 5s0-2 1-5c2 4 6 6 11 6 0-3-2-6-5-7 4-2 4-7 6-10-5-2-11 1-13 7z" fill="currentColor" opacity="0.8" />
+    <circle cx="16" cy="15.5" r="2.2" fill="currentColor" />
+  </svg>
+);
+
+const IconHolyShield = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="16" cy="6.5" rx="5.5" ry="3" stroke="currentColor" strokeWidth="1.6" opacity="0.85" />
+    <path d="M16 11l9 3.2v6.8c0 5.8-3.8 9.4-9 11.4-5.2-2-9-5.6-9-11.4v-6.8L16 11z" fill="currentColor" opacity="0.85" />
+    <path d="M16 15l4.6 1.6v4.8c0 3.2-2 5.2-4.6 6.4-2.6-1.2-4.6-3.2-4.6-6.4v-4.8L16 15z" fill="#1a0b2e" opacity="0.45" />
+  </svg>
+);
+
+const IconVoidSwirl = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="12" fill="currentColor" opacity="0.12" />
+    <path d="M16 6a10 10 0 11-9.8 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
+    <circle cx="16" cy="16" r="2.4" fill="currentColor" />
+    <circle cx="9" cy="10" r="1" fill="currentColor" opacity="0.7" />
+    <circle cx="24" cy="20" r="1.3" fill="currentColor" opacity="0.6" />
+  </svg>
+);
+
+// Reusable wrapper para sa lahat ng inline icons sa text (consistent sizing/alignment)
+const InlineIcon = ({ children, size = 15, style }) => (
+  <span style={{ width: size, height: size, display: 'inline-flex', verticalAlign: '-2px', marginRight: '6px', flexShrink: 0, ...style }}>
+    {children}
+  </span>
+);
 
 const getUpgradeMeta = (rawString, wave = 1) => {
     const normalize = String(rawString || '').toLowerCase().trim();
     
     // 🔥 DYNAMIC SCALING FORMULAS
     const dmgBoost = 14 + Math.floor(wave * 1.5); 
-    const hpBoost = 50 + Math.floor(wave * 4.0);  // <-- Itinama para pumarehas sa totoong bigay ng GameCanvas
+    const hpBoost = 50 + Math.floor(wave * 4.0);  
     const spdBoost = 10 + Math.floor(wave * 1.2);
     
     // 👇 BAGONG FORMULAS PARA SA CRIT AT DEFENSE (+5% base, pataas nang pataas)
@@ -367,36 +597,34 @@ const getUpgradeMeta = (rawString, wave = 1) => {
     const lifestealBoost = 5 + Math.floor(wave * 0.2);
 
     if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
-      return { icon: '⚡', title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s (CAP: 0.15s)' };
+      return { icon: <IconVortex />, title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s (CAP: 0.15s)' };
     }
     if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
-      return { icon: '🔮', title: 'ARCANE MIGHT', desc: `BOLT DAMAGE +${dmgBoost} POINTS` };
+      return { icon: <IconFlame />, title: 'ARCANE MIGHT', desc: `BOLT DAMAGE +${dmgBoost} POINTS` };
     }
     if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
-      return { icon: '💛', title: 'VITALITY', desc: `MAX HP +${hpBoost} & FULL HEAL` };
+      return { icon: <IconHeart />, title: 'VITALITY', desc: `MAX HP +${hpBoost} & FULL HEAL` };
     }
     if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
-      return { icon: '🏹', title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 20)' };
+      return { icon: <IconWand />, title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 20)' };
     }
     if (normalize.includes('swift') || normalize.includes('speed') || normalize.includes('stride')) {
-      return { icon: '👟', title: 'SWIFT STRIDE', desc: `MOVEMENT SPEED +${spdBoost} (CAP: 800)` };
+      return { icon: <IconWind />, title: 'SWIFT STRIDE', desc: `MOVEMENT SPEED +${spdBoost} (CAP: 800)` };
     }
-    // 👇 IDAGDAG ITO PARA SA BAGONG UPGRADES
     if (normalize.includes('crit') || normalize.includes('fatal') || normalize.includes('strike')) {
-      return { icon: '🎯', title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
+      return { icon: <IconDagger />, title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
     }
     if (normalize.includes('def') || normalize.includes('armor') || normalize.includes('plating')) {
-      return { icon: '🛡️', title: 'IRON PLATING', desc: `ARMOR RATING +${defBoost}` };
+      return { icon: <IconShield />, title: 'IRON PLATING', desc: `ARMOR RATING +${defBoost}` };
     }
     if (normalize.includes('vampiric') || normalize.includes('aura') || normalize.includes('life')) {
-      return { icon: '🦇', title: 'VAMPIRIC AURA', desc: `HEAL ${lifestealBoost} HP PER ENEMY KILLED` };
+      return { icon: <IconBat />, title: 'VAMPIRIC AURA', desc: `HEAL ${lifestealBoost} HP PER ENEMY KILLED` };
     }
-    return { icon: '📜', title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
+    return { icon: <IconScroll />, title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
   };
 
   if (screen === 'playing') return null;
 
-  const medals = ['🥇', '🥈', '🥉'];
   const displayedChoices = (levelUpOptions || []).slice(0, 3);
   const restartVotes = isCoop ? [hudData?.coopVotes?.p1, hudData?.coopVotes?.p2].filter(Boolean).length : 0;
 
@@ -459,8 +687,8 @@ const renderDamageRecap = () => {
         <div style={{ textAlign: 'center', color: '#f87171', fontWeight: '900', marginBottom: '4px', fontSize: '1.2rem', letterSpacing: '2px' }}>
           TOTAL DAMAGE DEALT: {formatDamage(totalDamage)}
         </div>
-        <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', marginBottom: '18px', fontSize: '0.8rem', fontFamily: 'monospace' }}>
-          🩸 DAMAGE TAKEN: <span style={{ color: '#fca5a5' }}>{formatDamage(damageTaken)}</span>
+        <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', marginBottom: '18px', fontSize: '0.8rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <InlineIcon size={14} style={{ color: '#f87171' }}><IconBloodDrop /></InlineIcon>DAMAGE TAKEN: <span style={{ color: '#fca5a5' }}> {formatDamage(damageTaken)}</span>
         </div>
 
         {/* 🔥 RENDER BAWAT CATEGORY */}
@@ -524,21 +752,21 @@ const renderDamageRecap = () => {
               
               {utility['Fairy Heal'] > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
-                  <span>🧚 Fairy Healing</span>
+                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#4ade80' }}><IconFairyWings /></InlineIcon>Fairy Healing</span>
                   <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{formatDamage(utility['Fairy Heal'])} HP</span>
                 </div>
               )}
               
               {utility['Light Shield'] > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
-                  <span>👼 Holy Shield Absorbed</span>
+                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#facc15' }}><IconHolyShield /></InlineIcon>Holy Shield Absorbed</span>
                   <span style={{ color: '#facc15', fontWeight: 'bold' }}>{formatDamage(utility['Light Shield'])} DMG</span>
                 </div>
               )}
               
               {utility['Voidling Loot'] > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
-                  <span>🌌 Voidling Vacuumed</span>
+                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#c084fc' }}><IconVoidSwirl /></InlineIcon>Voidling Vacuumed</span>
                   <span style={{ color: '#c084fc', fontWeight: 'bold' }}>{utility['Voidling Loot']} Items</span>
                 </div>
               )}
@@ -551,22 +779,110 @@ const renderDamageRecap = () => {
   return (
     <div id="overlays">
 <style>{`
-        .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; }
-        .lu-title { font-size: 2.35rem; font-weight: 800; color: #fef08a; text-shadow: 0 0 20px rgba(251,240,138,0.3); margin-bottom: 8px; letter-spacing: 0.05em; font-family: Georgia, serif; text-transform: uppercase; }
-        .lu-subtitle { font-size: 0.85rem; color: #cbd5e1; letter-spacing: 0.08em; margin-bottom: 4px; opacity: 0.9; text-transform: uppercase; font-family: Georgia, serif; }
-        .lu-warning { font-size: 0.72rem; color: #eab308; opacity: 0.85; margin-bottom: 28px; font-family: monospace; letter-spacing: 0.05em; font-weight: bold; }
-        .lu-cards-row { display: flex; justify-content: center; gap: 24px; width: 100%; flex-wrap: wrap; }
-        .lu-card { background: linear-gradient(135deg, #3b117b 0%, #1e0a45 100%); border: 2px solid #7c3aed; border-radius: 16px; width: 230px; padding: 32px 16px; cursor: pointer; transition: all 0.22s ease-in-out; box-shadow: 0 0 20px rgba(124, 58, 237, 0.25); display: flex; flex-direction: column; align-items: center; position: relative; }
-        .lu-card:hover { transform: translateY(-6px); border-color: #a78bfa; box-shadow: 0 0 32px rgba(167, 139, 250, 0.65); background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); }
-        .lu-icon { font-size: 2.2rem; margin-bottom: 16px; filter: drop-shadow(0 0 8px rgba(255,255,255,0.2)); }
-        .lu-card-title { font-size: 1.15rem; font-weight: 700; color: #ffffff; margin-bottom: 8px; letter-spacing: 0.03em; text-transform: uppercase; font-family: Georgia, serif; }
-        .lu-card-desc { font-size: 0.78rem; color: #94a3b8; font-family: monospace; margin-bottom: 24px; min-height: 2em; line-height: 1.3; }
-        .lu-hotkey { font-size: 0.95rem; color: #fde047; font-weight: bold; font-family: monospace; opacity: 0.85; }
+        .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; position: relative; }
 
-        @media (max-width: 840px) {
+        /* 🜂 Ambient Arcane Circle — one element, transform-only animation (GPU, zero reflow cost) */
+        .lu-arcane-circle {
+          position: absolute; top: 50%; left: 50%; width: 640px; height: 640px;
+          max-width: 96vw; max-height: 96vw;
+          transform: translate(-50%, -50%);
+          border: 1px solid rgba(197,160,89,0.16);
+          border-radius: 50%;
+          pointer-events: none; z-index: 0;
+          will-change: transform;
+          animation: arcaneCircleSpin 120s linear infinite;
+        }
+        .lu-arcane-circle::before {
+          content: '';
+          position: absolute; inset: 26px;
+          border: 1px dashed rgba(197,160,89,0.13);
+          border-radius: 50%;
+        }
+        .lu-arcane-circle::after {
+          content: '✦';
+          position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+          color: rgba(233,196,122,0.45); font-size: 0.8rem;
+        }
+        @keyframes arcaneCircleSpin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        .lu-title-row { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 16px; }
+        .lu-rune-flank { font-family: 'Georgia', serif; font-size: 0.85rem; letter-spacing: 0.3em; color: rgba(197,160,89,0.55); text-shadow: 0 0 8px rgba(197,160,89,0.3); user-select: none; }
+        .lu-title { font-size: 2.35rem; font-weight: 800; background: linear-gradient(180deg, #fffbe8 0%, #fef08a 45%, #c5a059 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 22px rgba(251,240,138,0.35); margin-bottom: 8px; letter-spacing: 0.05em; font-family: Georgia, serif; text-transform: uppercase; }
+        .lu-subtitle { position: relative; z-index: 1; font-size: 0.85rem; color: #cbd5e1; letter-spacing: 0.08em; margin-bottom: 4px; opacity: 0.9; text-transform: uppercase; font-family: Georgia, serif; }
+        .lu-rune-strip { position: relative; z-index: 1; font-family: 'Georgia', serif; font-size: 0.6rem; letter-spacing: 0.3em; color: rgba(197,160,89,0.4); margin: 6px 0 8px; user-select: none; white-space: nowrap; overflow: hidden; opacity: 0.8; }
+        .lu-warning { position: relative; z-index: 1; font-size: 0.72rem; color: #eab308; opacity: 0.85; margin-bottom: 22px; font-family: monospace; letter-spacing: 0.05em; font-weight: bold; }
+        .lu-cards-row { position: relative; z-index: 1; display: flex; justify-content: center; gap: 24px; width: 100%; flex-wrap: wrap; }
+
+        .lu-card { background: linear-gradient(135deg, #3b117b 0%, #1e0a45 100%); border: 1px solid #7c3aed; border-radius: 6px; width: 230px; padding: 30px 16px 22px; cursor: pointer; transition: transform 0.22s ease-in-out, box-shadow 0.22s ease-in-out, border-color 0.22s ease-in-out, background 0.22s ease-in-out; box-shadow: 0 0 20px rgba(124, 58, 237, 0.25), inset 0 0 24px rgba(124,58,237,0.08); display: flex; flex-direction: column; align-items: center; position: relative; overflow: hidden; }
+        .lu-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 28%, rgba(255,255,255,0.05) 0%, transparent 60%); pointer-events: none; }
+        .lu-card:hover { transform: translateY(-6px); border-color: #e9c47a; box-shadow: 0 0 30px rgba(233, 196, 122, 0.5), inset 0 0 28px rgba(233,196,122,0.12); background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); }
+
+        /* 🜁 Rune corner brackets — pure border, negligible paint cost */
+        .lu-corner { position: absolute; width: 13px; height: 13px; border: 1.5px solid rgba(197,160,89,0.65); opacity: 0.85; transition: border-color 0.22s ease-in-out; pointer-events: none; }
+        .lu-corner.tl { top: 6px; left: 6px; border-right: none; border-bottom: none; }
+        .lu-corner.tr { top: 6px; right: 6px; border-left: none; border-bottom: none; }
+        .lu-corner.bl { bottom: 6px; left: 6px; border-right: none; border-top: none; }
+        .lu-corner.br { bottom: 6px; right: 6px; border-left: none; border-top: none; }
+        .lu-card:hover .lu-corner { border-color: #ffe6a3; }
+
+        .lu-card-runes { font-family: 'Georgia', serif; font-size: 0.5rem; letter-spacing: 0.18em; color: rgba(197,160,89,0.45); margin-bottom: 10px; user-select: none; }
+
+        /* 🜄 MMORPG-style item-slot icon frame */
+        .lu-icon-frame {
+          position: relative; width: 62px; height: 62px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          background: radial-gradient(circle at 50% 35%, #33176b 0%, #150a2e 70%, #0a0414 100%);
+          border: 2px solid #c5a059; margin-bottom: 12px;
+          box-shadow: 0 0 14px rgba(197,160,89,0.35), inset 0 0 12px rgba(124,58,237,0.4), inset 0 2px 4px rgba(255,255,255,0.07);
+          transition: border-color 0.22s ease-in-out, box-shadow 0.22s ease-in-out, transform 0.22s ease-in-out;
+        }
+        .lu-icon-frame::before {
+          content: ''; position: absolute; inset: 5px; border: 1px dashed rgba(197,160,89,0.4); border-radius: 50%; pointer-events: none;
+        }
+        .lu-icon-frame::after {
+          content: '◆'; position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+          font-size: 0.5rem; color: #d946ef; text-shadow: 0 0 6px rgba(217,70,239,0.9); pointer-events: none;
+        }
+        .lu-card:hover .lu-icon-frame { border-color: #ffe6a3; box-shadow: 0 0 22px rgba(255,230,163,0.55), inset 0 0 16px rgba(168,85,247,0.5); transform: scale(1.06); }
+        .lu-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #ffe6a3; filter: drop-shadow(0 0 6px rgba(255,230,163,0.4)); transition: color 0.22s ease-in-out, filter 0.22s ease-in-out; }
+        .lu-icon svg { width: 100%; height: 100%; overflow: visible; }
+        .lu-card:hover .lu-icon { color: #fff6dc; filter: drop-shadow(0 0 10px rgba(255,230,163,0.7)); }
+
+        /* 🜅 Ornate beveled reroll button — RPG item-shop styling */
+        .lu-reroll-btn {
+          position: relative !important; width: auto !important; max-width: 260px !important;
+          background: linear-gradient(180deg, #2a1454 0%, #1a0d3a 55%, #0d0519 100%) !important;
+          border: 1.5px solid #c5a059 !important;
+          clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 14px, 100% calc(100% - 14px), calc(100% - 14px) 100%, 14px 100%, 0 calc(100% - 14px), 0 14px);
+          box-shadow: 0 0 18px rgba(197,160,89,0.22), inset 0 0 20px rgba(124,58,237,0.28), inset 0 1px 0 rgba(255,255,255,0.06) !important;
+          color: #ffe6a3 !important; padding: 12px 22px !important; margin: 0 auto !important; gap: 10px !important;
+        }
+        .lu-reroll-btn::before { display: none; } /* alisin ang default shine sweep, gusto natin ibang glow */
+        .lu-reroll-btn:hover {
+          border-color: #ffe6a3 !important; transform: translateY(-2px) !important;
+          box-shadow: 0 0 30px rgba(255,230,163,0.5), inset 0 0 26px rgba(168,85,247,0.4) !important;
+          background: linear-gradient(180deg, #3a1a6e 0%, #22104a 55%, #0d0519 100%) !important;
+        }
+        .lu-reroll-btn:disabled { transform: none !important; }
+        .lu-reroll-icon { font-size: 1rem; display: inline-block; filter: drop-shadow(0 0 6px rgba(217,70,239,0.6)); transition: transform 0.4s ease; }
+        .lu-reroll-btn:hover .lu-reroll-icon { transform: rotate(20deg); }
+        .lu-reroll-gem { color: #d946ef; text-shadow: 0 0 8px rgba(217,70,239,0.85); font-size: 0.6rem; }
+        .lu-card-title { font-size: 1.15rem; font-weight: 700; color: #ffffff; margin-bottom: 8px; letter-spacing: 0.03em; text-transform: uppercase; font-family: Georgia, serif; }
+        .lu-card-desc { font-size: 0.78rem; color: #94a3b8; font-family: monospace; margin-bottom: 18px; min-height: 2em; line-height: 1.3; }
+
+        /* 🜃 Hotkey re-styled as a wax-sigil stamp */
+        .lu-hotkey { font-size: 0.85rem; color: #1e0a45; font-weight: bold; font-family: Georgia, serif; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #ffe6a3 0%, #c5a059 100%); box-shadow: 0 0 10px rgba(255,230,163,0.5); margin-top: auto; flex-shrink: 0; }
+
+        @media (max-width: 840px), (max-height: 500px) and (orientation: landscape) {
           /* Compress Title and Headers */
           .lu-wrapper {
             padding: 10px !important;
+          }
+          .lu-arcane-circle {
+            opacity: 0.5 !important;
+          }
+          .lu-rune-flank {
+            display: none !important; /* Itago sa maliit na screen para hindi crowded */
           }
           .lu-title {
             font-size: 1.2rem !important; /* Mula 2.35rem pababa sa halos kalahati */
@@ -575,6 +891,11 @@ const renderDamageRecap = () => {
           .lu-subtitle {
             font-size: 0.55rem !important;
             margin-bottom: 2px !important;
+          }
+          .lu-rune-strip {
+            font-size: 0.4rem !important;
+            margin: 3px 0 !important;
+            letter-spacing: 0.15em !important;
           }
           .lu-warning {
             font-size: 0.5rem !important;
@@ -593,10 +914,26 @@ const renderDamageRecap = () => {
             padding: 8px !important; /* Manipis na padding */
             border-radius: 6px !important; 
           }
+          .lu-corner {
+            width: 8px !important;
+            height: 8px !important;
+          }
+          .lu-card-runes {
+            display: none !important; /* Iwas clutter sa maliit na card */
+          }
+          .lu-icon-frame {
+            width: 34px !important; height: 34px !important; margin-bottom: 4px !important;
+          }
+          .lu-icon-frame::after {
+            font-size: 0.35rem !important; top: -4px !important;
+          }
+          .lu-reroll-btn {
+            padding: 8px 14px !important; max-width: 220px !important;
+          }
           
           /* Shrink Content Inside Cards */
           .lu-icon {
-            font-size: 1.2rem !important; /* Mula 2.2rem */
+            width: 18px !important; height: 18px !important; /* Mula 32px */
             margin-bottom: 4px !important;
           }
           .lu-card-title {
@@ -1130,6 +1467,105 @@ const renderDamageRecap = () => {
         .tribute-glow-effect {
           animation: arcaneGlow 2.5s infinite ease-in-out !important;
         }
+
+        /* 🔥 PURE CSS MOBILE RESPONSIVE OVERRIDES (GRIMOIRE) 🔥 */
+            
+        /* 1. PORTRAIT FIX: Native overlay scroll, expand full height, tabs at top */
+        @media (max-width: 768px) and (orientation: portrait) {
+          .grimoire-modal-overlay {
+            align-items: flex-start !important;
+            padding-top: 65px !important; /* Space para hindi makain ang tabs sa taas */
+            padding-bottom: 40px !important;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+          }
+          .grimoire-book { 
+            flex-direction: column !important; 
+            height: auto !important;
+            max-height: none !important; /* Tanggalin ang height restriction para mag-expand */
+            margin-top: 0 !important;
+            overflow: visible !important; /* 👈 MUST BE VISIBLE FOR TABS TO SHOW! */
+          }
+          .grimoire-page {
+            flex: none !important;
+            min-height: auto !important;
+            height: auto !important;
+          }
+          .grimoire-left { 
+            border-radius: 8px 8px 0 0 !important; 
+            border-right: 1.5px solid #c5a059 !important; 
+            border-bottom: 1px dashed rgba(197,160,89,0.4) !important; 
+          }
+          .grimoire-right { 
+            border-radius: 0 0 8px 8px !important; 
+            border-left: 1.5px solid #c5a059 !important; 
+            border-top: none !important; 
+          }
+          .grimoire-spine { 
+            display: none !important; 
+          }
+          .grimoire-tabs-container {
+            flex-direction: row !important;
+            top: -42px !important;
+            left: 0 !important;
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .mobile-tab-btn {
+            writing-mode: horizontal-tb !important;
+            transform: none !important;
+            padding: 10px 16px !important;
+            border-radius: 8px 8px 0 0 !important;
+            border-right: 1.5px solid #c5a059 !important;
+            border-bottom: none !important;
+            height: auto !important;
+          }
+          .grimoire-page-inner {
+            height: auto !important;
+            overflow: visible !important; /* Hayaan lang na i-stretch ng content ang container */
+          }
+        }
+
+        /* 2. LANDSCAPE FIX: Prevent cutoff, restrict height, icon tabs */
+        @media (max-width: 932px) and (orientation: landscape) {
+          .grimoire-book {
+            margin-left: 45px !important; 
+            width: calc(100vw - 70px) !important; 
+            min-height: 0 !important;     
+            height: 85svh !important;     
+            max-height: 85svh !important; 
+            overflow: visible !important; /* 👈 Ensure tabs don't clip left */
+          }
+          .grimoire-tabs-container {
+            left: -38px !important; 
+          }
+          .mobile-tab-btn {
+            font-size: 0 !important;      
+            padding: 12px 6px !important; 
+            writing-mode: horizontal-tb !important; 
+            transform: none !important; 
+            min-width: 38px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .mobile-tab-btn:nth-child(1)::after {
+            content: '📜'; 
+            font-size: 1.2rem !important;
+          }
+          .mobile-tab-btn:nth-child(2)::after {
+            content: '🦇'; 
+            font-size: 1.2rem !important;
+          }
+        }
+
+        /* 3. UNIVERSAL PAGE CLIPPING FIX */
+        @media (max-width: 932px) {
+          .grimoire-page-inner {
+            overflow-y: auto !important;  
+            padding: 16px !important; 
+          }
+        }
       `}</style>
 
 
@@ -1162,7 +1598,14 @@ const renderDamageRecap = () => {
 
             <button className="btn wizard-btn" onClick={() => executeWithTransition(() => onAction('start-solo', { name: wizardName }))}>
               
-              <span className="btn-icon">🧙</span><span className="btn-label">Solo Trial</span>
+              <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3 L17 16 L7 16 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(233,196,122,0.15)"/>
+                  <ellipse cx="12" cy="17" rx="7" ry="1.6" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                  <path d="M12 3 Q13 5 11.5 6.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
+                  <circle cx="14.5" cy="9" r="0.8" fill="currentColor"/>
+                </svg>
+              </span><span className="btn-label">Solo Trial</span>
             </button>
 {/* 🔥 FIX 2: 3-Way Conditional Handling para iwas click-spamming habang nagre-refresh */}
             {coopActiveInDb === null ? (
@@ -1179,7 +1622,14 @@ const renderDamageRecap = () => {
                   boxShadow: 'none'
                 }}
               >
-                <span className="btn-icon">🔮</span>
+                <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="10" r="6" stroke="currentColor" strokeWidth="1.6" fill="rgba(233,196,122,0.12)"/>
+                    <path d="M9 8.5 Q12 6 15 8.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.7"/>
+                    <line x1="7" y1="18" x2="17" y2="18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                    <path d="M9 18 Q12 16 15 18" stroke="currentColor" strokeWidth="1.4" fill="none"/>
+                  </svg>
+                </span>
                 <span className="btn-label" style={{ color: '#94a3b8' }}>Chanting Gate Spell...</span>
               </button>
             ) : coopActiveInDb ? (
@@ -1191,7 +1641,14 @@ const renderDamageRecap = () => {
                   executeWithTransition(() => setScreen('coop-menu'));
                 }}
               >
-                <span className="btn-icon">⚔️</span>
+                <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <line x1="5" y1="5" x2="17" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M17 17 L19.5 15.5 L18.5 19.5 L17 17 Z" fill="currentColor"/>
+                    <line x1="19" y1="5" x2="7" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    <path d="M7 17 L4.5 15.5 L5.5 19.5 L7 17 Z" fill="currentColor"/>
+                  </svg>
+                </span>
                 <span className="btn-label">Co-op Covenant</span>
                       <span
                 style={{
@@ -1239,12 +1696,27 @@ const renderDamageRecap = () => {
                   boxShadow: 'none'
                 }}
               >
-                <span className="btn-icon">🔒</span>
+                <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <rect x="6" y="11" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.6" fill="rgba(233,196,122,0.1)"/>
+                    <path d="M8.5 11 V8 a3.5 3.5 0 0 1 7 0 V11" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                    <circle cx="12" cy="15" r="1.3" fill="currentColor"/>
+                    <line x1="12" y1="16.3" x2="12" y2="18" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                </span>
                 <span className="btn-label" style={{ color: '#64748b' }}>Co-op Gates Sealed by Council</span>
               </button>
             )}
             <button className="btn wizard-btn" onClick={() => executeWithTransition(() => setScreen('leaderboard'))}>
-              <span className="btn-icon">🏆</span><span className="btn-label">Arcane Tombstones</span>
+              <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M8 4 H16 V9 a4 4 0 0 1 -8 0 V4 Z" stroke="currentColor" strokeWidth="1.6" fill="rgba(233,196,122,0.12)"/>
+                  <path d="M8 5.5 H5.5 a2 2 0 0 0 0 4 H8" stroke="currentColor" strokeWidth="1.3" fill="none"/>
+                  <path d="M16 5.5 H18.5 a2 2 0 0 1 0 4 H16" stroke="currentColor" strokeWidth="1.3" fill="none"/>
+                  <line x1="12" y1="13" x2="12" y2="19" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                  <line x1="8" y1="19" x2="16" y2="19" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+                </svg>
+              </span><span className="btn-label">Arcane Tombstones</span>
               <span
                 style={{
                   position: 'absolute',
@@ -1280,7 +1752,15 @@ const renderDamageRecap = () => {
           </button>
 
             <button className="btn wizard-btn" style={{ borderColor: '#d946ef' }} onClick={() => executeWithTransition(() => setScreen('metashop'))}>
-              <span className="btn-icon">🌌</span><span className="btn-label">The Mage's Codex</span>
+              <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="7.5" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                  <path d="M12 4.5 a7.5 7.5 0 0 1 5.3 12.8" stroke="currentColor" strokeWidth="1.4" fill="none" opacity="0.6"/>
+                  <circle cx="8" cy="8.5" r="0.8" fill="currentColor"/>
+                  <circle cx="16" cy="9.5" r="0.6" fill="currentColor" opacity="0.7"/>
+                  <circle cx="9.5" cy="16" r="0.5" fill="currentColor" opacity="0.5"/>
+                </svg>
+              </span><span className="btn-label">The Mage's Codex</span>
                <span
                 style={{
                   position: 'absolute',
@@ -1320,7 +1800,16 @@ const renderDamageRecap = () => {
                 style={{ flex: 1, margin: 0 }}
                 onClick={() => executeWithTransition(() => { setCouncilTab('decrees'); setCouncilNewsOpen(true); })}
               >
-                <span className="btn-icon">🏛️</span><span className="btn-label" style={{ color: '#fbcfe8' }}>Council Chronicles</span>
+                <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3 L20 8 H4 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="rgba(233,196,122,0.12)"/>
+                    <line x1="6" y1="8" x2="6" y2="17" stroke="currentColor" strokeWidth="1.5"/>
+                    <line x1="10" y1="8" x2="10" y2="17" stroke="currentColor" strokeWidth="1.5"/>
+                    <line x1="14" y1="8" x2="14" y2="17" stroke="currentColor" strokeWidth="1.5"/>
+                    <line x1="18" y1="8" x2="18" y2="17" stroke="currentColor" strokeWidth="1.5"/>
+                    <line x1="4" y1="19" x2="20" y2="19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                  </svg>
+                </span><span className="btn-label" style={{ color: '#fbcfe8' }}>Council Chronicles</span>
                 <span
                   style={{
                     position: 'absolute',
@@ -1369,7 +1858,13 @@ const renderDamageRecap = () => {
               }}
               onClick={() => executeWithTransition(() => { setGrimoirePage('cover'); setGrimoireVideoPlaying(false); setShowGrimoireModal(true); })}
             >
-              <span style={{ fontSize: '1.1rem' }}>📖</span>
+              <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path d="M4 5.5 Q8 4 12 5.5 V18.5 Q8 17 4 18.5 Z" stroke="currentColor" strokeWidth="1.5" fill="rgba(233,196,122,0.1)"/>
+                  <path d="M20 5.5 Q16 4 12 5.5 V18.5 Q16 17 20 18.5 Z" stroke="currentColor" strokeWidth="1.5" fill="rgba(233,196,122,0.1)"/>
+                  <line x1="12" y1="5.5" x2="12" y2="18.5" stroke="currentColor" strokeWidth="1.3" opacity="0.5"/>
+                </svg>
+              </span>
               <span className="btn-label" style={{ color: '#e9c47a' }}>The Archmage's Grimoire</span>
               <span
                 style={{
@@ -1433,23 +1928,32 @@ const renderDamageRecap = () => {
 
       {/* DYNAMIC ARCANE COUNCIL SCROLL OVERLAY WINDOW */}
       {councilNewsOpen && (
-        <div className="council-news-overlay" onClick={() => setCouncilNewsOpen(false)}>
+        <div className="council-news-overlay">
           <div className="council-news-box" onClick={e => e.stopPropagation()}>
             <div className="panel-corner pc-tl" />
             <div className="panel-corner pc-tr" />
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
-            <div className="section-title" style={{ color: '#ffe6a3', fontSize: '1.25rem', fontFamily: 'Georgia, serif', marginBottom: '14px', textShadow: '0 0 10px rgba(197,160,89,0.5)', textAlign: 'center' }}>
-              🏛️ COUNCIL SANCTUM CHRONICLES
+            <div className="section-title" style={{ color: '#ffe6a3', fontSize: '1.25rem', fontFamily: 'Georgia, serif', marginBottom: '14px', textShadow: '0 0 10px rgba(197,160,89,0.5)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{ width: '22px', height: '22px', display: 'inline-flex' }}>
+                <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 4l13 6.6H3L16 4z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                  <line x1="7" y1="10.6" x2="7" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="13" y1="10.6" x2="13" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="19" y1="10.6" x2="19" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="25" y1="10.6" x2="25" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="3" y1="25.4" x2="29" y2="25.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </span> COUNCIL SANCTUM CHRONICLES
             </div>
             
             <div className="council-tab-headers">
-              <button className={`council-tab-btn ${councilTab === 'decrees' ? 'active' : ''}`} onClick={() => setCouncilTab('decrees')}>
-                📣 Council Decrees
+              <button className={`council-tab-btn ${councilTab === 'decrees' ? 'active' : ''}`} onClick={() => setCouncilTab('decrees')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconMegaphone /></span> Council Decrees
               </button>
-              <button className={`council-tab-btn ${councilTab === 'grimoire' ? 'active' : ''}`} onClick={() => setCouncilTab('grimoire')}>
-                📜 Grimoire Changes
+              <button className={`council-tab-btn ${councilTab === 'grimoire' ? 'active' : ''}`} onClick={() => setCouncilTab('grimoire')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconScroll /></span> Grimoire Changes
               </button>
             </div>
             
@@ -1461,8 +1965,8 @@ const renderDamageRecap = () => {
               ) : (
                 activeLogs.map((item) => (
                   <div className="council-log-item" key={item.id}>
-                    <div className="council-log-header">
-                      ✨ {item.type === 'decree' ? 'DECREE' : 'GRIMOIRE LOG'} • {new Date(item.created_at).toLocaleDateString()}
+                    <div className="council-log-header" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '13px', height: '13px', display: 'inline-flex' }}><IconSparkleStar /></span> {item.type === 'decree' ? 'DECREE' : 'GRIMOIRE LOG'} • {new Date(item.created_at).toLocaleDateString()}
                     </div>
                     <div className="council-log-title">{item.title?.toUpperCase()}</div>
                     <div className="council-log-desc">{item.description}</div>
@@ -1552,7 +2056,9 @@ const renderDamageRecap = () => {
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
 
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🏆 COUNCIL OF THE FALLEN</div>
+            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{ width: '22px', height: '22px', display: 'inline-flex' }}><IconTrophy /></span> COUNCIL OF THE FALLEN
+            </div>
             <div className="lb-description">
               When the final spell fades and the last wave falls,{' '}
               <b style={{ color: '#fef08a', textShadow: '0 0 12px rgba(254, 240, 138, 0.9)' }}>
@@ -1568,14 +2074,16 @@ const renderDamageRecap = () => {
               <button 
                 className={`council-tab-btn ${leaderboardTab === 'solo' ? 'active' : ''}`} 
                 onClick={() => setLeaderboardTab('solo')}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                🧙‍♂️ Solo Records
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconWizardHat /></span> Solo Records
               </button>
               <button 
                 className={`council-tab-btn ${leaderboardTab === 'coop' ? 'active' : ''}`} 
                 onClick={() => setLeaderboardTab('coop')}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                ⚔️ Co-op Records
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconSwordsCrossed /></span> Co-op Records
               </button>
             </div>
 
@@ -1603,7 +2111,17 @@ const renderDamageRecap = () => {
 
                         return (
                           <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
-                            <td style={{ fontWeight: 'bold', textAlign: 'center' }}>{idx === 0 ? '👑' : (medals[idx] || `#${idx + 1}`)}</td>
+                            <td style={{ fontWeight: 'bold', textAlign: 'center' }}>
+                              {idx === 0 ? (
+                                <span style={{ width: '20px', height: '20px', display: 'inline-flex', color: '#ffd700' }}>👑</span>
+                              ) : idx === 1 ? (
+                                <span style={{ width: '18px', height: '18px', display: 'inline-flex', color: '#c0c0c0' }}>🥈</span>
+                              ) : idx === 2 ? (
+                                <span style={{ width: '18px', height: '18px', display: 'inline-flex', color: '#cd7f32' }}>🥉</span>
+                              ) : (
+                                `#${idx + 1}`
+                              )}
+                            </td>
                             
                             {/* 🔥 ANG LIVE CANVAS RENDERER MULA SA METASHOP */}
                             <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '4px' }}>
@@ -1642,29 +2160,33 @@ const renderDamageRecap = () => {
       {screen === 'levelup' && (
         <div className="overlay active" style={{ background: 'rgba(3, 1, 17, 0.55)', backdropFilter: 'blur(3px)' }}>
           <div className="lu-wrapper">
-            <div className="lu-title">LEVEL UP — WAVE {hudData?.wave || 1}</div>
+            <div className="lu-arcane-circle" />
+            <div className="lu-title-row">
+              <span className="lu-rune-flank">ᛟᛗᛚ</span>
+              <div className="lu-title">LEVEL UP — WAVE {hudData?.wave || 1}</div>
+              <span className="lu-rune-flank">ᛚᛗᛟ</span>
+            </div>
             <div className="lu-subtitle">Choose an Upgrade (Press 1, 2, 3 or Click)</div>
-            <div className="lu-warning">⚠️ Game continues – enemies are still moving!</div>
+            <div className="lu-rune-strip">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ</div>
+            <div className="lu-warning" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><InlineIcon size={15} style={{ color: '#fbbf24' }}><IconWarningRune /></InlineIcon>Game continues – enemies are still moving!</div>
 
             <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <div style={{ color: '#d946ef', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 8px rgba(217, 70, 239, 0.6)', fontSize: '0.9rem' }}>
-                💎 Void Crystals: {voidCrystals.toLocaleString()}
+              <div style={{ color: '#d946ef', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 8px rgba(217, 70, 239, 0.6)', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
+                <InlineIcon size={15} style={{ color: '#d946ef' }}><IconVoidCrystal /></InlineIcon>Void Crystals: {voidCrystals.toLocaleString()}
               </div>
               <button 
-                className="btn wizard-btn" 
+                className="btn wizard-btn lu-reroll-btn" 
                 onClick={handleReroll}
                 disabled={voidCrystals < 50}
                 style={{ 
-                  maxWidth: '240px', 
-                  padding: '8px 16px', 
                   fontSize: '0.75rem',
                   opacity: voidCrystals < 50 ? 0.5 : 1,
                   cursor: voidCrystals < 50 ? 'not-allowed' : 'pointer',
-                  borderColor: '#d946ef',
-                  margin: '0 auto'
                 }}
               >
-                🎲 Reroll Options (Cost: 50)
+                <span className="lu-reroll-gem">◆</span>
+                <span className="lu-reroll-icon" style={{ display: 'inline-flex', width: '13px', height: '13px', verticalAlign: '-2px' }}><IconRuneDie /></span> Reroll Options (Cost: 50)
+                <span className="lu-reroll-gem">◆</span>
               </button>
             </div>
             
@@ -1678,13 +2200,25 @@ const renderDamageRecap = () => {
                     style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)' }} 
                     onPointerDown={(e) => {
                       e.stopPropagation();
+                      
+                      // 🛑 PIGILAN ANG DOUBLE-CLICK LAG DITO
+                      if (upgradeLockRef.current) return; 
+                      upgradeLockRef.current = true; // 🔒 I-LOCK AGAD
+                      
                       onSelectUpgrade(opt);
                     }}
                   >
-                    <div className="lu-icon" style={{ textShadow: '0 0 10px rgba(255,255,255,0.4)' }}>{card.icon}</div>
+                    <span className="lu-corner tl" />
+                    <span className="lu-corner tr" />
+                    <span className="lu-corner bl" />
+                    <span className="lu-corner br" />
+                    <div className="lu-card-runes">ᛟ ᚱ ᚨ ᚾ ᛟ</div>
+                    <div className="lu-icon-frame">
+                      <div className="lu-icon">{card.icon}</div>
+                    </div>
                     <div className="lu-card-title" style={{ color: '#ffe6a3' }}>{card.title}</div>
                     <div className="lu-card-desc" style={{ color: '#cbd5e1' }}>{card.desc}</div>
-                    <div className="lu-hotkey">[{i + 1}]</div>
+                    <div className="lu-hotkey">{i + 1}</div>
                   </div>
                 );
               })}
@@ -1711,12 +2245,12 @@ const renderDamageRecap = () => {
                   Revive and Resume Trial
                 </div>
                 
-                <div style={{ fontSize: '1rem', color: '#cbd5e1', textAlign: 'center', marginBottom: '20px', fontFamily: 'monospace' }}>
-                  Cost: <span style={{ color: '#d946ef', fontWeight: 'bold' }}>100 💎</span>
+                <div style={{ fontSize: '1rem', color: '#cbd5e1', textAlign: 'center', marginBottom: '20px', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  Cost: <span style={{ color: '#d946ef', fontWeight: 'bold', display: 'flex', alignItems: 'center', marginLeft: '6px' }}>100 <InlineIcon size={14} style={{ color: '#d946ef', marginLeft: '4px', marginRight: 0 }}><IconVoidCrystal /></InlineIcon></span>
                 </div>
                 
-                <div style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginBottom: '20px', fontFamily: 'monospace' }}>
-                  Your Void Crystals: {voidCrystals.toLocaleString()} 💎
+                <div style={{ fontSize: '0.85rem', color: '#94a3b8', textAlign: 'center', marginBottom: '20px', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  Your Void Crystals: {voidCrystals.toLocaleString()} <InlineIcon size={14} style={{ color: '#94a3b8', marginLeft: '4px', marginRight: 0 }}><IconVoidCrystal /></InlineIcon>
                 </div>
 
                 <button 
@@ -1759,8 +2293,8 @@ const renderDamageRecap = () => {
                     </div>
 
                     {hudData?.p?.voidCrystals > 0 && (
-                       <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)' }}>
-                         💎 +{hudData.p.voidCrystals} Void Crystals Retrieved
+                       <div style={{ fontSize: '1rem', color: '#d946ef', marginBottom: '18px', fontWeight: 'bold', textAlign: 'center', textShadow: '0 0 8px rgba(217, 70, 239, 0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                         <InlineIcon size={15} style={{ color: '#d946ef' }}><IconVoidCrystal /></InlineIcon>+{hudData.p.voidCrystals} Void Crystals Retrieved
                        </div>
                     )}
 
@@ -1778,9 +2312,13 @@ const renderDamageRecap = () => {
                 <button 
                   className="btn wizard-btn" 
                   onClick={() => setShowDamageRecap(!showDamageRecap)}
-                  style={{ marginBottom: '15px', borderStyle: 'dashed' }}
+                  style={{ marginBottom: '15px', borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
-                  {showDamageRecap ? '↶ Return to Summary' : '📊 View Damage Recap'}
+                  {showDamageRecap ? (
+                    <><InlineIcon size={14}><IconReturnArrow /></InlineIcon>Return to Summary</>
+                  ) : (
+                    <><InlineIcon size={14}><IconRecapChart /></InlineIcon>View Damage Recap</>
+                  )}
                 </button>
 
                 {hasSupabase && (
@@ -1810,15 +2348,15 @@ const renderDamageRecap = () => {
                 )}
 
                 {isCoop && (!hudData?.p?.dead || !hudData?.p2?.dead) && (
-                  <button className="btn wizard-btn" style={{ borderColor: '#38bdf8', color: '#38bdf8', marginBottom: '10px' }} onClick={() => setScreen('playing')}>
-                    👁️ Spectate Partner
+                  <button className="btn wizard-btn" style={{ borderColor: '#38bdf8', color: '#38bdf8', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setScreen('playing')}>
+                    <InlineIcon size={14}><IconSpectateEye /></InlineIcon>Spectate Partner
                   </button>
                 )}
 
-                <button className="btn wizard-btn gold-theme" onClick={() => executeWithTransition(() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName }))}>
-                  🔄 {isCoop ? 'Vote Restart' : 'Play Again'}
+                <button className="btn wizard-btn gold-theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => executeWithTransition(() => onAction(isCoop ? 'restart-coop' : 'start-solo', { name: wizardName }))}>
+                  <InlineIcon size={14}><IconRestartCycle /></InlineIcon>{isCoop ? 'Vote Restart' : 'Play Again'}
                 </button>
-                <button className="btn wizard-btn" onClick={() => executeWithTransition(() => setScreen('menu'))}>🏠 Main Menu</button>
+                <button className="btn wizard-btn" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => executeWithTransition(() => setScreen('menu'))}><InlineIcon size={14}><IconSanctumHome /></InlineIcon>Main Menu</button>
               </>
             )}
           </div>
@@ -1838,7 +2376,7 @@ const renderDamageRecap = () => {
             <div className="panel-corner pc-br" />
 
             {/* Idinagdag ang pause-title na class */}
-            <div className="section-title pause-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⏸ Paused</div>
+            <div className="section-title pause-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>GAME PAUSED</div>
             <div className="divider mystic-divider" />
             
             <button 
@@ -1880,9 +2418,10 @@ const renderDamageRecap = () => {
           ==================================================================== */}
       {showGrimoireModal && (
         <div
+          className="grimoire-modal-overlay" /* 👈 Bagong class para i-handle ang overlay scrolling */
           onClick={(e) => {
             e.stopPropagation(); 
-            setShowGrimoireModal(false);
+            ;
           }}
           style={{
             position: 'fixed', inset: 0, zIndex: 99999,
@@ -1908,8 +2447,8 @@ const renderDamageRecap = () => {
             }}
           >
             {/* 📌 BOOKMARK TABS SA KALIWANG GILID */}
-            <div style={{ position: 'absolute', left: '-42px', top: '40px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 0 }}>
-              <button 
+          <div className="grimoire-tabs-container" style={{ position: 'absolute', left: '-42px', top: '40px', display: 'flex', flexDirection: 'column', gap: '8px', zIndex: 0 }}>
+              <button className="mobile-tab-btn" 
                 onClick={() => setActiveGrimoireTab('lore')}
                 style={{
                   padding: '20px 8px', writingMode: 'vertical-rl', transform: 'rotate(180deg)',
@@ -1922,7 +2461,7 @@ const renderDamageRecap = () => {
                 }}>
                 CHRONICLES
               </button>
-              <button 
+              <button className="mobile-tab-btn"
                 onClick={() => setActiveGrimoireTab('bestiary')}
                 style={{
                   padding: '20px 8px', writingMode: 'vertical-rl', transform: 'rotate(180deg)',
@@ -2248,6 +2787,105 @@ const renderDamageRecap = () => {
               .grimoire-right  { border-radius: 0 0 8px 8px !important; border-left:  1.5px solid #c5a059 !important; border-top:    none !important; }
               .grimoire-spine  { width: 100% !important; height: clamp(12px, 3vw, 18px) !important; flex-direction: row !important; }
               .grimoire-spine div { writing-mode: horizontal-tb !important; transform: none !important; }
+            }
+
+            /* 🔥 PURE CSS MOBILE RESPONSIVE OVERRIDES (GRIMOIRE) 🔥 */
+            
+            /* 1. PORTRAIT FIX: Native overlay scroll, expand full height, tabs at top */
+            @media (max-width: 768px) and (orientation: portrait) {
+              .grimoire-modal-overlay {
+                align-items: flex-start !important;
+                padding-top: 65px !important; /* Space para hindi makain ang tabs sa taas */
+                padding-bottom: 40px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+              }
+              .grimoire-book { 
+                flex-direction: column !important; 
+                height: auto !important;
+                max-height: none !important; /* Tanggalin ang height restriction para mag-expand */
+                margin-top: 0 !important;
+                overflow: visible !important; /* 👈 MUST BE VISIBLE FOR TABS TO SHOW! */
+              }
+              .grimoire-page {
+                flex: none !important;
+                min-height: auto !important;
+                height: auto !important;
+              }
+              .grimoire-left { 
+                border-radius: 8px 8px 0 0 !important; 
+                border-right: 1.5px solid #c5a059 !important; 
+                border-bottom: 1px dashed rgba(197,160,89,0.4) !important; 
+              }
+              .grimoire-right { 
+                border-radius: 0 0 8px 8px !important; 
+                border-left: 1.5px solid #c5a059 !important; 
+                border-top: none !important; 
+              }
+              .grimoire-spine { 
+                display: none !important; 
+              }
+              .grimoire-tabs-container {
+                flex-direction: row !important;
+                top: -42px !important;
+                left: 0 !important;
+                width: 100% !important;
+                justify-content: center !important;
+              }
+              .mobile-tab-btn {
+                writing-mode: horizontal-tb !important;
+                transform: none !important;
+                padding: 10px 16px !important;
+                border-radius: 8px 8px 0 0 !important;
+                border-right: 1.5px solid #c5a059 !important;
+                border-bottom: none !important;
+                height: auto !important;
+              }
+              .grimoire-page-inner {
+                height: auto !important;
+                overflow: visible !important; /* Hayaan lang na i-stretch ng content ang container */
+              }
+            }
+
+            /* 2. LANDSCAPE FIX: Prevent cutoff, restrict height, icon tabs */
+            @media (max-width: 932px) and (orientation: landscape) {
+              .grimoire-book {
+                margin-left: 45px !important; 
+                width: calc(100vw - 70px) !important; 
+                min-height: 0 !important;     
+                height: 85svh !important;     
+                max-height: 85svh !important; 
+                overflow: visible !important; /* 👈 Ensure tabs don't clip left */
+              }
+              .grimoire-tabs-container {
+                left: -38px !important; 
+              }
+              .mobile-tab-btn {
+                font-size: 0 !important;      
+                padding: 12px 6px !important; 
+                writing-mode: horizontal-tb !important; 
+                transform: none !important; 
+                min-width: 38px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              .mobile-tab-btn:nth-child(1)::after {
+                content: '📜'; 
+                font-size: 1.2rem !important;
+              }
+              .mobile-tab-btn:nth-child(2)::after {
+                content: '🦇'; 
+                font-size: 1.2rem !important;
+              }
+            }
+
+            /* 3. UNIVERSAL PAGE CLIPPING FIX */
+            @media (max-width: 932px) {
+              .grimoire-page-inner {
+                overflow-y: auto !important;  
+                padding: 16px !important; 
+              }
             }
           `}</style>
         </div>

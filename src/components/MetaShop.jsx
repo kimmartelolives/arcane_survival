@@ -1,5 +1,62 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// ============================================================
+// CUSTOM ICON SET (Pinalitan ang mga emoji ng sariling SVG icons)
+// ============================================================
+const Icon = ({ name, size = 16, color = 'currentColor', style = {} }) => {
+  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'inline-block', verticalAlign: '-3px', flexShrink: 0, ...style } };
+  switch (name) {
+    case 'crystal': // Void Crystals / currency
+      return (<svg {...common}><path d="M12 2L4 9l8 13 8-13-8-7z" /><path d="M4 9h16M12 2v20M8 9l4 13M16 9l-4 13" /></svg>);
+    case 'sparkle': // decorative accent
+      return (<svg {...common}><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" /></svg>);
+    case 'wrench': // dev/test tools
+      return (<svg {...common}><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 0 1 5.4-5.4l-3-3z" /></svg>);
+    case 'orb': // Arcane Stats tab
+      return (<svg {...common}><circle cx="12" cy="12" r="7" /><path d="M12 5v14M5 12h14" strokeDasharray="2 3" /></svg>);
+    case 'paw': // Familiars tab
+      return (<svg {...common}><circle cx="7" cy="9" r="2" /><circle cx="12" cy="6.5" r="2" /><circle cx="17" cy="9" r="2" /><path d="M12 12c-3 0-5.5 2-5.5 4.5S8.5 20 12 20s5.5-1 5.5-3.5S15 12 12 12z" /></svg>);
+    case 'robe': // Wardrobe tab
+      return (<svg {...common}><path d="M9 3l3 2 3-2 1 4-2 1v12H8V8L6 7l3-4z" /></svg>);
+    case 'trendUp': // bonus / total stat increase
+      return (<svg {...common}><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></svg>);
+    case 'upgrade': // upgrade arrow
+      return (<svg {...common}><path d="M12 19V5" /><path d="M6 11l6-6 6 6" /></svg>);
+    case 'check': // equipped checkmark
+      return (<svg {...common}><path d="M5 12l5 5L20 7" /></svg>);
+    case 'forbid': // unequip all
+      return (<svg {...common}><circle cx="12" cy="12" r="9" /><path d="M6 6l12 12" /></svg>);
+    case 'arrowLeft': // leave sanctum
+      return (<svg {...common}><path d="M19 12H5" /><path d="M11 18l-6-6 6-6" /></svg>);
+    // --- Familiar evolution icons ---
+    case 'void': // voidling
+      return (<svg {...common}><circle cx="12" cy="12" r="8" /><circle cx="12" cy="12" r="3.2" /><path d="M4 12h2.5M17.5 12H20" /></svg>);
+    case 'fairy': // fairy
+      return (<svg {...common}><path d="M12 4c2 2 2 4 0 6-2-2-2-4 0-6z" /><path d="M12 10c3 1 5 3 5 6-3 0-5-2-5-6z" /><path d="M12 10c-3 1-5 3-5 6 3 0 5-2 5-6z" /></svg>);
+    case 'flame': // wisp
+      return (<svg {...common}><path d="M12 3c1 3-2 4-2 7a3 3 0 0 0 6 0c0-1-0.5-2-1-2.5.7 2 0 3.5-1.5 4.5-1.7 1.1-3.5.3-4-1.3-.6-1.9.6-3 1.5-4.2C11.5 5.5 11.7 4 12 3z" /><path d="M9 16a3 3 0 0 0 6 0" /></svg>);
+    case 'snowflake': // frost
+      return (<svg {...common}><path d="M12 2v20M4.5 7l15 10M19.5 7l-15 10" /></svg>);
+    case 'falcon': // wind
+      return (<svg {...common}><path d="M3 12c4-5 8-6 9-6s5 1 9 6c-4 1-7 0-9-2-2 2-5 3-9 2z" /><path d="M12 6v14" /></svg>);
+    case 'stone': // golem
+      return (<svg {...common}><path d="M5 16l2-7 5-3 5 3 2 7-4 3H9l-4-3z" /></svg>);
+    case 'bolt': // thunder
+      return (<svg {...common}><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" /></svg>);
+    case 'bat': // shadow
+      return (<svg {...common}><path d="M12 8c-3-4-7-5-10-3 2 1 3 3 3 5-2 0-3 1-3 3 2-1 4-1 5 0 1.5-2 3.5-3 5-3s3.5 1 5 3c1-1 3-1 5 0 0-2-1-3-3-3 0-2 1-4 3-5-3-2-7-1-10 3z" /><circle cx="10" cy="9" r="0.8" /><circle cx="14" cy="9" r="0.8" /></svg>);
+    case 'wings': // light/holy
+      return (<svg {...common}><path d="M12 4v16" /><path d="M12 9c-3-3-7-3-9-1 2 0 4 1 5 3-3 0-5 1-6 3 3 0 6 0 8-2" /><path d="M12 9c3-3 7-3 9-1-2 0-4 1-5 3 3 0 5 1 6 3-3 0-6 0-8-2" /></svg>);
+    default:
+      return null;
+  }
+};
+
+const FAMILIAR_ICON_BY_ID = {
+  voidling: 'void', fairy: 'fairy', wisp: 'flame', frost: 'snowflake',
+  wind: 'falcon', golem: 'stone', thunder: 'bolt', shadow: 'bat', light: 'wings',
+};
+
 const UPGRADES_DB = [
   { id: 'hp', name: 'Vitality Core', desc: '+15 Max HP per level', statValue: 15, statSuffix: ' Max HP', baseCost: 50, costMult: 1.5, maxLevel: 20 },
   { id: 'dmg', name: 'Arcane Amplifier', desc: '+3 Base Damage per level', statValue: 3, statSuffix: ' Base Damage', baseCost: 75, costMult: 1.6, maxLevel: 20 },
@@ -26,55 +83,55 @@ export const SKINS_DB = [
 
 export const FAMILIARS_DB = [
    { 
-    id: 'voidling', evolutions: { 1: '🌌 Voidling', 5: '🌌 Void Walker', 10: '🌌 Abyssal Maw' },
+    id: 'voidling', evolutions: { 1: 'Voidling', 5: 'Void Walker', 10: 'Abyssal Maw'},
     type: 'Utility / Looter', desc: 'Creates a gravitational vacuum that automatically loots distant gems and potions.', 
     getStats: (lvl) => `+${lvl * 35} Vacuum Radius`,
     baseCost: 500, upgBase: 200, upgMult: 1.7, maxLevel: 10, color: '#d946ef' 
   },
   { 
-    id: 'fairy', evolutions: { 1: '🧚 Sylvan Fairy', 5: '🧚 Forest Sprite', 10: '🧚 Nature Queen' },
+    id: 'fairy', evolutions: { 1: 'Sylvan Fairy', 5: 'Forest Sprite', 10: 'Nature Queen'},
     type: 'Support / Healer', desc: 'Passively heals the player. Healing output scales with your Max HP.', 
     getStats: (lvl) => `+${lvl * 6} Base Heal`,
     baseCost: 600, upgBase: 250, upgMult: 1.75, maxLevel: 10, color: '#86efac' 
   },
   { 
-    id: 'wisp', evolutions: { 1: '🔥 Ignis Wisp', 5: '🔥 Blaze Spirit', 10: '🔥 Inferno Lord' },
+    id: 'wisp', evolutions: { 1: 'Ignis Wisp', 5: 'Blaze Spirit', 10: 'Inferno Lord'},
     type: 'Summon / Mage', desc: 'Fires realistic chaotic fire orbs. Damage scales with Level & Wave.', 
     getStats: (lvl) => `+${lvl * 30} Damage | ${lvl >= 10 ? '3 Orbs' : (lvl >= 5 ? '2 Orbs' : '1 Orb')}`,
     baseCost: 600, upgBase: 250, upgMult: 1.75, maxLevel: 10, color: '#ef4444' 
   },
   { 
-    id: 'frost', evolutions: { 1: '❄️ Frost Sprite', 5: '❄️ Winter Wraith', 10: '❄️ Glacial Sovereign' },
+    id: 'frost', evolutions: { 1: 'Frost Sprite', 5: 'Winter Wraith', 10: 'Glacial Sovereign'},
     type: 'AoE / Control', desc: 'Summons a glowing cyan snowflake blizzard that slows and damages enemies.', 
     getStats: (lvl) => `+${lvl * 5} Radius | -${(lvl * 0.15).toFixed(2)}s Cooldown`,
     baseCost: 800, upgBase: 300, upgMult: 1.8, maxLevel: 10, color: '#22d3ee' 
   },
   { 
-    id: 'wind', evolutions: { 1: '🦅 Zephyr Falcon', 5: '🦅 Gale Gryphon', 10: '🦅 Tempest Roc' },
+    id: 'wind', evolutions: { 1: 'Zephyr Falcon', 5: 'Gale Gryphon', 10: 'Tempest Roc'},
     type: 'AoE / Sweep', desc: 'Summons dynamic green wind vortex tornados that sweep through the map and shred enemies.', 
     getStats: (lvl) => `+${lvl * 25} Damage | +${lvl * 5} Radius | ${lvl >= 5 ? '2 Tornados' : '1 Tornado'}`,
     baseCost: 900, upgBase: 350, upgMult: 1.85, maxLevel: 10, color: '#10b981' 
   },
   { 
-    id: 'golem', evolutions: { 1: '🪨 Stone Golem', 5: '🪨 Earth Titan', 10: '🪨 Mountain Colossus' },
+    id: 'golem', evolutions: { 1: 'Stone Golem', 5: 'Earth Titan', 10: 'Mountain Colossus'},
     type: 'Heavy / Stun', desc: 'Smashes the ground creating a massive crater, lava cracks, and 3D stone spikes.', 
     getStats: (lvl) => `+${lvl * 50} Damage | +${lvl * 8} Radius`,
     baseCost: 900, upgBase: 350, upgMult: 1.85, maxLevel: 10, color: '#f59e0b' 
   },
   { 
-    id: 'thunder', evolutions: { 1: '⚡ Spark Fox', 5: '⚡ Storm Wolf', 10: '⚡ Raiju' },
+    id: 'thunder', evolutions: { 1: 'Spark Fox', 5: 'Storm Wolf', 10: 'Raiju'},
     type: 'Chain Lightning', desc: 'Unleashes erratic violet plasma chain lightning that branches to multiple targets.', 
     getStats: (lvl) => `+${lvl * 45} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
     baseCost: 1000, upgBase: 400, upgMult: 1.9, maxLevel: 10, color: '#c084fc' 
   },
   { 
-    id: 'shadow', evolutions: { 1: '🦇 Umbral Bat', 5: '🦇 Night Terror', 10: '🦇 Vampire Lord' },
+    id: 'shadow', evolutions: { 1: 'Umbral Bat', 5: 'Night Terror', 10: 'Vampire Lord'},
     type: 'Burst / Physical', desc: 'Fires high-speed crimson shadow blades. Can critically hit and scales with Player Buffs.', 
     getStats: (lvl) => `+${lvl * 60} Damage | -${(lvl * 0.1).toFixed(1)}s Cooldown`,
     baseCost: 1200, upgBase: 500, upgMult: 2.0, maxLevel: 10, color: '#e11d48' 
   },
   { 
-    id: 'light', evolutions: { 1: '👼 Holy Seraph', 5: '👼 Divine Valkyrie', 10: '👼 Archangel' },
+    id: 'light', evolutions: { 1: 'Holy Seraph', 5: 'Divine Valkyrie', 10: 'Archangel'},
     type: 'Defense / Shield', desc: 'Grants a Divine Absorption Shield with golden wings. Shield capacity scales heavily with Wave.', 
     getStats: (lvl) => `+${lvl * 250} Shield HP | -${(lvl * 1.0).toFixed(1)}s Cooldown`,
     baseCost: 1200, upgBase: 500, upgMult: 2.0, maxLevel: 10, color: '#fde047' 
@@ -1489,7 +1546,7 @@ export const LiveSkinPreview = ({ skin }) => {
   );
 };
 
-// 🔥 NAKALABAS DITO ANG LIVE FAMILIAR PREVIEW (Para hindi mag-error)
+// NAKALABAS DITO ANG LIVE FAMILIAR PREVIEW (Para hindi mag-error)
 export function LiveFamiliarPreview({ id, level }) {
   const canvasRef = useRef(null);
 
@@ -1526,7 +1583,7 @@ export function LiveFamiliarPreview({ id, level }) {
     ctx.fill();
   }
 
-  // ✨ LEVEL 5 TRANSFORMATION: Bat-like Fiery Wings
+  // LEVEL 5 TRANSFORMATION: Bat-like Fiery Wings
   // Idodraw natin ang pakpak BAGO ang katawan para nasa likod ito
   if (f.level >= 5) {
     const wingFlap = Math.cos(t * 0.08) * 3;
@@ -1591,7 +1648,7 @@ export function LiveFamiliarPreview({ id, level }) {
   ctx.beginPath(); ctx.arc(-2.5, 2, 0.6, 0, Math.PI*2); ctx.fill();
   ctx.beginPath(); ctx.arc(2.5, 2, 0.6, 0, Math.PI*2); ctx.fill();
 
-  // ✨ LEVEL 10 TRANSFORMATION: Orbiting Hellfires & Wild Embers
+  // LEVEL 10 TRANSFORMATION: Orbiting Hellfires & Wild Embers
   if (f.level >= 10) {
     // Extra intense embers (Mas maraming umuumbok pataas)
     ctx.fillStyle = '#fde047'; // Yellow-hot embers
@@ -1813,7 +1870,7 @@ else if (f.id === 'frost') {
   ctx.arc(0, -6, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // ✨ LEVEL 5 TRANSFORMATION: Hexagon Ice Shield
+  // LEVEL 5 TRANSFORMATION: Hexagon Ice Shield
   if (f.level >= 5) {
     ctx.strokeStyle = 'rgba(14, 165, 233, 0.8)'; // Darker cyan border
     ctx.lineWidth = 1.5;
@@ -1829,7 +1886,7 @@ else if (f.id === 'frost') {
     ctx.restore();
   }
 
-  // ✨ LEVEL 10 TRANSFORMATION: Orbiting Mini Snowflakes
+  // LEVEL 10 TRANSFORMATION: Orbiting Mini Snowflakes
   if (f.level >= 10) {
     const orbit = t * 0.003;
     
@@ -1864,11 +1921,11 @@ else if (f.id === 'frost') {
 else if (f.id === 'golem') {
         ctx.save();
         
-        // 🚀 CONSTANTS
+        // CONSTANTS
         const PI2 = 6.283;
         const float = Math.sin(t * 0.005) * 3; 
 
-        // ✨ BASE FORM: ARCANE MECHA CORE & FLOATING ARMOR
+        // BASE FORM: ARCANE MECHA CORE & FLOATING ARMOR
         ctx.shadowBlur = 15;
         ctx.shadowColor = '#06b6d4'; // High-tech Neon Cyan Glow
 
@@ -1899,7 +1956,7 @@ else if (f.id === 'golem') {
         ctx.closePath();
         ctx.fill(); ctx.stroke();
 
-        // ✨ TRANSFORMATION: LEVEL 5 (Heavy Runic Gauntlets)
+        // TRANSFORMATION: LEVEL 5 (Heavy Runic Gauntlets)
         if (f.level >= 5) {
           const sway = Math.cos(t * 0.005) * 4; 
 
@@ -1929,7 +1986,7 @@ else if (f.id === 'golem') {
           ctx.fillRect(14, 2 - sway, 3, 5);
         }
 
-        // ✨ TRANSFORMATION: LEVEL 10 (Hexagon Forcefield Only)
+        // TRANSFORMATION: LEVEL 10 (Hexagon Forcefield Only)
         if (f.level >= 10) {
           ctx.shadowBlur = 10;
           ctx.shadowColor = '#06b6d4';
@@ -1964,95 +2021,216 @@ else if (f.id === 'golem') {
 
         ctx.restore();
       }
-      else if (f.id === 'thunder') {
-  // Mabilis na pulse para sa kuryente
-  const pulse = Math.sin(t * 0.1) * 2; 
+    else if (f.id === 'thunder') {
+  // THUNDER SOVEREIGN — Full cinematic lightning entity
+  const pulse  = Math.sin(t * 0.08) * 2;
+  const flicker = Math.sin(t * 0.22) * 0.5 + 0.5; // fast intensity flicker
 
-  // --- 1. FAKE GLOW (Neon Purple Aura) ---
-  ctx.fillStyle = `rgba(217, 70, 239, ${0.15 + pulse * 0.02})`;
-  ctx.beginPath(); 
-  ctx.arc(0, 0, 20 + pulse, 0, Math.PI*2); 
+  // Helper: draw one jagged lightning bolt between two points
+  const drawBolt = (x1, y1, x2, y2, segs, spread, color, lw, alpha) => {
+    const pts = [{ x: x1, y: y1 }];
+    for (let s = 1; s < segs; s++) {
+      const frac = s / segs;
+      const px = x1 + (x2 - x1) * frac + (Math.random() - 0.5) * spread;
+      const py = y1 + (y2 - y1) * frac + (Math.random() - 0.5) * spread;
+      pts.push({ x: px, y: py });
+    }
+    pts.push({ x: x2, y: y2 });
+    // Outer glow pass
+    ctx.strokeStyle = color.replace(')', `, ${alpha * 0.35})`).replace('rgb', 'rgba');
+    ctx.lineWidth = lw * 3.5;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+    // Core bright pass
+    ctx.strokeStyle = color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+  };
+
+  // ── LAYER 0: AMBIENT SURGE CORONA ──────────────────────────────────────
+  // Wide electric aura — pale violet-white wash
+  const coronaR = 26 + pulse;
+  const coronaGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, coronaR);
+  coronaGrad.addColorStop(0,   `rgba(240,200,255,${0.28 + flicker * 0.12})`);
+  coronaGrad.addColorStop(0.5, `rgba(180,100,255,${0.14 + flicker * 0.06})`);
+  coronaGrad.addColorStop(1,   'rgba(100,20,200,0)');
+  ctx.fillStyle = coronaGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, coronaR, 0, Math.PI * 2);
   ctx.fill();
 
-  // ✨ LEVEL 10 TRANSFORMATION: Electric Wings (Nasa likod kaya unang idinraw)
+  // ── LAYER 1: GROUND CHARGE SURGE PATH ──────────────────────────────────
+  // Tendrils reaching downward like ground contact static
+  if (Math.random() < 0.55) {
+    const surgeCount = 2 + Math.floor(Math.random() * 2);
+    for (let s = 0; s < surgeCount; s++) {
+      const sx = (Math.random() - 0.5) * 14;
+      const sy = 10 + Math.random() * 6;
+      const ex = sx + (Math.random() - 0.5) * 18;
+      const ey = sy + 10 + Math.random() * 10;
+      drawBolt(sx, sy, ex, ey, 4, 4, 'rgb(200,140,255)', 0.9, 0.7 + flicker * 0.25);
+    }
+  }
+
+  // ── LAYER 2: SMOKE / OZONE WISPS (semi-opaque dark puffs) ───────────────
+  const smokePhase = (t * 0.018) % (Math.PI * 2);
+  for (let sm = 0; sm < 5; sm++) {
+    const sa  = smokePhase + sm * 1.26;
+    const sr  = 14 + sm * 2.5;
+    const sx  = Math.cos(sa) * sr * 0.6 + Math.sin(t * 0.031 + sm) * 3;
+    const sy  = Math.sin(sa) * sr * 0.4 - 5 + sm * 1.8;
+    const ss  = 3 + sm * 1.2;
+    const smokeAlpha = 0.10 + (sm / 5) * 0.08;
+    const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, ss);
+    sg.addColorStop(0,   `rgba(60,10,80,${smokeAlpha})`);
+    sg.addColorStop(0.6, `rgba(100,30,120,${smokeAlpha * 0.5})`);
+    sg.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ss, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── LAYER 3: REMNANT LIGHTNING ARCS around the body ─────────────────────
+  // These are the "daan" / path marks — like after-images of where lightning passed
+  const arcCount = 3 + (f.level >= 5 ? 2 : 0);
+  for (let a = 0; a < arcCount; a++) {
+    if (Math.random() < 0.5) continue; // Flicker effect
+    const arcAngle = (a / arcCount) * Math.PI * 2 + t * 0.015;
+    const arcR1 = 10 + Math.random() * 4;
+    const arcR2 = 18 + Math.random() * 8;
+    const ax1 = Math.cos(arcAngle) * arcR1;
+    const ay1 = Math.sin(arcAngle) * arcR1;
+    const ax2 = Math.cos(arcAngle + 0.6) * arcR2;
+    const ay2 = Math.sin(arcAngle + 0.6) * arcR2;
+    const arcAlpha = 0.45 + flicker * 0.35;
+    drawBolt(ax1, ay1, ax2, ay2, 3, 5, 'rgb(220,180,255)', 0.8, arcAlpha);
+  }
+
+  // ── LAYER 4: ELECTRIC WINGS (level 10) ──────────────────────────────────
   if (f.level >= 10) {
-    const flap = Math.cos(t * 0.15) * 4; // Mabilis na pagkampay
-    ctx.strokeStyle = '#f0abfc'; // Bright pinkish-white
-    ctx.lineWidth = 2;
-    
-    // Left Electric Wing (Zig-zag)
-    ctx.beginPath();
-    ctx.moveTo(-4, 0); 
-    ctx.lineTo(-12, -8 - flap); 
-    ctx.lineTo(-10, -4 - flap); 
-    ctx.lineTo(-20, 2 - flap);
-    ctx.stroke();
-    
-    // Right Electric Wing (Zig-zag)
-    ctx.beginPath();
-    ctx.moveTo(4, 0); 
-    ctx.lineTo(12, -8 - flap); 
-    ctx.lineTo(10, -4 - flap); 
-    ctx.lineTo(20, 2 - flap);
-    ctx.stroke();
+    const flap = Math.cos(t * 0.12) * 5;
+    // Draw wing as multiple micro-bolt segments — feels alive
+    const wingSegs = [
+      [[-4, 0], [-14, -10 - flap], [-11, -5 - flap], [-22, 0 - flap]],
+      [[-4, 0], [-16, -6 - flap], [-13, 2 - flap]],
+      [[4, 0],  [14, -10 - flap], [11, -5 - flap],  [22, 0 - flap]],
+      [[4, 0],  [16, -6 - flap],  [13, 2 - flap]],
+    ];
+    wingSegs.forEach((pts, wi) => {
+      // Glow layer
+      ctx.strokeStyle = `rgba(240,180,255,${0.25 + flicker * 0.1})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.stroke();
+      // Core
+      ctx.strokeStyle = `rgba(255,230,255,${0.7 + flicker * 0.25})`;
+      ctx.lineWidth = wi % 2 === 0 ? 1.5 : 1;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.stroke();
+    });
   }
 
-  // --- 2. LIGHTNING HORNS (Mga sungay na parang kidlat) ---
-  ctx.fillStyle = '#fdf4ff'; // Bright neon white
-  // Left Horn
-  ctx.beginPath(); 
-  ctx.moveTo(-3, -6); ctx.lineTo(-8, -12); ctx.lineTo(-5, -14); ctx.lineTo(-10, -20); ctx.lineTo(-2, -8); 
-  ctx.fill();
+  // ── LAYER 5: LIGHTNING HORNS ──────────────────────────────────────────
+  // Glowing jagged horns instead of plain fill
+  ctx.shadowBlur = 10 + flicker * 6;
+  ctx.shadowColor = '#e879f9';
+  ctx.fillStyle = `rgba(253,240,255,${0.85 + flicker * 0.12})`;
+  // Left Horn — main shard
+  ctx.beginPath();
+  ctx.moveTo(-3, -6); ctx.lineTo(-7, -13); ctx.lineTo(-4, -15);
+  ctx.lineTo(-9, -22); ctx.lineTo(-1, -9); ctx.fill();
+  // Left Horn — micro branch
+  ctx.beginPath();
+  ctx.moveTo(-6, -12); ctx.lineTo(-11, -16); ctx.lineTo(-8, -10); ctx.fill();
   // Right Horn
-  ctx.beginPath(); 
-  ctx.moveTo(3, -6); ctx.lineTo(8, -12); ctx.lineTo(5, -14); ctx.lineTo(10, -20); ctx.lineTo(2, -8); 
+  ctx.beginPath();
+  ctx.moveTo(3, -6); ctx.lineTo(7, -13); ctx.lineTo(4, -15);
+  ctx.lineTo(9, -22); ctx.lineTo(1, -9); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(6, -12); ctx.lineTo(11, -16); ctx.lineTo(8, -10); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // ── LAYER 6: DEMON BODY ────────────────────────────────────────────────
+  // Dark mecha-demon core with electric edge highlight
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = '#a855f7';
+  ctx.fillStyle = '#4a0264'; // Very dark purple
+  ctx.beginPath();
+  ctx.moveTo(0, -9); ctx.lineTo(8, -2); ctx.lineTo(5, 9);
+  ctx.lineTo(0, 13); ctx.lineTo(-5, 9); ctx.lineTo(-8, -2);
+  ctx.closePath();
   ctx.fill();
+  // Edge highlight — thin electric rim
+  ctx.strokeStyle = `rgba(232,121,249,${0.55 + flicker * 0.3})`;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 
-  // --- 3. DEMON CORE BODY (Angular / Mecha-Demon Face) ---
-  ctx.fillStyle = '#701a75'; // Dark intense purple
+  // ── LAYER 7: DEMON EYES ───────────────────────────────────────────────
+  // Bright slit eyes with inner glow
+  ctx.shadowBlur = 8 + flicker * 5;
+  ctx.shadowColor = '#f0abfc';
+  ctx.fillStyle = `rgba(253,244,255,${0.9 + flicker * 0.1})`;
   ctx.beginPath();
-  ctx.moveTo(0, -8);  // Tuktok ng ulo
-  ctx.lineTo(7, -2);  // Kanang pisngi
-  ctx.lineTo(4, 8);   // Kanang panga
-  ctx.lineTo(0, 12);  // Matulis na baba
-  ctx.lineTo(-4, 8);  // Kaliwang panga
-  ctx.lineTo(-7, -2); // Kaliwang pisngi
-  ctx.fill();
+  ctx.moveTo(-2.5, -0.5); ctx.lineTo(-6.5, -2.5); ctx.lineTo(-2.5, 1.5); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(2.5, -0.5); ctx.lineTo(6.5, -2.5); ctx.lineTo(2.5, 1.5); ctx.fill();
+  // Inner hot-white core of eyes
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(-4.2, -0.8, 0.9, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4.2, -0.8, 0.9, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
 
-  // --- 4. DEMON EYES (Nagniningning na neon slits) ---
-  ctx.fillStyle = '#fdf4ff';
-  ctx.beginPath();
-  ctx.moveTo(-2, -1); ctx.lineTo(-6, -3); ctx.lineTo(-2, 1); ctx.fill(); // Left eye
-  ctx.beginPath();
-  ctx.moveTo(2, -1); ctx.lineTo(6, -3); ctx.lineTo(2, 1); ctx.fill(); // Right eye
-
-  // ✨ LEVEL 5 TRANSFORMATION: Rotating Electric Halo (Atom-style)
+  // ── LAYER 8: ROTATING ELECTRON ORBIT HALO (Level 5+) ─────────────────
   if (f.level >= 5) {
-    ctx.strokeStyle = '#d946ef'; // Neon Magenta
-    ctx.lineWidth = 1.5;
     ctx.save();
-    ctx.rotate(t * 0.02); // Mabilis na pag-ikot
-    // Dalawang nagkrus na ellipse parang electron orbit
-    ctx.beginPath(); ctx.ellipse(0, 0, 16, 4, 0, 0, Math.PI*2); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(0, 0, 16, 4, Math.PI/2, 0, Math.PI*2); ctx.stroke();
+    ctx.rotate(t * 0.025);
+    ctx.strokeStyle = `rgba(217,70,239,${0.65 + flicker * 0.25})`;
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#d946ef';
+    ctx.beginPath(); ctx.ellipse(0, 0, 17, 5, 0, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
+    ctx.save();
+    ctx.rotate(-t * 0.018);
+    ctx.strokeStyle = `rgba(167,139,250,${0.5 + flicker * 0.2})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0, 0, 17, 5, Math.PI/2.5, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+    ctx.shadowBlur = 0;
   }
 
-  // ✨ LEVEL 10 TRANSFORMATION: High Voltage Lightning Strikes
-  if (f.level >= 10 && Math.random() < 0.4) { // Tumaas ang chance pumitik
-    ctx.strokeStyle = '#ffffff'; 
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); 
-    ctx.moveTo(0,0); 
-    
-    // Imbes na isang diretso, ginawa nating "zig-zag" ang kidlat para mas realistic!
-    const midX = (Math.random() - 0.5) * 20;
-    const midY = (Math.random() - 0.5) * 20;
-    const endX = midX + (Math.random() - 0.5) * 25;
-    const endY = midY + (Math.random() - 0.5) * 25;
-    
-    ctx.lineTo(midX, midY); // Unang pitik ng kidlat
-    ctx.lineTo(endX, endY); // Pangalawang pitik ng kidlat
+  // ── LAYER 9: KINETIC LIGHTNING STRIKES around body (level 10) ─────────
+  if (f.level >= 10) {
+    const strikeCount = Math.floor(Math.random() * 3) + 1;
+    for (let str = 0; str < strikeCount; str++) {
+      if (Math.random() > 0.45) continue;
+      const sAngle = Math.random() * Math.PI * 2;
+      const sStart = 5 + Math.random() * 5;
+      const sEnd   = 18 + Math.random() * 16;
+      const sx1 = Math.cos(sAngle) * sStart;
+      const sy1 = Math.sin(sAngle) * sStart;
+      const sx2 = Math.cos(sAngle + (Math.random()-0.5)*1.2) * sEnd;
+      const sy2 = Math.sin(sAngle + (Math.random()-0.5)*1.2) * sEnd;
+      drawBolt(sx1, sy1, sx2, sy2, 5, 6, 'rgb(255,255,255)', 1.5, 0.9);
+    }
+  }
+
+  // ── LAYER 10: MICRO STATIC SPARKS always firing ──────────────────────
+  if (Math.random() < 0.7) {
+    const sparkX = (Math.random() - 0.5) * 24;
+    const sparkY = (Math.random() - 0.5) * 24;
+    ctx.strokeStyle = `rgba(255,240,255,${0.6 + Math.random() * 0.35})`;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(sparkX, sparkY);
+    ctx.lineTo(sparkX + (Math.random()-0.5)*8, sparkY + (Math.random()-0.5)*8);
     ctx.stroke();
   }
 }
@@ -2060,7 +2238,7 @@ else if (f.id === 'golem') {
 else if (f.id === 'shadow') {
         ctx.save(); // I-save ang state para hindi madamay ang ibang drawing sa lag/glow
 
-        // 🔥 BASE FORM: VAMPIRE DEMON (With GLOW & BLUR)
+        // BASE FORM: VAMPIRE DEMON (With GLOW & BLUR)
         ctx.shadowBlur = 15; 
         ctx.shadowColor = '#ef4444'; // Glowing red aura
         
@@ -2090,7 +2268,7 @@ else if (f.id === 'shadow') {
         ctx.arc(2, -1, 1.5, 0, Math.PI*2); 
         ctx.fill();
 
-        // ✨ TRANSFORMATION: LEVEL 5
+        // TRANSFORMATION: LEVEL 5
         if (f.level >= 5) {
           ctx.shadowBlur = 20;
           ctx.shadowColor = '#e11d48'; // Bright blood aura glow
@@ -2112,7 +2290,7 @@ else if (f.id === 'shadow') {
           ctx.fill();
         }
 
-        // ✨ TRANSFORMATION: LEVEL 10
+        // TRANSFORMATION: LEVEL 10
         if (f.level >= 10) {
           ctx.shadowBlur = 25;
           ctx.shadowColor = '#9f1239'; // Dark crimson glow para sa malaking ring
@@ -2154,19 +2332,19 @@ else if (f.id === 'shadow') {
 else if (f.id === 'light') {
         ctx.save();
         
-        // 🚀 HIGH-PERFORMANCE CONSTANTS & TIMING
+        // HIGH-PERFORMANCE CONSTANTS & TIMING
         const PI2 = 6.283;
         const floatY = Math.sin(t * 0.004) * 5; // Mas marangyang paglutang
         const wingFlap = Math.sin(t * 0.012);
         
-        // 🎨 DIVINE GRADIENT (Pre-defined para mabilis i-render)
+        // DIVINE GRADIENT (Pre-defined para mabilis i-render)
         // Gumagawa ng dahan-dahang nagpapalitang kulay mula ginto patungong pilak at puti
         let holyGrad = ctx.createLinearGradient(-20, floatY - 20, 20, floatY + 20);
         holyGrad.addColorStop(0, '#fffbeb'); // Platinum White
         holyGrad.addColorStop(0.5, '#fde047'); // Radiant Gold
         holyGrad.addColorStop(1, '#eab308'); // Deep Gold
 
-        // ✨ BASE FORM: THE HOLY ARCHANGEL
+        // BASE FORM: THE HOLY ARCHANGEL
         // Central Body: Elegant Robed Figure (Mala-kapa/ginto ang hugis)
         ctx.fillStyle = '#ffffff';
         ctx.beginPath();
@@ -2196,7 +2374,7 @@ else if (f.id === 'light') {
         ctx.quadraticCurveTo(14, floatY + 2, 2, floatY + 4);
         ctx.fill();
 
-        // ✨ TRANSFORMATION: LEVEL 5 (Seraphim Form - 4 Wings & Crown of Light)
+        // TRANSFORMATION: LEVEL 5 (Seraphim Form - 4 Wings & Crown of Light)
         if (f.level >= 5) {
           // Spiked Halo / Crown ( may apat na matutulis na sinag )
           ctx.strokeStyle = '#fef08a';
@@ -2241,7 +2419,7 @@ else if (f.id === 'light') {
           }
         }
 
-        // ✨ TRANSFORMATION: LEVEL 10 (Supreme Judgment Form - 6 Wings & Judgement Wheel)
+        // TRANSFORMATION: LEVEL 10 (Supreme Judgment Form - 6 Wings & Judgement Wheel)
         if (f.level >= 10) {
           ctx.shadowBlur = 15;
           ctx.shadowColor = '#eab308';
@@ -2365,7 +2543,7 @@ else if (f.id === 'light') {
   // Reset shadow para hindi magulo ang susunod na effects
   ctx.shadowBlur = 0;
 
-  // ✨ LEVEL 5 TRANSFORMATION: Wind Aura & Cyclone Base
+  // LEVEL 5 TRANSFORMATION: Wind Aura & Cyclone Base
   if (f.level >= 5) {
     ctx.shadowBlur = 10;
     ctx.shadowColor = '#34d399';
@@ -2385,7 +2563,7 @@ else if (f.id === 'light') {
     ctx.stroke();
   }
 
-  // ✨ LEVEL 10 TRANSFORMATION: Little Fairy Companions
+  // LEVEL 10 TRANSFORMATION: Little Fairy Companions
   if (f.level >= 10) {
     const orbitRadius = 22; // Gaano kalayo sa main fairy
     const orbitSpeed = t * 0.002;
@@ -2428,7 +2606,7 @@ else if (f.id === 'light') {
   return <canvas ref={canvasRef} width={90} height={90} style={{ background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} />;
 }
 
-// 🔥 ITO ANG MAIN METASHOP COMPONENT
+// ITO ANG MAIN METASHOP COMPONENT
 export default function MetaShop({ screen, setScreen }) {
   const [activeTab, setActiveTab] = useState('stats');
   const [crystals, setCrystals] = useState(0);
@@ -2441,10 +2619,10 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
   const [equippedFamiliars, setEquippedFamiliars] = useState([]);
   const [familiarLevels, setFamiliarLevels] = useState({});
 
- // 🌌 Universal Transition State
+ // Universal Transition State
   const [isTransitioning, setIsTransitioning] = useState(false);
 
-  // 🪄 Helper function para sa Frieren effect
+  // Helper function para sa Frieren effect
   const executeWithTransition = (callback) => {
     setIsTransitioning(true); // I-trigger ang animation
     setTimeout(() => {
@@ -2544,9 +2722,8 @@ const buyOrEquipFamiliar = (fam) => {
 
     if (isUnlocked) {
       if (newEquipped.includes(fam.id)) {
-        // 🔥 ITO ANG SIKRETO: Dito dapat matatanggal ang familiar
+        // ITO ANG SIKRETO: Dito dapat matatanggal ang familiar
         newEquipped = newEquipped.filter(id => id !== fam.id);
-        console.log("Removed familiar:", fam.id); // Debug check
       } else {
         // Equip logic
         if (newEquipped.length >= 3) {
@@ -2571,7 +2748,7 @@ const buyOrEquipFamiliar = (fam) => {
       localStorage.setItem('arcane_familiar_levels', JSON.stringify(newLevels));
     }
 
-    // 🔥 SAVE ANG BAGONG ARRAY SA LOCAL STORAGE
+    // SAVE ANG BAGONG ARRAY SA LOCAL STORAGE
     setEquippedFamiliars(newEquipped);
     localStorage.setItem('arcane_equipped_familiars', JSON.stringify(newEquipped));
   };
@@ -2634,15 +2811,15 @@ const upgradeFamiliar = (fam) => {
 
       <div style={{ flexShrink: 0 }}>
             <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#d946ef', textAlign: 'center', fontSize: '1.5rem', textShadow: '0 0 15px rgba(217, 70, 239, 0.6)' }}>
-              🌌 THE MAGE'S CODEX
+               THE MAGE'S CODEX
             </div>
             
             <div style={{ textAlign: 'center', margin: '15px 0' }}>
               <div style={{ color: '#fef08a', fontSize: '1.2rem', fontWeight: 'bold', textShadow: '0 0 10px rgba(254, 240, 138, 0.5)' }}>
-                💎 Void Crystals: {crystals.toLocaleString()}
+                <Icon name="crystal" size={18} color="#fef08a" style={{ marginRight: '4px' }} /> Void Crystals: {crystals.toLocaleString()}
               </div>
               <div style={{ color: '#cbd5e1', fontSize: '11px', fontStyle: 'italic', marginTop: '2px' }}>
-                ✦ Slay bosses and claim Void Crystals. 💎
+                <Icon name="sparkle" size={11} color="#cbd5e1" /> Slay bosses and claim Void Crystals. <Icon name="crystal" size={11} color="#cbd5e1" />
               </div>
               {/*  DEVELOPER TOOLS */}
               
@@ -2657,15 +2834,15 @@ const upgradeFamiliar = (fam) => {
                   padding: '4px 10px', borderRadius: '4px', marginTop: '6px', cursor: 'pointer', 
                   fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' 
                 }}>
-                🛠️ +10M Crystals (Test Mode)
+                <Icon name="wrench" size={13} color="#c084fc" style={{ marginRight: '4px' }} /> +10M Crystals (Test Mode)
               </button> 
              
             </div>
 
             <div className="council-tab-headers" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }}>
-              <button className={`council-tab-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')} style={{ flex: 1, maxWidth: '200px' }}>🔮 Arcane Stats</button>
-              <button className={`council-tab-btn ${activeTab === 'familiars' ? 'active' : ''}`} onClick={() => setActiveTab('familiars')} style={{ flex: 1, maxWidth: '200px' }}>🐾 Familiars</button>
-              <button className={`council-tab-btn ${activeTab === 'skins' ? 'active' : ''}`} onClick={() => setActiveTab('skins')} style={{ flex: 1, maxWidth: '200px' }}>🧥 Wardrobe</button>
+              <button className={`council-tab-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')} style={{ flex: 1, maxWidth: '200px' }}><Icon name="orb" size={14} style={{ marginRight: '5px' }} />Arcane Stats</button>
+              <button className={`council-tab-btn ${activeTab === 'familiars' ? 'active' : ''}`} onClick={() => setActiveTab('familiars')} style={{ flex: 1, maxWidth: '200px' }}><Icon name="paw" size={14} style={{ marginRight: '5px' }} />Familiars</button>
+              <button className={`council-tab-btn ${activeTab === 'skins' ? 'active' : ''}`} onClick={() => setActiveTab('skins')} style={{ flex: 1, maxWidth: '200px' }}><Icon name="robe" size={14} style={{ marginRight: '5px' }} />Wardrobe</button>
               
             </div>
 
@@ -2709,7 +2886,7 @@ const upgradeFamiliar = (fam) => {
                             boxShadow: '0 0 8px rgba(52, 211, 153, 0.2)',
                             alignSelf: 'center'      // <-- Babaguhin ito
                           }}>
-                            📈 Total Bonus: {level > 0 ? `+${level * item.statValue}${item.statSuffix}` : 'None'}
+                            <Icon name="trendUp" size={13} color="#34d399" style={{ marginRight: '4px' }} />Total Bonus: {level > 0 ? `+${level * item.statValue}${item.statSuffix}` : 'None'}
                           </span>
                           <span style={{ 
                             color: '#64748b', 
@@ -2737,7 +2914,7 @@ const upgradeFamiliar = (fam) => {
                             padding: '6px 14px', borderRadius: '4px', cursor: isMax || !canAfford ? 'not-allowed' : 'pointer',
                             fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.9rem'
                           }}>
-                          {isMax ? 'MAX LEVEL' : `⏫ UPGRADE: 💎 ${cost.toLocaleString()}`}
+                          {isMax ? 'MAX LEVEL' : (<><Icon name="upgrade" size={13} style={{ marginRight: '3px' }} />UPGRADE: <Icon name="crystal" size={13} style={{ margin: '0 2px 0 4px' }} />{cost.toLocaleString()}</>)}
                         </button>
                       </div>
 
@@ -2784,7 +2961,7 @@ const upgradeFamiliar = (fam) => {
                           fontSize: '1.1rem', 
                           textShadow: isEquipped ? `0 0 8px ${skin.glow}` : 'none' 
                         }}>
-                          {skin.name} {isEquipped && '✓'}
+                          {skin.name} {isEquipped && <Icon name="check" size={14} color="#34d399" />}
                         </span>
                         <span style={{ 
                           color: '#94a3b8', 
@@ -2810,7 +2987,7 @@ const upgradeFamiliar = (fam) => {
                         padding: '10px 16px', borderRadius: '6px', cursor: isEquipped || (!isUnlocked && !canAfford) ? 'not-allowed' : 'pointer',
                         fontFamily: 'monospace', fontWeight: 'bold'
                       }}>
-                      {isEquipped ? 'EQUIPPED' : (isUnlocked ? 'EQUIP' : `💎 ${skin.cost.toLocaleString()}`)}
+                      {isEquipped ? 'EQUIPPED' : (isUnlocked ? 'EQUIP' : (<><Icon name="crystal" size={13} style={{ marginRight: '3px' }} />{skin.cost.toLocaleString()}</>))}
                     </button>
                   </div>
                 );
@@ -2824,7 +3001,7 @@ const upgradeFamiliar = (fam) => {
                     Active Companions: {equippedFamiliars.length}/3
                   </span>
                   <button className="btn wizard-btn danger-theme" onClick={() => { setEquippedFamiliars([]); localStorage.setItem('arcane_equipped_familiars', '[]'); }} style={{ margin: 0, padding: '4px 10px' }}>
-                    🚫 Unequip All
+                    <Icon name="forbid" size={13} style={{ marginRight: '4px' }} />Unequip All
                   </button>
                 </div>
 
@@ -2850,7 +3027,8 @@ const upgradeFamiliar = (fam) => {
 
                         <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
                           <span style={{ color: isEquipped ? fam.color : '#fff', fontWeight: 'bold', fontFamily: 'Georgia, serif', fontSize: '1.2rem' }}>
-                            {evoName} <span style={{ color: '#a78bfa', fontSize: '0.9rem' }}>[Lv. {isUnlocked ? level : 0}/{fam.maxLevel}]</span> {isEquipped && '✓'}
+                            <Icon name={FAMILIAR_ICON_BY_ID[fam.id]} size={16} color={fam.color} style={{ marginRight: '6px' }} />
+                            {evoName} <span style={{ color: '#a78bfa', fontSize: '0.9rem' }}>[Lv. {isUnlocked ? level : 0}/{fam.maxLevel}]</span> {isEquipped && <Icon name="check" size={14} color="#34d399" />}
                           </span>
                           <span style={{ 
                             color: '#94a3b8', 
@@ -2863,7 +3041,7 @@ const upgradeFamiliar = (fam) => {
                             Type: {fam.type} | {fam.desc}
                           </span>
                           
-                          {/* ✨ BAGONG UI: TOTAL BONUS STATS INDICATOR ✨ */}
+                          {/* BAGONG UI: TOTAL BONUS STATS INDICATOR */}
                           <span style={{ 
                             color: '#34d399', 
                             fontSize: '0.80rem', 
@@ -2879,7 +3057,7 @@ const upgradeFamiliar = (fam) => {
                             boxSizing: 'border-box',   // Para hindi lumampas ang box dahil sa padding
                             boxShadow: '0 0 8px rgba(52, 211, 153, 0.2)'
                           }}>
-                            📈 Bonus Stats: {isUnlocked ? fam.getStats(level) : fam.getStats(0)}
+                            <Icon name="trendUp" size={13} color="#34d399" style={{ marginRight: '4px' }} />Bonus Stats: {isUnlocked ? fam.getStats(level) : fam.getStats(0)}
                           </span>
                           <span style={{ 
                             color: '#64748b', 
@@ -2897,7 +3075,7 @@ const upgradeFamiliar = (fam) => {
                         onClick={() => buyOrEquipFamiliar(fam)} 
                         disabled={!isUnlocked && !canAffordUnlock}
                         style={{
-                            // 🔥 DITO NAGBABAGO ANG KULAY: Kung Equipped, gawing RED (Danger Theme)
+                            // DITO NAGBABAGO ANG KULAY: Kung Equipped, gawing RED (Danger Theme)
                             background: isEquipped 
                             ? 'linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%)' // Crimson Red
                             : (isUnlocked ? 'linear-gradient(180deg, #b45309 0%, #78350f 100%)' : (canAffordUnlock ? 'linear-gradient(180deg, #3b117b 0%, #1e0a45 100%)' : 'rgba(239, 68, 68, 0.1)')),
@@ -2909,7 +3087,7 @@ const upgradeFamiliar = (fam) => {
                             cursor: (!isUnlocked && !canAffordUnlock) ? 'not-allowed' : 'pointer',
                             fontFamily: 'monospace', fontWeight: 'bold', flexShrink: 0
                         }}>
-                       {isEquipped ? 'UNEQUIP' : (isUnlocked ? 'EQUIP' : `💎 ${fam.baseCost.toLocaleString()}`)}
+                       {isEquipped ? 'UNEQUIP' : (isUnlocked ? 'EQUIP' : (<><Icon name="crystal" size={13} style={{ marginRight: '3px' }} />{fam.baseCost.toLocaleString()}</>))}
                         </button>
                       </div>
 
@@ -2926,7 +3104,7 @@ const upgradeFamiliar = (fam) => {
                               padding: '6px 14px', borderRadius: '4px', cursor: isMax || !canAffordUpg ? 'not-allowed' : 'pointer',
                               fontFamily: 'monospace', fontWeight: 'bold', fontSize: '0.9rem'
                             }}>
-                            {isMax ? 'MAX LEVEL' : `⏫ UPGRADE: 💎 ${upgCost.toLocaleString()}`}
+                            {isMax ? 'MAX LEVEL' : (<><Icon name="upgrade" size={13} style={{ marginRight: '3px' }} />UPGRADE: <Icon name="crystal" size={13} style={{ margin: '0 2px 0 4px' }} />{upgCost.toLocaleString()}</>)}
                           </button>
                         </div>
                       )}
@@ -2939,14 +3117,14 @@ const upgradeFamiliar = (fam) => {
 
           <div style={{ flexShrink: 0, marginTop: 'auto' }}>
             <div className="divider mystic-divider" style={{ margin: '15px 0 10px 0' }} />
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
+            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => executeWithTransition(() => setScreen('menu'))}><Icon name="arrowLeft" size={13} style={{ marginRight: '4px' }} />Leave Sanctum</button>
           </div>
         </div>
       </div>
 
 
             {/* ====================================================================
-          🌌 UNIVERSAL TRANSITION (ARCANE / FRIEREN STYLE)
+          UNIVERSAL TRANSITION (ARCANE / FRIEREN STYLE)
           ==================================================================== */}
       {isTransitioning && (
         <div className="arcane-idle-transition" style={{

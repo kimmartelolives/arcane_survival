@@ -77,7 +77,6 @@ const KEYFRAMES = `
   100%{ transform:scale(.02); opacity:0; }
 }
 
-/* ── NEW: elemental sigil animations ── */
 @keyframes sc-elemental-drift {
   0%   { transform:translate(var(--ex),var(--ey)) rotate(var(--er)) scale(1);    opacity:0; }
   8%   { opacity:var(--eo); }
@@ -117,6 +116,44 @@ const KEYFRAMES = `
 @keyframes sc-triangle-breathe {
   0%,100% { opacity:.12; }
   50%      { opacity:.28; }
+}
+
+/* ── Responsive Scaling Classes ── */
+.responsive-scale-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transition: transform 0.3s ease;
+}
+
+/* Hide side panels on smaller screens to prevent clipping */
+@media (max-width: 600px), (max-height: 600px) and (orientation: landscape) {
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+/* Mobile Portrait Scale */
+@media (max-width: 480px) and (orientation: portrait) {
+  .responsive-scale-wrapper { transform: scale(0.85); }
+}
+@media (max-width: 360px) and (orientation: portrait) {
+  .responsive-scale-wrapper { transform: scale(0.75); }
+}
+
+/* Mobile Landscape Scale */
+@media (max-height: 700px) and (orientation: landscape) {
+  .responsive-scale-wrapper { transform: scale(0.65); }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .responsive-scale-wrapper { transform: scale(0.5); }
+}
+@media (max-height: 400px) and (orientation: landscape) {
+  .responsive-scale-wrapper { transform: scale(0.4); }
 }
 `;
 
@@ -190,14 +227,13 @@ function Stars({ phase }) {
   );
 }
 
-// ─── Floating ambient runes (original positions + more) ──────────────────────
+// ─── Floating ambient runes ──────────────────────────────────────────────────
 const FLOAT_POS = [
   {l:'7%',b:'70%'},{l:'14%',b:'48%'},{l:'11%',b:'25%'},{l:'22%',b:'82%'},
   {l:'36%',b:'89%'},{l:'50%',b:'93%'},{l:'62%',b:'87%'},{l:'74%',b:'76%'},
   {l:'82%',b:'52%'},{l:'87%',b:'28%'},{l:'79%',b:'13%'},{l:'64%',b:'9%'},
   {l:'50%',b:'4%'},{l:'37%',b:'7%'},{l:'19%',b:'11%'},{l:'4%',b:'40%'},
   {l:'93%',b:'55%'},{l:'28%',b:'60%'},{l:'72%',b:'40%'},{l:'55%',b:'78%'},
-  // extra positions
   {l:'44%',b:'96%'},{l:'3%',b:'85%'},{l:'96%',b:'20%'},{l:'90%',b:'72%'},
 ];
 function FloatingRunes() {
@@ -225,7 +261,7 @@ function FloatingRunes() {
   );
 }
 
-// ─── Corner decorative elemental sigils (permanent background dressing) ───────
+// ─── Corner decorative elemental sigils ──────────────────────────────────────
 function CornerElementalSigils() {
   const corners = [
     { top: '2%',    left: '1.5%',  rot: 0,   path: ELEMENTAL_PATHS.fire,   col: 'rgba(255,180,60,.22)',  sz: 48 },
@@ -252,7 +288,7 @@ function CornerElementalSigils() {
   );
 }
 
-// ─── Drifting elemental sigils (mid-air ambient) ───────────────────────────────
+// ─── Drifting elemental sigils ───────────────────────────────────────────────
 function DriftingElementalSigils() {
   const items = useRef(Array.from({ length: 14 }, (_, i) => {
     const keys = Object.keys(ELEMENTAL_PATHS);
@@ -298,10 +334,9 @@ function DriftingElementalSigils() {
   );
 }
 
-// ─── Scrolling ancient inscription band ───────────────────────────────────────
+// ─── Scrolling ancient inscription band ──────────────────────────────────────
 function AncientInscriptionBand({ phase }) {
   const isGone = phase === 'warping' || phase === 'white';
-  // Double the phrases so the scroll loops seamlessly
   const text = [...ANCIENT_PHRASES, ...ANCIENT_PHRASES].join('  ·  ');
 
   return (
@@ -311,7 +346,6 @@ function AncientInscriptionBand({ phase }) {
       opacity: isGone ? 0 : 1,
       transition: 'opacity .5s ease',
     }} aria-hidden>
-      {/* Top micro-line */}
       <div style={{
         height: 1,
         background: 'linear-gradient(to right, transparent, rgba(168,85,247,.22), rgba(255,220,100,.15), rgba(168,85,247,.22), transparent)',
@@ -332,7 +366,7 @@ function AncientInscriptionBand({ phase }) {
   );
 }
 
-// ─── Enochian side panels ─────────────────────────────────────────────────────
+// ─── Enochian side panels ────────────────────────────────────────────────────
 function EnochianPanels({ phase }) {
   const isGone = phase === 'warping' || phase === 'white';
   const leftChars  = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ'.split('');
@@ -341,7 +375,7 @@ function EnochianPanels({ phase }) {
   return (
     <>
       {/* Left panel */}
-      <div style={{
+      <div className="hide-on-mobile" style={{
         position: 'absolute', left: 18, top: '50%',
         transform: 'translateY(-50%)',
         display: 'flex', flexDirection: 'column', gap: 11,
@@ -360,7 +394,7 @@ function EnochianPanels({ phase }) {
         ))}
       </div>
       {/* Right panel */}
-      <div style={{
+      <div className="hide-on-mobile" style={{
         position: 'absolute', right: 18, top: '50%',
         transform: 'translateY(-50%)',
         display: 'flex', flexDirection: 'column', gap: 11,
@@ -382,15 +416,13 @@ function EnochianPanels({ phase }) {
   );
 }
 
-// ─── Background pentagram (very subtle, far bg) ───────────────────────────────
+// ─── Background pentagram ────────────────────────────────────────────────────
 function BackgroundPentagram({ phase }) {
   const isGone = phase === 'warping' || phase === 'white';
-  // Regular pentagram points
   const pts = Array.from({ length: 5 }, (_, i) => {
     const a = (i * 72 - 90) * Math.PI / 180;
     return [Math.cos(a) * 200, Math.sin(a) * 200];
   });
-  // Draw star lines: 0→2→4→1→3→0
   const order = [0,2,4,1,3,0];
   const d = order.map((pi, i) => `${i===0?'M':'L'}${pts[pi][0]},${pts[pi][1]}`).join(' ') + ' Z';
 
@@ -486,7 +518,6 @@ function RuneBurstOverlay({ active }) {
     color: Math.random() > .45 ? 'rgba(192,132,252,1)' : Math.random() > .5 ? 'rgba(255,230,163,1)' : 'rgba(168,85,247,1)',
   })), []);
 
-  // Extended sigil definitions including elemental shapes
   const sigilDefs = [
     ELEMENTAL_PATHS.fire,
     ELEMENTAL_PATHS.water,
@@ -622,7 +653,6 @@ function Portal({ phase }) {
     transition: 'border-width .4s, box-shadow .4s',
   });
 
-  // Elemental sigils to place at cardinal + intercardinal on the portal ring
   const elementalRingItems = useMemo(() => {
     const keys = Object.keys(ELEMENTAL_PATHS);
     return Array.from({ length: 8 }, (_, i) => {
@@ -640,7 +670,6 @@ function Portal({ phase }) {
 
   return (
     <div style={{ position: 'relative', width: PORTAL_SIZE, height: PORTAL_SIZE, flexShrink: 0 }}>
-
       {/* ════ SVG magic circle ════ */}
       <svg
         width={PORTAL_SIZE} height={PORTAL_SIZE}
@@ -674,7 +703,6 @@ function Portal({ phase }) {
           </filter>
         </defs>
 
-        {/* Outermost dashed ring + tick marks (r=148) */}
         <g style={{ animation:'sc-spinrev 60s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: baseOp, transition:'opacity .6s ease' }}>
           <circle cx={PC} cy={PC} r="148" fill="none" stroke={glowColor} strokeWidth={isUnlocked?1.8:1} strokeDasharray="4 6" opacity=".7" filter="url(#mc-glow)" />
           {Array.from({ length: 36 }, (_, i) => {
@@ -689,7 +717,6 @@ function Portal({ phase }) {
           })}
         </g>
 
-        {/* ── NEW: Elemental sigils at cardinal/intercardinal points on outer ring ── */}
         <g style={{ animation:'sc-spin 55s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?.9:.3, transition:'opacity .55s ease' }}>
           {elementalRingItems.map((el, i) => (
             <g key={i} transform={`translate(${el.x},${el.y})`} filter="url(#mc-glow-elem)">
@@ -704,7 +731,6 @@ function Portal({ phase }) {
           ))}
         </g>
 
-        {/* Outer rune ring r=130 */}
         <g style={{ animation:'sc-spin 45s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: baseOp, transition:'opacity .6s ease' }}>
           <circle cx={PC} cy={PC} r="130" fill="none" stroke="rgba(192,132,252,.5)" strokeWidth={isUnlocked?1.5:.8} filter="url(#mc-glow)" />
           {outerRingRunes.map((r, i) => (
@@ -718,7 +744,6 @@ function Portal({ phase }) {
           ))}
         </g>
 
-        {/* 12-pointed star polygon */}
         <g style={{ animation:'sc-spinrev 90s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?.85:.28, transition:'opacity .6s ease' }}>
           {Array.from({ length: 12 }, (_, i) => {
             const a1 = (i * 30) * Math.PI / 180;
@@ -733,7 +758,6 @@ function Portal({ phase }) {
           })}
         </g>
 
-        {/* Hexagon r=100 */}
         <polygon
           points={Array.from({ length: 6 }, (_, i) => {
             const a = i * 60 * Math.PI / 180;
@@ -746,7 +770,6 @@ function Portal({ phase }) {
           filter="url(#mc-glow)"
         />
 
-        {/* ── NEW: Aether sigil at portal centre (idle state) ── */}
         {!isUnlocked && (
           <g style={{ opacity: baseOp * .6, transition:'opacity .6s ease' }}>
             <path
@@ -761,7 +784,6 @@ function Portal({ phase }) {
           </g>
         )}
 
-        {/* Inner rune ring r=92 */}
         <g style={{ animation:'sc-spin 30s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: baseOp, transition:'opacity .6s ease' }}>
           <circle cx={PC} cy={PC} r="92" fill="none" stroke="rgba(192,132,252,.52)" strokeWidth={isUnlocked?1.5:1} strokeDasharray="2 5" filter="url(#mc-glow)" />
           {midRingRunes.map((r, i) => (
@@ -775,7 +797,6 @@ function Portal({ phase }) {
           ))}
         </g>
 
-        {/* Triangle of Solomon (up) */}
         <polygon
           points={Array.from({ length: 3 }, (_, i) => {
             const a = (i * 120 - 90) * Math.PI / 180;
@@ -788,7 +809,6 @@ function Portal({ phase }) {
           filter="url(#mc-glow)"
         />
 
-        {/* Triangle of Solomon (down) */}
         <polygon
           points={Array.from({ length: 3 }, (_, i) => {
             const a = (i * 120 + 90) * Math.PI / 180;
@@ -801,7 +821,6 @@ function Portal({ phase }) {
           filter="url(#mc-glow)"
         />
 
-        {/* ── NEW: Pentagram inside the triangles ── */}
         {isUnlocked && (() => {
           const ppts = Array.from({ length: 5 }, (_, i) => {
             const a = (i * 72 - 90) * Math.PI / 180;
@@ -826,7 +845,6 @@ function Portal({ phase }) {
           );
         })()}
 
-        {/* Innermost circle r=56 */}
         <circle cx={PC} cy={PC} r="56"
           fill="none"
           stroke={isUnlocked ? 'rgba(255,230,163,.58)' : 'rgba(192,132,252,.32)'}
@@ -835,7 +853,6 @@ function Portal({ phase }) {
           filter="url(#mc-glow)"
         />
 
-        {/* 8 cardinal nodes on the outer ring */}
         {Array.from({ length: 8 }, (_, i) => {
           const a = i * 45 * Math.PI / 180;
           const x = PC + 130 * Math.cos(a - Math.PI/2);
@@ -852,7 +869,6 @@ function Portal({ phase }) {
           );
         })}
 
-        {/* 6 hex vertex symbols */}
         {Array.from({ length: 6 }, (_, i) => {
           const a = i * 60 * Math.PI / 180;
           const x = PC + 100 * Math.cos(a - Math.PI/2);
@@ -869,7 +885,6 @@ function Portal({ phase }) {
           );
         })}
 
-        {/* Eye of Providence (appears on unlock) */}
         {isUnlocked && (
           <g style={{ opacity: isWarping?0:1, transition:'opacity .55s ease' }}>
             <ellipse cx={PC} cy={PC} rx="28" ry="16"
@@ -886,8 +901,6 @@ function Portal({ phase }) {
       </svg>
 
       {/* ════ Div orbital rings ════ */}
-
-      {/* Outermost rune orbit ring */}
       <div style={{
         position: 'absolute',
         width: 296, height: 296,
@@ -908,12 +921,10 @@ function Portal({ phase }) {
         ))}
       </div>
 
-      {/* Three main spinning rings */}
       <div style={ringStyle(272, '#7c3aed55 #a855f7 #7c3aed55 #6d28d9', 18, false)} />
       <div style={ringStyle(246, '#ffe6a355 #ffe6a3 #ffe6a355 #fbbf24', 13, true)} />
       <div style={ringStyle(220, '#c084fc #7c3aed55 #a855f7 #7c3aed55', 23, false)} />
 
-      {/* Inner sacred geometry dashed ring */}
       <div style={{
         position: 'absolute',
         width: 202, height: 202,
@@ -924,7 +935,6 @@ function Portal({ phase }) {
         transition: 'border .55s ease',
       }} />
 
-      {/* Portal eye — innermost orb */}
       <div style={{
         position: 'absolute',
         width: 190, height: 190,
@@ -1001,49 +1011,80 @@ export default function IntroScreen({ onFinish }) {
   const [phase,   setPhase]   = useState('idle');
   const [hovered, setHovered] = useState(false);
 
-// Panatilihin lang ang mga SFX mo dito
   const unlockSfxRef = useRef(typeof Audio !== "undefined" ? new Audio('/rune-unlock.mp3') : null);
   const warpSfxRef = useRef(typeof Audio !== "undefined" ? new Audio('/warp-portal.wav') : null);
 
-useEffect(() => {
+  // ─── ANTI-INSPECT / SECURITY LOCK ──────────────────────────────────────────
+  useEffect(() => {
+    const handleContextMenu = (e) => {
+      e.preventDefault();
+    };
+
+    const handleKeyDown = (e) => {
+      // F12
+      if (e.key === 'F12') {
+        e.preventDefault();
+      }
+      // Ctrl+Shift+I (Inspect) / Cmd+Option+I (Mac)
+      if ((e.ctrlKey || e.metaKey) && (e.shiftKey || e.altKey) && (e.key === 'I' || e.key === 'i')) {
+        e.preventDefault();
+      }
+      // Ctrl+Shift+J (Console) / Cmd+Option+J (Mac)
+      if ((e.ctrlKey || e.metaKey) && (e.shiftKey || e.altKey) && (e.key === 'J' || e.key === 'j')) {
+        e.preventDefault();
+      }
+      // Ctrl+Shift+C (Element Selector) / Cmd+Option+C (Mac)
+      if ((e.ctrlKey || e.metaKey) && (e.shiftKey || e.altKey) && (e.key === 'C' || e.key === 'c')) {
+        e.preventDefault();
+      }
+      // Ctrl+U (View Source) / Cmd+Option+U (Mac)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U')) {
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+  // ───────────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
     const globalMenuBgm = window.arcaneAudio?.menuBgm;
 
     if (globalMenuBgm) {
       globalMenuBgm.loop = true;
       globalMenuBgm.volume = 0.5;
 
-      // 1. Subukan munang i-play agad (kung papayagan ng browser)
       globalMenuBgm.play().catch(() => {
-        console.log("Autoplay blocked. Aabangan natin ang click kahit saan sa screen...");
+        console.log("Made by: Martel");
       });
     }
 
-    // 2. 👉 PANG-ALAM NA FUNCTION KAPAG PUMINDOT KAHIT SAAN
     const handleGlobalClick = () => {
       if (globalMenuBgm && globalMenuBgm.paused) {
         globalMenuBgm.play()
           .then(() => {
-            // Kapag matagumpay nang tumutugtog, tatanggalin na natin ang mga listeners
-            // para hindi na paulit-ulit na ma-trigger tuwing may iki-click ang user.
             cleanupListeners();
           })
           .catch(err => console.log("Hindi pa rin ma-play ang audio:", err));
       }
     };
 
-    // Helper para maglinis ng listeners
     const cleanupListeners = () => {
       window.removeEventListener('click', handleGlobalClick);
       window.removeEventListener('keydown', handleGlobalClick);
       window.removeEventListener('touchstart', handleGlobalClick);
     };
 
-    // 3. 👉 MAG-ABANG NG INTERACTION KAHIT SAAN SA WINDOW
     window.addEventListener('click', handleGlobalClick);
     window.addEventListener('keydown', handleGlobalClick);
-    window.addEventListener('touchstart', handleGlobalClick); // Para sa mga mobile/touch devices
+    window.addEventListener('touchstart', handleGlobalClick); 
 
-    // Linisin ang mga listeners kapag umalis na sa IntroScreen component
     return () => {
       cleanupListeners();
     };
@@ -1052,16 +1093,14 @@ useEffect(() => {
   useCinzelFont();
   useInjectKeyframes();
 
-const handleEnter = () => {
+  const handleEnter = () => {
     if (phase !== 'idle') return;
 
-    // 1. Siguraduhing tumutugtog ang GLOBAL BGM kung sakaling na-block ng browser
     const globalMenuBgm = window.arcaneAudio?.menuBgm;
     if (globalMenuBgm) {
       globalMenuBgm.play().catch(()=>{});
     }
 
-    // 2. Play Unlock SFX
     if (unlockSfxRef.current) {
       unlockSfxRef.current.currentTime = 0;
       unlockSfxRef.current.volume = 0.8;
@@ -1074,7 +1113,6 @@ const handleEnter = () => {
     
     setTimeout(() => {
       setPhase('warping');
-      // Play Warp SFX
       if (warpSfxRef.current) {
         warpSfxRef.current.currentTime = 0;
         warpSfxRef.current.volume = 1.0;
@@ -1084,8 +1122,6 @@ const handleEnter = () => {
     
     setTimeout(() => {
       setPhase('white');
-      // WALA NANG FADE OUT DITO! 
-      // Hahayaan lang nating tumugtog ang globalMenuBgm.
     }, 2500);
     
     setTimeout(() => onFinish?.(), 2800);
@@ -1122,120 +1158,117 @@ const handleEnter = () => {
       <div style={{ position:'absolute', bottom:0, left:0, right:0, height:150, background:'linear-gradient(to top,rgba(8,1,20,.4) 0%,rgba(8,1,20,.12) 55%,transparent 100%)', pointerEvents:'none' }} aria-hidden />
       <div style={{ position:'absolute', top:0, left:0, right:0, height:110, background:'linear-gradient(to bottom,rgba(1,0,6,.42),transparent)', pointerEvents:'none' }} aria-hidden />
 
-      {/* Warp + burst overlays */}
       <VortexOverlay phase={phase} />
       <RuneBurstOverlay active={burstActive} />
 
-      {/* ── Main content column ── */}
-      <div style={{
-        position: 'relative', zIndex: 10,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center',
-        transition: isWarping
-          ? 'transform .75s cubic-bezier(.6,0,1,.45), opacity .58s ease'
-          : isCharging
-          ? 'transform .4s ease, opacity .4s ease'
-          : 'none',
-        transform: isWarping ? 'scale(.03)' : isCharging ? 'scale(.96)' : 'scale(1)',
-        opacity: isWarping ? 0 : 1,
-      }}>
-
-        {/* Lock + Portal */}
-        <div style={{ position: 'relative', marginBottom: 32 }}>
-          <LockIcon phase={phase} />
-          <Portal phase={phase} />
-        </div>
-
-        {/* Text block */}
+      <div className="responsive-scale-wrapper">
         <div style={{
-          textAlign: 'center',
+          position: 'relative', zIndex: 10,
           display: 'flex', flexDirection: 'column',
-          alignItems: 'center', gap: 10,
-          marginBottom: 36,
+          alignItems: 'center',
+          transition: isWarping
+            ? 'transform .75s cubic-bezier(.6,0,1,.45), opacity .58s ease'
+            : isCharging
+            ? 'transform .4s ease, opacity .4s ease'
+            : 'none',
+          transform: isWarping ? 'scale(.03)' : isCharging ? 'scale(.96)' : 'scale(1)',
+          opacity: isWarping ? 0 : 1,
         }}>
-          {/* Divider with elemental symbols */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-            <div style={{ width:38, height:1, background:'linear-gradient(to left,rgba(168,85,247,.32),transparent)' }} aria-hidden />
-            <span style={{ fontFamily:'serif', fontSize:12, color:'rgba(255,220,100,.45)', textShadow:'0 0 8px rgba(255,220,100,.3)' }} aria-hidden>✦</span>
-            <div style={{ width:38, height:1, background:'linear-gradient(to right,rgba(168,85,247,.32),transparent)' }} aria-hidden />
+
+          {/* Lock + Portal */}
+          <div style={{ position: 'relative', marginBottom: 32 }}>
+            <LockIcon phase={phase} />
+            <Portal phase={phase} />
           </div>
 
-          <p style={{
-            fontFamily: "'Cinzel',serif",
-            fontSize: 10, letterSpacing: '.42em',
-            color: 'rgba(255,230,163,.42)',
-            textTransform: 'uppercase', margin: 0,
-          }}>ARCANE SURVIVAL</p>
-          <h1 style={{
-            fontFamily: "'Cinzel Decorative',serif",
-            fontSize: 'clamp(22px,4.5vw,32px)', fontWeight: 600,
-            color: '#ffe6a3',
-            textShadow: '0 0 28px rgba(251,191,36,.48), 0 0 56px rgba(251,191,36,.16)',
-            letterSpacing: '.06em', lineHeight: 1.25, margin: 0,
-          }}>THE LAST COVENANT</h1>
+          {/* Text block */}
+          <div style={{
+            textAlign: 'center',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: 10,
+            marginBottom: 36,
+          }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+              <div style={{ width:38, height:1, background:'linear-gradient(to left,rgba(168,85,247,.32),transparent)' }} aria-hidden />
+              <span style={{ fontFamily:'serif', fontSize:12, color:'rgba(255,220,100,.45)', textShadow:'0 0 8px rgba(255,220,100,.3)' }} aria-hidden>✦</span>
+              <div style={{ width:38, height:1, background:'linear-gradient(to right,rgba(168,85,247,.32),transparent)' }} aria-hidden />
+            </div>
 
-          {/* Ancient text line */}
-          <p style={{
-            fontFamily: 'serif', fontSize: 10,
-            letterSpacing: '.22em', color: 'rgba(192,132,252,.38)',
-            margin: 0,
-            '--at-op': '.38',
-            animation: 'sc-ancient-text-fade 8s ease-in-out infinite',
-          }} aria-hidden>ᚦᚨᛏ ᚹᚺᛁᚲᚺ ᛚᛁᛖᛊ ᛒᛖᛃᛟᚾᛞ</p>
-
-          <p style={{
-            fontFamily: 'serif', fontSize: 13,
-            letterSpacing: '.28em', color: 'rgba(168,85,247,.52)',
-            margin: 0,
-          }} aria-hidden>ᛟ ✦ ᛟ</p>
-
-          {/* Elemental row */}
-          <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:2 }} aria-hidden>
-            {Object.entries(ELEMENTAL_PATHS).map(([name, path], i) => (
-              <svg key={name} width="18" height="18" viewBox="-28 -28 56 56" style={{ overflow:'visible', opacity:.35 }}>
-                <path d={path} fill="none"
-                  stroke={['rgba(255,140,60,.8)','rgba(80,160,255,.8)','rgba(192,132,252,.8)','rgba(120,200,80,.8)','rgba(255,220,100,.8)'][i]}
-                  strokeWidth="1.8"
-                />
-              </svg>
-            ))}
-          </div>
-        </div>
-
-        {/* Button */}
-        <div style={{ position: 'relative', display: 'inline-block' }}>
-          <button
-            style={{
-              position: 'relative',
+            <p style={{
               fontFamily: "'Cinzel',serif",
-              fontSize: 13, letterSpacing: '.18em',
-              color: '#ffe6a3', background: 'transparent',
-              borderWidth: '1px',                           // 👈 Bagong format
-              borderStyle: 'solid',                         // 👈 Bagong format
-              borderColor: 'rgba(255,230,163,0.33)',        // 👈 Bagong format
-              borderRadius: 1, padding: '16px 52px',
-              cursor: isIdle ? 'pointer' : 'default',
-              outline: 'none',
-              transition: 'color .38s ease, border-color .38s ease, box-shadow .38s ease, transform .28s ease',
-              boxShadow: '0 0 12px rgba(255,230,163,.05), inset 0 0 12px rgba(255,230,163,.03)',
-              opacity: isIdle ? 1 : 0,
-              pointerEvents: isIdle ? 'auto' : 'none',
-              ...(hovered && isIdle ? {
-                color: '#fff',
-                textShadow: '0 0 18px rgba(255,230,163,.88)',
-                borderColor: 'rgba(255,230,163,.58)',
-                boxShadow: '0 0 30px rgba(255,230,163,.15), 0 0 60px rgba(255,230,163,.07), inset 0 0 26px rgba(255,230,163,.07)',
-                transform: 'translateY(-2px)',
-              } : {}),
-            }}
-            onMouseEnter={() => setHovered(true)}
-            onMouseLeave={() => setHovered(false)}
-            onClick={handleEnter}
-            aria-label="Enter the Sanctum"
-          >
-            <CornerBrackets />
-            Enter the Sanctum
-          </button>
+              fontSize: 12, letterSpacing: '.42em',
+              color: 'rgba(255,230,163,.42)',
+              textTransform: 'uppercase', margin: 0,
+            }}>THE LAST COVENANT</p>
+            <h1 style={{
+              fontFamily: "'Cinzel Decorative',serif",
+              fontSize: 'clamp(22px,4.5vw,32px)', fontWeight: 600,
+              color: '#ffe6a3',
+              textShadow: '0 0 28px rgba(251,191,36,.48), 0 0 56px rgba(251,191,36,.16)',
+              letterSpacing: '.06em', lineHeight: 1.25, margin: 0,
+            }}>Arcane Survival</h1>
+
+            <p style={{
+              fontFamily: 'serif', fontSize: 10,
+              letterSpacing: '.22em', color: 'rgba(192,132,252,.38)',
+              margin: 0,
+              '--at-op': '.38',
+              animation: 'sc-ancient-text-fade 8s ease-in-out infinite',
+            }} aria-hidden>ᚦᚨᛏ ᚹᚺᛁᚲᚺ ᛚᛁᛖᛊ ᛒᛖᛃᛟᚾᛞ</p>
+
+            <p style={{
+              fontFamily: 'serif', fontSize: 13,
+              letterSpacing: '.28em', color: 'rgba(168,85,247,.52)',
+              margin: 0,
+            }} aria-hidden>ᛟ ✦ ᛟ</p>
+
+            <div style={{ display:'flex', gap:16, alignItems:'center', marginTop:2 }} aria-hidden>
+              {Object.entries(ELEMENTAL_PATHS).map(([name, path], i) => (
+                <svg key={name} width="18" height="18" viewBox="-28 -28 56 56" style={{ overflow:'visible', opacity:.35 }}>
+                  <path d={path} fill="none"
+                    stroke={['rgba(255,140,60,.8)','rgba(80,160,255,.8)','rgba(192,132,252,.8)','rgba(120,200,80,.8)','rgba(255,220,100,.8)'][i]}
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              ))}
+            </div>
+          </div>
+
+          {/* Button */}
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <button
+              style={{
+                position: 'relative',
+                fontFamily: "'Cinzel',serif",
+                fontSize: 13, letterSpacing: '.18em',
+                color: '#ffe6a3', background: 'transparent',
+                borderWidth: '1px',
+                borderStyle: 'solid',
+                borderColor: 'rgba(255,230,163,0.33)',
+                borderRadius: 1, padding: '16px 52px',
+                cursor: isIdle ? 'pointer' : 'default',
+                outline: 'none',
+                transition: 'color .38s ease, border-color .38s ease, box-shadow .38s ease, transform .28s ease',
+                boxShadow: '0 0 12px rgba(255,230,163,.05), inset 0 0 12px rgba(255,230,163,.03)',
+                opacity: isIdle ? 1 : 0,
+                pointerEvents: isIdle ? 'auto' : 'none',
+                ...(hovered && isIdle ? {
+                  color: '#fff',
+                  textShadow: '0 0 18px rgba(255,230,163,.88)',
+                  borderColor: 'rgba(255,230,163,.58)',
+                  boxShadow: '0 0 30px rgba(255,230,163,.15), 0 0 60px rgba(255,230,163,.07), inset 0 0 26px rgba(255,230,163,.07)',
+                  transform: 'translateY(-2px)',
+                } : {}),
+              }}
+              onMouseEnter={() => setHovered(true)}
+              onMouseLeave={() => setHovered(false)}
+              onClick={handleEnter}
+              aria-label="Enter the Sanctum"
+            >
+              <CornerBrackets />
+              Enter the Sanctum
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -61,202 +61,316 @@ const MonsterPreview = ({ monster }) => {
 
       // --- RENDER LOGIC ---
       if (e.type === 'normal') {
-            // ==================================================
-            // 🧟 NORMAL MINION (Shadow Ghoul with Bone Mask)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            ctx.rotate(Math.sin(now * 0.005 + e.x) * 0.1); // Wriggling motion
+    // ==================================================
+    // 🧟 NORMAL MINION (Shadow Ghoul with Bone Mask)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    // 1. PROPERTY CACHING: I-save ang e.r para hindi paulit-ulit na basahin sa object
+    const r = e.r; 
+    
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(Math.sin(now * 0.005 + e.x) * 0.1); // Wriggling motion
 
-            // Organic, squishy blob body
-            ctx.fillStyle = isFlash ? '#ffffff' : '#1e293b'; 
-            ctx.beginPath();
-            for(let i = 0; i < 12; i++) {
-                let ang = (i / 12) * Math.PI * 2;
-                let rad = e.r * (0.8 + Math.sin(now * 0.01 + i) * 0.2); // Umiiba ang hugis (Squishy)
-                ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
-            }
-            ctx.fill();
+    // 2. MATH PRE-COMPUTATION: I-compute ang constants sa labas ng loop
+    const timeOffset = now * 0.01;
+    const angStep = Math.PI / 6; // (Math.PI * 2) / 12
+    const baseRad = r * 0.8;
+    const pulseRad = r * 0.2;
 
-            // Bone Skull Mask sa ibabaw ng katawan
-            ctx.fillStyle = isFlash ? '#000000' : '#cbd5e1';
-            ctx.beginPath();
-            ctx.arc(0, -e.r * 0.2, e.r * 0.6, Math.PI, 0); // Hugis bungo sa itaas
-            ctx.quadraticCurveTo(e.r * 0.6, e.r * 0.5, e.r * 0.3, e.r * 0.5); // Kanang panga
-            ctx.lineTo(-e.r * 0.3, e.r * 0.5); // Baba
-            ctx.quadraticCurveTo(-e.r * 0.6, e.r * 0.5, -e.r * 0.6, -e.r * 0.2); // Kaliwang panga
-            ctx.fill();
+    // Organic, squishy blob body
+    ctx.fillStyle = isFlash ? '#ffffff' : '#1e293b'; 
+    ctx.beginPath();
+    for(let i = 0; i < 12; i++) {
+        let ang = i * angStep;
+        // Imbes na e.r * (0.8 + Math.sin(...) * 0.2), mas mabilis ang addition kaysa multiplication sa loob ng loop
+        let rad = baseRad + Math.sin(timeOffset + i) * pulseRad; 
+        ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+    }
+    ctx.closePath(); // Idagdag ang closePath bago mag-fill para malinis ang gilid
+    ctx.fill();
 
-            // Sunken Glowing Red Eyes
-            ctx.fillStyle = isFlash ? '#ffffff' : '#991b1b';
-            ctx.beginPath(); ctx.ellipse(-e.r * 0.25, 0, e.r * 0.15, e.r * 0.2, 0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(e.r * 0.25, 0, e.r * 0.15, e.r * 0.2, -0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.restore();
+    // 3. CACHING SIZES PARA SA BONE MASK
+    const topY = -r * 0.2;
+    const maskR = r * 0.6;
+    const jawY = r * 0.5;
+    const jawX = r * 0.3;
 
-        } else if (e.type === 'fast') {
-            // ==================================================
-            // 🦇 FAST MINION (Scythe-Winged Phantom)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            ctx.rotate(now * 0.008); // Mabilis na spin
+    // Bone Skull Mask sa ibabaw ng katawan
+    ctx.fillStyle = isFlash ? '#000000' : '#cbd5e1';
+    ctx.beginPath();
+    ctx.arc(0, topY, maskR, Math.PI, 0); // Hugis bungo sa itaas
+    ctx.quadraticCurveTo(maskR, jawY, jawX, jawY); // Kanang panga
+    ctx.lineTo(-jawX, jawY); // Baba
+    ctx.quadraticCurveTo(-maskR, jawY, -maskR, topY); // Kaliwang panga
+    ctx.fill();
 
-            // 3 Dark Scythe Wings (Parang paniki/shuriken)
-            ctx.fillStyle = isFlash ? '#ffffff' : '#9a3412'; // Dark burnt orange
-            ctx.strokeStyle = isFlash ? '#000000' : '#ea580c';
-            ctx.lineWidth = 1.5;
+    // 4. BATCH RENDERING SA MATA
+    ctx.fillStyle = isFlash ? '#ffffff' : '#991b1b';
+    
+    const eyeX = r * 0.25;
+    const eyeRX = r * 0.15;
+    const eyeRY = r * 0.2;
 
-            for(let i = 0; i < 3; i++) {
-                ctx.rotate((Math.PI * 2) / 3);
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                // Matulis na kurbada ng pakpak
-                ctx.quadraticCurveTo(e.r * 1.5, -e.r * 1.5, e.r * 2.5, 0); 
-                ctx.quadraticCurveTo(e.r * 1.0, -e.r * 0.5, 0, e.r * 0.5);
-                ctx.fill(); 
-                ctx.stroke();
-            }
+    ctx.beginPath(); 
+    // Kaliwang mata
+    ctx.ellipse(-eyeX, 0, eyeRX, eyeRY, 0.2, 0, Math.PI * 2); 
+    
+    // Exact moveTo magic: Pigilan ang ellipse na gumuhit ng connecting line sa pagitan ng dalawang mata
+    const startX = eyeX + eyeRX * Math.cos(-0.2);
+    const startY = eyeRX * Math.sin(-0.2);
+    ctx.moveTo(startX, startY);
+    
+    // Kanang mata
+    ctx.ellipse(eyeX, 0, eyeRX, eyeRY, -0.2, 0, Math.PI * 2); 
+    ctx.fill(); // Isang fill() call na lang para sa dalawang mata!
 
-            // Cluster ng Spider Eyes sa gitna
-            ctx.fillStyle = isFlash ? '#000000' : '#fef08a';
-            for(let i = 0; i < 3; i++) {
-                let a = (i / 3) * Math.PI * 2 + (now * 0.005);
-                ctx.beginPath(); 
-                ctx.arc(Math.cos(a) * e.r * 0.4, Math.sin(a) * e.r * 0.4, e.r * 0.25, 0, Math.PI * 2); 
-                ctx.fill();
-            }
-            ctx.restore();
+    ctx.restore();
+} else if (e.type === 'fast') {
+    // ==================================================
+    // 🦇 FAST MINION (Scythe-Winged Phantom)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    // 1. PROPERTY CACHING: I-save ang e.r para hindi paulit-ulit basahin sa memory
+    const r = e.r; 
 
-        } else if (e.type === 'tank') {
-            // ==================================================
-            // 🪨 TANK MINION (Armored Void Behemoth)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            
-            // Mabigat na paglalakad (Stomping motion)
-            let stomp = Math.abs(Math.sin(now * 0.003)) * (e.r * 0.15);
-            ctx.translate(0, -stomp);
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(now * 0.008); // Mabilis na spin
 
-            // Dambuhalang Asymmetrical Carapace (Baluti)
-            ctx.fillStyle = isFlash ? '#ffffff' : '#1e1b4b'; // Deepest indigo armor
-            ctx.strokeStyle = isFlash ? '#000000' : '#4338ca';
-            ctx.lineWidth = 2.5;
+    // 2. PRE-COMPUTE MATH CONSTANTS: Ilabas ang mga hindi naman nagbabago kada pakpak
+    const thirdPI = (Math.PI * 2) / 3;
+    const cp1x = r * 1.5, cp1y = -r * 1.5;
+    const end1x = r * 2.5, end1y = 0;
+    const cp2x = r * 1.0, cp2y = -r * 0.5;
+    const end2y = r * 0.5;
 
-            ctx.beginPath();
-            ctx.moveTo(-e.r * 1.2, e.r * 0.5); // Bottom left
-            ctx.lineTo(-e.r * 1.5, -e.r * 0.2); // Left shoulder spike
-            ctx.lineTo(-e.r * 0.6, -e.r * 1.2); // Top left ridge
-            ctx.lineTo(0, -e.r * 0.8);          // Center dip (batok)
-            ctx.lineTo(e.r * 0.6, -e.r * 1.2);   // Top right ridge
-            ctx.lineTo(e.r * 1.5, -e.r * 0.2);   // Right shoulder spike
-            ctx.lineTo(e.r * 1.2, e.r * 0.5);    // Bottom right
-            ctx.lineTo(0, e.r * 0.8);            // Bottom center
-            ctx.closePath();
-            ctx.fill(); 
-            ctx.stroke();
+    // 3. BATCH RENDERING (WINGS)
+    ctx.fillStyle = isFlash ? '#ffffff' : '#9a3412'; 
+    ctx.strokeStyle = isFlash ? '#000000' : '#ea580c';
+    ctx.lineWidth = 1.5;
 
-            // Glowing Internal Furnace (Tiyan na gawa sa Void Magma)
-            let coreGlow = Math.sin(now * 0.005) * 0.5 + 0.5;
-            ctx.fillStyle = isFlash ? '#000000' : `rgba(99, 102, 241, ${0.5 + coreGlow * 0.5})`;
-            ctx.beginPath();
-            ctx.arc(0, e.r * 0.2, e.r * 0.55, 0, Math.PI * 2);
-            ctx.fill();
+    ctx.beginPath(); // Isang path para sa tatlong pakpak!
+    for(let i = 0; i < 3; i++) {
+        ctx.rotate(thirdPI);
+        ctx.moveTo(0, 0);
+        // Dahil pre-computed na ang values, hindi na magmumultiply ang CPU ng 12 beses sa loob ng loop
+        ctx.quadraticCurveTo(cp1x, cp1y, end1x, end1y); 
+        ctx.quadraticCurveTo(cp2x, cp2y, 0, end2y);
+    }
+    ctx.fill();   // Isang render call imbes na tatlo
+    ctx.stroke(); // Isang render call imbes na tatlo
 
-            // Iron Prison Bars sa ibabaw ng kumikinang na tiyan
-            ctx.strokeStyle = isFlash ? '#ffffff' : '#0f172a';
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(-e.r * 0.7, e.r * 0.2); ctx.lineTo(e.r * 0.7, e.r * 0.2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(-e.r * 0.3, -e.r * 0.3); ctx.lineTo(-e.r * 0.3, e.r * 0.7); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(e.r * 0.3, -e.r * 0.3); ctx.lineTo(e.r * 0.3, e.r * 0.7); ctx.stroke();
-            ctx.restore();
+    // 4. BATCH RENDERING (EYES)
+    ctx.fillStyle = isFlash ? '#000000' : '#fef08a';
+    
+    // Pre-compute uli para sa mata
+    const eyeOffsetAng = now * 0.005;
+    const eyeDist = r * 0.4;
+    const eyeSize = r * 0.25;
 
-        } else if (e.type === 'miniBoss') {
-            // ==================================================
-            // 👁️ GENERIC MINI-BOSS (Eldritch Tentacle Terror)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
+    ctx.beginPath(); // Isang path para sa tatlong mata!
+    for(let i = 0; i < 3; i++) {
+        let a = i * thirdPI + eyeOffsetAng;
+        let ex = Math.cos(a) * eyeDist;
+        let ey = Math.sin(a) * eyeDist;
+        
+        ctx.moveTo(ex + eyeSize, ey); // Pigilan ang pagguhit ng connecting lines
+        ctx.arc(ex, ey, eyeSize, 0, Math.PI * 2); 
+    }
+    ctx.fill(); // Isang render call imbes na tatlo
+    
+    ctx.restore();
+} else if (e.type === 'tank') {
+    // ==================================================
+    // 🪨 TANK MINION (Armored Void Behemoth)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    // 1. PROPERTY CACHING: Ilagay sa variable ang e.r
+    // Mas mabilis basahin ng browser ang local variable kaysa maghanap sa loob ng object (e.r) nang paulit-ulit
+    const radius = e.r; 
 
-            // Abyssal Glow Aura
-            let auraGlow = ctx.createRadialGradient(0, 0, e.r, 0, 0, e.r * 3);
-            auraGlow.addColorStop(0, `rgba(217, 119, 6, 0.4)`); // Amber aura
-            auraGlow.addColorStop(1, 'transparent');
-            ctx.fillStyle = auraGlow;
-            ctx.beginPath(); ctx.arc(0, 0, e.r * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    
+    // Mabigat na paglalakad (Stomping motion)
+    const stomp = Math.abs(Math.sin(now * 0.003)) * (radius * 0.15);
+    ctx.translate(0, -stomp);
 
-            // 8 Writhing Tentacles (Gumagalaw na galamay)
-            ctx.strokeStyle = isFlash ? '#ffffff' : '#78350f'; // Dark amber
-            ctx.lineCap = 'round';
-            for(let i = 0; i < 8; i++) {
-                let a = (i / 8) * Math.PI * 2;
-                let wave = Math.sin(now * 0.002 + i) * (e.r * 0.8);
-                ctx.lineWidth = e.r * 0.3;
-                
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                // Curve magic para sa galamay
-                let cp1x = Math.cos(a) * e.r * 1.5 - Math.sin(a) * wave;
-                let cp1y = Math.sin(a) * e.r * 1.5 + Math.cos(a) * wave;
-                let endX = Math.cos(a) * e.r * 2.5 + Math.sin(a) * wave * 1.5;
-                let endY = Math.sin(a) * e.r * 2.5 - Math.cos(a) * wave * 1.5;
-                ctx.quadraticCurveTo(cp1x, cp1y, endX, endY);
-                ctx.stroke();
-            }
+    // Dambuhalang Asymmetrical Carapace (Baluti)
+    ctx.fillStyle = isFlash ? '#ffffff' : '#1e1b4b'; 
+    ctx.strokeStyle = isFlash ? '#000000' : '#4338ca';
+    ctx.lineWidth = 2.5;
 
-            // Deformed Fleshy Main Body
-            ctx.fillStyle = isFlash ? '#ffffff' : '#b45309';
-            ctx.beginPath();
-            for(let i = 0; i < 16; i++) {
-                let a = (i / 16) * Math.PI * 2;
-                let pulse = Math.sin(now * 0.005 + i * 2) * (e.r * 0.15); // Pulsating mass
-                ctx.lineTo(Math.cos(a) * (e.r * 1.2 + pulse), Math.sin(a) * (e.r * 1.2 + pulse));
-            }
-            ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(-radius * 1.2, radius * 0.5); 
+    ctx.lineTo(-radius * 1.5, -radius * 0.2); 
+    ctx.lineTo(-radius * 0.6, -radius * 1.2); 
+    ctx.lineTo(0, -radius * 0.8);          
+    ctx.lineTo(radius * 0.6, -radius * 1.2);   
+    ctx.lineTo(radius * 1.5, -radius * 0.2);   
+    ctx.lineTo(radius * 1.2, radius * 0.5);    
+    ctx.lineTo(0, radius * 0.8);             
+    ctx.closePath();
+    ctx.fill(); 
+    ctx.stroke();
 
-            // Asymmetrical Blinking Eyes (Maraming mata na kumukurap)
-            ctx.fillStyle = isFlash ? '#000000' : '#fef3c7'; 
-            let pupilColor = isFlash ? '#ffffff' : '#000000';
-            const eyes = [
-                {x: 0, y: 0, size: 0.5},       // Main center eye
-                {x: -0.6, y: -0.4, size: 0.25}, // Top left
-                {x: 0.6, y: -0.3, size: 0.2},   // Top right
-                {x: -0.3, y: 0.6, size: 0.3},   // Bottom left
-                {x: 0.5, y: 0.5, size: 0.25}    // Bottom right
-            ];
+    // 2. GLOBAL ALPHA VS STRING PARSING
+    // Imbes na gumamit ng `rgba(..., ${value})` template string, gagamit tayo ng hex color at globalAlpha.
+    const coreGlow = Math.sin(now * 0.005) * 0.5 + 0.5;
+    if (isFlash) {
+        ctx.fillStyle = '#000000';
+    } else {
+        ctx.fillStyle = '#6366f1'; // Hex code para sa rgb(99, 102, 241)
+        ctx.globalAlpha = 0.5 + coreGlow * 0.5; // Ito ang magdadala ng opacity
+    }
+    
+    ctx.beginPath();
+    ctx.arc(0, radius * 0.2, radius * 0.55, 0, Math.PI * 2);
+    ctx.fill();
 
-            eyes.forEach((eye, idx) => {
-                let isBlinking = Math.sin(now * 0.001 + idx * 5) > 0.95; // Random blink timing
-                
-                if (!isBlinking) {
-                    // Sclera (Puti ng mata)
-                    ctx.beginPath(); ctx.arc(eye.x * e.r, eye.y * e.r, eye.size * e.r, 0, Math.PI * 2); ctx.fill();
-                    // Pupil (Itim ng mata)
-                    ctx.fillStyle = pupilColor;
-                    ctx.beginPath(); ctx.arc(eye.x * e.r, eye.y * e.r, eye.size * e.r * 0.4, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = isFlash ? '#000000' : '#fef3c7'; // Reset para sa next eye
-                } else {
-                    // Closed Eye Slit (Pag nakapikit)
-                    ctx.strokeStyle = isFlash ? '#000000' : '#78350f';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath(); 
-                    ctx.moveTo(eye.x * e.r - eye.size * e.r, eye.y * e.r); 
-                    ctx.lineTo(eye.x * e.r + eye.size * e.r, eye.y * e.r); 
-                    ctx.stroke();
-                }
-            });
+    // I-reset agad ang alpha para hindi maapektuhan ang Prison Bars
+    ctx.globalAlpha = 1; 
 
-            ctx.restore();
+    // 3. Iron Prison Bars (BATCH RENDERING)
+    ctx.strokeStyle = isFlash ? '#ffffff' : '#0f172a';
+    ctx.lineWidth = 3;
+    
+    // Pinagsama natin ang tatlong magkakahiwalay na beginPath() at stroke() sa iisang batch
+    ctx.beginPath(); 
+    
+    // Horizontal bar
+    ctx.moveTo(-radius * 0.7, radius * 0.2); 
+    ctx.lineTo(radius * 0.7, radius * 0.2); 
+    // Left vertical bar
+    ctx.moveTo(-radius * 0.3, -radius * 0.3); 
+    ctx.lineTo(-radius * 0.3, radius * 0.7); 
+    // Right vertical bar
+    ctx.moveTo(radius * 0.3, -radius * 0.3); 
+    ctx.lineTo(radius * 0.3, radius * 0.7); 
+    
+    ctx.stroke(); // Isang stroke call na lang para sa lahat ng bakal!
+    
+    ctx.restore();
+} else if (e.type === 'miniBoss') {
+    // ==================================================
+    // 👁️ GENERIC MINI-BOSS (Eldritch Tentacle Terror)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    ctx.save();
+    ctx.translate(e.x, e.y);
 
-        } else if (e.type === 'demonKnight') {
+    // 1. Abyssal Glow Aura
+    let auraGlow = ctx.createRadialGradient(0, 0, e.r, 0, 0, e.r * 3);
+    auraGlow.addColorStop(0, `rgba(217, 119, 6, 0.4)`); // Amber aura
+    auraGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = auraGlow;
+    ctx.beginPath(); 
+    ctx.arc(0, 0, e.r * 3, 0, Math.PI * 2); 
+    ctx.fill();
+
+    // 2. 8 Writhing Tentacles (BATCH RENDERING)
+    ctx.strokeStyle = isFlash ? '#ffffff' : '#78350f'; 
+    ctx.lineCap = 'round';
+    ctx.lineWidth = e.r * 0.3; // Ilabas sa loop dahil pare-pareho lang naman ang kapal
+    
+    ctx.beginPath(); // Isang path lang para sa lahat ng galamay
+    for(let i = 0; i < 8; i++) {
+        let a = (i / 8) * Math.PI * 2;
+        let wave = Math.sin(now * 0.002 + i) * (e.r * 0.8);
+        
+        ctx.moveTo(0, 0);
+        let cp1x = Math.cos(a) * e.r * 1.5 - Math.sin(a) * wave;
+        let cp1y = Math.sin(a) * e.r * 1.5 + Math.cos(a) * wave;
+        let endX = Math.cos(a) * e.r * 2.5 + Math.sin(a) * wave * 1.5;
+        let endY = Math.sin(a) * e.r * 2.5 - Math.cos(a) * wave * 1.5;
+        
+        ctx.quadraticCurveTo(cp1x, cp1y, endX, endY);
+    }
+    ctx.stroke(); // Isang draw call na lang imbes na 8!
+
+    // 3. Deformed Fleshy Main Body
+    ctx.fillStyle = isFlash ? '#ffffff' : '#b45309';
+    ctx.beginPath();
+    for(let i = 0; i < 16; i++) {
+        let a = (i / 16) * Math.PI * 2;
+        let pulse = Math.sin(now * 0.005 + i * 2) * (e.r * 0.15); 
+        ctx.lineTo(Math.cos(a) * (e.r * 1.2 + pulse), Math.sin(a) * (e.r * 1.2 + pulse));
+    }
+    ctx.fill();
+
+    // 4. Asymmetrical Blinking Eyes (BATCH RENDERING)
+    // Ilabas ang static array declaration para hindi mabigat sa memory (mas maganda kung sa labas pa ito ng function)
+    const eyes = [
+        {x: 0, y: 0, size: 0.5},       // Main center eye
+        {x: -0.6, y: -0.4, size: 0.25}, // Top left
+        {x: 0.6, y: -0.3, size: 0.2},   // Top right
+        {x: -0.3, y: 0.6, size: 0.3},   // Bottom left
+        {x: 0.5, y: 0.5, size: 0.25}    // Bottom right
+    ];
+
+    // Paghiwalayin ang nakadilat at nakapikit para madaling i-batch
+    const openEyes = [];
+    const closedEyes = [];
+
+    for (let idx = 0; idx < eyes.length; idx++) {
+        if (Math.sin(now * 0.001 + idx * 5) > 0.95) {
+            closedEyes.push(eyes[idx]);
+        } else {
+            openEyes.push(eyes[idx]);
+        }
+    }
+
+    if (openEyes.length > 0) {
+        // I-draw lahat ng Sclera (Puti ng mata) ng sabay-sabay
+        ctx.fillStyle = isFlash ? '#000000' : '#fef3c7';
+        ctx.beginPath();
+        for (const eye of openEyes) {
+            const ex = eye.x * e.r;
+            const ey = eye.y * e.r;
+            const eSize = eye.size * e.r;
+            ctx.moveTo(ex + eSize, ey); // Para hindi magkonekta ang mga bilog ng linya
+            ctx.arc(ex, ey, eSize, 0, Math.PI * 2);
+        }
+        ctx.fill();
+
+        // I-draw lahat ng Pupil (Itim ng mata) ng sabay-sabay
+        ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
+        ctx.beginPath();
+        for (const eye of openEyes) {
+            const ex = eye.x * e.r;
+            const ey = eye.y * e.r;
+            const pSize = eye.size * e.r * 0.4;
+            ctx.moveTo(ex + pSize, ey);
+            ctx.arc(ex, ey, pSize, 0, Math.PI * 2);
+        }
+        ctx.fill();
+    }
+
+    if (closedEyes.length > 0) {
+        // I-draw lahat ng nakapikit na mata ng sabay-sabay
+        ctx.strokeStyle = isFlash ? '#000000' : '#78350f';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); 
+        for (const eye of closedEyes) {
+            const ex = eye.x * e.r;
+            const ey = eye.y * e.r;
+            const eSize = eye.size * e.r;
+            ctx.moveTo(ex - eSize, ey); 
+            ctx.lineTo(ex + eSize, ey); 
+        }
+        ctx.stroke();
+    }
+
+    ctx.restore();
+} else if (e.type === 'demonKnight') {
           // ==================================================
           // ⚔️ DRAXEN, VOID KNIGHT (The Unstoppable Blade)
           // ==================================================
@@ -547,754 +661,827 @@ const MonsterPreview = ({ monster }) => {
 
           ctx.restore();
         } else if (e.type === 'primordial') {
-                // ==================================================
-                // 🌌 PRIMORDIAL DEMON (King of the Void / World Ender)
-                // ==================================================
-                const isFlash = e.flash > 0;
-                
-                // --- 1. APOCALYPTIC FAUX GLOW (Fiery Void Aura) ---
-                const glowColor = isFlash ? '255, 255, 255' : '220, 20, 60'; // Crimson Core
-                const glowColor2 = isFlash ? '255, 255, 255' : '255, 100, 0'; // Fiery Orange Edge
-                const blurSize = isFlash ? 120 : 200;
-                const maxGlowRadius = e.r * 3.5 + blurSize;
-                
-                const grad = ctx.createRadialGradient(0, 0, e.r * 0.5, 0, 0, maxGlowRadius);
-                grad.addColorStop(0, `rgba(${glowColor}, 0.9)`);
-                grad.addColorStop(0.35, `rgba(${glowColor2}, 0.5)`);
-                grad.addColorStop(1, `rgba(${glowColor2}, 0)`);
-                
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(0, 0, maxGlowRadius, 0, Math.PI * 2);
-                ctx.fill();
+    // ==================================================
+    // 🌌 PRIMORDIAL DEMON (King of the Void / World Ender)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    // 1. PROPERTY CACHING: I-save sa local variable
+    const r = e.r;
 
-                // 🛑 I-OFF ANG HARDWARE SHADOW PARA DI MAG-LAG
-                ctx.shadowBlur = 0;
+    // --- 1. APOCALYPTIC FAUX GLOW (Fiery Void Aura) ---
+    const blurSize = isFlash ? 120 : 200;
+    const maxGlowRadius = r * 3.5 + blurSize;
+    
+    const grad = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, maxGlowRadius);
+    
+    // BATCHED COLORS: Umiwas tayo sa template string parsing tulad ng `rgba(${glowColor}, 0.9)`
+    if (isFlash) {
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.5)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    } else {
+        grad.addColorStop(0, 'rgba(220, 20, 60, 0.9)');
+        grad.addColorStop(0.35, 'rgba(255, 100, 0, 0.5)');
+        grad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+    }
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, maxGlowRadius, 0, Math.PI * 2);
+    ctx.fill();
 
-                // --- 2. ANCIENT KING'S SEAL (ROTATING TEXT) ---
-                ctx.save();
-                ctx.rotate(-now / 2000); // Mabagal na ikot counter-clockwise
-                ctx.fillStyle = isFlash ? '#ffffff' : 'rgba(255, 150, 0, 0.8)';
-                ctx.font = `bold ${e.r * 0.6}px "Courier New", monospace`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const runes = ['ᛞ','ᛟ','ᚢ','ᛗ','ᛚ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛒ','ᛖ', '✦', '✧'];
-                
-                for (let i = 0; i < 14; i++) {
-                    let a = (i / 14) * Math.PI * 2;
-                    let dist = e.r * 4.2; // Mas malawak na radius para sa text
-                    ctx.save();
-                    ctx.translate(Math.cos(a) * dist, Math.sin(a) * dist);
-                    ctx.rotate(a + Math.PI / 2);
-                    ctx.fillText(runes[i], 0, 0);
-                    ctx.restore();
-                }
-                
-                // Inner spinning magical ring (Clockwise)
-                ctx.rotate(now / 1000);
-                ctx.strokeStyle = isFlash ? '#ffffff' : 'rgba(220, 20, 60, 0.6)';
-                ctx.lineWidth = 3;
-                ctx.setLineDash([20, 15, 5, 15]);
-                ctx.beginPath();
-                ctx.arc(0, 0, e.r * 3.5, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.restore();
+    // 🛑 I-OFF ANG HARDWARE SHADOW PARA DI MAG-LAG
+    ctx.shadowBlur = 0;
 
-                // --- 3. FIRE EMBERS LOGIC (Lumilipad paitaas sa gilid) ---
-                ctx.fillStyle = isFlash ? '#ffffff' : '#ffaa00';
-                for (let i = 0; i < 24; i++) {
-                    // X position nagwe-wave sa gilid
-                    let emberX = Math.cos(now * 0.001 + i) * (e.r * 2.5 + (i % 3) * e.r);
-                    // Y position umaakyat at naglu-loop
-                    let emberY = e.r * 3 - ((now * 0.06 + i * 35) % (e.r * 6));
-                    let emberSize = 1.5 + Math.sin(now * 0.01 + i) * 1.5; // Pumipintig na laki
-                    
-                    ctx.beginPath();
-                    ctx.arc(emberX, emberY, Math.max(0.1, emberSize), 0, Math.PI * 2);
-                    ctx.fill();
-                }
+    // --- 2. ANCIENT KING'S SEAL (ROTATING TEXT) ---
+    ctx.save();
+    const sealRot = -now / 2000;
+    ctx.rotate(sealRot); // Mabagal na ikot counter-clockwise
+    ctx.fillStyle = isFlash ? '#ffffff' : 'rgba(255, 150, 0, 0.8)';
+    ctx.font = `bold ${r * 0.6}px "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const runes = ['ᛞ','ᛟ','ᚢ','ᛗ','ᛚ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛒ','ᛖ', '✦', '✧'];
+    const textDist = r * 4.2; 
+    
+    // INVERSE TRANSLATION (Massive FPS boost over save/restore in loop)
+    for (let i = 0; i < 14; i++) {
+        let a = (i / 14) * Math.PI * 2;
+        let cx = Math.cos(a) * textDist;
+        let cy = Math.sin(a) * textDist;
+        let letterRot = a + Math.PI / 2;
 
-                // --- 4. REALITY SHATTER (Fiery Cracks) ---
-                ctx.strokeStyle = isFlash ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 80, 0, 0.8)';
-                ctx.lineWidth = 2.5;
-                for (let i = 0; i < 8; i++) {
-                    let ang = (i * Math.PI / 4) + (Math.sin(now * 0.002) * 0.1); // Swaying cracks
-                    let crackLength = e.r * (7 + Math.random() * 4); 
-                    ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    let currX = 0, currY = 0;
-                    for (let j = 0; j < 4; j++) {
-                        currX += Math.cos(ang) * (crackLength / 4) + (Math.random() * 20 - 10);
-                        currY += Math.sin(ang) * (crackLength / 4) + (Math.random() * 20 - 10);
-                        ctx.lineTo(currX, currY);
-                    }
-                    ctx.stroke();
-                }
-
-                // --- 5. THE VOID KING'S BODY (Pulsing Black Hole with fiery crust) ---
-                ctx.fillStyle = isFlash ? '#ffffff' : '#050005';
-                ctx.strokeStyle = isFlash ? '#000000' : '#ff3300';
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                for (let i = 0; i < 36; i++) {
-                    let ang = (Math.PI * 2 / 36) * i + (now / 200); 
-                    // Nade-deform ang katawan niya
-                    let pulse = Math.sin(now * 0.01 + i * 2) * 0.15;
-                    let dist = e.r * (0.9 + pulse); 
-                    ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
-                }
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-
-                // --- 6. THE WORLD-ENDER CROWN ---
-                // Lumulutang sa taas ng ulo na may gold/orange edges
-                let crownY = -e.r * 1.1 + Math.sin(now * 0.005) * 6; // Float effect
-                let crownW = e.r * 1.3;
-                
-                ctx.fillStyle = isFlash ? '#ffffff' : '#0a0000';
-                ctx.strokeStyle = isFlash ? '#000000' : '#ffaa00'; 
-                ctx.lineWidth = 2.5;
-                
-                ctx.beginPath();
-                ctx.moveTo(-crownW, crownY);
-                ctx.lineTo(-crownW * 1.4, crownY - e.r * 1.3); // Outer left spike
-                ctx.lineTo(-crownW * 0.5, crownY - e.r * 0.4); 
-                ctx.lineTo(0, crownY - e.r * 1.8);             // Center highest spike
-                ctx.lineTo(crownW * 0.5, crownY - e.r * 0.4);  
-                ctx.lineTo(crownW * 1.4, crownY - e.r * 1.3);  // Outer right spike
-                ctx.lineTo(crownW, crownY);
-                ctx.quadraticCurveTo(0, crownY + e.r * 0.4, -crownW, crownY); // Curved bottom
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-
-                // Crown Jewel (Glowing Center)
-                ctx.fillStyle = isFlash ? '#000000' : '#ff0000';
-                ctx.beginPath();
-                ctx.arc(0, crownY - e.r * 0.6, e.r * 0.25, 0, Math.PI * 2);
-                ctx.fill();
-
-                // --- 7. TERRIFYING OMNIPRESENT EYES ---
-                ctx.fillStyle = isFlash ? '#000000' : '#ffea00'; // Glowing yellow/orange eyes
-                ctx.shadowColor = '#ff0000';
-                ctx.shadowBlur = 40; // Buhayin saglit ang shadow para sa mata
-                
-                let eyeGlitch = Math.random() > 0.9 ? 5 : 0; 
-                
-                // Giant Center Eye
-                ctx.beginPath(); 
-                ctx.ellipse(0, -e.r * 0.1 + eyeGlitch, e.r * 0.55, e.r * 0.25, 0, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Main Pupil (Reptilian slit)
-                ctx.fillStyle = isFlash ? '#ffffff' : '#ff0000';
-                ctx.beginPath();
-                ctx.ellipse(0, -e.r * 0.1 + eyeGlitch, e.r * 0.1, e.r * 0.25, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                // 4 Smaller Sub-eyes (Biblically Accurate Demon Vibe)
-                ctx.fillStyle = isFlash ? '#000000' : '#ffaa00';
-                // Top Angled Eyes
-                ctx.beginPath(); ctx.ellipse(-e.r * 0.65, -e.r * 0.4, e.r * 0.2, e.r * 0.08, -Math.PI/5, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.ellipse(e.r * 0.65, -e.r * 0.4, e.r * 0.2, e.r * 0.08, Math.PI/5, 0, Math.PI * 2); ctx.fill();
-                
-                // Bottom Angled Eyes
-                ctx.beginPath(); ctx.ellipse(-e.r * 0.55, e.r * 0.35, e.r * 0.15, e.r * 0.06, Math.PI/5, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.ellipse(e.r * 0.55, e.r * 0.35, e.r * 0.15, e.r * 0.06, -Math.PI/5, 0, Math.PI * 2); ctx.fill();
-
-                ctx.shadowBlur = 0; // I-reset ang shadow pabalik sa normal
-            } else if (e.type === 'abyss') {
-        // ==================================================
-        // 🌋 PRIMORDIAL DEMON (World-Ending God of Destruction)
-        // ==================================================
+        ctx.translate(cx, cy);
+        ctx.rotate(letterRot);
+        ctx.fillText(runes[i], 0, 0);
         
-        const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
-        const isEnraged = hpRatio <= 0.25;
-        const isFlash = e.flash > 0;
+        // I-reverse ang transform imbes na tumawag ng ctx.restore()
+        ctx.rotate(-letterRot);
+        ctx.translate(-cx, -cy);
+    }
+    
+    // Inner spinning magical ring (Clockwise)
+    // Tandaan: May sealRot pa tayong nauna, kaya ia-add natin yun pabalik
+    ctx.rotate((now / 1000) - sealRot); 
+    ctx.strokeStyle = isFlash ? '#ffffff' : 'rgba(220, 20, 60, 0.6)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([20, 15, 5, 15]);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 3.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // --- 3. FIRE EMBERS LOGIC (BATCH RENDERING) ---
+    ctx.fillStyle = isFlash ? '#ffffff' : '#ffaa00';
+    ctx.beginPath(); // Isang path para sa lahat ng embers
+    for (let i = 0; i < 24; i++) {
+        let emberX = Math.cos(now * 0.001 + i) * (r * 2.5 + (i % 3) * r);
+        let emberY = r * 3 - ((now * 0.06 + i * 35) % (r * 6));
+        let emberSize = Math.max(0.1, 1.5 + Math.sin(now * 0.01 + i) * 1.5);
         
-        const enrageScale = isEnraged ? 1.5 : 1;
-        const baseR = e.r * 1.4; 
-        const coreR = baseR * enrageScale;
-        const pi2 = 6.283185307; // Fast Math.PI * 2
+        ctx.moveTo(emberX + emberSize, emberY);
+        ctx.arc(emberX, emberY, emberSize, 0, Math.PI * 2);
+    }
+    ctx.fill(); // Isang tawag lang imbes na 24!
+
+    // --- 4. REALITY SHATTER (BATCH RENDERING) ---
+    ctx.strokeStyle = isFlash ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 80, 0, 0.8)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); // Isang path para sa lahat ng bitak
+    
+    const crackSway = Math.sin(now * 0.002) * 0.1;
+    for (let i = 0; i < 8; i++) {
+        let ang = (i * Math.PI / 4) + crackSway;
+        let crackLength = r * (7 + Math.random() * 4); 
+        let segLen = crackLength / 4;
         
-        ctx.save();
-        
-        // 💥 REALITY DISTORTION / ENRAGE SCREEN SHAKE
-        if (isEnraged) {
-            const intensity = 3 + Math.random() * 4;
-            ctx.translate((Math.random() - 0.5) * intensity, (Math.random() - 0.5) * intensity);
+        ctx.moveTo(0, 0);
+        let currX = 0, currY = 0;
+        for (let j = 0; j < 4; j++) {
+            currX += Math.cos(ang) * segLen + (Math.random() * 20 - 10);
+            currY += Math.sin(ang) * segLen + (Math.random() * 20 - 10);
+            ctx.lineTo(currX, currY);
         }
+    }
+    ctx.stroke(); // Isang stroke call imbes na 8!
 
-        // 0. APOCALYPTIC ENVIRONMENT (Optimized: Removed massive fillRect, used Arc)
-        const distPulse = Math.sin(now * 0.00666) * 0.15; // now / 150
-        const envGrad = ctx.createRadialGradient(0, 0, coreR * 2, 0, 0, coreR * 15);
-        envGrad.addColorStop(0, 'transparent');
-        envGrad.addColorStop(0.6, `rgba(153, 27, 27, ${0.1 + distPulse})`); 
-        envGrad.addColorStop(1, `rgba(69, 10, 10, ${0.3 + distPulse})`);
-        ctx.fillStyle = envGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, coreR * 15, 0, pi2);
+    // --- 5. THE VOID KING'S BODY ---
+    ctx.fillStyle = isFlash ? '#ffffff' : '#050005';
+    ctx.strokeStyle = isFlash ? '#000000' : '#ff3300';
+    ctx.lineWidth = 4;
+    
+    const bodyStep = Math.PI / 18; // Pre-computed (Math.PI * 2 / 36)
+    const bodyRot = now / 200;
+    
+    ctx.beginPath();
+    for (let i = 0; i < 36; i++) {
+        let ang = (bodyStep * i) + bodyRot; 
+        let pulse = Math.sin(now * 0.01 + i * 2) * 0.15;
+        let dist = r * (0.9 + pulse); 
+        ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // --- 6. THE WORLD-ENDER CROWN ---
+    let crownY = -r * 1.1 + Math.sin(now * 0.005) * 6; 
+    let crownW = r * 1.3;
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : '#0a0000';
+    ctx.strokeStyle = isFlash ? '#000000' : '#ffaa00'; 
+    ctx.lineWidth = 2.5;
+    
+    ctx.beginPath();
+    ctx.moveTo(-crownW, crownY);
+    ctx.lineTo(-crownW * 1.4, crownY - r * 1.3); 
+    ctx.lineTo(-crownW * 0.5, crownY - r * 0.4); 
+    ctx.lineTo(0, crownY - r * 1.8);            
+    ctx.lineTo(crownW * 0.5, crownY - r * 0.4);  
+    ctx.lineTo(crownW * 1.4, crownY - r * 1.3);  
+    ctx.lineTo(crownW, crownY);
+    ctx.quadraticCurveTo(0, crownY + r * 0.4, -crownW, crownY); 
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Crown Jewel
+    ctx.fillStyle = isFlash ? '#000000' : '#ff0000';
+    ctx.beginPath();
+    ctx.arc(0, crownY - r * 0.6, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // --- 7. TERRIFYING OMNIPRESENT EYES (BATCHED) ---
+    ctx.fillStyle = isFlash ? '#000000' : '#ffea00'; 
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 40; 
+    
+    let eyeGlitch = Math.random() > 0.9 ? 5 : 0; 
+    
+    // Giant Center Eye
+    ctx.beginPath(); 
+    ctx.ellipse(0, -r * 0.1 + eyeGlitch, r * 0.55, r * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Main Pupil
+    ctx.fillStyle = isFlash ? '#ffffff' : '#ff0000';
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.1 + eyeGlitch, r * 0.1, r * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4 Smaller Sub-eyes (Biblically Accurate Demon Vibe)
+    ctx.fillStyle = isFlash ? '#000000' : '#ffaa00';
+    ctx.beginPath(); 
+    
+    // Top Left
+    ctx.ellipse(-r * 0.65, -r * 0.4, r * 0.2, r * 0.08, -Math.PI/5, 0, Math.PI * 2);
+    
+    // Top Right (Exact moveTo para walang connecting line)
+    ctx.moveTo(r * 0.65 + r * 0.2 * Math.cos(Math.PI/5), -r * 0.4 + r * 0.2 * Math.sin(Math.PI/5));
+    ctx.ellipse(r * 0.65, -r * 0.4, r * 0.2, r * 0.08, Math.PI/5, 0, Math.PI * 2);
+    
+    // Bottom Left
+    ctx.moveTo(-r * 0.55 + r * 0.15 * Math.cos(Math.PI/5), r * 0.35 + r * 0.15 * Math.sin(Math.PI/5));
+    ctx.ellipse(-r * 0.55, r * 0.35, r * 0.15, r * 0.06, Math.PI/5, 0, Math.PI * 2);
+    
+    // Bottom Right
+    ctx.moveTo(r * 0.55 + r * 0.15 * Math.cos(-Math.PI/5), r * 0.35 + r * 0.15 * Math.sin(-Math.PI/5));
+    ctx.ellipse(r * 0.55, r * 0.35, r * 0.15, r * 0.06, -Math.PI/5, 0, Math.PI * 2);
+    
+    ctx.fill(); // Isang fill() call na lang para sa apat na maliliit na mata!
+
+    ctx.shadowBlur = 0; 
+} else if (e.type === 'abyss') {
+    // ==================================================
+    // 🌋 PRIMORDIAL DEMON (World-Ending God of Destruction)
+    // ==================================================
+    
+    const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
+    const isEnraged = hpRatio <= 0.25;
+    const isFlash = e.flash > 0;
+    
+    const enrageScale = isEnraged ? 1.5 : 1;
+    const baseR = e.r * 1.4; 
+    const coreR = baseR * enrageScale;
+    const pi2 = 6.283185307; // Fast Math.PI * 2
+    
+    // 🚨 OPTIMIZATION: Pseudo-random function para iwasan ang `Math.random()` lag sa loop
+    const seededRandom = (seed) => {
+        const x = Math.sin(seed * 9999) * 10000;
+        return x - Math.floor(x);
+    };
+    
+    ctx.save();
+    
+    // 💥 REALITY DISTORTION / ENRAGE SCREEN SHAKE (Optimized without Math.random)
+    if (isEnraged) {
+        // Gumamit tayo ng sine wave na nakabase sa time para smooth ang shake, hindi erratic jitter
+        const shakeX = Math.sin(now * 0.05) * 5;
+        const shakeY = Math.cos(now * 0.04) * 5;
+        ctx.translate(shakeX, shakeY);
+    }
+
+    // 0. APOCALYPTIC ENVIRONMENT 
+    const distPulse = Math.sin(now * 0.00666) * 0.15; 
+    const envGrad = ctx.createRadialGradient(0, 0, coreR * 2, 0, 0, coreR * 15);
+    envGrad.addColorStop(0, 'transparent');
+    envGrad.addColorStop(0.6, `rgba(153, 27, 27, ${0.1 + distPulse})`); 
+    envGrad.addColorStop(1, `rgba(69, 10, 10, ${0.3 + distPulse})`);
+    ctx.fillStyle = envGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 15, 0, pi2);
+    ctx.fill();
+
+    // 1. MULTI-LAYERED APOCALYPTIC AURA
+    const auraPulse = Math.abs(Math.sin(now * 0.005));
+    const auraRadius = coreR * (isEnraged ? 6 + auraPulse * 2 : 4 + auraPulse);
+    
+    const aura = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, auraRadius);
+    aura.addColorStop(0, '#ffffff'); 
+    aura.addColorStop(0.2, '#facc15'); 
+    aura.addColorStop(0.4, '#ea580c'); 
+    aura.addColorStop(0.7, '#7f1d1d'); 
+    aura.addColorStop(1, 'transparent'); 
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : aura;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, pi2); ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Swirling Infernal Vortexes 
+    const vortRot1 = now * 0.005;
+    const vortRot2 = vortRot1 + 1.570796; 
+    
+    ctx.lineWidth = coreR * 0.4;
+    ctx.strokeStyle = `rgba(234, 88, 12, ${0.3 + distPulse})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 3, coreR * 3, vortRot1, 0, Math.PI); ctx.stroke();
+    
+    ctx.strokeStyle = `rgba(153, 27, 27, ${0.2 + distPulse})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4, coreR * 4, vortRot2, 0, Math.PI); ctx.stroke();
+
+    // 2. GYROSCOPIC INFERNAL SIGILS 
+    const sigilSpeedMult = isEnraged ? 0.00666 : 0.00333; 
+    const outRot = now * -sigilSpeedMult;
+    
+    ctx.strokeStyle = 'rgba(153, 27, 27, 0.6)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([20, 15, 5, 15]);
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 5.5, coreR * 5.5, outRot, 0, pi2); ctx.stroke();
+
+    const inRot = now * (sigilSpeedMult * 1.25); 
+    ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([40, 20]);
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4.5, coreR * 4.5, inRot, 0, pi2); ctx.stroke();
+    
+    ctx.font = `${coreR * 0.6}px "Courier New", monospace`;
+    ctx.fillStyle = '#facc15';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const charBase = 0x16A0;
+    for (let i = 0; i < 12; i++) {
+        let ang = (i * 0.523598) + inRot; 
+        let rune = String.fromCharCode(charBase + (i % 20)); 
+        ctx.fillText(rune, Math.cos(ang) * coreR * 4.5, Math.sin(ang) * coreR * 4.5);
+    }
+    
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+        ctx.ellipse(0, 0, coreR * 4.2, coreR * 0.8, (i * 0.785398), 0, pi2);
+    }
+    ctx.stroke();
+
+    // 3. 12 WINGS 
+    const wingFlap = Math.cos(now * 0.00666) * 0.4;
+    const wingLen = isEnraged ? coreR * 8 : coreR * 5;
+    
+    // Shadow Wings
+    ctx.fillStyle = isFlash ? '#ffffff' : '#09090b';
+    ctx.strokeStyle = '#4c1d95'; 
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        let rot = (1.047197 * i) + wingFlap * 0.8 + 0.2; 
+        let cR = Math.cos(rot), sR = Math.sin(rot);
+        let tX = (x, y) => x * cR - y * sR;
+        let tY = (x, y) => x * sR + y * cR;
+
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(tX(-coreR * 2, -coreR * 2), tY(-coreR * 2, -coreR * 2), tX(-wingLen * 1.1, -wingLen * 0.9), tY(-wingLen * 1.1, -wingLen * 0.9));
+        ctx.lineTo(tX(-coreR * 3, -coreR * 1), tY(-coreR * 3, -coreR * 1));
+        ctx.lineTo(tX(-wingLen * 0.8, 0), tY(-wingLen * 0.8, 0));
+        ctx.lineTo(0, 0);
+    }
+    ctx.fill(); ctx.stroke();
+
+    // Hellfire Wings
+    ctx.fillStyle = isFlash ? '#ffffff' : '#7c2d12';
+    ctx.strokeStyle = '#fef08a'; 
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        let rot = (1.047197 * i) - wingFlap;
+        let cR = Math.cos(rot), sR = Math.sin(rot);
+        let tX = (x, y) => x * cR - y * sR;
+        let tY = (x, y) => x * sR + y * cR;
+
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(tX(coreR * 2, -coreR * 2.5), tY(coreR * 2, -coreR * 2.5), tX(wingLen, -wingLen * 0.8), tY(wingLen, -wingLen * 0.8)); 
+        ctx.lineTo(tX(coreR * 2.5, -coreR * 1.5), tY(coreR * 2.5, -coreR * 1.5));
+        ctx.lineTo(tX(wingLen * 0.7, -coreR * 0.5), tY(wingLen * 0.7, -coreR * 0.5));
+        ctx.lineTo(0, 0);
+    }
+    ctx.fill(); ctx.stroke();
+
+    // 4. COLOSSAL TITAN CARAPACE
+    const corePulse = Math.sin(now * 0.0125) * 0.3; 
+    const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * (1.3 + corePulse));
+    coreGrad.addColorStop(0, '#ffffff'); 
+    coreGrad.addColorStop(0.3, '#facc15'); 
+    coreGrad.addColorStop(0.7, '#b91c1c'); 
+    coreGrad.addColorStop(1, 'transparent');
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : coreGrad;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 1.4, 0, pi2); ctx.fill();
+
+    const armorGlow = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, coreR * 2.5);
+    armorGlow.addColorStop(0.5, 'rgba(234, 88, 12, 0.5)'); 
+    armorGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = armorGlow;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 2.5, 0, pi2); ctx.fill();
+
+    ctx.fillStyle = isFlash ? '#ffffff' : '#0c0a09';
+    ctx.strokeStyle = '#dc2626'; 
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        let pAng = (i * 1.047197) + (now * 0.002); 
+        let breathe = Math.sin((now * 0.00666) + i) * 0.15; 
+        let pDist = coreR * (0.5 + breathe); 
+        
+        let cx = Math.cos(pAng) * pDist;
+        let cy = Math.sin(pAng) * pDist;
+        let cR = Math.cos(pAng), sR = Math.sin(pAng);
+        let tX = (x, y) => (x * cR - y * sR) + cx;
+        let tY = (x, y) => (x * sR + y * cR) + cy;
+        
+        ctx.moveTo(tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
+        ctx.quadraticCurveTo(tX(coreR * 1.6, -coreR * 0.2), tY(coreR * 1.6, -coreR * 0.2), tX(coreR * 1.6, 0), tY(coreR * 1.6, 0));
+        ctx.quadraticCurveTo(tX(coreR * 1.6, coreR * 0.2), tY(coreR * 1.6, coreR * 0.2), tX(0, coreR * 0.6), tY(0, coreR * 0.6));
+        ctx.quadraticCurveTo(tX(coreR * 0.6, 0), tY(coreR * 0.6, 0), tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
+    }
+    ctx.fill(); ctx.stroke();
+
+    // 5. OMNIPRESENT EYES
+    // 🚨 OPTIMIZATION: Inalis natin ang arrays sa loop para sa performance
+    const eyePhase = Math.floor((now * 0.01) % 4);
+    const flickerColor = eyePhase === 0 ? '#ffffff' : eyePhase === 1 ? '#facc15' : eyePhase === 2 ? '#dc2626' : '#09090b';
+    
+    const eyeGlowGrad = ctx.createRadialGradient(0, -coreR * 0.3, coreR * 0.1, 0, -coreR * 0.3, coreR * 1.5);
+    const fcRGB = eyePhase === 0 ? '255,255,255' : eyePhase === 1 ? '250,204,21' : eyePhase === 2 ? '220,38,38' : '9,9,11';
+    eyeGlowGrad.addColorStop(0, `rgba(${fcRGB}, 0.8)`);
+    eyeGlowGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = eyeGlowGrad;
+    ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 1.5, coreR * 0.6, 0, 0, pi2); ctx.fill();
+    
+    ctx.fillStyle = isFlash ? '#000000' : flickerColor;
+    ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 0.6, coreR * 0.2, 0, 0, pi2); ctx.fill();
+    
+    const eyeCount = isEnraged ? 8 : 4;
+    for (let i = 0; i < eyeCount; i++) {
+        let eAng = (i / eyeCount) * pi2 + Math.PI;
+        let eDist = coreR * 0.9;
+        let eScale = (i % 2 === 0) ? 0.2 : 0.15;
+        let subPhase = Math.floor(((now + i * 50) * 0.01) % 4);
+        ctx.fillStyle = subPhase === 0 ? '#ffffff' : subPhase === 1 ? '#facc15' : subPhase === 2 ? '#dc2626' : '#09090b';
+        ctx.beginPath(); 
+        ctx.ellipse(Math.cos(eAng) * eDist, Math.sin(eAng) * eDist, coreR * eScale, coreR * (eScale * 0.4), eAng, 0, pi2); 
         ctx.fill();
+    }
 
-        // 1. MULTI-LAYERED APOCALYPTIC AURA
-        const auraPulse = Math.abs(Math.sin(now * 0.005));
-        const auraRadius = coreR * (isEnraged ? 6 + auraPulse * 2 : 4 + auraPulse);
+    // 6. FLOATING INFERNAL CROWN 
+    const crownY = -coreR * 2 + Math.sin(now * 0.00666) * 15;
+    
+    ctx.fillStyle = '#0c0a09';
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        let cAng = (now * -0.005) + (i * 1.256637); 
+        let cDist = coreR * 1.2;
+        let cx = Math.cos(cAng) * cDist;
+        let cy = Math.sin(cAng) * cDist * 0.3 + crownY; 
+        let rot = now * 0.01;
         
-        const aura = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, auraRadius);
-        aura.addColorStop(0, '#ffffff'); 
-        aura.addColorStop(0.2, '#facc15'); 
-        aura.addColorStop(0.4, '#ea580c'); 
-        aura.addColorStop(0.7, '#7f1d1d'); 
-        aura.addColorStop(1, 'transparent'); 
-        
-        ctx.fillStyle = isFlash ? '#ffffff' : aura;
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, pi2); ctx.fill();
-        ctx.globalAlpha = 1.0;
+        let cR = Math.cos(rot), sR = Math.sin(rot);
+        let tX = (x, y) => x * cR - y * sR + cx;
+        let tY = (x, y) => x * sR + y * cR + cy;
 
-        // Swirling Infernal Vortexes (Optimized: Built-in ellipse rotation)
-        const vortRot1 = now * 0.005;
-        const vortRot2 = vortRot1 + 1.570796; // + Math.PI / 2
-        
-        ctx.lineWidth = coreR * 0.4;
-        ctx.strokeStyle = `rgba(234, 88, 12, ${0.3 + distPulse})`;
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 3, coreR * 3, vortRot1, 0, Math.PI); ctx.stroke();
-        
-        ctx.strokeStyle = `rgba(153, 27, 27, ${0.2 + distPulse})`;
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4, coreR * 4, vortRot2, 0, Math.PI); ctx.stroke();
+        ctx.moveTo(tX(0, -coreR * 0.4), tY(0, -coreR * 0.4)); 
+        ctx.quadraticCurveTo(tX(coreR * 0.1, 0), tY(coreR * 0.1, 0), tX(coreR * 0.2, 0), tY(coreR * 0.2, 0)); 
+        ctx.quadraticCurveTo(tX(coreR * 0.1, coreR * 0.2), tY(coreR * 0.1, coreR * 0.2), tX(0, coreR * 0.4), tY(0, coreR * 0.4)); 
+        ctx.quadraticCurveTo(tX(-coreR * 0.1, coreR * 0.2), tY(-coreR * 0.1, coreR * 0.2), tX(-coreR * 0.2, 0), tY(-coreR * 0.2, 0));
+        ctx.quadraticCurveTo(tX(-coreR * 0.1, 0), tY(-coreR * 0.1, 0), tX(0, -coreR * 0.4), tY(0, -coreR * 0.4));
+    }
+    ctx.fill(); ctx.stroke();
+    
+    ctx.fillStyle = '#ea580c';
+    ctx.font = `${coreR * 0.4}px "Georgia"`;
+    ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+        let rAng = (now * 0.00666) + (i * 2.094395); 
+        ctx.fillText("✦", Math.cos(rAng) * coreR * 0.7, Math.sin(rAng) * coreR * 0.2 + crownY);
+    }
 
-        // 2. GYROSCOPIC INFERNAL SIGILS 
-        const sigilSpeedMult = isEnraged ? 0.00666 : 0.00333; 
-        const outRot = now * -sigilSpeedMult;
+    // 7. PARTICLES (Lava Embers, Ash, Sparks - Optimized with seeded randoms!)
+    let parts = [[], [], []];
+    // 🚨 OPTIMIZATION: Tinanggal natin ang array instantiation per frame at Math.random.
+    for (let k = 0; k < 40; k++) {
+        let pType = k % 3; 
         
-        ctx.strokeStyle = 'rgba(153, 27, 27, 0.6)';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([20, 15, 5, 15]);
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 5.5, coreR * 5.5, outRot, 0, pi2); ctx.stroke();
-
-        const inRot = now * (sigilSpeedMult * 1.25); 
-        ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([40, 20]);
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4.5, coreR * 4.5, inRot, 0, pi2); ctx.stroke();
+        // Ginamit natin ang `seededRandom` function gamit ang index (`k`) bilang seed.
+        // Ibig sabihin, ang particle #1 ay laging nasa specific X position na yun kahit magpalit ng frame.
+        let pX = (seededRandom(k) - 0.5) * coreR * 20;
         
-        ctx.font = `${coreR * 0.6}px "Courier New", monospace`;
-        ctx.fillStyle = '#facc15';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const charBase = 0x16A0;
-        for (let i = 0; i < 12; i++) {
-            let ang = (i * 0.523598) + inRot; 
-            let rune = String.fromCharCode(charBase + (i % 20)); 
-            ctx.fillText(rune, Math.cos(ang) * coreR * 4.5, Math.sin(ang) * coreR * 4.5);
-        }
+        // Ang pag-angat nila ay based parin sa oras (now) para umaangat ang animation.
+        let pY = (seededRandom(k * 2) - 0.5) * coreR * 20 - ((now / (pType === 1 ? 5 : 15)) + k * 80) % (coreR * 15);
+        parts[pType].push({x: pX, y: pY, sizeMod: seededRandom(k * 3)});
+    }
+    
+    // Type 0: Ash
+    ctx.fillStyle = 'rgba(87, 83, 78, 0.8)';
+    ctx.beginPath();
+    for (let p of parts[0]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, p.sizeMod * 2 + 1, 0, pi2); 
+    }
+    ctx.fill();
+
+    // Type 1: Embers with Faux Glow
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    for (let p of parts[1]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, p.sizeMod * 3 + 1, 0, pi2); 
+    }
+    ctx.fill();
+    
+    ctx.fillStyle = 'rgba(234, 88, 12, 0.4)';
+    ctx.beginPath();
+    for (let p of parts[1]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, 6, 0, pi2); 
+    }
+    ctx.fill();
+
+    // Type 2: Obsidian Fragments
+    ctx.fillStyle = '#0c0a09';
+    ctx.strokeStyle = '#dc2626';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let p of parts[2]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, 2.5, 0, pi2); 
+    }
+    ctx.fill(); ctx.stroke();
+
+    ctx.restore();
+} else if (e.type === 'abyss_awakened') {
+    // ==================================================
+    // 👁️ THE ABYSS AWAKENED (The Sovereign of Annihilation)
+    // ==================================================
+    
+    const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
+    const isEnraged = hpRatio <= 0.3;
+    const isFlash = e.flash > 0;
+    
+    const enrageMult = isEnraged ? 1.5 : 1;
+    const coreR = e.r * 1.5;
+    const pi2 = 6.283185307; 
+    
+    ctx.save();
+
+    // ==================================================
+    // 1. GLOBAL MAP AURA & SHOCKWAVES
+    // ==================================================
+    const auraPulse = Math.sin(now * 0.00125) * 0.1; 
+    const auraRadius = coreR * (40 + auraPulse * 10); 
+    
+    const mapAuraGrad = ctx.createRadialGradient(0, 0, coreR * 5, 0, 0, auraRadius);
+    mapAuraGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    mapAuraGrad.addColorStop(0.3, `rgba(153, 27, 27, ${0.15 + auraPulse})`);
+    mapAuraGrad.addColorStop(0.7, `rgba(10, 0, 10, ${0.4 + auraPulse})`);
+    mapAuraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = mapAuraGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraRadius, 0, pi2);
+    ctx.fill();
+
+    const swTime = (now / (isEnraged ? 400 : 800)) % 1;
+    const swRadius = coreR * (5 + swTime * 20);
+    ctx.beginPath();
+    ctx.arc(0, 0, swRadius, 0, pi2);
+    ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 * (1 - swTime)})`;
+    ctx.lineWidth = isEnraged ? 15 * (1 - swTime) : 5 * (1 - swTime);
+    ctx.stroke();
+
+    // ==================================================
+    // 2. ANNIHILATION ARRAY & ASCENDING EMBERS
+    // ==================================================
+    
+    const outerRot = now / 6000;
+    ctx.save(); 
+    ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.3 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.15 + Math.abs(auraPulse)})`;
+    ctx.lineWidth = isEnraged ? 3 : 1;
+    ctx.rotate(outerRot); 
+    
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 5.5, 0, pi2);
+    
+    // 🚨 OPTIMIZATION: Pre-computed Hexagram Angles
+    // Hindi na gagamit ng Math.cos at Math.sin sa loob ng loop para sa static na shape!
+    const hexCos = [1, 0.5, -0.5, -1, -0.5, 0.5];
+    const hexSin = [0, 0.866025, 0.866025, 0, -0.866025, -0.866025];
+    const hexRad = coreR * 5.5;
+    
+    for(let i=0; i<6; i++) {
+        let i2 = (i + 2) % 6; 
+        ctx.moveTo(hexCos[i] * hexRad, hexSin[i] * hexRad);
+        ctx.lineTo(hexCos[i2] * hexRad, hexSin[i2] * hexRad);
+    }
+    ctx.stroke(); 
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.5 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.3 + Math.abs(auraPulse)})`;
+    ctx.lineWidth = 2;
+    ctx.rotate(now / -3000); 
+    ctx.setLineDash([coreR * 0.8, coreR * 0.4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 4.2, 0, pi2);
+    ctx.stroke();
+    ctx.restore();
+
+    // 🚨 OPTIMIZATION: Tinanggal ang shadowBlur at pinalitan ang globalAlpha ng RGBA
+    ctx.shadowBlur = 0; 
+    const numEmbers = isEnraged ? 40 : 20;
+    const totalHeight = coreR * 11;
+    const emberRGB = isEnraged ? '255, 255, 255' : '239, 68, 68';
+    
+    for (let i = 0; i < numEmbers; i++) {
+        let emberX = (Math.sin(i * 123.45) * coreR * 6); 
+        let speed = 1 + (i % 3); 
+        let emberY = (coreR * 5) - ((now / (10 * speed) + i * 80) % totalHeight); 
         
-        ctx.setLineDash([]);
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 4; i++) {
-            ctx.ellipse(0, 0, coreR * 4.2, coreR * 0.8, (i * 0.785398), 0, pi2);
-        }
-        ctx.stroke();
-
-        // 3. 12 WINGS (Optimized Matrix Math -> 1 Batched Path)
-        const wingFlap = Math.cos(now * 0.00666) * 0.4;
-        const wingLen = isEnraged ? coreR * 8 : coreR * 5;
-        
-        // Shadow Wings (Background Layer)
-        ctx.fillStyle = isFlash ? '#ffffff' : '#09090b';
-        ctx.strokeStyle = '#4c1d95'; 
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            let rot = (1.047197 * i) + wingFlap * 0.8 + 0.2; 
-            let cR = Math.cos(rot), sR = Math.sin(rot);
-            let tX = (x, y) => x * cR - y * sR;
-            let tY = (x, y) => x * sR + y * cR;
-
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(tX(-coreR * 2, -coreR * 2), tY(-coreR * 2, -coreR * 2), tX(-wingLen * 1.1, -wingLen * 0.9), tY(-wingLen * 1.1, -wingLen * 0.9));
-            ctx.lineTo(tX(-coreR * 3, -coreR * 1), tY(-coreR * 3, -coreR * 1));
-            ctx.lineTo(tX(-wingLen * 0.8, 0), tY(-wingLen * 0.8, 0));
-            ctx.lineTo(0, 0);
-        }
-        ctx.fill(); ctx.stroke();
-
-        // Hellfire Wings (Foreground Layer)
-        ctx.fillStyle = isFlash ? '#ffffff' : '#7c2d12';
-        ctx.strokeStyle = '#fef08a'; 
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            let rot = (1.047197 * i) - wingFlap;
-            let cR = Math.cos(rot), sR = Math.sin(rot);
-            let tX = (x, y) => x * cR - y * sR;
-            let tY = (x, y) => x * sR + y * cR;
-
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(tX(coreR * 2, -coreR * 2.5), tY(coreR * 2, -coreR * 2.5), tX(wingLen, -wingLen * 0.8), tY(wingLen, -wingLen * 0.8)); 
-            ctx.lineTo(tX(coreR * 2.5, -coreR * 1.5), tY(coreR * 2.5, -coreR * 1.5));
-            ctx.lineTo(tX(wingLen * 0.7, -coreR * 0.5), tY(wingLen * 0.7, -coreR * 0.5));
-            ctx.lineTo(0, 0);
-        }
-        ctx.fill(); ctx.stroke();
-
-        // 4. COLOSSAL TITAN CARAPACE
-        const corePulse = Math.sin(now * 0.0125) * 0.3; 
-        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * (1.3 + corePulse));
-        coreGrad.addColorStop(0, '#ffffff'); 
-        coreGrad.addColorStop(0.3, '#facc15'); 
-        coreGrad.addColorStop(0.7, '#b91c1c'); 
-        coreGrad.addColorStop(1, 'transparent');
-        
-        ctx.fillStyle = isFlash ? '#ffffff' : coreGrad;
-        ctx.beginPath(); ctx.arc(0, 0, coreR * 1.4, 0, pi2); ctx.fill();
-
-        // Floating Obsidian Armor Plates (Optimized Batched Path with Faux Glow)
-        const armorGlow = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, coreR * 2.5);
-        armorGlow.addColorStop(0.5, 'rgba(234, 88, 12, 0.5)'); // #ea580c glow
-        armorGlow.addColorStop(1, 'transparent');
-        ctx.fillStyle = armorGlow;
-        ctx.beginPath(); ctx.arc(0, 0, coreR * 2.5, 0, pi2); ctx.fill();
-
-        ctx.fillStyle = isFlash ? '#ffffff' : '#0c0a09';
-        ctx.strokeStyle = '#dc2626'; 
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            let pAng = (i * 1.047197) + (now * 0.002); 
-            let breathe = Math.sin((now * 0.00666) + i) * 0.15; 
-            let pDist = coreR * (0.5 + breathe); 
-            
-            let cx = Math.cos(pAng) * pDist;
-            let cy = Math.sin(pAng) * pDist;
-            let cR = Math.cos(pAng), sR = Math.sin(pAng);
-            let tX = (x, y) => (x * cR - y * sR) + cx;
-            let tY = (x, y) => (x * sR + y * cR) + cy;
-            
-            ctx.moveTo(tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
-            ctx.quadraticCurveTo(tX(coreR * 1.6, -coreR * 0.2), tY(coreR * 1.6, -coreR * 0.2), tX(coreR * 1.6, 0), tY(coreR * 1.6, 0));
-            ctx.quadraticCurveTo(tX(coreR * 1.6, coreR * 0.2), tY(coreR * 1.6, coreR * 0.2), tX(0, coreR * 0.6), tY(0, coreR * 0.6));
-            ctx.quadraticCurveTo(tX(coreR * 0.6, 0), tY(coreR * 0.6, 0), tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
-        }
-        ctx.fill(); ctx.stroke();
-
-        // 5. OMNIPRESENT EYES (Body & Main)
-        const eyeColors = ['#ffffff', '#facc15', '#dc2626', '#09090b'];
-        const flickerColor = eyeColors[Math.floor((now * 0.01) % eyeColors.length)];
-        
-        // Main Eye with Faux Glow
-        const eyeGlowGrad = ctx.createRadialGradient(0, -coreR * 0.3, coreR * 0.1, 0, -coreR * 0.3, coreR * 1.5);
-        let fcRGB = flickerColor === '#ffffff' ? '255,255,255' : flickerColor === '#facc15' ? '250,204,21' : flickerColor === '#dc2626' ? '220,38,38' : '9,9,11';
-        eyeGlowGrad.addColorStop(0, `rgba(${fcRGB}, 0.8)`);
-        eyeGlowGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = eyeGlowGrad;
-        ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 1.5, coreR * 0.6, 0, 0, pi2); ctx.fill();
-        
-        ctx.fillStyle = isFlash ? '#000000' : flickerColor;
-        ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 0.6, coreR * 0.2, 0, 0, pi2); ctx.fill();
-        
-        // Additional body eyes 
-        const eyeCount = isEnraged ? 8 : 4;
-        for (let i = 0; i < eyeCount; i++) {
-            let eAng = (i / eyeCount) * pi2 + Math.PI;
-            let eDist = coreR * 0.9;
-            let eScale = (i % 2 === 0) ? 0.2 : 0.15;
-            ctx.fillStyle = eyeColors[Math.floor(((now + i * 50) * 0.01) % eyeColors.length)];
-            ctx.beginPath(); 
-            ctx.ellipse(Math.cos(eAng) * eDist, Math.sin(eAng) * eDist, coreR * eScale, coreR * (eScale * 0.4), eAng, 0, pi2); 
+        let fade = 1 - (Math.abs(emberY) / (coreR * 5.5));
+        if (fade > 0) {
+            // Mas mabilis ang string fillStyle kaysa globalAlpha state change
+            ctx.fillStyle = `rgba(${emberRGB}, ${fade})`;
+            ctx.beginPath();
+            // Pinalitan ang Math.random() ng pseudo-random na i%3 para hindi mag-jitter ang size per frame
+            ctx.arc(emberX, emberY, isEnraged ? (i % 3) + 1.5 : 1.5, 0, pi2);
             ctx.fill();
         }
+    }
 
-        // 6. FLOATING INFERNAL CROWN (Matrix Math)
-        const crownY = -coreR * 2 + Math.sin(now * 0.00666) * 15;
+    // ==================================================
+    // 3. LEVITATION & ENTITY JITTER 
+    // ==================================================
+    let shakeX = 0, shakeY = 0;
+    if (isEnraged) {
+        shakeX = (Math.random() - 0.5) * (coreR * 0.25);
+        shakeY = (Math.random() - 0.5) * (coreR * 0.25);
+    }
+    const floatY = Math.sin(now * 0.000833) * (coreR * 0.4) + shakeY; 
+    ctx.translate(shakeX, floatY);
+
+    // ==================================================
+    // 4. THE ECLIPSE HALO
+    // ==================================================
+    const haloGlowSz = isEnraged ? 150 : 50;
+    const fauxGlowRad = coreR * 3.5 + haloGlowSz;
+    
+    const haloGlowGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5 - 10, 0, -coreR * 0.5, fauxGlowRad);
+    haloGlowGrad.addColorStop(0, 'rgba(220, 38, 38, 1)'); 
+    haloGlowGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+    
+    ctx.fillStyle = haloGlowGrad;
+    ctx.beginPath(); ctx.arc(0, -coreR * 0.5, fauxGlowRad, 0, pi2); ctx.fill();
+
+    ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
+    ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + Math.sin(now * 0.005) * 0.4})`;
+    ctx.lineWidth = coreR * 0.4;
+    ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 3.5, 0, pi2); ctx.fill(); ctx.stroke();
+    
+    const eclipseGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5, 0, -coreR * 0.5, coreR * 6);
+    eclipseGrad.addColorStop(0, 'rgba(153, 27, 27, 0.8)');
+    eclipseGrad.addColorStop(0.5, 'rgba(45, 10, 70, 0.3)');
+    eclipseGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = eclipseGrad;
+    ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 6.5, 0, pi2); ctx.fill();
+
+    // ==================================================
+    // 5. AWAKENED CROWN 
+    // ==================================================
+    const crownSpeed = isEnraged ? 800 : 2500;
+    const crownRot = now / crownSpeed;
+    
+    ctx.save();
+    ctx.translate(0, -coreR * 0.5);
+    ctx.rotate(crownRot);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = isEnraged ? 4 : 2;
+    ctx.setLineDash([coreR * 0.8, coreR * 1.2]);
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 3.8, 0, pi2); ctx.stroke();
+    ctx.restore();
+
+    const dSin = Math.sin(now * 0.002) * 12; 
+    const dCos = Math.cos(now * 0.002) * 12;
+    
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    for(let i=0; i<4; i++) {
+        let gAng = (i * 1.5707963) + crownRot; 
+        let cx = Math.cos(gAng) * (coreR * 3.8);
+        let cy = Math.sin(gAng) * (coreR * 3.8) - coreR * 0.5; 
         
-        ctx.fillStyle = '#0c0a09';
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-            let cAng = (now * -0.005) + (i * 1.256637); 
-            let cDist = coreR * 1.2;
-            let cx = Math.cos(cAng) * cDist;
-            let cy = Math.sin(cAng) * cDist * 0.3 + crownY; 
-            let rot = now * 0.01;
+        ctx.moveTo(cx + dSin, cy - dCos);
+        ctx.lineTo(cx + dCos, cy + dSin);
+        ctx.lineTo(cx - dSin, cy + dCos);
+        ctx.lineTo(cx - dCos, cy - dSin);
+    }
+    ctx.fill();
+
+    // ==================================================
+    // 6. REALITY RIBBONS
+    // ==================================================
+    ctx.strokeStyle = isEnraged ? '#ef4444' : 'rgba(153, 27, 27, 0.9)';
+    ctx.lineWidth = isEnraged ? 6 : 4;
+    ctx.setLineDash([]);
+    
+    ctx.beginPath();
+    let ribbonDots = [];
+    for(let i=0; i<4; i++) {
+        let rAng = (now * -0.0005) + (i * 1.5707963);
+        let flow = coreR * (3 + Math.sin(now * 0.0025 + i) * 2);
+        let cCos = Math.cos(rAng);
+        let cSin = Math.sin(rAng);
+
+        let cx = cCos * (coreR * 2.5) - cSin * coreR;
+        let cy = cSin * (coreR * 2.5) + cCos * coreR;
+        let ex = cCos * flow - cSin * (-coreR * 2.5);
+        let ey = cSin * flow + cCos * (-coreR * 2.5);
+
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(cx, cy, ex, ey);
+        ribbonDots.push({x: ex, y: ey});
+    }
+    ctx.stroke(); 
+
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ef4444';
+    ctx.beginPath();
+    for(let i=0; i<4; i++) {
+        ctx.moveTo(ribbonDots[i].x + 4, ribbonDots[i].y);
+        ctx.arc(ribbonDots[i].x, ribbonDots[i].y, 4, 0, pi2);
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0; 
+
+    // ==================================================
+    // 7. DARK SERAPH WINGS
+    // ==================================================
+    const wingFlap = Math.cos(now / (isEnraged ? 600 : 1000)) * 0.2 * enrageMult; 
+    ctx.fillStyle = isFlash ? '#ffffff' : '#030303';
+    ctx.strokeStyle = isEnraged ? '#ef4444' : '#991b1b';
+    ctx.lineWidth = 3;
+    
+    const wingAngles = [-0.8, -0.3, 0.2, 0.7]; 
+    ctx.beginPath();
+    for (let j = 0; j < 2; j++) { 
+        let flip = j === 0 ? 1 : -1;
+        for (let i = 0; i < 4; i++) {
+            let rot = wingAngles[i] + wingFlap * (i % 2 === 0 ? 1 : -1);
+            let cosR = Math.cos(rot), sinR = Math.sin(rot);
+            let wLen = coreR * (isEnraged ? 8 : 6) - (i * coreR);
             
-            let cR = Math.cos(rot), sR = Math.sin(rot);
-            let tX = (x, y) => x * cR - y * sR + cx;
-            let tY = (x, y) => x * sR + y * cR + cy;
+            let tX = (x, y) => (x * cosR - y * sinR) * flip;
+            let tY = (x, y) => (x * sinR + y * cosR);
 
-            ctx.moveTo(tX(0, -coreR * 0.4), tY(0, -coreR * 0.4)); 
-            ctx.quadraticCurveTo(tX(coreR * 0.1, 0), tY(coreR * 0.1, 0), tX(coreR * 0.2, 0), tY(coreR * 0.2, 0)); 
-            ctx.quadraticCurveTo(tX(coreR * 0.1, coreR * 0.2), tY(coreR * 0.1, coreR * 0.2), tX(0, coreR * 0.4), tY(0, coreR * 0.4)); 
-            ctx.quadraticCurveTo(tX(-coreR * 0.1, coreR * 0.2), tY(-coreR * 0.1, coreR * 0.2), tX(-coreR * 0.2, 0), tY(-coreR * 0.2, 0));
-            ctx.quadraticCurveTo(tX(-coreR * 0.1, 0), tY(-coreR * 0.1, 0), tX(0, -coreR * 0.4), tY(0, -coreR * 0.4));
+            ctx.moveTo(0, 0);
+            ctx.lineTo(tX(coreR * 1.8, -wLen * 0.5), tY(coreR * 1.8, -wLen * 0.5));
+            ctx.lineTo(tX(coreR * 0.6, -wLen), tY(coreR * 0.6, -wLen));
+            ctx.lineTo(tX(-coreR * 0.6, -wLen * 0.7), tY(-coreR * 0.6, -wLen * 0.7));
+            ctx.closePath();
         }
-        ctx.fill(); ctx.stroke();
+    }
+    ctx.fill(); ctx.stroke(); 
+
+    // ==================================================
+    // 8. SOVEREIGN CARAPACE
+    // ==================================================
+    ctx.fillStyle = isFlash ? '#ffffff' : '#09090b'; 
+    ctx.strokeStyle = '#ef4444'; 
+    ctx.lineWidth = isEnraged ? 3 : 2;
+    
+    const breathe = Math.sin(now * 0.0025) * (coreR * 0.15);
+    ctx.beginPath(); 
+    ctx.moveTo(coreR * 1.2 + breathe, -coreR); ctx.lineTo(coreR * 2.8 + breathe, -coreR * 1.6); ctx.lineTo(coreR * 1.8 + breathe, -coreR * 0.2); ctx.closePath();
+    ctx.moveTo(-coreR * 1.2 - breathe, -coreR); ctx.lineTo(-coreR * 2.8 - breathe, -coreR * 1.6); ctx.lineTo(-coreR * 1.8 - breathe, -coreR * 0.2); ctx.closePath();
+    ctx.moveTo(0, -coreR * 2.8); ctx.lineTo(coreR * 1.6, -coreR * 0.8); ctx.lineTo(coreR * 0.9, coreR * 2.0); 
+    ctx.lineTo(0, coreR * 3.0); ctx.lineTo(-coreR * 0.9, coreR * 2.0); ctx.lineTo(-coreR * 1.6, -coreR * 0.8); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // ==================================================
+    // 9. SOUL VORTEX / DEBRIS
+    // ==================================================
+    // 🚨 OPTIMIZATION: Pinalitan ng dynamic string ang globalAlpha
+    for(let i=0; i<8; i++) {
+        let pTime = ((now / (isEnraged ? 300 : 600)) + (i * 0.125)) % 1; 
+        let pAngle = (i * 0.785398) + (now * 0.002); 
+        let pRadius = coreR * 5 * (1 - pTime); 
+        let alpha = Math.max(0, Math.sin(pTime * Math.PI)); 
         
-        // Burning Crown Runes (Inner Ring) - Removed ShadowBlur
-        ctx.fillStyle = '#ea580c';
-        ctx.font = `${coreR * 0.4}px "Georgia"`;
-        ctx.textAlign = 'center';
-        for (let i = 0; i < 3; i++) {
-            let rAng = (now * 0.00666) + (i * 2.094395); 
-            ctx.fillText("✦", Math.cos(rAng) * coreR * 0.7, Math.sin(rAng) * coreR * 0.2 + crownY);
-        }
+        ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+        ctx.beginPath(); 
+        ctx.arc(Math.cos(pAngle) * pRadius, Math.sin(pAngle) * pRadius, coreR * 0.15, 0, pi2); 
+        ctx.fill();
+    }
 
-        // 7. PARTICLES (Lava Embers, Ash, Sparks - Optimized Batched Paths)
-        let parts = [[], [], []];
-        for (let k = 0; k < 40; k++) {
-            let pType = k % 3; 
-            let pX = (Math.random() - 0.5) * coreR * 20;
-            let pY = (Math.random() - 0.5) * coreR * 20 - ((now / (pType === 1 ? 5 : 15)) + k * 80) % (coreR * 15);
-            parts[pType].push({x: pX, y: pY});
-        }
+    // ==================================================
+    // 10. THE BLACK STAR CORE 
+    // ==================================================
+    const coreBeat = Math.sin(now / (isEnraged ? 100 : 250)) * (isEnraged ? 0.3 : 0.2);
+    const innerCoreR = coreR * (0.8 + coreBeat);
+    const coreGlowSz = isEnraged ? 80 : 40;
+    
+    const coreGlowGrad = ctx.createRadialGradient(0, 0, innerCoreR * 0.5, 0, 0, innerCoreR * 1.8 + coreGlowSz);
+    coreGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)'); 
+    coreGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = coreGlowGrad;
+    ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 1.8 + coreGlowSz, 0, pi2); ctx.fill();
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : '#ef4444';
+    ctx.beginPath();
+    for(let i=0; i<8; i++) { 
+        let ang = (i * 0.785398) + (now/ (isEnraged ? 500 : 1000));
+        let dist = i % 2 === 0 ? innerCoreR * 1.8 : innerCoreR * 0.8;
+        ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+    }
+    ctx.fill();
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 0.7, 0, pi2); ctx.fill();
+
+    // ==================================================
+    // 11. THE ZENITH EYE 
+    // ==================================================
+    const eyeY = -coreR * 3.8; 
+    const eyeBlink = isEnraged ? 1 : Math.max(0.1, Math.sin(now / 1200)); 
+    const eyeHeight = coreR * 1.0 * eyeBlink;
+    const eyeGlowSz = isEnraged ? 80 : 40;
+    
+    const eyeGlowGrad = ctx.createRadialGradient(0, eyeY, coreR * 0.5, 0, eyeY, coreR * 1.6 + eyeGlowSz);
+    eyeGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)');
+    eyeGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = eyeGlowGrad;
+    ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6 + eyeGlowSz, eyeHeight + eyeGlowSz, 0, 0, pi2); ctx.fill();
+    
+    ctx.fillStyle = '#050505';
+    ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6, eyeHeight, 0, 0, pi2); ctx.fill(); 
+    
+    if (eyeBlink > 0.2) { 
+        const pupilTrackX = Math.sin(now / 800) * (coreR * 0.5);
         
-        // Type 0: Ash
-        ctx.fillStyle = 'rgba(87, 83, 78, 0.8)';
-        ctx.beginPath();
-        for (let p of parts[0]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, Math.random() * 2 + 1, 0, pi2); }
-        ctx.fill();
+        ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444'; 
+        ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.6, eyeHeight * 0.6, 0, 0, pi2); ctx.fill(); 
+        
+        ctx.fillStyle = '#000000';
+        ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.15, eyeHeight * 0.5, 0, 0, pi2); ctx.fill();
+        
+        // 🚨 OPTIMIZATION: RGBA Blood Drops imbes na globalAlpha
+        const dropLimit = isEnraged ? 80 : 50;
+        for(let i=0; i<5; i++) {
+            let dropY = eyeY + eyeHeight + ((now / (isEnraged ? 15 : 20) + i * 25) % dropLimit);
+            let alpha = Math.max(0, 1 - ((dropY - eyeY) / dropLimit));
+            ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+            ctx.beginPath(); 
+            ctx.arc(pupilTrackX + (i-2)*6, dropY, isEnraged ? 3 : 2, 0, pi2); 
+            ctx.fill();
+        }
+    }
 
-        // Type 1: Embers with Faux Glow
-        ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        for (let p of parts[1]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, Math.random() * 3 + 1, 0, pi2); }
-        ctx.fill();
-        ctx.fillStyle = 'rgba(234, 88, 12, 0.4)';
-        ctx.beginPath();
-        for (let p of parts[1]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, 6, 0, pi2); }
-        ctx.fill();
-
-        // Type 2: Obsidian Fragments
-        ctx.fillStyle = '#0c0a09';
-        ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let p of parts[2]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, 2.5, 0, pi2); }
-        ctx.fill(); ctx.stroke();
-
-        ctx.restore();
-      } else if (e.type === 'abyss_awakened') {
-                // ==================================================
-                // 👁️ THE ABYSS AWAKENED (The Sovereign of Annihilation)
-                // ==================================================
-                
-                const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
-                const isEnraged = hpRatio <= 0.3;
-                const isFlash = e.flash > 0;
-                
-                const enrageMult = isEnraged ? 1.5 : 1;
-                const coreR = e.r * 1.5;
-                const pi2 = 6.283185307; // Pre-calculate Math.PI * 2
-                
-                ctx.save();
-
-                // ==================================================
-                // 1. GLOBAL MAP AURA & SHOCKWAVES
-                // ==================================================
-                const auraPulse = Math.sin(now * 0.00125) * 0.1; // now / 800
-                const auraRadius = coreR * (40 + auraPulse * 10); 
-                
-                const mapAuraGrad = ctx.createRadialGradient(0, 0, coreR * 5, 0, 0, auraRadius);
-                mapAuraGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                mapAuraGrad.addColorStop(0.3, `rgba(153, 27, 27, ${0.15 + auraPulse})`);
-                mapAuraGrad.addColorStop(0.7, `rgba(10, 0, 10, ${0.4 + auraPulse})`);
-                mapAuraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                
-                ctx.fillStyle = mapAuraGrad;
-                ctx.beginPath();
-                ctx.arc(0, 0, auraRadius, 0, pi2);
-                ctx.fill();
-
-                // APOCALYPTIC SHOCKWAVES 
-                const swTime = (now / (isEnraged ? 400 : 800)) % 1;
-                const swRadius = coreR * (5 + swTime * 20);
-                ctx.beginPath();
-                ctx.arc(0, 0, swRadius, 0, pi2);
-                ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 * (1 - swTime)})`;
-                ctx.lineWidth = isEnraged ? 15 * (1 - swTime) : 5 * (1 - swTime);
-                ctx.stroke();
-
-                // ==================================================
-                // 2. NEW: ANNIHILATION ARRAY & ASCENDING EMBERS
-                // ==================================================
-                
-                // --- Outer Rotating Geometric Array (Optimized to 1 path) ---
-                const outerRot = now / 6000;
-                ctx.save(); // Needed for lineDash and rotation isolation
-                ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.3 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.15 + Math.abs(auraPulse)})`;
-                ctx.lineWidth = isEnraged ? 3 : 1;
-                ctx.rotate(outerRot); 
-                
-                ctx.beginPath();
-                ctx.arc(0, 0, coreR * 5.5, 0, pi2);
-                // Hexagram pattern batching
-                const hexRad = coreR * 5.5;
-                for(let i=0; i<6; i++) {
-                    let a1 = i * 1.04719755; // Math.PI / 3
-                    let a2 = (i + 2) * 1.04719755;
-                    ctx.moveTo(Math.cos(a1) * hexRad, Math.sin(a1) * hexRad);
-                    ctx.lineTo(Math.cos(a2) * hexRad, Math.sin(a2) * hexRad);
-                }
-                ctx.stroke(); // 1 stroke for circle + hexagram!
-                ctx.restore();
-
-                // --- Inner Reverse Rotating Ring ---
-                ctx.save();
-                ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.5 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.3 + Math.abs(auraPulse)})`;
-                ctx.lineWidth = 2;
-                ctx.rotate(now / -3000); 
-                ctx.setLineDash([coreR * 0.8, coreR * 0.4]);
-                ctx.beginPath();
-                ctx.arc(0, 0, coreR * 4.2, 0, pi2);
-                ctx.stroke();
-                ctx.restore();
-
-                // --- Ascending Void Embers ---
-                ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444';
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#ef4444';
-                const numEmbers = isEnraged ? 40 : 20;
-                const totalHeight = coreR * 11;
-                
-                for (let i = 0; i < numEmbers; i++) {
-                    let emberX = (Math.sin(i * 123.45) * coreR * 6); 
-                    let speed = 1 + (i % 3); 
-                    let emberY = (coreR * 5) - ((now / (10 * speed) + i * 80) % totalHeight); 
-                    
-                    let fade = 1 - (Math.abs(emberY) / (coreR * 5.5));
-                    if (fade > 0) {
-                        ctx.globalAlpha = fade;
-                        ctx.beginPath();
-                        ctx.arc(emberX, emberY, isEnraged ? Math.random() * 3 + 1 : 1.5, 0, pi2);
-                        ctx.fill();
-                    }
-                }
-                ctx.globalAlpha = 1.0;
-                ctx.shadowBlur = 0; // Turn off immediately to save performance
-
-                // ==================================================
-                // 3. LEVITATION & ENTITY JITTER 
-                // ==================================================
-                let shakeX = 0, shakeY = 0;
-                if (isEnraged) {
-                    shakeX = (Math.random() - 0.5) * (coreR * 0.25);
-                    shakeY = (Math.random() - 0.5) * (coreR * 0.25);
-                }
-                const floatY = Math.sin(now * 0.000833) * (coreR * 0.4) + shakeY; // now/1200
-                ctx.translate(shakeX, floatY);
-
-                // 4. THE ECLIPSE HALO (Optimized with Faux Glow instead of shadowBlur 150)
-                const haloGlowSz = isEnraged ? 150 : 50;
-                const fauxGlowRad = coreR * 3.5 + haloGlowSz;
-                
-                const haloGlowGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5 - 10, 0, -coreR * 0.5, fauxGlowRad);
-                haloGlowGrad.addColorStop(0, 'rgba(220, 38, 38, 1)'); // shadowColor
-                haloGlowGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
-                
-                ctx.fillStyle = haloGlowGrad;
-                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, fauxGlowRad, 0, pi2); ctx.fill();
-
-                ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
-                ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + Math.sin(now * 0.005) * 0.4})`;
-                ctx.lineWidth = coreR * 0.4;
-                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 3.5, 0, pi2); ctx.fill(); ctx.stroke();
-                
-                const eclipseGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5, 0, -coreR * 0.5, coreR * 6);
-                eclipseGrad.addColorStop(0, 'rgba(153, 27, 27, 0.8)');
-                eclipseGrad.addColorStop(0.5, 'rgba(45, 10, 70, 0.3)');
-                eclipseGrad.addColorStop(1, 'transparent');
-                ctx.fillStyle = eclipseGrad;
-                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 6.5, 0, pi2); ctx.fill();
-
-                // 5. AWAKENED CROWN (Optimized Math: No ctx.save/rotate loop!)
-                const crownSpeed = isEnraged ? 800 : 2500;
-                const crownRot = now / crownSpeed;
-                
-                ctx.save();
-                ctx.translate(0, -coreR * 0.5);
-                ctx.rotate(crownRot);
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = isEnraged ? 4 : 2;
-                ctx.setLineDash([coreR * 0.8, coreR * 1.2]);
-                ctx.beginPath(); ctx.arc(0, 0, coreR * 3.8, 0, pi2); ctx.stroke();
-                ctx.restore();
-
-                // Pre-calculate diamond points rotation
-                const dSin = Math.sin(now * 0.002) * 12; // now / 500
-                const dCos = Math.cos(now * 0.002) * 12;
-                
-                ctx.fillStyle = '#ef4444';
-                ctx.beginPath();
-                for(let i=0; i<4; i++) {
-                    let gAng = (i * 1.5707963) + crownRot; // Math.PI / 2
-                    let cx = Math.cos(gAng) * (coreR * 3.8);
-                    let cy = Math.sin(gAng) * (coreR * 3.8) - coreR * 0.5; // Offset by translate Y
-                    
-                    // Direct math rotation (Fastest rendering)
-                    ctx.moveTo(cx + dSin, cy - dCos);
-                    ctx.lineTo(cx + dCos, cy + dSin);
-                    ctx.lineTo(cx - dSin, cy + dCos);
-                    ctx.lineTo(cx - dCos, cy - dSin);
-                }
-                ctx.fill();
-
-                // 6. REALITY RIBBONS (Optimized to 1 Batched Path)
-                ctx.strokeStyle = isEnraged ? '#ef4444' : 'rgba(153, 27, 27, 0.9)';
-                ctx.lineWidth = isEnraged ? 6 : 4;
-                ctx.setLineDash([]);
-                
-                ctx.beginPath();
-                let ribbonDots = [];
-                for(let i=0; i<4; i++) {
-                    let rAng = (now * -0.0005) + (i * 1.5707963);
-                    let flow = coreR * (3 + Math.sin(now * 0.0025 + i) * 2);
-                    let cCos = Math.cos(rAng);
-                    let cSin = Math.sin(rAng);
-
-                    // Math rotation for quadraticCurve
-                    let cx = cCos * (coreR * 2.5) - cSin * coreR;
-                    let cy = cSin * (coreR * 2.5) + cCos * coreR;
-                    let ex = cCos * flow - cSin * (-coreR * 2.5);
-                    let ey = cSin * flow + cCos * (-coreR * 2.5);
-
-                    ctx.moveTo(0, 0);
-                    ctx.quadraticCurveTo(cx, cy, ex, ey);
-                    ribbonDots.push({x: ex, y: ey});
-                }
-                ctx.stroke(); // 1 Stroke pass for all 4 ribbons!
-
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#ef4444';
-                ctx.beginPath();
-                for(let i=0; i<4; i++) {
-                    ctx.moveTo(ribbonDots[i].x + 4, ribbonDots[i].y);
-                    ctx.arc(ribbonDots[i].x, ribbonDots[i].y, 4, 0, pi2);
-                }
-                ctx.fill();
-                ctx.shadowBlur = 0; // Reset
-
-                // 7. DARK SERAPH WINGS (Matrix Math Optimization -> 1 fill, 1 stroke)
-                const wingFlap = Math.cos(now / (isEnraged ? 600 : 1000)) * 0.2 * enrageMult; 
-                ctx.fillStyle = isFlash ? '#ffffff' : '#030303';
-                ctx.strokeStyle = isEnraged ? '#ef4444' : '#991b1b';
-                ctx.lineWidth = 3;
-                
-                const wingAngles = [-0.8, -0.3, 0.2, 0.7]; 
-                ctx.beginPath();
-                for (let j = 0; j < 2; j++) { 
-                    let flip = j === 0 ? 1 : -1;
-                    for (let i = 0; i < 4; i++) {
-                        let rot = wingAngles[i] + wingFlap * (i % 2 === 0 ? 1 : -1);
-                        let cosR = Math.cos(rot), sinR = Math.sin(rot);
-                        let wLen = coreR * (isEnraged ? 8 : 6) - (i * coreR);
-                        
-                        // Matrix translation instead of expensive ctx.save/rotate
-                        let tX = (x, y) => (x * cosR - y * sinR) * flip;
-                        let tY = (x, y) => (x * sinR + y * cosR);
-
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(tX(coreR * 1.8, -wLen * 0.5), tY(coreR * 1.8, -wLen * 0.5));
-                        ctx.lineTo(tX(coreR * 0.6, -wLen), tY(coreR * 0.6, -wLen));
-                        ctx.lineTo(tX(-coreR * 0.6, -wLen * 0.7), tY(-coreR * 0.6, -wLen * 0.7));
-                        ctx.closePath();
-                    }
-                }
-                ctx.fill(); ctx.stroke(); // All 8 wings rendered in one go!
-
-                // 8. SOVEREIGN CARAPACE (Batched Subpaths)
-                ctx.fillStyle = isFlash ? '#ffffff' : '#09090b'; 
-                ctx.strokeStyle = '#ef4444'; 
-                ctx.lineWidth = isEnraged ? 3 : 2;
-                
-                const breathe = Math.sin(now * 0.0025) * (coreR * 0.15);
-                ctx.beginPath(); 
-                // Right
-                ctx.moveTo(coreR * 1.2 + breathe, -coreR); ctx.lineTo(coreR * 2.8 + breathe, -coreR * 1.6); ctx.lineTo(coreR * 1.8 + breathe, -coreR * 0.2); ctx.closePath();
-                // Left
-                ctx.moveTo(-coreR * 1.2 - breathe, -coreR); ctx.lineTo(-coreR * 2.8 - breathe, -coreR * 1.6); ctx.lineTo(-coreR * 1.8 - breathe, -coreR * 0.2); ctx.closePath();
-                // Center
-                ctx.moveTo(0, -coreR * 2.8); ctx.lineTo(coreR * 1.6, -coreR * 0.8); ctx.lineTo(coreR * 0.9, coreR * 2.0); 
-                ctx.lineTo(0, coreR * 3.0); ctx.lineTo(-coreR * 0.9, coreR * 2.0); ctx.lineTo(-coreR * 1.6, -coreR * 0.8); ctx.closePath();
-                ctx.fill(); ctx.stroke();
-
-                // 9. SOUL VORTEX / DEBRIS
-                ctx.fillStyle = '#ef4444';
-                for(let i=0; i<8; i++) {
-                    let pTime = ((now / (isEnraged ? 300 : 600)) + (i * 0.125)) % 1; // i / 8
-                    let pAngle = (i * 0.785398) + (now * 0.002); // i * Math.PI / 4
-                    let pRadius = coreR * 5 * (1 - pTime); 
-                    
-                    ctx.globalAlpha = Math.sin(pTime * Math.PI); 
-                    ctx.beginPath(); 
-                    ctx.arc(Math.cos(pAngle) * pRadius, Math.sin(pAngle) * pRadius, coreR * 0.15, 0, pi2); 
-                    ctx.fill();
-                }
-                ctx.globalAlpha = 1.0;
-
-                // 10. THE BLACK STAR CORE (Replaced heavy shadowBlur with Faux Glow)
-                const coreBeat = Math.sin(now / (isEnraged ? 100 : 250)) * (isEnraged ? 0.3 : 0.2);
-                const innerCoreR = coreR * (0.8 + coreBeat);
-                const coreGlowSz = isEnraged ? 80 : 40;
-                
-                const coreGlowGrad = ctx.createRadialGradient(0, 0, innerCoreR * 0.5, 0, 0, innerCoreR * 1.8 + coreGlowSz);
-                coreGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)'); 
-                coreGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-                ctx.fillStyle = coreGlowGrad;
-                ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 1.8 + coreGlowSz, 0, pi2); ctx.fill();
-                
-                ctx.fillStyle = isFlash ? '#ffffff' : '#ef4444';
-                ctx.beginPath();
-                for(let i=0; i<8; i++) { 
-                    let ang = (i * 0.785398) + (now/ (isEnraged ? 500 : 1000));
-                    let dist = i % 2 === 0 ? innerCoreR * 1.8 : innerCoreR * 0.8;
-                    ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
-                }
-                ctx.fill();
-                
-                ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
-                ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 0.7, 0, pi2); ctx.fill();
-
-                // 11. THE ZENITH EYE (Replaced heavy shadowBlur with Faux Glow)
-                const eyeY = -coreR * 3.8; 
-                const eyeBlink = isEnraged ? 1 : Math.max(0.1, Math.sin(now / 1200)); 
-                const eyeHeight = coreR * 1.0 * eyeBlink;
-                const eyeGlowSz = isEnraged ? 80 : 40;
-                
-                const eyeGlowGrad = ctx.createRadialGradient(0, eyeY, coreR * 0.5, 0, eyeY, coreR * 1.6 + eyeGlowSz);
-                eyeGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)');
-                eyeGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-                ctx.fillStyle = eyeGlowGrad;
-                ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6 + eyeGlowSz, eyeHeight + eyeGlowSz, 0, 0, pi2); ctx.fill();
-                
-                ctx.fillStyle = '#050505';
-                ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6, eyeHeight, 0, 0, pi2); ctx.fill(); 
-                
-                if (eyeBlink > 0.2) { 
-                    const pupilTrackX = Math.sin(now / 800) * (coreR * 0.5);
-                    
-                    ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444'; 
-                    ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.6, eyeHeight * 0.6, 0, 0, pi2); ctx.fill(); 
-                    
-                    ctx.fillStyle = '#000000';
-                    ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.15, eyeHeight * 0.5, 0, 0, pi2); ctx.fill();
-                    
-                    ctx.fillStyle = '#ef4444';
-                    for(let i=0; i<5; i++) {
-                        let dropY = eyeY + eyeHeight + ((now / (isEnraged ? 15 : 20) + i * 25) % (isEnraged ? 80 : 50));
-                        ctx.globalAlpha = 1 - ((dropY - eyeY) / (isEnraged ? 80 : 50));
-                        ctx.beginPath(); ctx.arc(pupilTrackX + (i-2)*6, dropY, isEnraged ? 3 : 2, 0, pi2); ctx.fill();
-                    }
-                    ctx.globalAlpha = 1.0;
-                }
-
-                ctx.restore();
-            } 
+    ctx.restore();
+}
 
       ctx.restore();
       animationId = requestAnimationFrame(render);
@@ -1306,7 +1493,7 @@ const MonsterPreview = ({ monster }) => {
 
   // CIRCULAR PREVIEW WITH ANCIENT SEAL BORDER
   return (
-    <div style={{ position: 'relative', width: '240px', height: '240px', margin: '0 auto', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+    <div className="mobile-preview-fix" style={{ position: 'relative', width: '240px', height: '240px', margin: '0 auto', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <svg width="240" height="240" viewBox="0 0 240 240" style={{ position: 'absolute', inset: 0, animation: 'grimoire-spin 15s linear infinite', zIndex: 3, pointerEvents: 'none' }}>
         <circle cx="120" cy="120" r="115" fill="none" stroke="#ffe6a3" strokeWidth="1.5" opacity="0.6" strokeDasharray="8 4" />
         <circle cx="120" cy="120" r="106" fill="none" stroke="#c5a059" strokeWidth="1.2" />
@@ -1439,6 +1626,29 @@ export default function Bestiary() {
         .rune-flash.active {
           opacity: 1;
         }
+          /* 🔥 MOBILE FIX FOR PREVIEW & STATS */
+        @media (max-width: 480px) {
+          .mobile-preview-fix {
+            transform: scale(0.85) !important; 
+            margin: -15px auto !important;
+          }
+          .mobile-stats-fix {
+            grid-template-columns: 1fr !important; /* Stack stats vertically sa maliit na phone */
+          }
+        }
+
+        /* 🔥 PURE CSS MOBILE RESPONSIVE OVERRIDES 🔥 */
+        @media (max-width: 768px) {
+          /* Targetin ang 2-column Stats Grid gamit ang inline-style selector (Walang binagong JSX) */
+          div[style*="grid-template-columns: 1fr 1fr"] {
+            grid-template-columns: 1fr !important;
+          }
+          /* Targetin ang 240px Canvas Container para lumiit nang konti at magkasya sa phone */
+          div[style*="width: 240px"][style*="height: 240px"] {
+            transform: scale(0.85) !important;
+            margin: -20px auto !important;
+          }
+        }
       `}</style>
 
       {/* ── LEFT PAGE (PREVIEW & NAME) ── */}
@@ -1530,7 +1740,7 @@ export default function Bestiary() {
           </div>
 
           {/* STATS GRID */}
-          <div style={{ 
+          <div className="mobile-stats-fix" style={{ 
             background: 'rgba(0,0,0,0.4)', border: '1px dashed rgba(197,160,89,0.3)', borderRadius: '6px', 
             padding: '10px 15px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', 
             fontFamily: 'monospace', fontSize: '0.7rem', color: '#cbd5e1', position: 'relative', zIndex: 10 

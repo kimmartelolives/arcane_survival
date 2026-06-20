@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import LoadingScreen from './LoadingScreen';
 // SPELL DAMAGE LOGIC search para sa tornados at waves
 
 //CHEAT CODES / DEV
@@ -60,17 +61,46 @@ class SoundManager {
   unlockAll() {
     if (this.unlocked) return;
     this.unlocked = true;
-    Object.values(this.pools).forEach(pool => {
-      pool.forEach(audio => {
-        audio.volume = 0; 
-        const p = audio.play();
-        if (p !== undefined) {
-          p.then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-            audio.volume = 1; 
-          }).catch(() => {});
-        }
+
+    // 🔥 iOS FIX (was the cause of "sabay-sabay lahat ng SFX" + dead audio after):
+    // 1) iOS Safari IGNORES `audio.volume` on <audio> elements — Apple reserves
+    //    volume control for the hardware buttons only. The old code set
+    //    volume=0 to silently unlock, but on iOS that did nothing, so every
+    //    pooled sound played out loud the moment the player first touched the
+    //    screen. `.muted` IS respected on iOS, so we use that instead.
+    // 2) iOS only allows audio.play() to start when it's called SYNCHRONOUSLY
+    //    inside the user-gesture call stack (pointerdown/keydown handler).
+    //    Wrapping each play() in setTimeout (even 0/15ms) breaks that
+    //    association, so iOS silently blocked almost every pooled sound from
+    //    ever truly unlocking — which is why SFX stopped working entirely
+    //    once gameplay started. Unlocking everything in one synchronous loop
+    //    (no setTimeout) keeps every call tied to the original gesture.
+    //
+    // 🔥 LAG FIX: Dati, sabay-sabay na nino-notify ang 48 Audio elements (16 sounds x 3 pool)
+    // sa iisang synchronous loop — nagdudulot ng malaking main thread spike sa first gesture.
+    // Solusyon: I-unlock lang ang UNANG audio ng bawat sound type (16 calls lang) para
+    // ma-satisfy ang browser gesture requirement, tapos i-defer ang natitirang 32 sa
+    // microtask queue (Promise chain) para hindi nila ma-block ang first frame ng gameplay.
+    const allPools = Object.values(this.pools);
+
+    const unlockOne = (audio) => {
+      audio.muted = true;
+      const p = audio.play();
+      if (p !== undefined) {
+        p.then(() => { audio.pause(); audio.currentTime = 0; audio.muted = false; })
+         .catch(() => { audio.muted = false; });
+      } else {
+        audio.muted = false;
+      }
+    };
+
+    // Pass 1 (synchronous, sa loob ng gesture): pool[0] lang ng bawat sound (16 calls)
+    allPools.forEach(pool => { if (pool.length) unlockOne(pool[0]); });
+
+    // Pass 2 (deferred microtask): pool[1] at pool[2] — hindi na naka-block sa first frame
+    Promise.resolve().then(() => {
+      allPools.forEach(pool => {
+        for (let i = 1; i < pool.length; i++) unlockOne(pool[i]);
       });
     });
   }
@@ -121,6 +151,165 @@ const ET = [
   { r: 27, speed: 60,  hp: 600, dmg: 80, xp: 150, color: '#fbbf24', glow: '#f59e0b', boss: true, type: 'miniBoss' },
 ];
 
+// =========================================================================
+// 🚀 SPRITE CACHING PARA SA NORMAL MINIONS (ANTI-LAG SYSTEM)
+// =========================================================================
+const SPRITE_SIZE = 50; 
+const SPRITE_R = 13; // Ang size radius ng normal minion
+
+const createNormalSprite = (isFlash) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = SPRITE_SIZE;
+  canvas.height = SPRITE_SIZE;
+  const ctx = canvas.getContext('2d');
+  
+  ctx.translate(SPRITE_SIZE / 2, SPRITE_SIZE / 2); // Igitna ang drawing
+  
+  // Katawan
+  ctx.fillStyle = isFlash ? '#ffffff' : '#1e293b'; 
+  ctx.beginPath();
+  for(let i = 0; i < 12; i++) {
+      let ang = i * (Math.PI / 6);
+      let rad = SPRITE_R * 0.8; 
+      ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Bone Skull Mask
+  const topY = -SPRITE_R * 0.2;
+  const maskR = SPRITE_R * 0.6;
+  const jawY = SPRITE_R * 0.5;
+  const jawX = SPRITE_R * 0.3;
+
+  ctx.fillStyle = isFlash ? '#000000' : '#cbd5e1';
+  ctx.beginPath();
+  ctx.arc(0, topY, maskR, Math.PI, 0); 
+  ctx.quadraticCurveTo(maskR, jawY, jawX, jawY); 
+  ctx.lineTo(-jawX, jawY); 
+  ctx.quadraticCurveTo(-maskR, jawY, -maskR, topY); 
+  ctx.fill();
+
+  // Mata
+  ctx.fillStyle = isFlash ? '#ffffff' : '#991b1b';
+  const eyeX = SPRITE_R * 0.25;
+  const eyeRX = SPRITE_R * 0.15;
+  const eyeRY = SPRITE_R * 0.2;
+
+  ctx.beginPath(); 
+  ctx.ellipse(-eyeX, 0, eyeRX, eyeRY, 0.2, 0, Math.PI * 2); 
+  const startX = eyeX + eyeRX * Math.cos(-0.2);
+  const startY = eyeRY * Math.sin(-0.2);
+  ctx.moveTo(startX, startY);
+  ctx.ellipse(eyeX, 0, eyeRX, eyeRY, -0.2, 0, Math.PI * 2); 
+  ctx.fill();
+
+  return canvas;
+};
+
+// I-save natin sa memory yung mga pre-rendered images
+// Gagawin lang ito isang beses tuwing maglo-load ang page!
+const normalMinionImage = createNormalSprite(false);
+const normalMinionFlashImage = createNormalSprite(true);
+
+// =========================================================================
+// 🚀 SPRITE CACHING PARA SA FAST AT TANK MINIONS
+// =========================================================================
+const CACHE_R = 40; // Gagamit tayo ng malaking Radius (40) para malinaw (HD) ang sprite
+
+const createFastSprite = (isFlash) => {
+    const size = CACHE_R * 6; // Ang wingspan ng fast minion ay umaabot sa 2.5x radius
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(size / 2, size / 2); // Gitna
+
+    const thirdPI = (Math.PI * 2) / 3;
+    ctx.fillStyle = isFlash ? '#ffffff' : '#9a3412'; 
+    ctx.strokeStyle = isFlash ? '#000000' : '#ea580c';
+    ctx.lineWidth = 2.5;
+
+    // Wings
+    ctx.beginPath(); 
+    for(let i = 0; i < 3; i++) {
+        ctx.rotate(thirdPI);
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(CACHE_R * 1.5, -CACHE_R * 1.5, CACHE_R * 2.5, 0); 
+        ctx.quadraticCurveTo(CACHE_R * 1.0, -CACHE_R * 0.5, 0, CACHE_R * 0.5);
+    }
+    ctx.fill(); ctx.stroke();
+
+    // Eyes
+    ctx.fillStyle = isFlash ? '#000000' : '#fef08a';
+    const eyeDist = CACHE_R * 0.4;
+    const eyeSize = CACHE_R * 0.25;
+    ctx.beginPath(); 
+    for(let i = 0; i < 3; i++) {
+        let a = i * thirdPI;
+        let ex = Math.cos(a) * eyeDist;
+        let ey = Math.sin(a) * eyeDist;
+        ctx.moveTo(ex + eyeSize, ey);
+        ctx.arc(ex, ey, eyeSize, 0, Math.PI * 2); 
+    }
+    ctx.fill();
+    return canvas;
+};
+
+const createTankSprite = (isFlash) => {
+    const size = CACHE_R * 4; 
+    const canvas = document.createElement('canvas');
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(size / 2, size / 2);
+
+    // Carapace (Baluti)
+    ctx.fillStyle = isFlash ? '#ffffff' : '#1e1b4b'; 
+    ctx.strokeStyle = isFlash ? '#000000' : '#4338ca';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-CACHE_R * 1.2, CACHE_R * 0.5); 
+    ctx.lineTo(-CACHE_R * 1.5, -CACHE_R * 0.2); 
+    ctx.lineTo(-CACHE_R * 0.6, -CACHE_R * 1.2); 
+    ctx.lineTo(0, -CACHE_R * 0.8);          
+    ctx.lineTo(CACHE_R * 0.6, -CACHE_R * 1.2);   
+    ctx.lineTo(CACHE_R * 1.5, -CACHE_R * 0.2);   
+    ctx.lineTo(CACHE_R * 1.2, CACHE_R * 0.5);    
+    ctx.lineTo(0, CACHE_R * 0.8);             
+    ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // Furnace Glow (Naka-fix sa 0.75 opacity imbes na pumipintig)
+    if (isFlash) {
+        ctx.fillStyle = '#000000';
+    } else {
+        ctx.fillStyle = '#6366f1'; 
+        ctx.globalAlpha = 0.75; 
+    }
+    ctx.beginPath();
+    ctx.arc(0, CACHE_R * 0.2, CACHE_R * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1; // Reset
+
+    // Prison Bars
+    ctx.strokeStyle = isFlash ? '#ffffff' : '#0f172a';
+    ctx.lineWidth = 5;
+    ctx.beginPath(); 
+    ctx.moveTo(-CACHE_R * 0.7, CACHE_R * 0.2); ctx.lineTo(CACHE_R * 0.7, CACHE_R * 0.2); 
+    ctx.moveTo(-CACHE_R * 0.3, -CACHE_R * 0.3); ctx.lineTo(-CACHE_R * 0.3, CACHE_R * 0.7); 
+    ctx.moveTo(CACHE_R * 0.3, -CACHE_R * 0.3); ctx.lineTo(CACHE_R * 0.3, CACHE_R * 0.7); 
+    ctx.stroke(); 
+
+    return canvas;
+};
+
+// I-cache ang images sa memory (1 beses lang tatakbo)
+const fastImg = createFastSprite(false);
+const fastFlashImg = createFastSprite(true);
+const tankImg = createTankSprite(false);
+const tankFlashImg = createTankSprite(true);
+
+
+
 const RARITY_COLORS = {
   common: '#e2e8f0',
   rare: '#3b82f6',
@@ -128,6 +317,251 @@ const RARITY_COLORS = {
   legendary: '#fbbf24',
   mythic: '#ef4444'
 };
+
+// ── Custom Arcane Line-Icon Set (replaces generic emoji for hotbar/sigils) ──
+const ArcaneIcon = ({ type, size = 22, style, className }) => {
+  const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', style: { verticalAlign: 'middle', flexShrink: 0, ...style }, className };
+  switch (type) {
+    case 'bodyCutter': // B.Cutter — crimson slash blade
+      return (
+        <svg {...common}>
+          <path d="M4 19 L17 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <path d="M13 6 L19 4 L17 10 Z" fill="currentColor" opacity="0.9" />
+          <path d="M6 17 Q4.5 19 4 21 Q5.8 20.3 7 19" fill="#ef4444" opacity="0.85" />
+        </svg>
+      );
+    case 'shootingStar': // S.Star — comet with trail
+      return (
+        <svg {...common}>
+          <path d="M3 21 L11 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.55" />
+          <path d="M6.5 17.5 L13 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.8" />
+          <path d="M16 8 L17.4 11.1 L20.7 11.5 L18.3 13.8 L18.9 17.1 L16 15.5 L13.1 17.1 L13.7 13.8 L11.3 11.5 L14.6 11.1 Z" fill="currentColor" />
+        </svg>
+      );
+    case 'cubeBash': // C.Bash — impacting cube
+      return (
+        <svg {...common}>
+          <path d="M12 3 L20 7 V16 L12 20 L4 16 V7 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M4 7 L12 11 L20 7" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M12 11 V20" stroke="currentColor" strokeWidth="1.4" />
+          <path d="M1.5 11 L4 9.5 M1.5 13 L4 13" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.7" />
+        </svg>
+      );
+    case 'vacuumSlash': // V.Slash — vortex swirl
+      return (
+        <svg {...common}>
+          <path d="M12 4 C16.5 4 20 7 20 11 C20 14.5 17 16.5 14 16 C11.5 15.6 10 13.8 10.6 12 C11.1 10.5 13 10 14 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M5 13 C5 17 8.2 20 12.5 20" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.6" />
+          <circle cx="14" cy="11" r="1.3" fill="currentColor" />
+        </svg>
+      );
+    case 'arcaneCollapse': // A.Collapse — converging singularity
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="3" fill="currentColor" />
+          <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.2" opacity="0.4" />
+          {[0, 60, 120, 180, 240, 300].map(a => {
+            const r1 = 11, r2 = 6.5;
+            const rad = (a * Math.PI) / 180;
+            return (
+              <line key={a}
+                x1={12 + Math.cos(rad) * r1} y1={12 + Math.sin(rad) * r1}
+                x2={12 + Math.cos(rad) * r2} y2={12 + Math.sin(rad) * r2}
+                stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            );
+          })}
+        </svg>
+      );
+    case 'arcaneInstinct': // A.Instinct — bolt within an eye/diamond
+      return (
+        <svg {...common}>
+          <path d="M12 2 L21 12 L12 22 L3 12 Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" opacity="0.55" />
+          <path d="M13 6 L8.5 13 H12 L11 18 L16 11 H12.5 Z" fill="currentColor" />
+        </svg>
+      );
+    case 'arcaneResurrect': // A.Resurrect — rising rune staff
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="6" r="3.3" stroke="currentColor" strokeWidth="1.6" />
+          <path d="M12 9.3 V21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M7 14 L12 11.5 L17 14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8.5 18 L12 16.3 L15.5 18" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+        </svg>
+      );
+    case 'berserk': // Berserk Aura — crossed slashes with a flaring core
+      return (
+        <svg {...common}>
+          <path d="M5 5 L19 19 M19 5 L5 19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.75" />
+          <path d="M12 6.5c1.1 2.2 2.3 3 2.3 5.3a2.5 2.5 0 1 1-5 0c0-.85.3-1.4.75-1.9.1.6.5 1 .9 1-.35-1.6.2-2.7 1.05-4.4Z" fill="currentColor" />
+        </svg>
+      );
+    case 'haste': // Massive Haste — forward speed chevrons
+      return (
+        <svg {...common}>
+          <path d="M4 7 L10 12 L4 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <path d="M11 7 L17 12 L11 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" opacity="0.7" />
+          <path d="M17.5 12 H21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
+        </svg>
+      );
+    case 'fortify': // Fortify — hardened heater shield
+      return (
+        <svg {...common}>
+          <path d="M12 2 L20 5.5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5.5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none" />
+          <path d="M6.2 10 H17.8 M6.2 14 H17.8" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />
+          <path d="M12 6.2 V18" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />
+        </svg>
+      );
+    case 'shield': // Rigid's Defender — layered energy bubble
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.7" opacity="0.9" />
+          <circle cx="12" cy="12" r="4.6" stroke="currentColor" strokeWidth="1.1" opacity="0.5" />
+          <circle cx="9.3" cy="8.8" r="1.3" fill="currentColor" opacity="0.75" />
+        </svg>
+      );
+    case 'fire':
+      return (
+        <svg {...common}>
+          <path d="M12 2.5c1 3 4 4 4 8a4 4 0 1 1-8 0c0-1.2.4-2 1-2.7.2 1 .9 1.7 1.7 1.7-.5-2.2.3-3.8 1.3-7Z" fill="currentColor" />
+        </svg>
+      );
+    case 'water':
+      return (
+        <svg {...common}>
+          <path d="M3 11c2-1.5 3.5-1.5 5.5 0s3.5 1.5 5.5 0 3.5-1.5 5.5 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M3 16c2-1.5 3.5-1.5 5.5 0s3.5 1.5 5.5 0 3.5-1.5 5.5 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.6" />
+          <path d="M12 2c-2.5 3-4 5.3-4 7.2a4 4 0 0 0 8 0C16 7.3 14.5 5 12 2Z" fill="currentColor" opacity="0.85" />
+        </svg>
+      );
+    case 'earth':
+      return (
+        <svg {...common}>
+          <path d="M12 3 L21 19 H3 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+          <path d="M9 19 L13 11 L11 11 L16 19" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none" />
+          <path d="M9 19 L13 11 L11 11 L16 19 Z" fill="currentColor" opacity="0.35" />
+        </svg>
+      );
+    case 'lightning':
+      return (
+        <svg {...common}>
+          <path d="M13 2 L5 14 H11 L9.5 22 L19 9 H13 Z" fill="currentColor" />
+        </svg>
+      );
+    case 'ice':
+      return (
+        <svg {...common}>
+          <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M12 2 V22" /><path d="M3.5 7 L20.5 17" /><path d="M3.5 17 L20.5 7" />
+            <path d="M12 5 L9.5 7 M12 5 L14.5 7" /><path d="M12 19 L9.5 17 M12 19 L14.5 17" />
+          </g>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      );
+    case 'nature':
+      return (
+        <svg {...common}>
+          <path d="M12 21c0-7 .5-12 7-16-1 6-1.5 11-7 16Z" fill="currentColor" />
+          <path d="M12 21c0-7-.5-12-7-16 1 6 1.5 11 7 16Z" fill="currentColor" opacity="0.7" />
+          <path d="M12 21 V12" stroke="currentColor" strokeWidth="1.3" opacity="0.6" />
+        </svg>
+      );
+    case 'ultimateSeal': // Ultimate Spells header — void sigil with orbiting stars (replaces 🌌)
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.1" opacity="0.45" />
+          <circle cx="12" cy="12" r="5.6" stroke="currentColor" strokeWidth="1.3" opacity="0.7" />
+          <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+          <path d="M5.2 6.2 L6.5 7.5 M17.5 7.5 L18.8 6.2 M5.2 17.8 L6.5 16.5 M18.8 17.8 L17.5 16.5"
+            stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" opacity="0.6" />
+          <path d="M21 5 L21.6 6.6 L23.2 7.2 L21.6 7.8 L21 9.4 L20.4 7.8 L18.8 7.2 L20.4 6.6 Z" fill="currentColor" opacity="0.85" />
+          <path d="M4 17 L4.5 18.2 L5.7 18.7 L4.5 19.2 L4 20.4 L3.5 19.2 L2.3 18.7 L3.5 18.2 Z" fill="currentColor" opacity="0.7" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+};
+
+// ── Lightweight Canvas Debuff Icons ──────────────────────────────────────
+// Drawn with plain paths/arcs (no ctx.font, no emoji glyph lookups).
+// Emoji fillText forces the browser to resolve a fallback emoji font on
+// every draw call; with many enemies on screen each frame, that glyph
+// lookup is the actual lag source. Vector shapes are nearly free by
+// comparison and stay crisp at any zoom.
+const DEBUFF_ICON_COLORS = {
+  burn:   '#fb923c', // Arcane Burn (was 💥)
+  slow:   '#67e8f9', // Temporal Slow (was ❄️)
+  stun:   '#38bdf8', // Stunned (was 💫)
+  bleed:  '#f87171', // Stigma (was 🩸)
+  void:   '#c084fc', // Void Exhaustion (was 🌌)
+  instab: '#f472b6', // Instability (was 💔)
+};
+
+function drawDebuffIcon(ctx, type, cx, cy, s) {
+  const color = DEBUFF_ICON_COLORS[type] || '#e2e8f0';
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.4;
+  switch (type) {
+    case 'burn': // teardrop flame
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      ctx.quadraticCurveTo(s * 0.62, -s * 0.15, s * 0.34, s * 0.32);
+      ctx.quadraticCurveTo(s * 0.34, s * 0.82, 0, s * 0.95);
+      ctx.quadraticCurveTo(-s * 0.34, s * 0.82, -s * 0.34, s * 0.32);
+      ctx.quadraticCurveTo(-s * 0.62, -s * 0.15, 0, -s);
+      ctx.fill();
+      break;
+    case 'slow': // snowflake spokes
+      ctx.beginPath();
+      ctx.arc(0, 0, s, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let a = 0; a < 6; a++) {
+        const rad = (a * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(rad) * s, Math.sin(rad) * s);
+        ctx.stroke();
+      }
+      break;
+    case 'stun': // three orbiting stars
+      for (let i = 0; i < 3; i++) {
+        const a = (i * 2 * Math.PI) / 3 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * s * 0.55, Math.sin(a) * s * 0.55, s * 0.26, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    case 'bleed': // blood drop
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      ctx.quadraticCurveTo(s * 0.72, s * 0.15, 0, s * 0.95);
+      ctx.quadraticCurveTo(-s * 0.72, s * 0.15, 0, -s);
+      ctx.fill();
+      break;
+    case 'void': // eclipse ring
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case 'instab': // cracked X
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.7, -s * 0.5); ctx.lineTo(s * 0.7, s * 0.5);
+      ctx.moveTo(-s * 0.7, s * 0.5); ctx.lineTo(s * 0.7, -s * 0.5);
+      ctx.stroke();
+      break;
+    default:
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+  }
+  ctx.restore();
+}
 
 const EQUIPMENT_DB = [
   // WANDS
@@ -186,39 +620,308 @@ const focusStyles = `
     border-radius: 4px;
     overflow: hidden;
   }
-  .hud-start-overlay {
+.hud-start-overlay {
+    position: fixed !important;
+    inset: 0 !important; 
+    display: flex !important;
+    align-items: center !important;    
+    justify-content: center !important; 
+    background: rgba(12, 10, 20, 0.35) !important;
+    z-index: 99999 !important;
+    padding: 12px !important; /* Safe zone padding */
+    box-sizing: border-box !important;
+    overflow: hidden !important; 
+  }
+
+  .hud-start-modal {
+    width: 100% !important;
+    max-width: 340px !important;
+    box-sizing: border-box !important; 
+    margin: auto !important; 
+    
+    /* TINANGGAL ANG OVERFLOW AT MAX-HEIGHT DITO */
+    overflow: hidden !important; 
+    
+    padding: 1.5rem !important;
+    text-align: center !important;
+    background: rgba(26, 20, 50, 0.45) !important;
+    backdrop-filter: blur(5px) !important;
+    -webkit-backdrop-filter: blur(5px) !important;
+    border: 0.5px solid rgba(127, 119, 221, 0.35) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5) !important;
+    
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important; /* Binalik sa center */
+  }
+
+  /* =========================================================================
+     📱 COMPACT VIEW PARA SA MOBILE LANDSCAPE (Iwas putol, walang scroll)
+     ========================================================================= */
+  @media (max-height: 480px) {
+    .hud-start-modal { 
+      padding: 0.8rem 1rem !important; 
+    }
+    .hud-rune-row { 
+      margin-bottom: 0.4rem !important; 
+    }
+    .hud-rune-row span { 
+      font-size: 14px !important; 
+    }
+    .hud-sigil { 
+      width: 28px !important; 
+      height: 28px !important; 
+      margin: 0 auto 0.4rem !important; 
+    }
+    .hud-divider, .hud-divider-sm { 
+      margin: 0.4rem 0 !important; 
+    }
+    .hud-start-modal h2 { 
+      font-size: 13px !important; 
+    }
+    .hud-start-modal p { 
+      font-size: 10.5px !important; 
+      margin: 0 0 0.5rem !important; 
+      line-height: 1.3 !important; 
+    }
+    .hud-touch-hint, .hud-wasd-hint { 
+      margin: 0 0 0.4rem !important; 
+    }
+    .hud-touch-zone { 
+      width: 40px !important; 
+      height: 40px !important; 
+    }
+    .hud-rune-footer {
+      margin-top: 0 !important;
+    }
+  }
+
+  /* corner brackets */
+  .hud-corner {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(3, 1, 17, 0.88);
+    width: 22px;
+    height: 22px;
+    animation: hud-corner-glow 2.5s ease-in-out infinite;
+  }
+  .hud-corner-tl { top: -1px; left: -1px; border-top: 1.5px solid #7F77DD; border-left: 1.5px solid #7F77DD; }
+  .hud-corner-tr { top: -1px; right: -1px; border-top: 1.5px solid #7F77DD; border-right: 1.5px solid #7F77DD; animation-delay: .6s; }
+  .hud-corner-bl { bottom: -1px; left: -1px; border-bottom: 1.5px solid #7F77DD; border-left: 1.5px solid #7F77DD; animation-delay: 1.2s; }
+  .hud-corner-br { bottom: -1px; right: -1px; border-bottom: 1.5px solid #7F77DD; border-right: 1.5px solid #7F77DD; animation-delay: 1.8s; }
+
+  @keyframes hud-corner-glow {
+    0%, 100% { opacity: .5; }
+    50%      { opacity: 1; }
+  }
+
+  /* floating rune row */
+  .hud-rune-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 1.1rem;
+    font-family: serif;
+  }
+  .hud-rune-row span {
+    font-size: 18px;
+    color: #AFA9EC;
+    animation: hud-rune-drift 4s ease-in-out infinite;
+  }
+  .hud-rune-row span:nth-child(1) { animation-delay: 0s; }
+  .hud-rune-row span:nth-child(2) { animation-delay: .5s; }
+  .hud-rune-row span:nth-child(3) { animation-delay: 1s; }
+  .hud-rune-row span:nth-child(4) { animation-delay: 1.5s; }
+  .hud-rune-row span:nth-child(5) { animation-delay: 2s; }
+
+  @keyframes hud-rune-drift {
+    0%, 100% { opacity: .2; transform: translateY(0); }
+    50%      { opacity: .5; transform: translateY(-5px); }
+  }
+
+  /* center sigil */
+  .hud-sigil {
+    width: 40px;
+    height: 40px;
+    margin: 0 auto 1.1rem;
+    display: block;
+  }
+
+  /* dividers */
+  .hud-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 1rem 0;
+    animation: hud-border-pulse 3s ease-in-out infinite;
+  }
+  .hud-divider span {
+    flex: 1;
+    height: 0.5px;
+    background: #534AB7;
+    opacity: .6;
+  }
+  .hud-divider i {
+    font-size: 11px;
+    color: #7F77DD;
+    font-family: serif;
+    font-style: normal;
+  }
+  .hud-divider-sm { margin: .85rem 0; }
+
+  @keyframes hud-border-pulse {
+    0%, 100% { opacity: .4; }
+    50%      { opacity: .9; }
+  }
+
+  /* title */
+  .hud-start-modal h2 {
+    font-family: 'Cinzel', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #EEEDFE;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin: 0;
+    line-height: 1.4;
+    animation: hud-shimmer 3s ease-in-out infinite;
+  }
+
+  @keyframes hud-shimmer {
+    0%, 100% { opacity: .85; }
+    50%      { opacity: 1; }
+  }
+
+  /* body text */
+  .hud-start-modal p {
+    font-family: 'Cinzel', serif;
+    font-size: 11.5px;
+    font-weight: 400;
+    color: #AFA9EC;
+    line-height: 1.85;
+    letter-spacing: .5px;
+    margin: 0 0 1.1rem;
+  }
+
+  /* touch drag hint (mobile) */
+  .hud-touch-hint {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 1.25rem;
+  }
+  .hud-touch-zone {
+    position: relative;
+    width: 56px;
+    height: 56px;
+  }
+  .hud-touch-ring {
+    position: absolute;
+    inset: 0;
+    border: 1px solid #7F77DD;
+    border-radius: 50%;
+    opacity: 0;
+    animation: hud-touch-ripple 1.8s ease-out infinite;
+  }
+  .hud-touch-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    left: 50%;
+    top: 50%;
+    border-radius: 50%;
+    background: #AFA9EC;
+    box-shadow: 0 0 0 2px rgba(127,119,221,0.3);
+    animation: hud-touch-drag 1.8s ease-in-out infinite;
+  }
+
+  @keyframes hud-touch-drag {
+    0%   { transform: translate(-50%, -50%) translateX(-16px); opacity: .5; }
+    40%  { transform: translate(-50%, -50%) translateX(16px); opacity: 1; }
+    60%  { transform: translate(-50%, -50%) translateX(16px); opacity: 1; }
+    100% { transform: translate(-50%, -50%) translateX(-16px); opacity: .5; }
+  }
+
+  @keyframes hud-touch-ripple {
+    0%   { transform: scale(0.5); opacity: .6; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* WASD key hint (desktop) */
+  .hud-wasd-hint {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    margin: 0 0 1.25rem;
+  }
+  .hud-key-row {
+    display: flex;
+    gap: 4px;
+  }
+  .hud-key {
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 100;
-    font-family: monospace;
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #AFA9EC;
+    border: 0.5px solid rgba(127,119,221,0.5);
+    border-radius: 4px;
+    background: rgba(83,74,183,0.12);
+    animation: hud-key-press 2.4s ease-in-out infinite;
   }
-  .hud-start-modal {
-    background: #0b0826;
-    border: 2px solid #8b5cf6;
-    padding: 2rem;
-    border-radius: 8px;
-    text-align: center;
-    color: #fff;
-    max-width: 420px;
-    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5);
+  .hud-key-w { animation-delay: 0s; }
+  .hud-key-a { animation-delay: .6s; }
+  .hud-key-s { animation-delay: 1.2s; }
+  .hud-key-d { animation-delay: 1.8s; }
+
+  @keyframes hud-key-press {
+    0%, 70%, 100% {
+      background: rgba(83,74,183,0.12);
+      border-color: rgba(127,119,221,0.5);
+      color: #AFA9EC;
+      transform: scale(1);
+    }
+    15% {
+      background: rgba(127,119,221,0.45);
+      border-color: #AFA9EC;
+      color: #EEEDFE;
+      transform: scale(0.92);
+    }
   }
-  .hud-start-modal h2 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1.5rem;
-    letter-spacing: 1px;
+
+  /* footer runes */
+  .hud-rune-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin-top: .25rem;
+    font-family: serif;
   }
-  .hud-start-modal p {
-    font-size: 0.9rem;
-    color: #d1d5db;
-    line-height: 1.4;
-    margin: 0;
+  .hud-rune-footer span {
+    width: 40px;
+    height: 0.5px;
+    background: #3C3489;
+    opacity: .7;
+  }
+  .hud-rune-footer i {
+    font-size: 12px;
+    color: #534AB7;
+    font-style: normal;
+  }
+
+  @media (max-width: 480px) {
+    .hud-start-modal { padding: 1.5rem 1.25rem 1.25rem; }
+    .hud-start-modal h2 { font-size: 13px; letter-spacing: 2px; }
+    .hud-start-modal p { font-size: 11px; }
+    .stats-toggle-btn {
+      font-size: 0.5rem !important;
+      padding: 2px 5px !important;
+    }
   }
   .game-hud-top {
     position: absolute;
@@ -235,186 +938,417 @@ const focusStyles = `
     pointer-events: none;
     z-index: 10;
   }
+
+  .hud-score-block {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* ── Pause Button — absolutely pinned top-center, never affects SCORE/WAVE ── */
+  .hud-pause-btn {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 11;
+    background: linear-gradient(180deg, rgba(18, 10, 45, 0.82) 0%, rgba(8, 4, 22, 0.88) 100%);
+    border: none;
+    border-top: 1px solid rgba(167, 139, 250, 0.55);
+    border-bottom: 1px solid rgba(76, 45, 130, 0.45);
+    border-left: 1px solid rgba(100, 65, 190, 0.35);
+    border-right: 1px solid rgba(100, 65, 190, 0.35);
+    color: rgba(196, 181, 253, 0.9);
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    padding: 5px 16px;
+    clip-path: polygon(6px 0%, 100% 0%, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0% 100%, 0% 6px);
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow:
+      0 0 10px rgba(100, 50, 200, 0.18),
+      inset 0 0 12px rgba(2, 1, 12, 0.55);
+    transition: all 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+  .hud-pause-btn:hover, .hud-pause-btn:active {
+    background: linear-gradient(180deg, rgba(30, 14, 80, 0.92) 0%, rgba(12, 5, 35, 0.95) 100%);
+    border-top-color: rgba(216, 180, 254, 0.75);
+    color: #e9d5ff;
+    box-shadow:
+      0 0 16px rgba(139, 92, 246, 0.32),
+      inset 0 0 12px rgba(2, 1, 12, 0.55);
+  }
   .game-hud-bottom {
     position: absolute;
     bottom: 12px;
-    left: 12px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 10px;
     font-family: monospace;
     pointer-events: none;
     z-index: 10;
   }
+  /* Bars stay stacked (HP on top, XP below) inside their own column */
+  .hud-bars-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  /* ── Lv. badge — sits to the LEFT of the HP/XP bars, stretched to match
+     their combined height (HP bar + gap + XP bar) for a clean, even look ── */
+  .hud-level-badge {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    padding: 0 10px;
+    background: rgba(4, 2, 18, 0.88);
+    border: 1px solid rgba(100, 70, 200, 0.28);
+    border-top-color: rgba(139, 92, 246, 0.45);
+    border-bottom-color: rgba(60, 30, 120, 0.5);
+    clip-path: polygon(0% 0%, calc(100% - 4px) 0%, 100% 4px, 100% 100%, 4px 100%, 0% calc(100% - 4px));
+    box-shadow:
+      inset 0 1px 0 rgba(139, 92, 246, 0.1),
+      inset 0 0 12px rgba(2, 1, 10, 0.7);
+    white-space: nowrap;
+  }
+  .hud-level-label {
+    font-size: 0.55rem;
+    color: rgba(167, 139, 250, 0.85);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-family: 'Cinzel', 'Georgia', serif;
+    line-height: 1;
+  }
+  .hud-level-value {
+    font-size: 0.85rem;
+    color: #fbbf24;
+    font-weight: 800;
+    font-family: 'Cinzel', 'Georgia', serif;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+    line-height: 1;
+  }
+  /* ── HP / XP Bars — BDO Center Style ── */
   .hud-bar-container {
-    width: 260px;
-    background: rgba(15, 11, 42, 0.75);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 3px;
+    width: 300px;
+    background: rgba(4, 2, 18, 0.88);
+    border: 1px solid rgba(100, 70, 200, 0.28);
+    border-top-color: rgba(139, 92, 246, 0.45);
+    border-bottom-color: rgba(60, 30, 120, 0.5);
+    /* Subtle angular clip on right corner — arcane seal mark */
+    clip-path: polygon(0% 0%, calc(100% - 5px) 0%, 100% 5px, 100% 100%, 5px 100%, 0% calc(100% - 5px));
     position: relative;
-    height: 18px;
+    height: 20px;
     overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(139, 92, 246, 0.1),
+      inset 0 0 12px rgba(2, 1, 10, 0.7);
   }
   .hud-bar-fill {
     height: 100%;
     width: 100%;
-    transition: width 0.1s linear;
+    transition: width 0.12s linear;
   }
 
-.hud-bar-text {
+  .hud-bar-text {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     text-align: center;
-    font-size: 0.75rem;
+    font-size: 0.68rem;
     line-height: 18px;
-    color: #fff;
+    color: rgba(226, 217, 243, 0.92);
     font-weight: bold;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    font-family: 'Cinzel', 'Georgia', serif;
+    letter-spacing: 0.4px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
     white-space: nowrap;
     overflow: hidden;
   }
 
+  /* ── Stats Toggle Button — Arcane Codex Tab ── */
   .stats-toggle-btn {
-    background: #110c36;
-    border: 1px solid #8b5cf6;
-    color: #e2e8f0;
-    font-family: monospace;
-    font-size: 0.7rem;
+    background:
+      linear-gradient(180deg, rgba(14, 9, 42, 0.97) 0%, rgba(6, 3, 20, 0.99) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.35);
+    border-top-color: rgba(167, 139, 250, 0.55);
+    color: rgba(196, 181, 253, 0.88);
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 0.65rem;
     font-weight: bold;
-    padding: 4px 8px;
-    border-radius: 4px;
+    letter-spacing: 0.6px;
+    padding: 4px 10px;
+    clip-path: polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px);
     cursor: pointer;
     align-self: flex-start;
     pointer-events: auto;
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
-    transition: all 0.15s ease;
+    box-shadow:
+      0 0 8px rgba(109, 60, 220, 0.15),
+      inset 0 0 10px rgba(2, 1, 12, 0.6);
+    transition: all 0.18s ease;
   }
   .stats-toggle-btn:hover {
-    background: #24145e;
-    border-color: #c084fc;
-    color: #fff;
+    background: linear-gradient(180deg, rgba(30, 16, 80, 0.97) 0%, rgba(12, 6, 35, 0.99) 100%);
+    border-color: rgba(192, 132, 252, 0.6);
+    color: #e9d5ff;
+    box-shadow: 0 0 14px rgba(139, 92, 246, 0.3);
+  }
+
+  /* ── BDO-style top-right menu icon buttons ── */
+  .bdo-menu-icon-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: linear-gradient(180deg, rgba(14, 9, 42, 0.92) 0%, rgba(6, 3, 20, 0.96) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    border-top-color: rgba(167, 139, 250, 0.6);
+    color: rgba(196, 181, 253, 0.9);
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 0.5rem;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    padding: 5px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: all 0.15s ease;
+    box-shadow: 0 0 6px rgba(109, 60, 220, 0.15), inset 0 0 8px rgba(2, 1, 12, 0.5);
+    clip-path: polygon(3px 0%, 100% 0%, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0% 100%, 0% 3px);
+    min-width: 38px;
+  }
+  .bdo-menu-icon-btn:hover {
+    background: linear-gradient(180deg, rgba(30, 16, 80, 0.95) 0%, rgba(12, 6, 35, 0.98) 100%);
+    border-color: rgba(192, 132, 252, 0.7);
+    color: #e9d5ff;
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+  }
+  .bdo-menu-icon-btn:active { transform: scale(0.94); }
+
+  /* ── RPG Stats Panel — positioned to not overlap when open ── */
+  .rpg-stats-panel {
+    position: absolute;
+    top: 60px;
+    right: 12px;
+    z-index: 90;
   }
 .rpg-stats-panel {
   width: 260px;
-  background: rgba(11, 8, 38, 0.45) !important; /* Pinalabnaw na color */
-  backdrop-filter: blur(8px) !important;        /* Glass effect */
-  -webkit-backdrop-filter: blur(8px) !important;
-  border: 2px solid #8b5cf6;
-  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(6, 3, 24, 0.4) 0%, rgba(4, 2, 16, 0.42) 100%) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(100, 65, 190, 0.32) !important;
+  border-top-color: rgba(139, 92, 246, 0.52) !important;
+  clip-path: polygon(0% 0%, calc(100% - 8px) 0%, 100% 8px, 100% 100%, 8px 100%, 0% calc(100% - 8px));
   padding: 10px;
-  color: #fff;
-  font-family: monospace;
+  color: #e2d9f3;
+  font-family: 'Cinzel', 'Georgia', serif;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.4);
+  box-shadow:
+    0 0 12px rgba(80, 40, 180, 0.15),
+    inset 0 0 20px rgba(3, 1, 14, 0.35);
   pointer-events: auto;
 }
   .stats-header {
     font-size: 0.78rem;
     font-weight: bold;
-    color: #fef08a;
-    border-bottom: 1px solid rgba(139, 92, 246, 0.4);
-    padding-bottom: 4px;
+    color: #e9d5ff;
+    border-bottom: 1px solid rgba(109, 60, 220, 0.3);
+    padding-bottom: 5px;
     margin-bottom: 2px;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
   }
   .stats-row {
     display: flex;
     justify-content: space-between;
-    font-size: 0.75rem;
+    font-size: 0.78rem;
   }
-  .stats-label { color: #94a3b8; }
-  .stats-value { color: #34d399; font-weight: bold; }
+  .stats-label { color: #c9bfe0; letter-spacing: 0.3px; }
+  .stats-value { color: #6ee7b7; font-weight: bold; text-shadow: 0 0 6px rgba(52, 211, 153, 0.4); }
 
   .rpg-buff-container {
     position: absolute;
-    top: 48px;
+    bottom: 80px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 70vw;
+    gap: 14px;
     z-index: 80;
-    font-family: monospace;
+    font-family: 'Cinzel', 'Georgia', serif;
     pointer-events: none;
   }
-  .rpg-buff-badge {
-    background: linear-gradient(180deg, #130b3a 0%, #060314 100%);
-    border: 1px solid #c084fc;
-    box-shadow: 0 0 10px rgba(192, 132, 252, 0.4);
-    border-radius: 4px;
-    padding: 3px 6px;
-    color: #ffffff;
-    font-size: 0.72rem;
+
+  /* ── Rune Buff Medallion — Frieren-style arcane sigil, replaces flat badge ── */
+  .rune-buff {
+    position: relative;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
-    gap: 5px;
-    font-weight: bold;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    justify-content: center;
   }
-  .rpg-buff-badge.pot-power { border-color: #f97316; box-shadow: 0 0 10px rgba(249, 115, 22, 0.4); }
-  .rpg-buff-badge.pot-defense { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59, 130, 246, 0.4); }
-  .rpg-buff-badge.pot-crit { border-color: #eab308; box-shadow: 0 0 10px rgba(234, 179, 8, 0.4); }
-  .rpg-buff-badge.pot-regen { border-color: #22c55e; box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); }
-  .rpg-buff-badge.pot-xpBoost { border-color: #a855f7; box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
-  .rpg-buff-badge.skill-instinct { border-color: #e879f9; box-shadow: 0 0 12px rgba(232, 121, 249, 0.6); background: #3b0764; }
+  .rune-buff-ring {
+    position: absolute;
+    top: 0; left: 0;
+    filter: drop-shadow(0 0 5px var(--buff-color));
+  }
+  .rune-buff-glyphs {
+    transform-origin: 20px 20px;
+    animation: rune-orbit 9s linear infinite;
+  }
+  .rune-buff-sweep {
+    transition: stroke-dashoffset 0.3s linear;
+    filter: drop-shadow(0 0 3px var(--buff-color));
+  }
+  .rune-buff-core {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, rgba(20,12,40,0.95) 0%, rgba(8,4,20,0.98) 75%);
+    box-shadow: 0 0 8px var(--buff-color), inset 0 0 6px rgba(0,0,0,0.6);
+    animation: rune-core-pulse 2.4s ease-in-out infinite;
+  }
+  .rune-buff-timer {
+    position: absolute;
+    bottom: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.62rem;
+    font-weight: bold;
+    letter-spacing: 0.3px;
+    text-shadow: 0 0 6px currentColor, 0 1px 2px rgba(0,0,0,0.9);
+    white-space: nowrap;
+  }
+  .rune-buff-label {
+    position: absolute;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%) scale(0.62);
+    transform-origin: top center;
+    font-size: 0.62rem;
+    font-weight: bold;
+    letter-spacing: 0.6px;
+    color: #d8cdf0;
+    text-shadow: 0 0 6px rgba(167, 139, 250, 0.7), 0 1px 2px rgba(0,0,0,0.9);
+    white-space: nowrap;
+    opacity: 0.9;
+  }
+  .rune-buff-low .rune-buff-core { animation: rune-core-pulse-urgent 0.6s ease-in-out infinite; }
+  .rune-buff-low .rune-buff-timer { animation: rune-timer-flash 0.6s ease-in-out infinite; }
 
+  @keyframes rune-orbit {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes rune-core-pulse {
+    0%, 100% { box-shadow: 0 0 6px var(--buff-color), inset 0 0 6px rgba(0,0,0,0.6); }
+    50% { box-shadow: 0 0 12px var(--buff-color), inset 0 0 6px rgba(0,0,0,0.6); }
+  }
+  @keyframes rune-core-pulse-urgent {
+    0%, 100% { box-shadow: 0 0 6px var(--buff-color), inset 0 0 6px rgba(0,0,0,0.6); transform: scale(1); }
+    50% { box-shadow: 0 0 16px var(--buff-color), inset 0 0 6px rgba(0,0,0,0.6); transform: scale(1.08); }
+  }
+  @keyframes rune-timer-flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+
+/* ── Inventory & Skill Tree Toggle Buttons — Arcane Tome Tabs ── */
 .inventory-toggle-btn, .skill-tree-toggle-btn {
-  background: #0f0726;
-  border: 1px solid #eab308;
-  color: #fef08a;
-  font-family: monospace;
-  font-size: 0.75rem;
+  background:
+    linear-gradient(180deg, rgba(10, 6, 32, 0.98) 0%, rgba(5, 3, 18, 0.99) 100%);
+  border: 1px solid rgba(180, 140, 40, 0.35);
+  border-top-color: rgba(234, 179, 8, 0.55);
+  color: rgba(253, 230, 138, 0.88);
+  font-family: 'Cinzel', 'Georgia', serif;
+  font-size: 0.68rem;
   font-weight: bold;
+  letter-spacing: 0.5px;
   padding: 0 12px;
-  height: 32px; /* Fixed height para hindi tabingi */
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px;
+  clip-path: polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px);
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: 0 0 12px rgba(234, 179, 8, 0.2);
-  transition: all 0.2s ease;
+  box-shadow:
+    0 0 8px rgba(180, 130, 0, 0.1),
+    inset 0 0 10px rgba(2, 1, 10, 0.6);
+  transition: all 0.18s ease;
   box-sizing: border-box;
 }
 
 .skill-tree-toggle-btn {
-  background: #7c3aed;
-  border-color: #a78bfa;
-  color: #fff;
-  box-shadow: 0 0 10px rgba(124, 58, 237, 0.6);
+  background:
+    linear-gradient(180deg, rgba(16, 8, 48, 0.98) 0%, rgba(7, 3, 22, 0.99) 100%);
+  border-color: rgba(100, 65, 190, 0.35);
+  border-top-color: rgba(139, 92, 246, 0.6);
+  color: rgba(196, 181, 253, 0.9);
+  box-shadow:
+    0 0 8px rgba(100, 50, 200, 0.15),
+    inset 0 0 10px rgba(2, 1, 12, 0.6);
 }
 
   .skill-tree-toggle-btn:hover {
-    background: #6d28d9;
-    transform: translateY(-2px);
+    background: linear-gradient(180deg, rgba(30, 14, 80, 0.98) 0%, rgba(12, 5, 35, 0.99) 100%);
+    border-color: rgba(167, 139, 250, 0.65);
+    color: #e9d5ff;
+    box-shadow: 0 0 14px rgba(109, 60, 220, 0.28);
+    transform: translateY(-1px);
   }
 
+/* ── Skill Tree Container — Grimoire Spellbook Panel ── */
 .skill-tree-container {
   position: absolute;
   bottom: 46px;
   right: 12px;
-  background: rgba(11, 8, 38, 0.45) !important; /* Pinalabnaw */
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  border: 2px solid #7c3aed;
-  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(6, 3, 24, 0.4) 0%, rgba(4, 2, 16, 0.42) 100%) !important;
+  backdrop-filter: blur(4px) !important;
+  -webkit-backdrop-filter: blur(4px) !important;
+  border: 1px solid rgba(100, 65, 190, 0.32) !important;
+  border-top-color: rgba(139, 92, 246, 0.5) !important;
+  clip-path: polygon(0% 0%, calc(100% - 10px) 0%, 100% 10px, 100% 100%, 10px 100%, 0% calc(100% - 10px));
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
   z-index: 50;
-  font-family: monospace;
-  color: #fff;
+  font-family: 'Cinzel', 'Georgia', serif;
+  color: #e2d9f3;
   width: 250px;
   max-height: 480px;
   overflow-y: auto;
-  box-shadow: 0 0 20px rgba(124, 58, 237, 0.5);
-
+  box-shadow:
+    0 0 16px rgba(80, 40, 180, 0.18),
+    inset 0 0 24px rgba(3, 1, 14, 0.35);
   touch-action: pan-y !important;
 }
 
@@ -426,256 +1360,611 @@ const focusStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(124, 58, 237, 0.4);
+    border-bottom: 1px solid rgba(100, 60, 200, 0.25);
     padding-bottom: 6px;
     margin-bottom: 4px;
   }
   .skill-tree-title {
-    font-size: 0.75rem;
+    font-size: 0.78rem;
     font-weight: bold;
-    color: #fef08a;
-    letter-spacing: 0.5px;
+    color: #e9d5ff;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(139, 92, 246, 0.4);
   }
   .skill-tree-close-x {
     background: transparent;
-    border: none;
-    color: #94a3b8;
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    color: rgba(248, 113, 113, 0.7);
     cursor: pointer;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: bold;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    clip-path: polygon(3px 0%, 100% 0%, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0% 100%, 0% 3px);
+    transition: all 0.15s;
   }
   .skill-tree-close-x:hover {
-    color: #f87171;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(244, 63, 94, 0.6);
   }
+  /* ── Skill Row Buttons ── */
   .skill-row-btn {
-    background: linear-gradient(135deg, #1e1145 0%, #0f0726 100%);
-    border: 1px solid #5b21b6;
-    border-radius: 4px;
-    padding: 6px 8px;
-    color: #e2e8f0;
-    font-size: 0.72rem;
+    background:
+      linear-gradient(135deg, rgba(18, 10, 50, 0.97) 0%, rgba(6, 3, 18, 0.98) 100%);
+    border: 1px solid rgba(80, 40, 160, 0.4);
+    border-top-color: rgba(109, 60, 220, 0.5);
+    clip-path: polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px);
+    padding: 7px 8px;
+    color: #e1dcf5;
+    font-size: 0.76rem;
+    font-family: 'Cinzel', 'Georgia', serif;
     text-align: left;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    transition: all 0.2s;
+    transition: all 0.18s;
     position: relative;
   }
   .skill-row-btn:hover:not(:disabled) {
-    border-color: #a78bfa;
-    background: #2e146a;
-    color: #fff;
+    border-color: rgba(167, 139, 250, 0.6);
+    border-top-color: rgba(196, 181, 253, 0.75);
+    background: linear-gradient(135deg, rgba(36, 16, 90, 0.97) 0%, rgba(12, 5, 32, 0.98) 100%);
+    color: #f5f0ff;
+    box-shadow: 0 0 8px rgba(109, 60, 220, 0.2);
   }
   .skill-row-btn:disabled {
     cursor: not-allowed;
-    opacity: 0.6;
+    opacity: 0.45;
   }
   .skill-row-btn.learned {
-    border-color: #10b981;
-    background: linear-gradient(135deg, #064e3b 0%, #022c22 100%);
-    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.4);
+    border-top-color: rgba(52, 211, 153, 0.55);
+    background: linear-gradient(135deg, rgba(4, 50, 35, 0.95) 0%, rgba(2, 20, 14, 0.97) 100%);
+    color: #6ee7b7;
   }
   .skill-row-btn.disabled-toggle {
-    border-color: #f87171;
-    background: linear-gradient(135deg, #4c0519 0%, #1c0007 100%);
-    color: #f43f5e;
+    border-color: rgba(244, 63, 94, 0.4);
+    border-top-color: rgba(251, 100, 120, 0.55);
+    background: linear-gradient(135deg, rgba(50, 4, 18, 0.97) 0%, rgba(18, 1, 6, 0.98) 100%);
+    color: #fca5a5;
   }
   .skill-cd-text {
-    font-size: 0.65rem;
-    color: #fbbf24;
+    font-size: 0.66rem;
+    color: #fde68a;
     font-weight: bold;
+    letter-spacing: 0.3px;
   }
   .skill-node-desc {
-    font-size: 0.65rem;
-    color: #94a3b8;
-    line-height: 1.3;
-    background: rgba(3, 1, 17, 0.5);
-    padding: 4px 6px;
-    border-radius: 3px;
+    font-size: 0.7rem;
+    color: #cdc3e8;
+    line-height: 1.45;
+    background: rgba(3, 1, 14, 0.7);
+    padding: 5px 7px;
+    border-left: 2px solid rgba(139, 92, 246, 0.55);
     margin-top: -2px;
     margin-bottom: 4px;
-    border-left: 2px solid #7c3aed;
+    letter-spacing: 0.2px;
   }
 
   /* MOBILE VIEW ADJUSTMENTS */
 @media (max-width: 840px) {
-.skill-tree-container {
-    width: 250px !important;     /* Ibalik sa fixed width para hindi masyadong malapad */
-    max-height: 50vh !important;
-    bottom: 80px !important;     
-    right: 12px !important;      /* Ibalik sa kanan gaya ng desktop */
-    left: auto !important;       /* Siguraduhing hindi ito naka-center */
-    transform: none !important;  /* Alisin yung centering */
-    padding: 10px !important;
+
+.bdo-panel {
+    transform: scale(0.65) !important; /* Dati 0.75, mas pinaliit pa natin */
+    transform-origin: top right !important; /* Siguradong papunta sa kanan */
+    top: 40px !important; /* Mas idinikit sa ilalim ng menu buttons */
+    right: 15px !important; /* Inilinya sa kanan */
+    left: auto !important;
+    bottom: auto !important;
   }
 
-  
+  /* Pinaliit ang specific na lapad para hindi sakop ang buong screen */
+  .bdo-stats-panel {
+    width: 240px !important; /* Dati ay 280px */
+  }
 
-  .skill-tree-title {
-    font-size: 0.85rem !important; /* Konting lakihan para madaling basahin */
+  .bdo-skill-tree-panel {
+    width: 260px !important; /* Dati ay 320px kaya umaabot sa gitna */
+  }
+
+  .bdo-inventory-panel {
+    width: 240px !important;
+  }
+
+.bdo-top-menu-btns {
+    gap: 4px !important; /* Mas pinadikit ang agwat ng tatlong buttons */
+  }
+
+  .bdo-menu-icon-btn {
+    padding: 3px 6px !important; /* Pinaliit ang padding para numipis ang button */
+    font-size: 0.5rem !important; /* Pinaliit ang text */
+    border-width: 1px !important; /* Pinanipis ang border */
+    min-height: 20px !important; /* Mas mababang height */
+  }
+
+  .bdo-menu-icon-btn svg {
+    width: 10px !important; /* Pinaliit ang icon (mula 14px) */
+    height: 10px !important; 
+    margin-right: 2px !important; /* Pinaliit ang agwat ng icon sa text */
+  }
+
+  /* NOTE: width/padding for .skill-tree-container, and the font-size/padding
+     for .skill-tree-title / .skill-row-btn / .skill-node-desc, are all set
+     once in the consolidated mobile panel rules further down (grouped with
+     .rpg-stats-panel / .coop-party-panel) — this rule only carries the
+     properties unique to the skill tree panel's position & shape. */
+.skill-tree-container {
+    max-height: 50vh !important;
+    max-height: 50dvh !important; /* dvh = real visible viewport, avoids overflow on iOS Safari's toolbar */
+    bottom: 80px !important;
+    right: 12px !important;
+    left: auto !important;
+    transform: none !important;
+    clip-path: polygon(0% 0%, calc(100% - 8px) 0%, 100% 8px, 100% 100%, 8px 100%, 0% calc(100% - 8px)) !important;
   }
 
   .skill-row-btn {
-    padding: 10px 8px !important;  /* Mas malaking touch target sa mobile */
-    font-size: 0.8rem !important;  /* Mas madaling basahin ang text */
-  }
-
-  .skill-node-desc {
-    font-size: 0.75rem !important; /* Konting linaw sa description */
-    padding: 6px 8px !important;
+    clip-path: polygon(3px 0%, 100% 0%, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0% 100%, 0% 3px) !important;
   }
 }
 
-/* ELEMENTAL SIGILS CONTAINER */
+/* ELEMENTAL SIGILS CONTAINER — Frieren Arcane Grimoire Style */
+/* BDO-style radial skill layout — sigils + ultimates orbit around dash */
 .elemental-sigils-container {
   position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  /* center of the orbital cluster, bottom-right */
+  right: 90px;
+  bottom: 90px;
+  width: 0;
+  height: 0;
+  background: none;
+  padding: 5px;
+  border: none;
+  box-shadow: none;
   z-index: 45;
-  background: rgba(11, 8, 38, 0.8);
-  padding: 10px 8px;
-  border: 2px solid #38bdf8;
-  border-radius: 8px;
-  box-shadow: 0 0 25px rgba(56, 189, 248, 0.3);
-  backdrop-filter: blur(4px);
-  pointer-events: auto;
+  pointer-events: none;
+  outline: none;
 }
-/* 💨 DASH BUTTON (CENTERED ABOVE INVENTORY & SKILLS) */
+.elemental-sigils-container::before,
+.elemental-sigils-container::after { display: none; }
+/* ── Dash Button — BDO-style center sword button ── */
   .dash-btn-container {
     position: absolute;
-    bottom: 90px; /* ✅ Lulutang sa taas ng Inventory/Skills */
-    right: 42px;  /* ✅ Nakapagitna nang eksakto sa dalawang menu buttons (Desktop) */
-    width: 60px;
-    height: 60px;
-    background: radial-gradient(circle, rgba(16, 12, 54, 0.9) 0%, rgba(10, 8, 38, 0.95) 100%);
-    border: 1.5px solid #2dd4bf;
+    bottom: 60px;
+    right: 60px;
+    width: 104px;
+    height: 104px;
+    background: radial-gradient(circle at 50% 35%, rgba(20, 10, 55, 0.97) 0%, rgba(4, 2, 18, 0.99) 100%);
+    border: 3px solid rgba(94, 234, 212, 0.5);
+    border-top-color: rgba(94, 234, 212, 0.8);
     border-radius: 50%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 45; /* 🔥 Nakatago sa likod ng Modal kapag bumukas */
-    box-shadow: 0 0 20px rgba(45, 212, 191, 0.25), inset 0 0 10px rgba(45, 212, 191, 0.1);
+    z-index: 46;
+    box-shadow:
+      0 0 24px rgba(45, 212, 191, 0.28),
+      0 0 50px rgba(20, 150, 140, 0.14),
+      inset 0 0 18px rgba(2, 30, 28, 0.7),
+      inset 0 1px 0 rgba(94, 234, 212, 0.14);
     user-select: none;
     touch-action: none;
-    transition: transform 0.1s, box-shadow 0.2s;
+    transition: transform 0.12s ease, box-shadow 0.2s ease;
   }
-  
+  /* Outer arcane ring */
+  .dash-btn-container::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px solid rgba(45, 212, 191, 0.18);
+    pointer-events: none;
+  }
   .dash-btn-container:active {
-    transform: scale(0.9); /* ✅ Tinanggal ang translateX para hindi tumalon pag kinlick */
-    box-shadow: 0 0 10px rgba(45, 212, 191, 0.4), inset 0 0 15px rgba(0, 0, 0, 0.5);
-    background: #0d092b;
+    transform: scale(0.88);
+    box-shadow:
+      0 0 6px rgba(45, 212, 191, 0.2),
+      inset 0 0 18px rgba(0, 0, 0, 0.8);
+    background: radial-gradient(circle, rgba(3, 20, 20, 0.98) 0%, rgba(2, 1, 10, 0.99) 100%);
   }
-  
-  .dash-icon { 
-    font-size: 1.4rem; 
+
+  .dash-icon {
+    font-size: 0;
     line-height: 1;
-    margin-top: 2px; 
+    margin-top: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 0 8px rgba(94, 234, 212, 0.65));
   }
-  
-  .dash-label { 
-    font-size: 0.5rem; 
-    color: #ccfbf1; 
-    font-family: 'Avenir Next', 'Roboto', sans-serif; 
-    font-weight: 700; 
+
+  .dash-label {
+    font-size: 0.6rem;
+    color: rgba(153, 246, 228, 0.85);
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-weight: 700;
     letter-spacing: 1px;
     text-transform: uppercase;
-    margin-top: 1px; 
-    text-shadow: 0 1px 3px rgba(0,0,0,0.5); 
+    margin-top: 3px;
+    text-shadow: 0 0 6px rgba(45, 212, 191, 0.5);
   }
-  
+
   .dash-cd-overlay {
-    position: absolute; inset: -1px; background: rgba(0,0,0,0.8); border-radius: 50%;
-    display: none; align-items: center; justify-content: center;
-    color: #fef08a; font-size: 1.1rem; font-weight: bold; font-family: monospace;
-    border: 1.5px solid rgba(45, 212, 191, 0.3); 
+    position: absolute;
+    inset: -1px;
+    background: rgba(1, 0, 10, 0.85);
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    color: #c4b5fd;
+    font-size: 1.4rem;
+    font-weight: bold;
+    font-family: 'Cinzel', 'Georgia', serif;
+    letter-spacing: 0.3px;
+    text-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
+    border: 1px solid rgba(45, 212, 191, 0.15);
   }
 
-  /* 📱 MOBILE VIEW */
-  @media (max-width: 840px) {
+  /* 📱 MOBILE VIEW — kasama na ang landscape big-phones (hal. iPhone Pro Max @932px),
+     para tugma ito sa JS isMobileLayout breakpoint at hindi mag-mismatch ang
+     button size (CSS) laban sa orbit radius/position (JS). */
+  @media (max-width: 840px), (max-width: 932px) and (orientation: landscape) {
     .dash-btn-container {
-      width: 58px; 
-      height: 58px; 
-      bottom: 75px; 
-      right: 36px; /* ✅ Nakapagitna sa dalawang menu buttons sa Mobile View */
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5), 0 0 15px rgba(45, 212, 191, 0.2);
+      width: 60px !important;      /* Dati: 88px */
+      height: 60px !important;     /* Dati: 88px */
+      bottom: 50px !important;     /* Mas ibinaba */
+      right: 50px !important;      /* Mas inilapit sa gilid */
     }
-    .dash-btn-container:active {
-      transform: scale(0.9);
+    .dash-label {
+      font-size: 0.4rem !important; 
+      margin-top: 1px !important;
     }
-    .dash-icon { font-size: 1.5rem; margin-top: 3px; }
-    .dash-label { 
-      display: block; 
-      font-size: 0.55rem; 
-      margin-top: 0;
-      letter-spacing: 0.5px;
-    }
-    .dash-cd-overlay { font-size: 1rem; }
+    .dash-cd-overlay { font-size: 0.9rem !important; }
   }
 
+  /* ── Ultimate Spell Buttons (left-side diagonal stack) ── */
+  .bdo-ult-btn {
+    position: absolute;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+    transition: transform 0.12s ease, box-shadow 0.18s ease;
+    pointer-events: auto;
+    z-index: 45;
+  }
+  .bdo-ult-btn:active { transform: scale(0.9); }
+  .bdo-ult-btn:hover  { transform: scale(1.07); }
+
+  .bdo-ult-collapse {
+    width: 72px; height: 72px;
+    background: radial-gradient(circle, #1a0630 0%, #070010 100%);
+    border: 3px solid #7c3aed;
+    border-top-color: #a78bfa;
+    box-shadow: 0 0 18px rgba(139, 92, 246, 0.38), inset 0 0 16px rgba(2,0,12,0.8);
+  }
+  .bdo-ult-instinct {
+    width: 72px; height: 72px;
+    background: radial-gradient(circle, #4c0519 0%, #0c0004 100%);
+    border: 3px solid #be185d;
+    border-top-color: #f472b6;
+    box-shadow: 0 0 18px rgba(244,114,182,0.32), inset 0 0 16px rgba(12,0,4,0.8);
+  }
+  .bdo-ult-resurrect {
+    width: 72px; height: 72px;
+    background: radial-gradient(circle, #064e3b 0%, #022c22 100%);
+    border: 3px solid #059669;
+    border-top-color: #34d399;
+    box-shadow: 0 0 18px rgba(52, 211, 153, 0.32), inset 0 0 16px rgba(2,12,8,0.8);
+  }
+  .bdo-ult-label {
+    font-size: 0.58rem;
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    margin-top: 3px;
+    white-space: nowrap;
+  }
+  .bdo-ult-key {
+    position: absolute;
+    top: 5px; left: 5px;
+    font-size: 0.56rem;
+    color: rgba(255,255,255,0.45);
+    font-family: monospace;
+    font-weight: bold;
+    line-height: 1;
+  }
+  .bdo-ult-cd {
+    position: absolute;
+    inset: -2px;
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 1, 12, 0.78);
+    font-size: 1.3rem;
+    font-weight: bold;
+    font-family: 'Cinzel', 'Georgia', serif;
+    letter-spacing: 0.3px;
+    z-index: 2;
+  }
+  .bdo-ult-btn svg { filter: drop-shadow(0 0 5px currentColor); }
+
+  /* 📱 Mobile — ultimates shrink so the left stack fits on small screens.
+     Kasama na rin ang landscape big-phones (932px), tugma sa JS isMobileLayout. */
+  @media (max-width: 840px), (max-width: 932px) and (orientation: landscape) {
+    .bdo-ult-collapse,
+    .bdo-ult-instinct,
+    .bdo-ult-resurrect {
+      width: 46px !important;      /* Dati: 70px */
+      height: 46px !important;     /* Dati: 70px */
+      border-width: 1.5px !important;
+    }
+    .bdo-ult-label { font-size: 0.38rem !important; margin-top: 1px !important; }
+    .bdo-ult-key { font-size: 0.4rem !important; top: 2px !important; left: 2px !important; }
+    .bdo-ult-cd { font-size: 0.8rem !important; }
+}
+
+  /* Orbital ring hub (the invisible anchor that positions everything) */
+  .bdo-skill-hub {
+    position: absolute;
+    width: 0; height: 0;
+    pointer-events: none;
+    z-index: 44;
+  }
+
+  /* ── Sigil Button — BDO-style circular orbital ── */
   .sigil-btn {
-    position: relative;
-    width: 52px;
-    height: 52px;
-    border-radius: 8px;
+    position: absolute;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.6rem;
     cursor: pointer;
-    border: 2px solid;
-    background: #0f0726;
-    transition: all 0.2s ease;
-    box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+    border: 2px solid rgba(139, 92, 246, 0.55);
+    background: radial-gradient(circle at 50% 30%, rgba(30, 18, 70, 0.92) 0%, rgba(5, 3, 20, 0.98) 100%);
+    transition: all 0.18s ease;
+    box-shadow:
+      inset 0 0 10px rgba(0, 0, 0, 0.9),
+      0 0 10px rgba(99, 60, 200, 0.25),
+      0 0 0 1px rgba(99,60,200,0.1);
+    pointer-events: auto;
+    transform: translate(-50%, -50%);
   }
-  .sigil-btn:hover { transform: scale(1.1); }
-  .sigil-fire { border-color: #ef4444; text-shadow: 0 0 10px #ef4444; }
-  .sigil-water { border-color: #3b82f6; text-shadow: 0 0 10px #3b82f6; }
-  .sigil-earth { border-color: #f59e0b; text-shadow: 0 0 10px #f59e0b; }
-  .sigil-lightning { border-color: #c084fc; text-shadow: 0 0 10px #c084fc; }
-  .sigil-ice { border-color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
+  @media (max-width: 840px), (max-width: 932px) and (orientation: landscape) {
+    .sigil-btn { 
+      width: 34px !important;      /* Dati: 44px */
+      height: 34px !important;     /* Dati: 44px */
+    }
+    .sigil-cd-overlay { font-size: 0.6rem !important; }
+  }
+  .sigil-btn svg {
+    filter: drop-shadow(0 0 5px currentColor);
+  }
+  .sigil-btn::before {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1px solid rgba(139, 92, 246, 0.18);
+    pointer-events: none;
+  }
+  .sigil-btn:hover { transform: translate(-50%, -50%) scale(1.12); }
+  .sigil-btn:active { transform: translate(-50%, -50%) scale(0.92); }
+  /* Rune-corner dots */
+  .sigil-btn::after { display: none; }
 
-  .sigil-ice { border-color: #38bdf8; text-shadow: 0 0 10px #38bdf8; }
-  /* ADD THIS NEW LINE BELOW SIGIL-ICE */
-  .sigil-nature { border-color: #22c55e; text-shadow: 0 0 10px #22c55e; }
-  
+  /* Element-specific sigil colors — ancient seal palette */
+  .sigil-fire {
+    color: #f87171;
+    border-color: rgba(239, 100, 68, 0.55);
+  }
+  .sigil-fire::before {
+    background: radial-gradient(ellipse at center, rgba(239, 68, 68, 0.18) 0%, transparent 70%);
+  }
+  .sigil-water {
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.55);
+  }
+  .sigil-water::before {
+    background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.18) 0%, transparent 70%);
+  }
+  .sigil-earth {
+    color: #f59e0b;
+    border-color: rgba(180, 130, 40, 0.55);
+  }
+  .sigil-earth::before {
+    background: radial-gradient(ellipse at center, rgba(245, 158, 11, 0.15) 0%, transparent 70%);
+  }
+  .sigil-lightning {
+    color: #c084fc;
+    border-color: rgba(192, 132, 252, 0.6);
+  }
+  .sigil-lightning::before {
+    background: radial-gradient(ellipse at center, rgba(192, 132, 252, 0.2) 0%, transparent 70%);
+  }
+  .sigil-ice {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.55);
+  }
+  .sigil-ice::before {
+    background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.16) 0%, transparent 70%);
+  }
+  .sigil-nature {
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.55);
+  }
+  .sigil-nature::before {
+    background: radial-gradient(ellipse at center, rgba(34, 197, 94, 0.15) 0%, transparent 70%);
+  }
+
+  /* Cooldown overlay - circular radial sweep */
   .sigil-cd-overlay {
     position: absolute;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    border-radius: 6px;
+    inset: -2px;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: #c4b5fd;
     font-weight: bold;
-    font-family: monospace;
-    font-size: 1.1rem;
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 0.75rem;
+    letter-spacing: 0.3px;
+    text-shadow: 0 0 8px rgba(167, 139, 250, 0.8);
+    background: rgba(2, 1, 12, 0.72);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    clip-path: none;
+    z-index: 2;
   }
-  
+
+  /* Tooltip title */
   .sigil-title {
-     font-size: 0.5rem;
-     position: absolute;
-     bottom: -16px;
-     color: #fff;
-     white-space: nowrap;
-     font-family: monospace;
-     text-align: center;
-     background: rgba(0,0,0,0.8);
-     padding: 2px 4px;
-     border-radius: 4px;
-     opacity: 0;
-     transition: opacity 0.2s;
-     pointer-events: none;
-     z-index: 100;
+    font-size: 0.45rem;
+    position: absolute;
+    bottom: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #e2d9f3;
+    white-space: nowrap;
+    font-family: 'Cinzel', 'Georgia', serif;
+    text-align: center;
+    background: rgba(4, 2, 18, 0.92);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    padding: 1px 5px;
+    border-radius: 2px;
+    letter-spacing: 0.4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 100;
   }
   .sigil-btn:hover .sigil-title { opacity: 1; }
+
+  /* ── Circular Skill-Timer Ring (sigils + ultimates) — same language as the active-buff rune rings ── */
+  .skill-cd-ring-svg {
+    position: absolute;
+    inset: -5px;
+    width: calc(100% + 10px);
+    height: calc(100% + 10px);
+    pointer-events: none;
+    z-index: 3;
+  }
+  .skill-cd-ring-track { opacity: 0.9; }
+  .skill-cd-ring-sweep {
+    transition: stroke-dashoffset 0.3s linear;
+  }
+
+  /* ── Ultimate "READY" Magic Circle — Frieren-style layered arcane sigil ── */
+  .ult-ready-fx {
+    position: absolute;
+    inset: -18px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .ult-ready-glow {
+    position: absolute;
+    inset: 8px;
+    border-radius: 50%;
+    box-shadow: 0 0 18px 3px var(--fx-color), inset 0 0 12px var(--fx-color);
+    animation: urc-glow-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes urc-glow-pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
+
+  /* Layered rune circle — same skeleton for all 3 ultimates, only color/speed differs */
+  .ult-ready-circle-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    filter: drop-shadow(0 0 3px var(--fx-color));
+  }
+  .urc-outer-ring, .urc-mid-ring, .urc-inner-ring {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+  }
+  .urc-outer-ring { animation: urc-spin-cw 16s linear infinite; }
+  .urc-mid-ring   { animation: urc-spin-ccw 22s linear infinite; }
+  .urc-inner-ring { animation: urc-spin-ccw 9s linear infinite; }
+  @keyframes urc-spin-cw  { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes urc-spin-ccw { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+  .urc-core-dot { animation: urc-core-pulse 1.8s ease-in-out infinite; }
+  @keyframes urc-core-pulse {
+    0%, 100% { opacity: 0.5; r: 2; }
+    50%      { opacity: 1;   r: 2.8; }
+  }
+
+  /* Rising smoke / dust wisps — replaces the old orbiting dots; the elemental "exhaust" once ready */
+  .ult-smoke-container {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .ult-smoke-wisp {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 15px; height: 15px;
+    border-radius: 46% 54% 64% 36% / 55% 45% 58% 42%;
+    background: radial-gradient(circle at 40% 38%, rgba(255,255,255,0.4) 0%, rgba(var(--fx-rgb), 0.45) 32%, rgba(var(--fx-rgb), 0.14) 62%, rgba(var(--fx-rgb), 0) 80%);
+    opacity: 0;
+    transform: translate(var(--p-x), var(--p-y)) scale(0.45);
+    animation: ult-smoke-rise 3.4s ease-out infinite;
+    animation-delay: var(--p-delay);
+  }
+  @keyframes ult-smoke-rise {
+    0%   { opacity: 0;    transform: translate(var(--p-x), var(--p-y)) scale(0.4) rotate(0deg); }
+    14%  { opacity: 0.5; }
+    55%  { opacity: 0.3;  transform: translate(calc(var(--p-x) + var(--p-sway)), calc(var(--p-y) - 26px)) scale(1.15) rotate(20deg); }
+    100% { opacity: 0;    transform: translate(calc(var(--p-x) - var(--p-sway)), calc(var(--p-y) - 48px)) scale(1.75) rotate(-15deg); }
+  }
+
+  /* AURA — Arcane Collapse: slow, large, ethereal violet smoke that drifts gently */
+  .ult-ready-aura .ult-smoke-container { animation: urc-spin-ccw 24s linear infinite; }
+  .ult-ready-aura .ult-smoke-wisp {
+    width: 17px; height: 17px;
+    filter: blur(3.5px);
+    animation-duration: 4.6s;
+  }
+
+  /* DUST EMBER — Arcane Instinct: small, quick, sparkly pink motes of dust */
+  .ult-ready-ember .ult-smoke-container { animation: urc-spin-cw 14s linear infinite; }
+  .ult-ready-ember .ult-smoke-wisp {
+    width: 10px; height: 10px;
+    filter: blur(1.6px);
+    animation-duration: 2.1s;
+    animation-timing-function: ease-in-out;
+  }
+
+  /* APOY / FIRE — Arcane Resurrection: warm-cored, turbulent smoke with a hot white-gold center */
+  .ult-ready-fire .ult-smoke-container { animation: urc-spin-ccw 10s linear infinite; }
+  .ult-ready-fire .ult-smoke-wisp {
+    width: 14px; height: 14px;
+    filter: blur(2.4px);
+    animation-duration: 1.6s;
+    background: radial-gradient(circle at 42% 36%, rgba(255,250,225,0.6) 0%, rgba(var(--fx-rgb), 0.55) 30%, rgba(40,30,15,0.22) 62%, rgba(var(--fx-rgb), 0) 82%);
+  }
+
+  @media (max-width: 840px) {
+    .ult-ready-fx { inset: -12px; }
+  }
 
 .mmo-hotbar-container {
   position: absolute;
@@ -684,20 +1973,28 @@ const focusStyles = `
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 10px;
-  background: rgba(11, 8, 38, 0.9);
-  border: 2px solid #8b5cf6;
-  padding: 6px 14px;
-  border-radius: 8px;
-  box-shadow: 0 0 25px rgba(139, 92, 246, 0.4);
+  gap: 8px;
+  /* Deep arcane tome panel */
+  background:
+    linear-gradient(180deg, rgba(6, 3, 25, 0.98) 0%, rgba(4, 2, 18, 0.99) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.28);
+  border-top-color: rgba(167, 139, 250, 0.45);
+  padding: 8px 16px;
+  border-radius: 3px;
+  box-shadow:
+    0 0 0 1px rgba(80, 40, 160, 0.10),
+    0 0 20px rgba(109, 60, 220, 0.18),
+    0 0 50px rgba(80, 30, 160, 0.10),
+    inset 0 1px 0 rgba(167, 139, 250, 0.08),
+    inset 0 0 30px rgba(4, 2, 16, 0.8);
   z-index: 55;
-  font-family: monospace;
-  backdrop-filter: blur(4px);
-  max-width: 65vw; 
+  font-family: 'Cinzel', 'Georgia', serif;
+  backdrop-filter: blur(8px);
+  max-width: 65vw;
   overflow-x: auto;
   white-space: nowrap;
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* ADDED: Para itago ang visual scrollbar sa Chrome/Safari pero scrollable pa rin */
@@ -740,88 +2037,87 @@ const focusStyles = `
   }
 
 @media (max-width: 840px) {
-  /* HOTBAR: Centered and scaled to fit between HP bar and right-side UI */
+  /* HOTBAR: Hidden (moved to skill tree auto) */
   .mmo-hotbar-container {
-    position: absolute !important;
-    left: 50% !important;
-    bottom: 8px !important;
-    transform: translateX(-50%) scale(0.8) !important; /* Centers it and shrinks it to 80% */
-    transform-origin: bottom center !important;
-    gap: 6px;
-    padding: 4px 8px;
-    z-index: 55;
+    display: none !important;
   }
-  .mmo-hotbar-slot {
-    width: 46px;
-    height: 46px;
+
+  /* Buffs above HP bar, smaller gap on mobile */
+  .rpg-buff-container {
+    bottom: 72px !important;
+    gap: 10px !important;
   }
-  .mmo-hotbar-ult-slot {
-    width: 54px;
-    height: 54px;
+
+  /* HP bars narrower on mobile */
+  .hud-bar-container {
+    width: 200px !important;
   }
-  .hotbar-name {
-    display: none; 
+
+  .hud-level-badge {
+    padding: 3px 7px !important;
   }
-  
-  /* ELEMENTAL SIGILS: Anchored right and centered vertically */
-  .elemental-sigils-container {
-    position: absolute !important;
-    top: 50% !important;
-    right: 4px !important;
-    transform: translateY(-50%) scale(0.85) !important; /* Centers vertically and shrinks to 85% */
-    transform-origin: right center !important;
-    gap: 6px;
-    padding: 6px 4px;
-    z-index: 45;
+  .hud-level-label {
+    font-size: 0.52rem !important;
   }
-  .sigil-btn {
-    width: 38px;
-    height: 38px;
-    font-size: 1.2rem;
+  .hud-level-value {
+    font-size: 0.78rem !important;
   }
 }
 
 
+  /* ── MMO Hotbar Slot — Frieren Ancient Seal Style ── */
   .mmo-hotbar-slot {
     position: relative;
     width: 58px;
     height: 58px;
-    background: #110c36;
-    border: 2px solid #5b21b6;
-    border-radius: 6px;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(22, 12, 55, 0.95) 0%, rgba(5, 3, 18, 0.98) 100%);
+    border: 1px solid rgba(91, 33, 182, 0.45);
+    border-top-color: rgba(139, 92, 246, 0.6);
+    border-radius: 2px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     user-select: none;
-    transition: all 0.15s ease;
+    transition: all 0.18s ease;
+    clip-path: polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px);
+    box-shadow: inset 0 0 10px rgba(0,0,0,0.7);
   }
   .mmo-hotbar-slot:hover:not(.not-learned) {
-    border-color: #c084fc;
-    background: #24145e;
-    transform: translateY(-2px);
+    border-color: rgba(192, 132, 252, 0.8);
+    border-top-color: rgba(216, 180, 254, 0.9);
+    background: radial-gradient(circle at 50% 20%, rgba(45, 20, 100, 0.95) 0%, rgba(12, 6, 35, 0.98) 100%);
+    transform: translateY(-3px);
+    box-shadow:
+      0 0 12px rgba(139, 92, 246, 0.35),
+      inset 0 0 12px rgba(80, 30, 180, 0.15);
   }
   .mmo-hotbar-slot.disabled-toggle {
-    border-color: #f43f5e;
-    background: #310413;
+    border-color: rgba(244, 63, 94, 0.5);
+    border-top-color: rgba(251, 100, 120, 0.7);
+    background: radial-gradient(circle, rgba(49, 4, 19, 0.97) 0%, rgba(10, 2, 8, 0.99) 100%);
   }
   .mmo-hotbar-slot.learned {
-    border-color: #10b981;
+    border-color: rgba(16, 185, 129, 0.45);
+    border-top-color: rgba(52, 211, 153, 0.6);
   }
   .mmo-hotbar-slot.not-learned {
-    border-color: #374151;
-    background: #1f2937;
-    opacity: 0.4;
+    border-color: rgba(55, 65, 81, 0.35);
+    background: rgba(8, 6, 20, 0.9);
+    opacity: 0.38;
     cursor: not-allowed;
   }
   
+  /* ── Ultimate Slot — Arcane Sigil Circle ── */
   .mmo-hotbar-ult-slot {
     position: relative;
     width: 72px;
     height: 72px;
-    background: radial-gradient(circle, #2e1065 0%, #09051c 100%);
-    border: 3px solid #d946ef;
+    background:
+      radial-gradient(circle at 50% 35%, rgba(55, 15, 110, 0.92) 0%, rgba(8, 3, 28, 0.98) 100%);
+    border: 1px solid rgba(192, 100, 240, 0.5);
     border-radius: 50%;
     display: flex;
     flex-direction: column;
@@ -829,91 +2125,122 @@ const focusStyles = `
     justify-content: center;
     cursor: pointer;
     user-select: none;
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    box-shadow: 0 0 20px rgba(217, 70, 239, 0.6), inset 0 0 10px rgba(217, 70, 239, 0.4);
-    margin-left: 6px;
+    transition: all 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow:
+      0 0 16px rgba(167, 70, 220, 0.35),
+      0 0 32px rgba(130, 50, 200, 0.15),
+      inset 0 0 14px rgba(120, 40, 200, 0.25),
+      inset 0 1px 0 rgba(216, 180, 254, 0.12);
+    margin-left: 8px;
+  }
+  /* Outer arcane ring */
+  .mmo-hotbar-ult-slot::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 1px solid rgba(167, 139, 250, 0.15);
+    pointer-events: none;
   }
   .mmo-hotbar-ult-slot:hover:not(.not-learned) {
-    border-color: #f472b6;
-    box-shadow: 0 0 32px rgba(244, 114, 182, 0.9), inset 0 0 14px rgba(244, 114, 182, 0.6);
-    transform: scale(1.08) translateY(-4px);
+    border-color: rgba(216, 120, 255, 0.75);
+    box-shadow:
+      0 0 24px rgba(200, 100, 255, 0.55),
+      0 0 50px rgba(160, 60, 230, 0.25),
+      inset 0 0 18px rgba(150, 50, 220, 0.4);
+    transform: scale(1.09) translateY(-4px);
   }
   .mmo-hotbar-ult-slot.not-learned {
-    border-color: #4b5563;
-    background: #111827;
+    border-color: rgba(75, 85, 99, 0.35);
+    background: rgba(8, 6, 20, 0.9);
     box-shadow: none;
-    opacity: 0.35;
+    opacity: 0.32;
     cursor: not-allowed;
   }
   
+  /* ── Hotbar sub-elements ── */
   .hotbar-icon {
-    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #c4b5fd;
     margin-bottom: -1px;
+    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.45));
   }
   .mmo-hotbar-ult-slot .hotbar-icon {
-    font-size: 1.7rem;
-    text-shadow: 0 0 10px rgba(217, 70, 239, 0.8);
+    color: #e9d5ff;
+    filter: drop-shadow(0 0 8px rgba(192, 100, 250, 0.7));
   }
   .hotbar-name {
-    font-size: 0.52rem;
-    color: #cbd5e1;
+    font-size: 0.48rem;
+    color: #b8a8d8;
     text-align: center;
     max-width: 54px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-family: 'Cinzel', 'Georgia', serif;
+    letter-spacing: 0.3px;
   }
   .mmo-hotbar-ult-slot .hotbar-name {
-    font-size: 0.48rem;
-    color: #f472b6;
+    font-size: 0.46rem;
+    color: #d4b8f0;
     font-weight: bold;
     max-width: 64px;
+    letter-spacing: 0.5px;
   }
   .hotbar-key-bind {
     position: absolute;
-    top: 2px;
+    top: 3px;
     left: 4px;
-    font-size: 0.55rem;
-    color: #fbbf24;
+    font-size: 0.5rem;
+    color: rgba(251, 191, 36, 0.75);
     font-weight: bold;
+    font-family: 'Cinzel', 'Georgia', serif;
+    letter-spacing: 0.3px;
   }
   .mmo-hotbar-ult-slot .hotbar-key-bind {
-    top: 4px;
-    left: 14px;
-    font-size: 0.65rem;
-    color: #a78bfa;
+    top: 5px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.58rem;
+    color: rgba(196, 181, 253, 0.7);
   }
   .hotbar-status-dot {
     position: absolute;
-    bottom: 2px;
+    bottom: 3px;
     right: 4px;
-    font-size: 0.52rem;
+    font-size: 0.48rem;
     font-weight: bold;
   }
-  .hotbar-status-dot.on { color: #34d399; }
-  .hotbar-status-dot.off { color: #f43f5e; }
-  
+  .hotbar-status-dot.on  { color: rgba(52, 211, 153, 0.85); text-shadow: 0 0 5px rgba(52,211,153,0.5); }
+  .hotbar-status-dot.off { color: rgba(244, 63, 94, 0.8);   text-shadow: 0 0 5px rgba(244,63,94,0.4); }
+
+  /* Cooldown overlay */
   .hotbar-cooldown-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.76);
-    border-radius: 4px;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(1, 0, 10, 0.8);
+    border-radius: 2px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #fef08a;
-    font-size: 1.1rem;
+    color: #c4b5fd;
+    font-size: 1rem;
     font-weight: bold;
+    font-family: 'Cinzel', 'Georgia', serif;
     pointer-events: none;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 8px rgba(167, 139, 250, 0.7);
+    clip-path: polygon(4px 0%, 100% 0%, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0% 100%, 0% 4px);
   }
   .mmo-hotbar-ult-slot .hotbar-cooldown-overlay {
     border-radius: 50%;
-    font-size: 1.3rem;
-    color: #fef08a;
-    text-shadow: 0 0 8px rgba(234, 179, 8, 0.9);
+    font-size: 1.25rem;
+    color: #ddd6fe;
+    text-shadow: 0 0 10px rgba(192, 132, 252, 0.8);
+    clip-path: none;
   }
 
   .game-hud-right-group {
@@ -1085,7 +2412,24 @@ const focusStyles = `
     -webkit-tap-highlight-color: transparent;
   }
 
-  @media (max-width: 932px) and (orientation: landscape) {
+@media (max-width: 932px) and (orientation: landscape) {
+
+.bdo-menu-icon-btn {
+    padding: 2px 6px !important;    /* Pinaliit ang loob */
+    font-size: 0.5rem !important;   /* Pinaliit ang font */
+    height: 22px !important;        /* Pinaliit ang taas */
+  }
+
+  .bdo-menu-icon-btn svg {
+    width: 10px !important;         /* Pinaliit ang icon */
+    height: 10px !important;
+    margin-right: 2px !important;
+  }
+  
+  .bdo-top-menu-btns {
+    gap: 3px !important;            /* Pinaliit ang agwat ng buttons */
+  }
+
     .game-hud-top {
       top: 16px !important;
       left: 24px !important;
@@ -1093,25 +2437,58 @@ const focusStyles = `
       font-size: 0.9rem !important;
     }
 
-    @supports (-webkit-touch-callout: none) {
-    .game-hud-top {
-      top: 56px !important; 
+    .hud-pause-btn {
+      top: 16px !important;
+      font-size: 0.55rem !important;
+      padding: 4px 12px !important;
     }
-    
+
+    /* 👇 TINAASAN NATIN YUNG BOTTOM VALUE (Gagawing 85px) */
+    .rpg-buff-container {
+      top: auto !important;
+      bottom: 85px !important; 
+    }
+
+    @supports (-webkit-touch-callout: none) {
+      .game-hud-top {
+        top: 56px !important; 
+      }
+
+      .hud-pause-btn {
+        top: 56px !important;
+      }
+
+      /* 👇 TINAASAN DIN PARA SA IPHONE/IOS (Gagawing 95px) */
+      .rpg-buff-container {
+        top: auto !important;
+        bottom: 95px !important; 
+      }
+    }
+
+    /* ── Skill tree / co-op panel (mobile landscape) ──────────────────────
+       FIX: anchor BOTH top and bottom instead of relying on a fixed
+       max-height. That makes the panel's height whatever space is actually
+       left on screen, so it can no longer overflow past the bottom edge.
+       max-height is kept only as a safety cap, using dvh (dynamic
+       viewport height) instead of vh. On iOS Safari, vh is sized as if
+       the address bar / home-indicator chrome were already hidden, so the
+       panel overflows whenever that chrome is actually showing — this is
+       exactly why it clips on notched iPhones but looks fine elsewhere.
+       dvh tracks the real visible viewport, fixing that. This now applies
+       to every mobile-landscape browser (not gated behind the old
+       @supports iOS check above), so the behavior is consistent rather
+       than relying on browser sniffing. */
+
     .skill-tree-container, .coop-party-panel {
       top: 90px !important;
-      bottom: auto !important;
-      max-height: 60vh !important;
+      bottom: 8px !important;
+      max-height: 60vh !important;  /* fallback for browsers without dvh support */
+      max-height: 60dvh !important;
     }
-  }
 
     .hud-menu-title, 
     .hud-menu-sub {
       display: none !important;
-    }
-
-    .game-hud-top > div:nth-child(2) {
-      margin-left: -20px !important; 
     }
 
     .game-hud-right-group div {
@@ -1121,7 +2498,7 @@ const focusStyles = `
     .inventory-toggle-btn, .skill-tree-toggle-btn {
     font-size: 0.55rem !important;
     padding: 0 8px !important;
-    height: 24px !important; /* Parehas liliit ang height */
+    height: 24px !important;
   }
   }
 
@@ -1141,10 +2518,10 @@ const focusStyles = `
       font-size: 0.75rem !important; 
     }
 
-    .game-hud-top button {
+    .hud-pause-btn {
       font-size: 0.5rem !important;  
-      padding: 4px 8px !important;   
-      border-width: 1px !important;  
+      padding: 3px 10px !important;
+      top: 4px !important;
     }
 
     .hud-bar-container {
@@ -1155,22 +2532,34 @@ const focusStyles = `
       font-size: 0.5rem !important;
       line-height: 8px !important;
     }
+    .hud-level-badge {
+      padding: 2px 5px !important;
+    }
+    .hud-level-label {
+      font-size: 0.42rem !important;
+    }
+    .hud-level-value {
+      font-size: 0.6rem !important;
+    }
 
     .rpg-buff-container {
-      top: 20px !important; 
-      gap: 2px !important;
+      top: auto !important; 
+      bottom: 75px !important; /* Itutulak nito ang buffs pataas ng HP bar */
+      gap: 10px !important;
       transform: translateX(-50%) scale(0.6) !important; 
+      transform-origin: bottom center !important; 
     }
 
     .mmo-hotbar-container {
       gap: 3px !important;
       padding: 3px 4px !important;
       bottom: 4px !important;
+      border-radius: 2px !important;
     }
     .mmo-hotbar-slot {
       width: 28px !important;
       height: 28px !important;
-      border-radius: 3px !important;
+      clip-path: polygon(3px 0%, 100% 0%, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0% 100%, 0% 3px) !important;
     }
     .mmo-hotbar-ult-slot {
       width: 36px !important;
@@ -1183,118 +2572,296 @@ const focusStyles = `
       font-size: 0.95rem !important;
     }
     .hotbar-key-bind {
-      font-size: 0.4rem !important; 
+      font-size: 0.4rem !important;
       top: 1px !important;
       left: 2px !important;
     }
     .mmo-hotbar-ult-slot .hotbar-key-bind {
       font-size: 0.45rem !important;
-      left: 6px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
     }
     .hotbar-status-dot {
       font-size: 0.35rem !important;
     }
     .hotbar-cooldown-overlay {
       font-size: 0.7rem !important;
+      clip-path: polygon(3px 0%, 100% 0%, 100% calc(100% - 3px), calc(100% - 3px) 100%, 0% 100%, 0% 3px) !important;
     }
     .mmo-hotbar-ult-slot .hotbar-cooldown-overlay {
       font-size: 0.85rem !important;
     }
 
+    /* Single source of truth for width/padding/gap on these three panels
+       at this breakpoint — see the earlier .skill-tree-container rule for
+       its position/shape-only overrides (max-height, clip-path, etc). */
     .rpg-stats-panel, .skill-tree-container, .coop-party-panel {
-      width: 135px !important; 
-      padding: 4px !important;
+      width: 150px !important; 
+      padding: 5px !important;
       gap: 2px !important;
     }
     .stats-header, .skill-tree-title {
-      font-size: 0.6rem !important;
+      font-size: 0.68rem !important;
       padding-bottom: 2px !important;
       margin-bottom: 2px !important;
     }
     .stats-row, .skill-row-btn, .coop-name {
-      font-size: 0.55rem !important; 
+      font-size: 0.64rem !important; 
     }
     .skill-row-btn {
-      padding: 3px 4px !important;
+      padding: 4px 5px !important;
     }
     .skill-node-desc {
-      font-size: 0.5rem !important;
-      padding: 2px 3px !important;
+      font-size: 0.6rem !important;
+      padding: 3px 4px !important;
     }
     
     .stats-toggle-btn, .skill-tree-toggle-btn {
+      font-size: 0.58rem !important;
+      padding: 3px 7px !important;
+    }
+    .stats-toggle-btn {
       font-size: 0.55rem !important;
-      padding: 3px 5px !important;
+      padding: 2px 6px !important;
+      letter-spacing: 0.3px !important;
     }
   }
 /* =========================================================================
    🔮 PREMIUM CYBER-FANTASY INVENTORY STYLES (PC & Mobile Ready)
    ========================================================================= */
 
-.inventory-toggle-btn:hover { 
-  background: #2e1503; 
-  border-color: #fef08a;
-  box-shadow: 0 0 16px rgba(234, 179, 8, 0.4);
+.inventory-toggle-btn:hover {
+  background: linear-gradient(180deg, rgba(22, 12, 5, 0.98) 0%, rgba(8, 4, 2, 0.99) 100%);
+  border-color: rgba(253, 230, 138, 0.65);
+  border-top-color: rgba(254, 240, 138, 0.8);
+  color: #fef9c3;
+  box-shadow: 0 0 12px rgba(180, 130, 0, 0.2);
 }
 
-/* Inventory Window (Modal) */
+/* ── Inventory Modal — Arcane Grimoire Tome ── */
 .inventory-modal {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 360px; 
-  background: rgba(13, 9, 33, 0.45) !important; /* Pinalabnaw */
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  border: 2px solid #8b5cf6;
-  border-radius: 12px;
+  width: 360px;
+  background:
+    linear-gradient(160deg, rgba(7, 4, 26, 0.4) 0%, rgba(4, 2, 16, 0.42) 100%) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+  border: 1px solid rgba(100, 65, 190, 0.32) !important;
+  border-top-color: rgba(139, 92, 246, 0.52) !important;
+  border-radius: 10px;
+  outline: 1px solid rgba(139, 92, 246, 0.15);
+  outline-offset: -4px;
+  overflow: visible !important;
   padding: 16px;
   z-index: 100;
-  color: white;
-  font-family: monospace;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 0 15px rgba(139, 92, 246, 0.2);
+  color: #e2d9f3;
+  font-family: 'Cinzel', 'Georgia', serif;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(80, 40, 180, 0.12),
+    inset 0 0 20px rgba(3, 1, 14, 0.3);
   pointer-events: auto;
 }
 
-/* Header Row Custom Styling */
+/* Header Row */
 .inventory-modal > div:first-child {
   display: flex !important;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+  border-bottom: 1px solid rgba(100, 60, 200, 0.22);
   padding-bottom: 8px;
   margin-bottom: 12px !important;
 }
 
-/* X Close Button Custom Style */
+/* X Close Button */
 .inventory-modal > div:first-child button {
-  background: rgba(239, 68, 68, 0.1) !important;
-  border: 1px solid rgba(239, 68, 68, 0.4) !important;
-  color: #f87171 !important;
+  background: rgba(239, 68, 68, 0.12) !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.55) !important;
+  color: #fca5a5 !important;
   border-radius: 4px !important;
-  width: 22px !important;
-  height: 22px !important;
+  width: 24px !important;
+  height: 24px !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   font-weight: bold !important;
-  font-size: 0.75rem !important;
+  font-size: 0.9rem !important;
   transition: all 0.15s ease !important;
 }
 .inventory-modal > div:first-child button:hover {
-  background: #ef4444 !important;
-  color: white !important;
+  background: rgba(239, 68, 68, 0.3) !important;
+  border-color: rgba(244, 63, 94, 0.8) !important;
+  color: #ffffff !important;
 }
 
-/* Equipment Section Box */
+/* ── Help Modal — Hotkeys & How To Play ── */
+.help-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 460px;
+  max-width: 92vw;
+  max-height: 86vh;
+  background:
+    linear-gradient(160deg, rgba(7, 4, 26, 0.4) 0%, rgba(4, 2, 16, 0.42) 100%) !important;
+  backdrop-filter: blur(5px) !important;
+  -webkit-backdrop-filter: blur(5px) !important;
+  border: 1px solid rgba(100, 65, 190, 0.32) !important;
+  border-top-color: rgba(139, 92, 246, 0.52) !important;
+  border-radius: 10px;
+  outline: 1px solid rgba(139, 92, 246, 0.15);
+  outline-offset: -4px;
+  padding: 22px;
+  z-index: 100;
+  color: #e2d9f3;
+  font-family: 'Cinzel', 'Georgia', serif;
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 20px rgba(80, 40, 180, 0.12),
+    inset 0 0 20px rgba(3, 1, 14, 0.3);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.help-modal > div:first-child {
+  display: flex !important;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(100, 60, 200, 0.22);
+  padding-bottom: 8px;
+  margin-bottom: 10px !important;
+  flex-shrink: 0;
+}
+
+.help-modal > div:first-child button {
+  background: rgba(239, 68, 68, 0.12) !important;
+  border: 1.5px solid rgba(239, 68, 68, 0.55) !important;
+  color: #fca5a5 !important;
+  border-radius: 4px !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-weight: bold !important;
+  font-size: 0.9rem !important;
+  transition: all 0.15s ease !important;
+}
+.help-modal > div:first-child button:hover {
+  background: rgba(239, 68, 68, 0.3) !important;
+  border-color: rgba(244, 63, 94, 0.8) !important;
+  color: #ffffff !important;
+}
+
+.help-modal-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.help-section-title {
+  font-size: 0.76rem;
+  font-weight: bold;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #fbbf24;
+  margin: 16px 0 7px;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.22);
+  padding-bottom: 4px;
+}
+.help-section-title:first-child {
+  margin-top: 0;
+}
+.help-section-title em {
+  font-style: normal;
+  color: rgba(226, 217, 243, 0.55);
+  font-size: 0.66rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.help-text {
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: rgba(226, 217, 243, 0.85);
+  margin: 0 0 4px;
+  font-family: 'Georgia', serif;
+}
+
+.help-key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 2px;
+  border-bottom: 1px solid rgba(100, 60, 200, 0.12);
+}
+.help-key-row:last-of-type {
+  border-bottom: none;
+}
+
+.help-key-combo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.help-key {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #d8d2f5;
+  border: 0.5px solid rgba(127, 119, 221, 0.5);
+  border-radius: 4px;
+  background: rgba(83, 74, 183, 0.18);
+  box-shadow: 0 0 6px rgba(80, 40, 180, 0.15);
+}
+.help-key-wide {
+  min-width: 56px;
+  padding: 0 10px;
+}
+.help-key-icon {
+  padding: 0 7px;
+}
+.help-key-or {
+  font-size: 0.64rem;
+  color: rgba(226, 217, 243, 0.45);
+  font-style: italic;
+  margin: 0 1px;
+}
+
+.help-key-desc {
+  font-size: 0.74rem;
+  color: rgba(226, 217, 243, 0.85);
+  text-align: right;
+}
+.help-key-desc em {
+  font-style: normal;
+  color: rgba(251, 191, 36, 0.75);
+  font-size: 0.64rem;
+}
+
+/* Equipment Section */
 .equip-section {
   display: flex;
   justify-content: space-around;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(4, 2, 18, 0.5);
   padding: 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(80, 50, 160, 0.2);
+  border-top-color: rgba(100, 65, 200, 0.3);
+  border-radius: 6px;
   margin-bottom: 14px;
 }
 .equip-box {
@@ -1302,21 +2869,24 @@ const focusStyles = `
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  font-size: 0.65rem;
-  color: #a78bfa;
+  font-size: 0.6rem;
+  color: rgba(167, 139, 250, 0.8);
   font-weight: bold;
+  letter-spacing: 0.4px;
 }
 .equip-section .inv-slot {
-  width: 52px !important; /* Pinuwersa nating i-override ang inline 60px para maging pantay na parisukat */
+  width: 52px !important;
   height: 52px !important;
 }
 
 /* Backpack Text Header */
 .inventory-modal > div:nth-child(3) {
   font-weight: bold;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   margin-bottom: 6px;
-  color: #94a3b8;
+  color: rgba(148, 130, 190, 0.65);
+  font-size: 0.6rem;
+  text-transform: uppercase;
 }
 
 /* Main Items Grid */
@@ -1326,34 +2896,39 @@ const focusStyles = `
   gap: 8px;
 }
 
-/* Individual Item Slots */
+/* ── Individual Item Slots ── */
 .inv-slot {
   aspect-ratio: 1 / 1;
-  background: rgba(20, 15, 45, 0.6) !important;
-  border: 1px solid #4c2d82 !important;
+  background: rgba(6, 3, 22, 0.8) !important;
+  border: 1px solid rgba(70, 40, 130, 0.45) !important;
   border-radius: 6px;
+  outline: 1px solid rgba(139, 92, 246, 0.18);
+  outline-offset: -3px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   position: relative;
   transition: all 0.15s ease;
-  box-shadow: inset 0 0 6px rgba(0,0,0,0.4);
+  box-shadow: inset 0 0 8px rgba(0,0,0,0.6);
 }
-.inv-slot:hover { 
-  transform: scale(1.05); 
-  z-index: 50; 
-  background: transparent !important;
-  border-color: #fef08a !important;
-  box-shadow: 0 0 10px rgba(254, 240, 138, 0.4) !important;
+.inv-slot:hover {
+  transform: scale(1.06);
+  z-index: 50;
+  background: rgba(18, 8, 50, 0.9) !important;
+  border-color: rgba(251, 191, 36, 0.65) !important;
+  outline-color: rgba(251, 191, 36, 0.35);
+  box-shadow:
+    0 0 10px rgba(180, 130, 0, 0.2),
+    inset 0 0 8px rgba(0,0,0,0.5) !important;
 }
 
 /* Rarity Color Accents */
-.inv-slot[data-rarity="common"] { border-color: #64748b !important; background: rgba(100, 116, 139, 0.05) !important; }
-.inv-slot[data-rarity="rare"] { border-color: #3b82f6 !important; box-shadow: inset 0 0 8px rgba(59, 130, 246, 0.2) !important; }
-.inv-slot[data-rarity="epic"] { border-color: #a855f7 !important; box-shadow: inset 0 0 8px rgba(168, 85, 247, 0.2) !important; }
-.inv-slot[data-rarity="legendary"] { border-color: #fbbf24 !important; box-shadow: inset 0 0 8px rgba(251, 191, 36, 0.2) !important; }
-.inv-slot[data-rarity="mythic"] { border-color: #ef4444 !important; box-shadow: inset 0 0 8px rgba(239, 68, 68, 0.3) !important; }
+.inv-slot[data-rarity="common"]    { border-color: rgba(100, 116, 139, 0.45) !important; }
+.inv-slot[data-rarity="rare"]      { border-color: rgba(59, 130, 246, 0.55) !important;  box-shadow: inset 0 0 8px rgba(59, 130, 246, 0.12) !important; }
+.inv-slot[data-rarity="epic"]      { border-color: rgba(168, 85, 247, 0.55) !important;  box-shadow: inset 0 0 8px rgba(168, 85, 247, 0.15) !important; }
+.inv-slot[data-rarity="legendary"] { border-color: rgba(251, 191, 36, 0.55) !important;  box-shadow: inset 0 0 8px rgba(251, 191, 36, 0.12) !important; }
+.inv-slot[data-rarity="mythic"]    { border-color: rgba(239, 68, 68, 0.55) !important;   box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.18) !important; }
 
 /* Item Tooltips */
 .item-tooltip {
@@ -1361,47 +2936,54 @@ const focusStyles = `
   bottom: 115%;
   left: 50%;
   transform: translateX(-50%);
-  background: #09061a;
-  border: 1px solid #8b5cf6;
-  padding: 8px;
+  background: rgba(4, 2, 18, 0.97);
+  border: 1px solid rgba(100, 65, 190, 0.5);
+  border-top: 1.5px solid rgba(139, 92, 246, 0.7);
+  padding: 9px;
   width: max-content;
   max-width: 190px;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
+  font-family: 'Georgia', serif;
+  border-radius: 4px;
   z-index: 60;
   pointer-events: none;
   opacity: 0;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.7);
-  border-radius: 4px;
+  box-shadow:
+    0 6px 18px rgba(0,0,0,0.8),
+    0 0 10px rgba(80, 40, 180, 0.12);
   transition: opacity 0.15s ease;
+  letter-spacing: 0.2px;
 }
 .inv-slot:hover .item-tooltip { opacity: 1; }
 
-/* Elegant Delete Button (Pulang X) */
+/* Delete Button */
 .delete-btn {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 16px !important; 
-  height: 16px !important; 
-  font-size: 9px !important;
-  background: #dc2626 !important;
-  color: white !important;
+  top: -5px;
+  right: -5px;
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 11px !important;
+  background: rgba(185, 28, 28, 0.95) !important;
+  color: #ffffff !important;
   border-radius: 50% !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   font-weight: bold !important;
   cursor: pointer !important;
-  border: 1px solid #f87171 !important;
-  z-index: 25 !important; 
+  border: 1.5px solid rgba(254, 202, 202, 0.8) !important;
+  z-index: 25 !important;
   transition: all 0.1s ease;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
 }
 .delete-btn:hover {
-  transform: scale(1.15) !important;
+  transform: scale(1.18) !important;
   background: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.5) !important;
 }
 
-/* CLEAR ALL BUTTON */
+/* Clear All Button */
   .backpack-header {
     display: flex;
     justify-content: space-between;
@@ -1412,12 +2994,14 @@ const focusStyles = `
   }
 
   .clear-all-btn {
-    background: rgba(220, 38, 38, 0.15);
-    border: 1px solid rgba(239, 68, 68, 0.6);
-    color: #f87171;
-    font-family: monospace;
-    font-size: 0.65rem;
-    padding: 3px 8px;
+    background: rgba(180, 28, 28, 0.18);
+    border: 1.5px solid rgba(239, 68, 68, 0.6);
+    border-top-color: rgba(248, 113, 113, 0.75);
+    color: #fecaca;
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.4px;
+    padding: 4px 10px;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -1425,32 +3009,43 @@ const focusStyles = `
   }
 
   .clear-all-btn:hover {
-    background: #ef4444;
-    color: white;
-    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+    background: rgba(239, 68, 68, 0.3);
+    color: #ffffff;
+    border-color: rgba(244, 63, 94, 0.85);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.3);
   }
 
-  /* ITEM PLUS BADGE */
+  /* Item Plus Badge */
   .item-plus-badge {
     position: absolute;
     bottom: 2px;
     right: 2px;
-    background: rgba(0, 0, 0, 0.8);
-    color: #fbbf24; /* Gold/Yellow na kulay para litaw */
-    font-size: 0.65rem;
+    background: rgba(0, 0, 0, 0.85);
+    color: rgba(251, 191, 36, 0.88);
+    font-size: 0.6rem;
     font-weight: bold;
     padding: 1px 4px;
-    border-radius: 3px;
-    pointer-events: none; /* Para hindi maka-istorbo sa pag-click ng item */
-    font-family: monospace;
+    clip-path: polygon(2px 0%, 100% 0%, 100% calc(100% - 2px), calc(100% - 2px) 100%, 0% 100%, 0% 2px);
+    pointer-events: none;
+    font-family: 'Cinzel', 'Georgia', serif;
     z-index: 10;
-    text-shadow: 1px 1px 0 #000;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+    letter-spacing: 0.2px;
   }
 /* =========================================================================
    📱 INTERACTIVE MOBILE LANDSCAPE CONFIGURATION (Fixed Tooltips)
    ========================================================================= */
 @media (max-height: 550px), (max-width: 950px) and (orientation: landscape) {
   
+  .help-modal {
+    width: 340px !important;
+    max-height: 90vh !important;
+    padding: 10px 12px !important;
+  }
+  .help-text, .help-key-desc {
+    font-size: 0.62rem !important;
+  }
+
   .inventory-toggle-btn {
     font-size: 0.55rem;
     padding: 3px 8px;
@@ -1528,7 +3123,7 @@ const focusStyles = `
   .inv-grid .inv-slot {
     width: 38px !important;
     height: 38px !important;
-    border-radius: 4px !important;
+    border-radius: 5px !important;
   }
 
   /* 2️⃣ INAYOS NA TOOLTIP POSITION PARA SA MOBILE (Tulad ng sa Desktop) */
@@ -1550,6 +3145,54 @@ const focusStyles = `
     right: -2px !important;
   }
 }
+  /* =========================================================================
+     📱 ULTRA-COMPACT MOBILE LANDSCAPE FIX (No scroll, perfectly centered)
+     ========================================================================= */
+  @media (max-height: 480px) and (orientation: landscape) {
+    .hud-start-overlay {
+      align-items: center !important;  /* Ino-override yung flex-start ng portrait mobile */
+      padding-top: 0 !important;       /* Tinatanggal yung 12vh push down */
+    }
+    
+    .hud-start-modal {
+      padding: 12px 16px !important;
+      max-width: 320px !important;
+    }
+    
+    /* Itago ang mga purely decorative na runes at lines para malaki ang matipid sa vertical space */
+    .hud-rune-row,
+    .hud-divider,
+    .hud-divider-sm,
+    .hud-rune-footer {
+      display: none !important;
+    }
+    
+    .hud-sigil {
+      width: 30px !important;
+      height: 30px !important;
+      margin: 0 auto 6px !important;
+    }
+    
+    .hud-start-modal h2 {
+      font-size: 14px !important;
+      margin-bottom: 6px !important;
+    }
+    
+    .hud-start-modal p {
+      font-size: 10.5px !important;
+      line-height: 1.3 !important;
+      margin-bottom: 8px !important;
+    }
+    
+    .hud-touch-hint, .hud-wasd-hint {
+      margin-bottom: 0 !important;
+    }
+    
+    .hud-touch-zone {
+      width: 40px !important;
+      height: 40px !important;
+    }
+  } 
 `;
 
 export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
@@ -1579,7 +3222,22 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const statCdRef = useRef(null);
   const statLifestealRef = useRef(null);
 
+  // hasStarted: ginagamit para ipakita/itago ang start overlay at dash button
+  // Gumagamit ng visibility/opacity CSS imbes na unmount para walang re-render lag
   const [hasStarted, setHasStarted] = useState(false);
+
+  // 🔮 isPreloading: ipinapakita ang arcane LoadingScreen BAGO lumabas ang
+  // "MOVE TO START GAME" prompt. Binibigyan nito ng 3-4 segundo ang heavy
+  // canvas/particle/sprite setup (yung VOID/FRIEREN map baking, ambient
+  // particles, atbp.) para matapos sa background habang naka-cover ang
+  // loading screen — kaya hindi na naramdaman ang stutter sa unang
+  // movement frame ng player. Ginagamit din ang isPreloadingRef sa loob ng
+  // game loop (worker.onmessage closure) dahil hindi laging sigurado na
+  // fresh ang `screen`/state closure doon — ref ang laging up-to-date.
+  const [isPreloading, setIsPreloading] = useState(true);
+  const isPreloadingRef = useRef(true);
+  useEffect(() => { isPreloadingRef.current = isPreloading; }, [isPreloading]);
+
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
   const [p1VotedRestart, setP1VotedRestart] = useState(false);
   const [p2VotedRestart, setP2VotedRestart] = useState(false);
@@ -1587,15 +3245,97 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [isTreeOpen, setIsTreeOpen] = useState(true);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [playerLevel, setPlayerLevel] = useState(1);
+  const playerLevelRef = useRef(1);
   const [activeBuffsList, setActiveBuffsList] = useState([]);
+  // Tracks the peak duration seen per buff "type" key, kasi nag-iiba ang max
+  // duration depende sa source (potion vs skill vs ultimate). Ginagamit ito
+  // para tama ang radial sweep ng rune medallion (life / peak), hindi fixed guess.
+  const buffPeakDurationRef = useRef({});
   const [guestExitedAlert, setGuestExitedAlert] = useState(false);
   const [hostExitedCountdown, setHostExitedCountdown] = useState(null);
   const exitTimerRef = useRef(null);
   const [showInventory, setShowInventory] = useState(false);
 
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [invTrigger, setInvTrigger] = useState(0);
   const lastInvAction = useRef(0);
+
+  // 🔥 RELIABLE TOUCH/MOBILE DETECTION: Hindi pwede umasa lang sa 'ontouchstart' in window,
+  // kasi false ito sa mobile-preview/resized desktop browsers (walang totoong touch hardware).
+  // Idinagdag ang width check (tulad ng ginagamit na sa ibang parte ng file) bilang fallback,
+  // at nag-liliisten din sa unang totoong touchstart event para mag-upgrade agad kung mali ang unang guess.
+  const computeIsTouchDevice = () => {
+    if (typeof window === 'undefined') return false;
+    // Gamitin ang MAS MALIIT sa width/height, hindi lang width — kasi pag naka-landscape
+    // ang malalaking phone (hal. iPhone Pro Max), lumalampas ang width sa karaniwang
+    // mobile breakpoint kahit phone pa rin talaga ito. Ang "narrow dimension" ang
+    // tamang sukatan dahil 'yun ang nananatiling maliit kahit anong orientation.
+    const narrowSide = Math.min(window.innerWidth, window.innerHeight);
+    // pointer:coarse + hover:none = totoong touch-primary input device, gumagana
+    // 'to kahit malaki ang screen (tablets, malalaking phone sa landscape, atbp.)
+    const isCoarsePointer =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches;
+    return (
+      'ontouchstart' in window ||
+      navigator.maxTouchPoints > 0 ||
+      isCoarsePointer ||
+      narrowSide <= 500
+    );
+  };
+
+  const [isTouchDevice, setIsTouchDevice] = useState(computeIsTouchDevice);
+
+  useEffect(() => {
+    const checkTouch = () => setIsTouchDevice(computeIsTouchDevice());
+    checkTouch();
+    window.addEventListener('resize', checkTouch);
+    window.addEventListener('orientationchange', checkTouch);
+    // Kapag may totoong touch event na natanggap, sigurado na touch device ito
+    window.addEventListener('touchstart', checkTouch, { once: true, passive: true });
+    return () => {
+      window.removeEventListener('resize', checkTouch);
+      window.removeEventListener('orientationchange', checkTouch);
+      window.removeEventListener('touchstart', checkTouch);
+    };
+  }, []);
+
+  const screenRef = useRef(screen);
+
+  // 🔥 ORIENTATION-AWARE LAYOUT BREAKPOINT: dating "window.innerWidth <= 840" lang ang
+  // ginagamit ng elemental sigils / dash / ultimate buttons para mag-decide ng radius,
+  // anchor offset, at icon size. Pero may existing CSS na "(max-width: 932px) and
+  // (orientation: landscape)" para sa malalaking phone na naka-landscape (hal. iPhone
+  // Pro Max). Dahil hindi tugma ang dalawa, naging "desktop-sized" ang mga skill
+  // buttons (mas malaking radius/icons) kahit "mobile" na ang CSS sa paligid nila —
+  // kaya lumalabas na sobrang laki/misaligned ang mga ito sa landscape phones.
+  // Ginawa itong IISANG shared check na eksaktong sumasalamin sa parehong CSS rules.
+  const computeIsMobileLayout = () => {
+    if (typeof window === 'undefined') return false;
+    const isLandscape =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(orientation: landscape)').matches;
+    return window.innerWidth <= 840 || (isLandscape && window.innerWidth <= 932);
+  };
+
+  const [isMobileLayout, setIsMobileLayout] = useState(computeIsMobileLayout);
+
+  useEffect(() => {
+    const checkLayout = () => setIsMobileLayout(computeIsMobileLayout());
+    checkLayout();
+    window.addEventListener('resize', checkLayout);
+    window.addEventListener('orientationchange', checkLayout);
+    return () => {
+      window.removeEventListener('resize', checkLayout);
+      window.removeEventListener('orientationchange', checkLayout);
+    };
+  }, []);
+
+// I-sync ang ref sa state tuwing nagbabago ang screen
+useEffect(() => {
+  screenRef.current = screen;
+}, [screen]);
 
 
   // BLOCK INSPECT ELEMENT & KEYBOARD SHORTCUTS
@@ -1811,11 +3551,12 @@ const engineRef = useRef({
     slashes: [], cubeBashes: [], stars: [], collapses: [], potions: [],
     tornados: [], waves: [], fissures: [], lightnings: [], iceStorms: [], aoeZones: [], // 🔥 DINAGDAG: aoeZones
     floatingTexts: [],
-    keys: {}, floorPat: null, p2Input: { x: 0, y: 0 },
+    pendingSigilCasts: [], // 🔥 FIX: dt-synced na cast queue (kapalit ng setTimeout) — naka-pause-aware, walang stale orphan timers, may stagger sa sabay-sabay na cast
+    keys: {}, floorPat: null, floorBaked: null, staticBg: null, p2Input: { x: 0, y: 0 },
     bossIntro: {
         active: false,
         timer: 0,
-        maxDuration: 900, // Kung 60fps ang laro mo, 180 = 3 seconds
+        maxDuration: 720, // Kung 60fps ang laro mo, 180 = 3 seconds
         bossName: ""
       },
     p1Target: { x: 300, y: 280, hp: 100, maxHp: 100, inv: 0, dead: false },
@@ -1905,7 +3646,171 @@ const engineRef = useRef({
       vy: isCrit ? 90 : 45 // Bounce speed (mas mabilis pag crit)
     });
   };
-const castElementalSigil = (sigilType, forcedTarget = null) => {
+
+  // =========================================================================
+  // 🔥 FIX: SPELL RESOLUTION — inalis sa setTimeout, ginawang plain function
+  // para matawag ito ng dt-synced queue (pendingSigilCasts) sa main game loop.
+  // Dahil dito: (1) naka-sync na sa pause state, (2) walang orphan timers
+  // pag nag-restart/unmount, (3) consistent sa internal game clock.
+  // =========================================================================
+  const resolveSigilCast = (currentEng, target, sigilType) => {
+    if (!currentEng || !target || target.dead) return; // Wag ituloy kung napatay si player habang nagchachant
+
+    currentEng.screenShake = 0.8; // Malakas na shake pag pumutok na yung spell!
+
+    if (!currentEng.tornados) currentEng.tornados = [];
+    if (!currentEng.waves) currentEng.waves = [];
+    if (!currentEng.fissures) currentEng.fissures = [];
+    if (!currentEng.lightnings) currentEng.lightnings = [];
+    if (!currentEng.iceStorms) currentEng.iceStorms = [];
+
+    if (sigilType === 'flareInferno') {
+      target.chatBubble = { text: "FLARE INFERNO!", life: 1.5 };
+
+      // 🔥 AUTO-AIM LOGIC: Hanapin ang pinakamalapit na kalaban
+      let targetEnemy = null;
+      let minDist = Infinity;
+      for (const e of currentEng.enemies) {
+        // Wag isama ang mga patay na o wala pa sa screen (unless malaking boss)
+        const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
+        if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
+        
+        let d = Math.hypot(e.x - target.x, e.y - target.y);
+        if (d < minDist) { minDist = d; targetEnemy = e; }
+      }
+      
+      // Compute ang angle papunta sa target. Kung walang kalaban, random na lang.
+      let angle = Math.random() * Math.PI * 2; 
+      if (targetEnemy) {
+        angle = Math.atan2(targetEnemy.y - target.y, targetEnemy.x - target.x);
+      }
+
+      // I-spawn ang tornado papunta sa calculated angle
+      currentEng.tornados.push({ 
+          x: target.x, 
+          y: target.y, 
+          life: 5.0, 
+          vx: Math.cos(angle) * 150, // 150 ang speed ng tornado
+          vy: Math.sin(angle) * 150, 
+          r: 80 
+      });
+    } else if (sigilType === 'tidalWave') {
+      target.chatBubble = { text: "TIDAL WAVE!", life: 1.5 };
+      currentEng.waves.push({ x: -200, y: H/2, vx: 450, life: 5.0, width: 300 });
+
+    } else if (sigilType === 'fissureSlam') {
+      target.chatBubble = { text: "FISSURE SLAM!", life: 1.5 };
+      // --- AUTO-AIM LOGIC ---
+      let closestEnemy = null;
+      let minDistance = Infinity;
+
+      // Hanapin ang pinakamalapit na buhay na kalaban
+      for (let i = 0; i < currentEng.enemies.length; i++) {
+          const e = currentEng.enemies[i];
+          if (e.hp <= 0) continue; // Wag pansinin ang mga patay na
+
+          const dist = Math.hypot(e.x - target.x, e.y - target.y);
+          if (dist < minDistance) {
+              minDistance = dist;
+              closestEnemy = e;
+          }
+      }
+
+      // Kung may kalaban, dun itutok ang skill. Kung wala, gawing random.
+      let angle;
+      if (closestEnemy) {
+          angle = Math.atan2(closestEnemy.y - target.y, closestEnemy.x - target.x);
+      } else {
+          angle = Math.random() * Math.PI * 2;
+      }
+      // ----------------------
+
+      const fLength = 800; 
+      currentEng.fissures.push({ x: target.x, y: target.y, angle, length: fLength, life: 1.5 });
+
+      // =======================================================
+      // 💥 FISSURE SLAM TRAIL DECALS (Linya ng mga basag sa lupa)
+      // =======================================================
+      if (!currentEng.decals) currentEng.decals = [];
+      
+      // Gagawa ng lamat kada 60 pixels kasunod ng direksyon ng angle
+      for (let dist = 0; dist < fLength; dist += 60) {
+        currentEng.decals.push({ 
+          x: target.x + Math.cos(angle) * dist, 
+          y: target.y + Math.sin(angle) * dist, 
+          r: 35 + Math.random() * 20, // Random ang laki para mukhang natural na basag
+          life: 6.0, 
+          maxLife: 6.0 
+        });
+      }
+      // =======================================================
+
+      const fissureDmg = 150 + ((currentEng.wave || 1) * 15) + ((target.dmg || 0) * 3.0);
+      const cosAng = Math.cos(angle);
+      const sinAng = Math.sin(angle);
+
+      for (const e of currentEng.enemies) {
+        const dx = e.x - target.x, dy = e.y - target.y;
+        const proj = dx * cosAng + dy * sinAng; 
+        const perp = Math.abs(dx * sinAng - dy * cosAng)
+        if (proj > 0 && perp < 60) {
+           e.hp -= fissureDmg; 
+           window.recordArcaneDamage('Fissure Slam', fissureDmg);
+           spawnFCT(currentEng, e.x, e.y, fissureDmg, 'damage', false); // 💥 ADDED FCT
+           e.stunnedTime = 5.0;
+           e.flash = 0.5;
+           if(e.hp <= 0) e.deadTrigger = true;
+        }
+      }
+    } else if (sigilType === 'lightningSurge') {
+      target.chatBubble = { text: "LIGHTNING SURGE!", life: 1.5 };
+      let pts = [{x: target.x, y: target.y}];
+      let current = target;
+      let hits = new Set();
+      
+      const lightningDmg = 200 + ((currentEng.wave || 1) * 20) + ((target.dmg || 0) * 3.5);
+
+      for (let i = 0; i < 8; i++) {
+        let best = null, minDistSq = 160000; // ✅ 400 * 400 (Squared max distance)
+        for (const e of currentEng.enemies) {
+          if (!hits.has(e)) {
+            const dx = e.x - current.x;
+            const dy = e.y - current.y;
+            const distSq = (dx * dx) + (dy * dy); // ✅ MAS MABILIS SA CPU
+            if (distSq < minDistSq) { minDistSq = distSq; best = e; }
+          }
+        }
+        if (best) {
+          hits.add(best);
+          pts.push({x: best.x, y: best.y});
+          current = best;
+          best.hp -= lightningDmg; 
+          window.recordArcaneDamage('Lightning Surge', lightningDmg);
+          // 💥 ITO YUNG PARA SA LIGHTNING SURGE (Paso ng kuryente kung saan tinamaan yung kalaban)
+          if (!currentEng.decals) currentEng.decals = [];
+          currentEng.decals.push({ 
+            x: best.x, 
+            y: best.y, 
+            r: 25, 
+            life: 4.0, 
+            maxLife: 4.0 
+          });
+          spawnFCT(currentEng, best.x, best.y, lightningDmg, 'damage', false); // 💥 ADDED FCT
+          best.stunnedTime = 1.0;
+          best.flash = 0.5;
+          if (best.hp <= 0) best.deadTrigger = true;
+        } else break;
+      }
+      if (pts.length > 1) currentEng.lightnings.push({ pts, life: 0.6 });
+    }
+    
+    else if (sigilType === 'iceStorm') {
+      target.chatBubble = { text: "ICE STORM!", life: 1.5 };
+      currentEng.iceStorms.push({ x: target.x, y: target.y, radius: 250, life: 6.0 });
+    }
+  };
+
+  const castElementalSigil = (sigilType, forcedTarget = null) => {
     const eng = engineRef.current;
     if (!eng) return;
     const isCoopActive = Boolean(netRef.current && netRef.current.channel);
@@ -1937,164 +3842,20 @@ const castElementalSigil = (sigilType, forcedTarget = null) => {
     target.chatBubble = { text: "CHANTING...", life: 4.5 };
     eng.screenShake = 0.1; // Maliit na panginginig ng screen habang nag-chacharge
 
-    // 4. ⏱️ DELAY NG SPELL EXECUTION (Maghihintay bago ilabas ang damage at effects)
-    setTimeout(() => {
-      const currentEng = engineRef.current;
-      if (!currentEng || target.dead) return; // Wag ituloy kung napatay si player habang nagchachant
-
-      currentEng.screenShake = 0.8; // Malakas na shake pag pumutok na yung spell!
-
-      if (!currentEng.tornados) currentEng.tornados = [];
-      if (!currentEng.waves) currentEng.waves = [];
-      if (!currentEng.fissures) currentEng.fissures = [];
-      if (!currentEng.lightnings) currentEng.lightnings = [];
-      if (!currentEng.iceStorms) currentEng.iceStorms = [];
-
-      if (sigilType === 'flareInferno') {
-        target.chatBubble = { text: "FLARE INFERNO!", life: 1.5 };
-
-        // 🔥 AUTO-AIM LOGIC: Hanapin ang pinakamalapit na kalaban
-        let targetEnemy = null;
-        let minDist = Infinity;
-        for (const e of currentEng.enemies) {
-          // Wag isama ang mga patay na o wala pa sa screen (unless malaking boss)
-          const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
-          if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
-          
-          let d = Math.hypot(e.x - target.x, e.y - target.y);
-          if (d < minDist) { minDist = d; targetEnemy = e; }
-        }
-        
-        // Compute ang angle papunta sa target. Kung walang kalaban, random na lang.
-        let angle = Math.random() * Math.PI * 2; 
-        if (targetEnemy) {
-          angle = Math.atan2(targetEnemy.y - target.y, targetEnemy.x - target.x);
-        }
-
-        // I-spawn ang tornado papunta sa calculated angle
-        currentEng.tornados.push({ 
-            x: target.x, 
-            y: target.y, 
-            life: 5.0, 
-            vx: Math.cos(angle) * 150, // 150 ang speed ng tornado
-            vy: Math.sin(angle) * 150, 
-            r: 80 
-        });
-      } else if (sigilType === 'tidalWave') {
-        target.chatBubble = { text: "TIDAL WAVE!", life: 1.5 };
-        currentEng.waves.push({ x: -200, y: H/2, vx: 450, life: 5.0, width: 300 });
-
-} else if (sigilType === 'fissureSlam') {
-        target.chatBubble = { text: "FISSURE SLAM!", life: 1.5 };
-        // --- AUTO-AIM LOGIC ---
-        let closestEnemy = null;
-        let minDistance = Infinity;
-
-        // Hanapin ang pinakamalapit na buhay na kalaban
-        for (let i = 0; i < currentEng.enemies.length; i++) {
-            const e = currentEng.enemies[i];
-            if (e.hp <= 0) continue; // Wag pansinin ang mga patay na
-
-            const dist = Math.hypot(e.x - target.x, e.y - target.y);
-            if (dist < minDistance) {
-                minDistance = dist;
-                closestEnemy = e;
-            }
-        }
-
-        // Kung may kalaban, dun itutok ang skill. Kung wala, gawing random.
-        let angle;
-        if (closestEnemy) {
-            angle = Math.atan2(closestEnemy.y - target.y, closestEnemy.x - target.x);
-        } else {
-            angle = Math.random() * Math.PI * 2;
-        }
-        // ----------------------
-
-        const fLength = 800; 
-        currentEng.fissures.push({ x: target.x, y: target.y, angle, length: fLength, life: 1.5 });
-
-        // =======================================================
-        // 💥 FISSURE SLAM TRAIL DECALS (Linya ng mga basag sa lupa)
-        // =======================================================
-        if (!currentEng.decals) currentEng.decals = [];
-        
-        // Gagawa ng lamat kada 60 pixels kasunod ng direksyon ng angle
-        for (let dist = 0; dist < fLength; dist += 60) {
-          currentEng.decals.push({ 
-            x: target.x + Math.cos(angle) * dist, 
-            y: target.y + Math.sin(angle) * dist, 
-            r: 35 + Math.random() * 20, // Random ang laki para mukhang natural na basag
-            life: 6.0, 
-            maxLife: 6.0 
-          });
-        }
-        // =======================================================
-
-        const fissureDmg = 150 + ((currentEng.wave || 1) * 15) + ((target.dmg || 0) * 3.0);
-        const cosAng = Math.cos(angle);
-        const sinAng = Math.sin(angle);
-
-        for (const e of currentEng.enemies) {
-          const dx = e.x - target.x, dy = e.y - target.y;
-          const proj = dx * cosAng + dy * sinAng; 
-          const perp = Math.abs(dx * sinAng - dy * cosAng)
-          if (proj > 0 && perp < 60) {
-             e.hp -= fissureDmg; 
-             window.recordArcaneDamage('Fissure Slam', fissureDmg);
-             spawnFCT(currentEng, e.x, e.y, fissureDmg, 'damage', false); // 💥 ADDED FCT
-             e.stunnedTime = 5.0;
-             e.flash = 0.5;
-             if(e.hp <= 0) e.deadTrigger = true;
-          }
-        }
-      } else if (sigilType === 'lightningSurge') {
-        target.chatBubble = { text: "LIGHTNING SURGE!", life: 1.5 };
-        let pts = [{x: target.x, y: target.y}];
-        let current = target;
-        let hits = new Set();
-        
-        const lightningDmg = 200 + ((currentEng.wave || 1) * 20) + ((target.dmg || 0) * 3.5);
-
-        for (let i = 0; i < 8; i++) {
-          let best = null, minDistSq = 160000; // ✅ 400 * 400 (Squared max distance)
-          for (const e of currentEng.enemies) {
-            if (!hits.has(e)) {
-              const dx = e.x - current.x;
-              const dy = e.y - current.y;
-              const distSq = (dx * dx) + (dy * dy); // ✅ MAS MABILIS SA CPU
-              if (distSq < minDistSq) { minDistSq = distSq; best = e; }
-            }
-          }
-          if (best) {
-            hits.add(best);
-            pts.push({x: best.x, y: best.y});
-            current = best;
-            best.hp -= lightningDmg; 
-            window.recordArcaneDamage('Lightning Surge', lightningDmg);
-            // 💥 ITO YUNG PARA SA LIGHTNING SURGE (Paso ng kuryente kung saan tinamaan yung kalaban)
-            if (!currentEng.decals) currentEng.decals = [];
-            currentEng.decals.push({ 
-              x: best.x, 
-              y: best.y, 
-              r: 25, 
-              life: 4.0, 
-              maxLife: 4.0 
-            });
-            spawnFCT(currentEng, best.x, best.y, lightningDmg, 'damage', false); // 💥 ADDED FCT
-            best.stunnedTime = 1.0;
-            best.flash = 0.5;
-            if (best.hp <= 0) best.deadTrigger = true;
-          } else break;
-        }
-        if (pts.length > 1) currentEng.lightnings.push({ pts, life: 0.6 });
-      }
-      
-      else if (sigilType === 'iceStorm') {
-        target.chatBubble = { text: "ICE STORM!", life: 1.5 };
-        currentEng.iceStorms.push({ x: target.x, y: target.y, radius: 250, life: 6.0 });
-      }
-    }, 4500); // 👈 🔥 DITO MO BABAGUHIN ANG DELAY (2000 = 2 seconds)
+    // 4. ⏱️ FIX: dt-synced na queue kapalit ng setTimeout.
+    //    - Naka-pause-aware: hindi tatakbo habang naka-pause dahil sa dt loop mismo ang nag-de-decrement.
+    //    - Walang orphan timers: kapag nag-restart/unmount, sapat lang i-clear ang array, walang
+    //      "zombie" na setTimeout na pumuputok pagkatapos matapos ang match.
+    //    - Stagger sa sabay-sabay na cast: random jitter (0-150ms) para hindi lahat ng pending
+    //      spells sumabog sa EKSAKTONG parehong animation frame kapag pinindot lahat ng 1-6 keys
+    //      nang magkakasunod — ito yung dating nagiging lag SPIKE (compressed sa isang frame)
+    //      sa halip na steady-state cost.
+    if (!eng.pendingSigilCasts) eng.pendingSigilCasts = [];
+    eng.pendingSigilCasts.push({
+      sigilType,
+      target,
+      timeLeft: 4.5 + (Math.random() * 0.15) // 4.5s base + hanggang 150ms jitter
+    });
 
     if (isCoopActive && !forcedTarget && !netRef.current.isHost) {
       netRef.current.channel.send('guest_cast_sigil', { sigilType });
@@ -2377,6 +4138,7 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
     if (caster === ((isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p)) {
       setSkillsState({ ...caster.skills });
       setPlayerLevel(caster.level);
+      playerLevelRef.current = caster.level;
     }
 };
 
@@ -2551,21 +4313,25 @@ const handleResize = () => {
 
   const activateAudioKeepAlive = () => {
     if (audioCtxRef.current) return;
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioContext();
-      const gainNode = ctx.createGain();
-      gainNode.gain.setValueAtTime(0, ctx.currentTime); 
-      
-      const osc = ctx.createOscillator();
-      osc.connect(gainNode);
-      gainNode.connect(ctx.destination);
-      osc.start();
-      
-      audioCtxRef.current = ctx;
-    } catch (e) {
-    }
-  };
+    
+    // 🔥 Inilipat sa background execution para iwas lag spike
+    setTimeout(() => { 
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioContext();
+        const gainNode = ctx.createGain();
+        gainNode.gain.setValueAtTime(0, ctx.currentTime); 
+        
+        const osc = ctx.createOscillator();
+        osc.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        osc.start();
+        
+        audioCtxRef.current = ctx;
+      } catch (e) {
+      }
+    }, 100);
+  };;
 
   // Awtomatikong isasara ang inventory kapag hindi 'playing' ang screen
 useEffect(() => {
@@ -2795,9 +4561,11 @@ useEffect(() => {
 
         if (eng.p2) {
           setPlayerLevel(eng.p2.level);
+          playerLevelRef.current = eng.p2.level;
           if (eng.p2.skills) setSkillsState({ ...eng.p2.skills });
         } else if (eng.p) {
           setPlayerLevel(eng.p.level);
+          playerLevelRef.current = eng.p.level;
           if (eng.p.skills) setSkillsState({ ...eng.p.skills });
         }
       }
@@ -2935,7 +4703,15 @@ useEffect(() => {
     }
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
-  useEffect(() => {
+  // 🔮 useLayoutEffect (HINDI useEffect): kailangan ma-commit ang
+  // isPreloading=true BAGO mag-paint ang browser ng bagong frame. Yung
+  // canvas ay laging naka-mount at tuloy-tuloy gumagawa (rAF loop), kaya
+  // kung useEffect lang ito (na async/pagkatapos ng paint), may 1+ frame
+  // na "nakakalusot" kung saan screen === 'playing' na pero isPreloading
+  // ref/state ay hindi pa updated — dito nanggagaling yung "nakikita ng
+  // mabilis ang laro" bago pa lumabas ang LoadingScreen. Sa
+  // useLayoutEffect, naka-sync ito sa parehong commit/paint cycle.
+  useLayoutEffect(() => {
     const eng = engineRef.current;
 
     if (screen === 'playing') {
@@ -2948,9 +4724,11 @@ useEffect(() => {
       setP1VotedRestart(false);
       setP2VotedRestart(false);
       setPlayerLevel(1);
+      playerLevelRef.current = 1;
       setIsTreeOpen(true); 
       setSkillsState(initSkills());
       setActiveBuffsList([]);
+      buffPeakDurationRef.current = {};
       if (exitTimerRef.current) clearInterval(exitTimerRef.current);
       setHostExitedCountdown(null);
 
@@ -2961,8 +4739,20 @@ useEffect(() => {
       eng.slashes = []; eng.cubeBashes = []; eng.stars = []; eng.collapses = []; eng.potions = [];
       eng.tornados = []; eng.waves = []; eng.fissures = []; eng.lightnings = []; eng.iceStorms = [];
       eng.floatingTexts = [];
+      eng.pendingSigilCasts = []; // 🔥 FIX: i-clear ang mga "chanting" pa sa restart, para walang spell na pumutok pagkatapos mag-reset
+      eng.cachedPoolWave = undefined; eng.cachedScaleWave = undefined; // ⚡ FIX: i-force ang re-compute ng spawn cache sa unang spawn ng bagong match
       eng.gameStarted = false; 
       setHasStarted(false);
+
+      // 🔮 Bagong simula ng laro (fresh start o restart pagkatapos ng
+      // gameover) → ipakita ulit ang LoadingScreen bago lumabas ang
+      // "MOVE TO START" prompt. Direktang i-set ang ref dito (hindi lang
+      // ang state) para walang 1-render-delay na puwang kung saan pwedeng
+      // makapasok ang isang movement tick bago ma-sync ang ref sa bagong
+      // state — ito mismo ang dating dahilan kung bakit minsan "nakakalusot"
+      // ang paggalaw sa simula pa lang ng loading screen.
+      isPreloadingRef.current = true;
+      setIsPreloading(true);
 
       // 🔥 RESET DAMAGE TRACKER FOR NEW RUN
       window.arcaneDamageMetrics = {}; 
@@ -3164,23 +4954,713 @@ useEffect(() => {
     canvas.width = W; canvas.height = H;
     const eng = engineRef.current;
 
-    const oc = document.createElement('canvas');
-    oc.width = oc.height = 60;
-    const ox = oc.getContext('2d');
-    ox.fillStyle = '#0a061e'; ox.fillRect(0,0,60,60);
-    ox.strokeStyle = 'rgba(139,92,246,0.07)'; ox.lineWidth = 0.5; ox.strokeRect(0,0,60,60);
-    eng.floorPat = ctx.createPattern(oc, 'repeat');
+    // ═══════════════════════════════════════════════════════════════════
+    // VOID / FRIEREN MMORPG MAP — Pre-baked static layer + live particles
+    // All heavy drawing done ONCE at init → single drawImage() per frame
+    // ═══════════════════════════════════════════════════════════════════
 
-    eng.ambs = Array.from({ length: 55 }, () => ({
-      x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.8 + 0.4,
-      vx: (Math.random() - 0.5) * 12, vy: -(Math.random() * 18 + 4),
-      a: Math.random() * 0.5 + 0.15, t: Math.random(),
-      c: ['#c4b5fd', '#818cf8', '#a78bfa', '#7c3aed'][Math.floor(Math.random() * 4)]
+    // ── HELPER: seeded pseudo-random (deterministic per-tile) ──────────
+    const seededRand = (seed) => {
+      let s = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+      return s - Math.floor(s);
+    };
+
+    // ── 1. FLOOR — multi-variant stone tiles, every tile uniquely seeded ──
+    // (Frieren-style ancient dungeon floor. No single tile is ever repeated
+    //  identically — each cell gets its own hue jitter, crack layout, joint
+    //  shape and stain placement, so the floor reads as worn natural
+    //  flagstone instead of an obviously copy-pasted grid.)
+    const TILE = 160;
+    const cols = Math.ceil(W / TILE) + 1;
+    const rows = Math.ceil(H / TILE) + 1;
+    const fc = document.createElement('canvas');
+    fc.width = W; fc.height = H;
+    const fx = fc.getContext('2d');
+
+    const drawStoneTile = (g, px, py, s, seed) => {
+      const rnd = (n) => seededRand(seed * 91.7 + n * 13.3);
+      g.save();
+      g.translate(px, py);
+      g.beginPath(); g.rect(0, 0, s, s); g.clip();
+
+      // A. Darker ancient stone base — every tile gets its own hue/brightness
+      // jitter so adjacent tiles never read as identical copies.
+      const jitter = rnd(1) * 10 - 5;
+      const warmShift = rnd(2) * 8 - 4;
+      const base = g.createLinearGradient(0, 0, s, s);
+      base.addColorStop(0,    `rgb(${24+warmShift+jitter},${20+jitter},${16+jitter})`);
+      base.addColorStop(0.5,  `rgb(${17+jitter},${14+jitter},${11+jitter})`);
+      base.addColorStop(1,    `rgb(${10+jitter},${8+jitter},${6+jitter})`);
+      g.fillStyle = base;
+      g.fillRect(0, 0, s, s);
+
+      // Subtle worn-center variation
+      const stoneVar = g.createRadialGradient(s*0.5, s*0.5, 0, s*0.5, s*0.5, s*0.62);
+      stoneVar.addColorStop(0,   `rgba(60,50,40,${0.16 + rnd(3)*0.10})`);
+      stoneVar.addColorStop(0.55,'rgba(20,16,13,0.14)');
+      stoneVar.addColorStop(1,   'rgba(0,0,0,0.40)');
+      g.fillStyle = stoneVar; g.fillRect(0, 0, s, s);
+
+      // Fine stone grain noise — count varies per tile
+      const grainN = 16 + Math.floor(rnd(4) * 14);
+      for (let gi = 0; gi < grainN; gi++) {
+        const gx = rnd(gi*7.3+5) * s, gy = rnd(gi*11.7+6) * s;
+        const ga = rnd(gi*3.1+7) * 0.05 + 0.01;
+        const gr = rnd(gi*5.9+8) * 4.5 + 1.5;
+        const grainG = g.createRadialGradient(gx, gy, 0, gx, gy, gr);
+        const isLight = rnd(gi*17.3+9) > 0.5;
+        grainG.addColorStop(0, isLight ? `rgba(90,76,60,${ga*2})` : `rgba(4,3,2,${ga*2.2})`);
+        grainG.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = grainG; g.fillRect(gx-gr, gy-gr, gr*2, gr*2);
+      }
+
+      // B. Irregular flagstone joints — wavy hand-cut lines, not a clean grid.
+      // Drawn faint + jittered so two adjacent tiles never line up into an
+      // obvious repeating rectangle.
+      if (rnd(11) > 0.2) {
+        g.strokeStyle = `rgba(2,2,1,${0.30 + rnd(10)*0.18})`;
+        g.lineWidth = 1.2 + rnd(12)*1.2;
+        g.beginPath();
+        let jx = 0, jy = rnd(13) * s * 0.4;
+        g.moveTo(jx, jy);
+        for (let i = 0; i < 4; i++) { jx += s/4; jy += (rnd(14+i)-0.5)*14; g.lineTo(jx, jy); }
+        g.stroke();
+      }
+      if (rnd(20) > 0.2) {
+        g.strokeStyle = `rgba(2,2,1,${0.28 + rnd(20.5)*0.16})`;
+        g.lineWidth = 1.0 + rnd(21)*1.1;
+        g.beginPath();
+        let jx2 = rnd(22) * s * 0.4, jy2 = 0;
+        g.moveTo(jx2, jy2);
+        for (let i = 0; i < 4; i++) { jy2 += s/4; jx2 += (rnd(23+i)-0.5)*14; g.lineTo(jx2, jy2); }
+        g.stroke();
+      }
+      // Faint warm catch-light on a random edge (keeps a hint of directionality
+      // without forming a uniform lit-border grid)
+      g.strokeStyle = `rgba(80,68,54,${0.06 + rnd(24)*0.07})`;
+      g.lineWidth = 0.7;
+      g.beginPath();
+      if (rnd(25) > 0.5) { g.moveTo(2, s-2); g.lineTo(2, 2); g.lineTo(s-2, 2); }
+      else { g.moveTo(s-2, 2); g.lineTo(s-2, s-2); g.lineTo(2, s-2); }
+      g.stroke();
+
+      // C. Cracks — count + shape + glow color randomized per tile, so the
+      // floor never shows the same fracture pattern twice.
+      const crackCount = 1 + Math.floor(rnd(30) * 2.2);
+      for (let c = 0; c < crackCount; c++) {
+        const sx = rnd(31+c*9)*s, sy = rnd(32+c*9)*s;
+        let cx2 = sx, cy2 = sy, a2 = rnd(33+c*9)*Math.PI*2;
+        const pts = [[cx2, cy2]];
+        const segs = 3 + Math.floor(rnd(34+c)*3);
+        for (let i = 0; i < segs; i++) {
+          a2 += (rnd(35+c*5+i) - 0.5) * 1.3;
+          cx2 += Math.cos(a2) * (s*0.12);
+          cy2 += Math.sin(a2) * (s*0.12);
+          pts.push([cx2, cy2]);
+        }
+        const drawPath = () => { g.beginPath(); pts.forEach(([px2,py2],i)=> i===0?g.moveTo(px2,py2):g.lineTo(px2,py2)); };
+        g.strokeStyle = 'rgba(3,2,1,0.75)'; g.lineWidth = 1.5; drawPath(); g.stroke();
+        // Glow core — brighter than before so cracks actually read as glowing in the dark
+        const isPurple = rnd(36+c) > 0.55;
+        g.shadowBlur = 7;
+        g.shadowColor = isPurple ? 'rgba(150,90,230,0.55)' : 'rgba(215,170,65,0.55)';
+        g.strokeStyle = isPurple
+          ? `rgba(160,110,235,${0.22 + rnd(37+c)*0.16})`
+          : `rgba(210,165,65,${0.24 + rnd(38+c)*0.16})`;
+        g.lineWidth = 0.9; drawPath(); g.stroke();
+        g.shadowBlur = 0;
+      }
+
+      // D. Age stains — moisture damage / mineral deposits, randomized count+spot
+      const stainCount = 1 + Math.floor(rnd(40) * 2.2);
+      for (let st = 0; st < stainCount; st++) {
+        const bx = rnd(41+st*7)*s, by = rnd(42+st*7)*s, br = 6 + rnd(43+st)*11;
+        const warm = rnd(44+st) > 0.5;
+        const sg = g.createRadialGradient(bx,by,0,bx,by,br);
+        sg.addColorStop(0, warm ? `rgba(55,36,16,${0.14+rnd(45+st)*0.08})` : `rgba(0,0,0,${0.22+rnd(46+st)*0.12})`);
+        sg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = sg; g.fillRect(bx-br, by-br, br*2, br*2);
+      }
+
+      // E. Sparse rubble chip — only some tiles get one, never in a fixed spot
+      if (rnd(50) > 0.72) {
+        const rr = 3 + rnd(51)*3.5;
+        const rx = rnd(52)*s, ry = rnd(53)*s, rot = rnd(54)*Math.PI*2;
+        g.save(); g.translate(rx,ry); g.rotate(rot);
+        g.fillStyle = 'rgba(0,0,0,0.32)';
+        g.beginPath(); g.ellipse(0.8,0.8,rr*1.1,rr*0.7,0,0,Math.PI*2); g.fill();
+        g.beginPath();
+        g.moveTo(-rr,-rr*0.3); g.lineTo(-rr*0.2,-rr); g.lineTo(rr*0.8,-rr*0.4);
+        g.lineTo(rr*0.7,rr*0.6); g.lineTo(-rr*0.6,rr*0.5); g.closePath();
+        g.fillStyle = 'rgba(40,32,24,0.8)'; g.fill();
+        g.strokeStyle = 'rgba(90,74,55,0.4)'; g.lineWidth = 0.6; g.stroke();
+        g.restore();
+      }
+
+      // F. Very rare worn rune fragment — echoes the central seal's lost script,
+      // appears on maybe 1 in 8 tiles so it feels discovered, not stamped.
+      if (rnd(60) > 0.87) {
+        const arx = rnd(61)*s*0.6 + s*0.2, ary = rnd(62)*s*0.6 + s*0.2;
+        const a0 = rnd(63)*Math.PI*2;
+        g.strokeStyle = 'rgba(190,150,60,0.18)';
+        g.shadowBlur = 4; g.shadowColor = 'rgba(190,150,60,0.4)';
+        g.lineWidth = 0.8;
+        g.beginPath();
+        g.arc(arx, ary, 13 + rnd(64)*8, a0, a0 + Math.PI*0.85);
+        g.stroke();
+        g.shadowBlur = 0;
+      }
+
+      g.restore();
+    };
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        drawStoneTile(fx, c * TILE, r * TILE, TILE, r * cols + c + 1);
+      }
+    }
+
+    eng.floorBaked = fc;
+
+
+    // ── 2. STATIC FULL-SCREEN LAYER — baked ONCE, blitted per frame ────
+    // Contains: large crack clusters, mana veins, central arcane seal
+    const sbc = document.createElement('canvas');
+    sbc.width = W; sbc.height = H;
+    const sbx = sbc.getContext('2d');
+
+    // A. Large crack clusters scattered across arena
+    const bigCracks = [
+      // [startX, startY, angle, length, segments, alpha]
+      [W*0.12, H*0.18, 0.55, 180, 7, 0.18],
+      [W*0.82, H*0.14, -0.3, 140, 6, 0.14],
+      [W*0.25, H*0.72, 0.8,  160, 6, 0.16],
+      [W*0.70, H*0.80, -0.6, 150, 6, 0.15],
+      [W*0.48, H*0.35, 1.1,  120, 5, 0.12],
+      [W*0.90, H*0.55, 0.2,  130, 5, 0.13],
+      [W*0.05, H*0.45, -0.9, 100, 5, 0.11],
+      [W*0.60, H*0.08, 0.4,  110, 4, 0.10],
+    ];
+
+    bigCracks.forEach(([sx,sy,ang,len,segs,al]) => {
+      sbx.save();
+      // Physical stone crack shadow (dark, wide)
+      sbx.strokeStyle = `rgba(5,3,2,${al*3.0})`;
+      sbx.lineWidth = 2.2;
+      sbx.beginPath();
+      let cx2=sx, cy2=sy, a2=ang;
+      sbx.moveTo(cx2,cy2);
+      const segLen = len/segs;
+      for(let i=0;i<segs;i++){
+        a2 += (seededRand(sx+i*13.7+sy)*0.9-0.45);
+        cx2 += Math.cos(a2)*segLen*(0.7+seededRand(sy+i*7.3)*0.6);
+        cy2 += Math.sin(a2)*segLen*(0.7+seededRand(sx+i*5.1)*0.6);
+        sbx.lineTo(cx2,cy2);
+        if(i===Math.floor(segs/2)){
+          const ba = a2+(seededRand(sx+i)*1.2-0.6);
+          const blen = segLen*(0.5+seededRand(sy+i*3.3)*0.8);
+          sbx.moveTo(cx2,cy2);
+          sbx.lineTo(cx2+Math.cos(ba)*blen, cy2+Math.sin(ba)*blen);
+          sbx.moveTo(cx2,cy2);
+        }
+      }
+      sbx.stroke();
+      // Gold-amber magic glow core bleeding through crack
+      sbx.strokeStyle = `rgba(200,155,50,${al*0.90})`;
+      sbx.lineWidth = 0.8;
+      sbx.stroke();
+      // Purple arcane halo on crack (residual enchantment)
+      sbx.strokeStyle = `rgba(150,100,240,${al*0.55})`;
+      sbx.lineWidth = 2.5;
+      sbx.globalAlpha = 0.5;
+      sbx.stroke();
+      sbx.globalAlpha = 1.0;
+      sbx.restore();
+    });
+
+    // B. Mana vein network radiating from near-center — gold-purple hybrid
+    const veinOrigins = [
+      [W*0.42, H*0.50], [W*0.58, H*0.48], [W*0.50, H*0.38]
+    ];
+    veinOrigins.forEach(([vx,vy]) => {
+      for(let v=0;v<6;v++){
+        const vAng = (v/6)*Math.PI*2 + seededRand(vx+v)*0.5;
+        const vLen = 90 + seededRand(vy+v*7)*110;
+        sbx.save();
+        // Dark crack under the vein
+        sbx.strokeStyle = 'rgba(4,2,1,0.30)';
+        sbx.lineWidth = 1.2;
+        sbx.beginPath();
+        let vxc=vx, vyc=vy, va=vAng;
+        sbx.moveTo(vxc,vyc);
+        for(let s=0;s<5;s++){
+          va += (seededRand(vx+v*3+s)*0.6-0.3);
+          vxc += Math.cos(va)*(vLen/5);
+          vyc += Math.sin(va)*(vLen/5);
+          sbx.lineTo(vxc,vyc);
+        }
+        sbx.stroke();
+        // Gold-purple magic glow in vein
+        sbx.strokeStyle = v % 2 === 0 ? 'rgba(190,145,45,0.14)' : 'rgba(109,40,217,0.11)';
+        sbx.lineWidth = 0.7;
+        sbx.stroke();
+        sbx.restore();
+      }
+    });
+
+    // C. Central arcane seal — an ancient, BROKEN magic circle (Frieren-style
+    // forgotten grimoire mark). Gold-dominant, genuinely glowing, and
+    // deliberately incomplete: gaps in the rings, a crack through the middle,
+    // and a few of its surrounding runes worn away by time.
+    const seal = { x: W*0.5, y: H*0.5 };
+    sbx.save();
+    sbx.translate(seal.x, seal.y);
+
+    // Centuries of grime, soot and scorch stains baked into the stone around
+    // the seal — sells the "forgotten, abused ruin" read before any rings are drawn
+    const GRIME_SPOTS = [
+      [-72,-58,36],[64,-74,28],[88,42,32],[-94,32,30],[12,86,24],[-34,-92,22],[40,2,18]
+    ];
+    GRIME_SPOTS.forEach(([gx,gy,gr], gi) => {
+      const grimeGrad = sbx.createRadialGradient(gx,gy,0,gx,gy,gr);
+      grimeGrad.addColorStop(0, `rgba(8,6,4,${0.32 + seededRand(gi*3.3)*0.16})`);
+      grimeGrad.addColorStop(1, 'rgba(8,6,4,0)');
+      sbx.fillStyle = grimeGrad;
+      sbx.beginPath(); sbx.arc(gx,gy,gr,0,Math.PI*2); sbx.fill();
+    });
+
+    // Helper: stroke a ring but leave random gaps in it — sells the "broken seal" read
+    const brokenRing = (radius, gapCount, color, width, glowColor, glowBlur) => {
+      const gaps = [];
+      for (let i = 0; i < gapCount; i++) {
+        const ga = seededRand(radius*3.1 + i*7.7) * Math.PI * 2;
+        const gw = 0.10 + seededRand(radius*5.3 + i*2.1) * 0.20;
+        gaps.push([ga, ga + gw]);
+      }
+      const inGap = (a) => gaps.some(([g0, g1]) => {
+        let aa = a; while (aa < g0) aa += Math.PI * 2;
+        return aa < g1;
+      });
+      sbx.save();
+      sbx.strokeStyle = color; sbx.lineWidth = width;
+      if (glowColor) { sbx.shadowColor = glowColor; sbx.shadowBlur = glowBlur; }
+      const steps = 160;
+      let drawing = false;
+      sbx.beginPath();
+      for (let i = 0; i <= steps; i++) {
+        const a = (i / steps) * Math.PI * 2;
+        if (inGap(a)) { drawing = false; continue; }
+        const x = Math.cos(a) * radius, y = Math.sin(a) * radius;
+        if (!drawing) { sbx.moveTo(x, y); drawing = true; }
+        else sbx.lineTo(x, y);
+      }
+      sbx.stroke();
+      sbx.restore();
+    };
+
+    // Shattered fragments — broken-off pieces of the containment ring, scattered
+    // just outside it like shards that fell and never got swept away
+    for (let i = 0; i < 6; i++) {
+      const fa = seededRand(i*17.3) * Math.PI * 2;
+      const fr = 100 + seededRand(i*22.1) * 24;
+      const flen = 0.10 + seededRand(i*9.7) * 0.09;
+      sbx.save();
+      sbx.translate(Math.cos(fa)*fr, Math.sin(fa)*fr);
+      sbx.rotate(fa + Math.PI/2 + (seededRand(i*5.5)-0.5)*0.6);
+      sbx.strokeStyle = 'rgba(205,160,65,0.32)';
+      sbx.lineWidth = 1.8;
+      sbx.shadowColor = 'rgba(205,160,65,0.5)'; sbx.shadowBlur = 6;
+      sbx.beginPath();
+      sbx.arc(0, 0, 9 + seededRand(i*7.1)*6, 0, flen * Math.PI * 2);
+      sbx.stroke();
+      sbx.restore();
+    }
+
+    // Outer ring — broken gold containment band, glowing
+    brokenRing(96, 3, 'rgba(225,180,80,0.55)', 2.2, 'rgba(225,180,80,0.9)', 14);
+    brokenRing(96, 3, 'rgba(255,225,150,0.28)', 0.8, null, 0);
+    // Middle ring — thinner, broken at different points than the outer ring
+    brokenRing(68, 2, 'rgba(205,160,65,0.42)', 1.5, 'rgba(205,160,65,0.6)', 9);
+    // Inner ring — mostly intact, the seal's last surviving "core" — cooler purple
+    sbx.save();
+    sbx.strokeStyle = 'rgba(155,110,235,0.32)';
+    sbx.lineWidth = 1.0;
+    sbx.shadowColor = 'rgba(155,110,235,0.6)'; sbx.shadowBlur = 10;
+    sbx.beginPath(); sbx.arc(0, 0, 40, 0, Math.PI*2); sbx.stroke();
+    sbx.restore();
+
+    // Jagged inner ward spikes — an aggressive, claw-like accent ringing the core,
+    // reading as the seal's last line of defense rather than a polite decoration
+    sbx.save();
+    sbx.beginPath();
+    const wardSpikes = 10;
+    for (let i = 0; i < wardSpikes; i++) {
+      const sa = (i / wardSpikes) * Math.PI * 2;
+      const outR = i % 2 === 0 ? 31 : 19;
+      const px = Math.cos(sa) * outR, py = Math.sin(sa) * outR;
+      if (i === 0) sbx.moveTo(px, py); else sbx.lineTo(px, py);
+    }
+    sbx.closePath();
+    sbx.strokeStyle = 'rgba(225,180,80,0.22)';
+    sbx.lineWidth = 0.8;
+    sbx.shadowColor = 'rgba(225,180,80,0.45)'; sbx.shadowBlur = 6;
+    sbx.stroke();
+    sbx.restore();
+
+    // 6-pointed rune star — also weathered unevenly (gold edge brighter than purple edge)
+    [0,1].forEach(t => {
+      sbx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const sa = (i/3)*Math.PI*2 + t*(Math.PI/3) - Math.PI/2;
+        const sx2 = Math.cos(sa)*68, sy2 = Math.sin(sa)*68;
+        if (i===0) sbx.moveTo(sx2,sy2); else sbx.lineTo(sx2,sy2);
+      }
+      sbx.closePath();
+      sbx.strokeStyle = t === 0 ? 'rgba(225,180,80,0.24)' : 'rgba(150,105,235,0.16)';
+      sbx.lineWidth = 0.8;
+      sbx.stroke();
+    });
+
+    // Ancient runic script ringing the seal — real Elder Futhark glyphs, gold,
+    // glowing — with several missing/faded to read as old and incomplete
+    const SEAL_RUNES = ['ᚠ','ᚢ','ᚦ','ᚨ','ᚱ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛁ','ᛃ','ᛇ','ᛈ','ᛉ','ᛊ','ᛏ','ᛒ','ᛖ','ᛗ','ᛚ','ᛜ','ᛝ','ᛟ'];
+    sbx.font = '13px serif';
+    sbx.textAlign = 'center';
+    sbx.textBaseline = 'middle';
+    const runeRadius = 112;
+    SEAL_RUNES.forEach((rune, i) => {
+      const worn = seededRand(i*9.13) > 0.78; // some glyphs have eroded away entirely
+      if (worn) return;
+      const a = (i / SEAL_RUNES.length) * Math.PI * 2 - Math.PI/2;
+      const rx = Math.cos(a) * runeRadius, ry = Math.sin(a) * runeRadius;
+      const fade = 0.35 + seededRand(i*4.71) * 0.45;
+      sbx.save();
+      sbx.translate(rx, ry);
+      sbx.rotate(a + Math.PI/2);
+      sbx.shadowColor = 'rgba(230,190,90,0.9)';
+      sbx.shadowBlur = 9;
+      sbx.fillStyle = `rgba(230,190,100,${fade})`;
+      sbx.fillText(rune, 0, 0);
+      sbx.restore();
+    });
+
+    // The fracture that broke the seal — a physical crack cutting across it
+    sbx.strokeStyle = 'rgba(5,3,2,0.55)';
+    sbx.lineWidth = 2;
+    sbx.beginPath();
+    sbx.moveTo(-100,-30); sbx.lineTo(-50,-10); sbx.lineTo(-10,-40);
+    sbx.lineTo(30,-5); sbx.lineTo(90,25);
+    sbx.stroke();
+    sbx.strokeStyle = 'rgba(225,180,80,0.28)';
+    sbx.lineWidth = 0.8;
+    sbx.beginPath();
+    sbx.moveTo(-100,-30); sbx.lineTo(-50,-10); sbx.lineTo(-10,-40);
+    sbx.lineTo(30,-5); sbx.lineTo(90,25);
+    sbx.stroke();
+
+    // Secondary splinter crack — a smaller branch off the main break, the kind
+    // of detail that sells real structural failure instead of a single clean line
+    sbx.strokeStyle = 'rgba(5,3,2,0.42)';
+    sbx.lineWidth = 1.3;
+    sbx.beginPath();
+    sbx.moveTo(-10,-40); sbx.lineTo(-26,-64); sbx.lineTo(-16,-86);
+    sbx.stroke();
+    sbx.strokeStyle = 'rgba(150,100,240,0.22)';
+    sbx.lineWidth = 0.6;
+    sbx.stroke();
+
+    // Center ember — the last spark of power still left in the broken seal
+    sbx.shadowColor = 'rgba(225,180,80,0.85)'; sbx.shadowBlur = 13;
+    sbx.fillStyle = 'rgba(230,195,110,0.6)';
+    sbx.beginPath(); sbx.arc(0,0,4,0,Math.PI*2); sbx.fill();
+
+    sbx.restore();
+
+    // D. Scattered small rune glyphs (partial) around the arena
+    const runeSpots = [
+      [W*0.15,H*0.25,18,0.10], [W*0.85,H*0.30,14,0.09],
+      [W*0.20,H*0.78,16,0.08], [W*0.78,H*0.72,15,0.09],
+      [W*0.50,H*0.15,12,0.07], [W*0.50,H*0.88,12,0.07],
+    ];
+    runeSpots.forEach(([rx,ry,rr,ra]) => {
+      sbx.save(); sbx.translate(rx,ry);
+      sbx.strokeStyle = `rgba(109,40,217,${ra})`;
+      sbx.lineWidth = 0.7;
+      // Partial arc
+      sbx.beginPath(); sbx.arc(0,0,rr, Math.PI*0.2, Math.PI*1.4); sbx.stroke();
+      sbx.beginPath(); sbx.arc(0,0,rr*0.6, Math.PI*0.8, Math.PI*2.0); sbx.stroke();
+      // Cross mark
+      sbx.beginPath();
+      sbx.moveTo(-rr*0.4,0); sbx.lineTo(rr*0.4,0);
+      sbx.moveTo(0,-rr*0.4); sbx.lineTo(0,rr*0.4);
+      sbx.stroke();
+      sbx.restore();
+    });
+
+    // E. BROKEN SLAB PATCHES — large sunken/shattered floor sections,
+    // like whole stone slabs that caved in or were blasted apart.
+    // Kept clear of dead-center (player spawn / seal) so they read as
+    // environmental detail, not obstacles in the main fight zone.
+    const slabPatches = [
+      { x: W*0.16, y: H*0.62, w: 110, h: 70, rot: -0.25 },
+      { x: W*0.86, y: H*0.22, w: 95,  h: 60, rot: 0.35 },
+      { x: W*0.10, y: H*0.15, w: 80,  h: 55, rot: 0.15 },
+      { x: W*0.92, y: H*0.78, w: 100, h: 65, rot: -0.4 },
+    ];
+    slabPatches.forEach(({x,y,w,h,rot}) => {
+      sbx.save();
+      sbx.translate(x,y); sbx.rotate(rot);
+      // Sunken depth shadow (broad, soft)
+      const slabShadow = sbx.createRadialGradient(0,0,0,0,0, Math.max(w,h)*0.65);
+      slabShadow.addColorStop(0,'rgba(0,0,0,0.35)');
+      slabShadow.addColorStop(0.7,'rgba(0,0,0,0.16)');
+      slabShadow.addColorStop(1,'rgba(0,0,0,0)');
+      sbx.fillStyle = slabShadow;
+      sbx.fillRect(-w*0.7,-h*0.7,w*1.4,h*1.4);
+
+      // Jagged broken outline (irregular polygon, not a clean rectangle)
+      const jag = (n, rx, ry) => {
+        const pts = [];
+        for (let i=0;i<n;i++){
+          const ang = (i/n)*Math.PI*2;
+          const jr = 0.78 + seededRand(x+y+i*9.1)*0.3;
+          pts.push([Math.cos(ang)*rx*jr, Math.sin(ang)*ry*jr]);
+        }
+        return pts;
+      };
+      const slabPts = jag(9, w*0.5, h*0.5);
+      sbx.beginPath();
+      slabPts.forEach(([px,py],i)=> i===0 ? sbx.moveTo(px,py) : sbx.lineTo(px,py));
+      sbx.closePath();
+      sbx.fillStyle = 'rgba(2,1,8,0.45)';
+      sbx.fill();
+      // Lit broken-edge rim (light catching the fracture lip)
+      sbx.strokeStyle = 'rgba(150,100,220,0.16)';
+      sbx.lineWidth = 1.2;
+      sbx.stroke();
+
+      // A few thin secondary fractures radiating from the slab
+      sbx.strokeStyle = 'rgba(120,60,200,0.13)';
+      sbx.lineWidth = 0.7;
+      for (let i=0;i<3;i++){
+        const fa = seededRand(x+i*4.4)*Math.PI*2;
+        const flen = (w+h)*0.22;
+        sbx.beginPath();
+        sbx.moveTo(Math.cos(fa)*w*0.4, Math.sin(fa)*h*0.4);
+        sbx.lineTo(Math.cos(fa)*(w*0.4+flen), Math.sin(fa)*(h*0.4+flen));
+        sbx.stroke();
+      }
+      sbx.restore();
+    });
+
+    // F. RUBBLE PILES — small clusters of broken stone debris resting in
+    // the open floor, each chip independently shaded for a 3D-ish read.
+    const rubblePiles = [
+      { x: W*0.34, y: H*0.85, n: 6, spread: 26 },
+      { x: W*0.66, y: H*0.12, n: 5, spread: 22 },
+      { x: W*0.06, y: H*0.40, n: 4, spread: 18 },
+      { x: W*0.95, y: H*0.45, n: 5, spread: 20 },
+      { x: W*0.40, y: H*0.06, n: 4, spread: 16 },
+      // ── extra piles for a denser, more lived-in arena floor ──
+      { x: W*0.20, y: H*0.50, n: 5, spread: 20 },
+      { x: W*0.78, y: H*0.62, n: 4, spread: 18 },
+      { x: W*0.55, y: H*0.92, n: 5, spread: 22 },
+      { x: W*0.88, y: H*0.08, n: 4, spread: 16 },
+      { x: W*0.12, y: H*0.92, n: 4, spread: 18 },
+    ];
+    rubblePiles.forEach(({x,y,n,spread}) => {
+      for (let i=0;i<n;i++){
+        const ang = seededRand(x+i*3.3)*Math.PI*2;
+        const dist = seededRand(y+i*5.7)*spread;
+        const cx = x + Math.cos(ang)*dist;
+        const cy = y + Math.sin(ang)*dist*0.6; // squash for floor perspective
+        const cr = 3 + seededRand(x+y+i*7.1)*5;
+        const crot = seededRand(x*2+i)*Math.PI*2;
+
+        sbx.save();
+        sbx.translate(cx,cy); sbx.rotate(crot);
+        // contact shadow
+        sbx.fillStyle = 'rgba(0,0,0,0.35)';
+        sbx.beginPath(); sbx.ellipse(1.2,1.6,cr*1.15,cr*0.72,0,0,Math.PI*2); sbx.fill();
+        // chip body — warm dark stone, irregular hexagon
+        sbx.beginPath();
+        sbx.moveTo(-cr,-cr*0.3);
+        sbx.lineTo(-cr*0.2,-cr);
+        sbx.lineTo(cr*0.8,-cr*0.4);
+        sbx.lineTo(cr*0.9,cr*0.5);
+        sbx.lineTo(0,cr*0.9);
+        sbx.lineTo(-cr*0.8,cr*0.4);
+        sbx.closePath();
+        sbx.fillStyle = 'rgba(50,38,28,0.82)'; // warm dark stone
+        sbx.fill();
+        // Moonlit edge highlight (warm light from top)
+        sbx.strokeStyle = 'rgba(100,82,60,0.40)';
+        sbx.lineWidth = 0.7;
+        sbx.stroke();
+        // Tiny warm highlight catching directional moonlight
+        sbx.fillStyle = 'rgba(130,108,78,0.18)';
+        sbx.beginPath(); sbx.ellipse(-cr*0.3,-cr*0.35,cr*0.38,cr*0.22,0,0,Math.PI*2); sbx.fill();
+        sbx.restore();
+      }
+    });
+
+    // G. SCATTERED GLINTING DEBRIS — sparse loose shards (broken weapon
+    // fragments, rune-glass splinters) catching a faint glow. Independent
+    // of the rubble piles so debris reads as spread across the whole floor,
+    // not just clumped in corners.
+    const glintShards = Array.from({ length: 22 }, (_, i) => ({
+      x: seededRand(i*17.3 + 1) * W,
+      y: seededRand(i*23.9 + 2) * H,
+      len: 5 + seededRand(i*11.1 + 3) * 7,
+      rot: seededRand(i*7.7 + 4) * Math.PI * 2,
+      gold: seededRand(i*5.5 + 5) > 0.5,
     }));
+    glintShards.forEach(({x,y,len,rot,gold}) => {
+      sbx.save();
+      sbx.translate(x,y); sbx.rotate(rot);
+      // shard silhouette
+      sbx.beginPath();
+      sbx.moveTo(-len*0.5, -1.1);
+      sbx.lineTo(len*0.5, -0.3);
+      sbx.lineTo(len*0.42, 1.0);
+      sbx.lineTo(-len*0.45, 0.6);
+      sbx.closePath();
+      sbx.fillStyle = 'rgba(35,28,20,0.7)';
+      sbx.fill();
+      // thin glowing edge — sells "broken enchanted metal/glass" read
+      sbx.strokeStyle = gold ? 'rgba(225,190,110,0.5)' : 'rgba(160,120,230,0.45)';
+      sbx.shadowColor = gold ? 'rgba(225,190,110,0.7)' : 'rgba(160,120,230,0.65)';
+      sbx.shadowBlur = 3;
+      sbx.lineWidth = 0.6;
+      sbx.beginPath(); sbx.moveTo(-len*0.5,-1.1); sbx.lineTo(len*0.5,-0.3); sbx.stroke();
+      sbx.restore();
+    });
+
+    // H. HAIRLINE SPIDERWEB CRACKS — a finer, denser fracture network layered
+    // over the big cracks so no two regions of the floor share the exact
+    // same break pattern. Radiates from small random impact points instead
+    // of running straight, for a more "shattered glass / aged stone" feel.
+    const webOrigins = Array.from({ length: 7 }, (_, i) => ({
+      x: seededRand(i*31.1 + 9) * W,
+      y: seededRand(i*19.7 + 8) * H,
+      arms: 5 + Math.floor(seededRand(i*13.3 + 6) * 3),
+      reach: 26 + seededRand(i*9.9 + 7) * 30,
+    }));
+    webOrigins.forEach(({x,y,arms,reach}) => {
+      sbx.save();
+      for (let a = 0; a < arms; a++) {
+        const baseAng = (a / arms) * Math.PI * 2 + seededRand(x+a*4.4)*0.6;
+        let cx2 = x, cy2 = y, ang2 = baseAng;
+        const segs = 3;
+        sbx.beginPath(); sbx.moveTo(cx2, cy2);
+        for (let s = 0; s < segs; s++) {
+          ang2 += (seededRand(x+y+a*5+s*2.2) - 0.5) * 0.8;
+          cx2 += Math.cos(ang2) * (reach/segs);
+          cy2 += Math.sin(ang2) * (reach/segs);
+          sbx.lineTo(cx2, cy2);
+        }
+        sbx.strokeStyle = 'rgba(4,2,1,0.30)';
+        sbx.lineWidth = 0.8;
+        sbx.stroke();
+        sbx.strokeStyle = 'rgba(190,150,70,0.10)';
+        sbx.lineWidth = 0.5;
+        sbx.stroke();
+      }
+      sbx.restore();
+    });
+
+    eng.staticBg = sbc;
+
+    // ── 3. AMBIENT PARTICLES: 4-tier void ecosystem ────────────────────
+
+    // Tier A — small drifting rune sparks (warm gold + purple hybrid)
+    const ambs_sparks = Array.from({ length: 36 }, () => ({
+      kind: 'spark',
+      x: Math.random()*W, y: Math.random()*H,
+      r: Math.random()*1.1+0.3,
+      vx: (Math.random()-0.5)*13,
+      vy: -(Math.random()*20+5),
+      a: Math.random()*0.5+0.2,
+      t: Math.random(),
+      c: ['#c4b5fd','#fbbf24','#e9d5ff','#fcd34d','#a78bfa','#f59e0b','#818cf8'][Math.floor(Math.random()*7)]
+    }));
+
+    // Tier B — large slow void orbs
+    const ambs_orbs = Array.from({ length: 9 }, () => ({
+      kind: 'orb',
+      x: Math.random()*W, y: Math.random()*H,
+      r: Math.random()*16+9,
+      vx: (Math.random()-0.5)*5,
+      vy: -(Math.random()*5+1.5),
+      a: Math.random()*0.042+0.016,
+      t: Math.random()*0.7+0.3,
+      phase: Math.random()*Math.PI*2,
+      c: ['#6d28d9','#4c1d95','#7c3aed','#5b21b6'][Math.floor(Math.random()*4)]
+    }));
+
+    // Tier C — horizontal mist wisps
+    const ambs_wisps = Array.from({ length: 6 }, () => ({
+      kind: 'wisp',
+      x: Math.random()*W, y: Math.random()*H,
+      w: Math.random()*140+70,
+      h: Math.random()*7+3,
+      vx: (Math.random()-0.5)*7,
+      vy: (Math.random()-0.5)*3,
+      a: Math.random()*0.038+0.01,
+      t: Math.random()*0.8+0.2,
+      phase: Math.random()*Math.PI*2,
+    }));
+
+    // Tier D — rune ember cross-sparks (gold + purple mix)
+const ambs_embers = Array.from({ length: 32 }, () => ({ // dati 14, ngayon 32
+  kind: 'ember',
+  x: Math.random() * W,
+  y: Math.random() * H,
+  r: Math.random() * 3.5 + 2.0,        // dati 2.5+1.5, mas malalaki
+  vx: (Math.random() - 0.5) * 4,       // konting hina ng horizontal drift
+  vy: -(Math.random() * 7 + 2),        // mas mabagal paakyat para mas matagal kita
+  a: Math.random() * 0.4 + 0.4,        // dati 0.45+0.15 (~0.15–0.6), ngayon ~0.4–0.8
+  t: Math.random(),
+  rot: Math.random() * Math.PI,
+  c: ['#fbbf24','#a78bfa','#f59e0b','#c4b5fd','#fcd34d','#7c3aed'][Math.floor(Math.random() * 6)],
+}));
+
+    // Tier E — fine drifting dust motes (ground-haze, barely visible until
+    // a light source — moonlight shaft or the player's own glow — passes
+    // over them, which is what actually sells "dusty ancient dungeon air")
+const ambs_dust = Array.from({ length: 110 }, () => ({ // dati 55, doble na
+  kind: 'dust',
+  x: Math.random() * W,
+  y: Math.random() * H,
+  r: Math.random() * 1.8 + 0.8,       // dati 1.0+0.4, mas malalaki ng konti
+  vx: (Math.random() - 0.5) * 5,      // mas mabagal, hindi agad nagdi-disperse
+  vy: (Math.random() - 0.5) * 4,
+  a: Math.random() * 0.3 + 0.25,      // dati 0.16+0.04, ngayon ~0.25–0.55
+  phase: Math.random() * Math.PI * 2,
+}));
+
+    // Tier F — soft drifting smoke/fog clouds. Kept deliberately sparse and
+    // low-opacity (just enough volume to add depth/atmosphere) — large, slow,
+    // ash-grey blobs that gently roll across the floor without ever reading
+    // as a flat fog layer or hiding the floor detail underneath.
+    const ambs_smoke = Array.from({ length: 16 }, () => ({
+  kind: 'smoke',
+  x: Math.random() * W,
+  y: Math.random() * H,
+  r: Math.random() * 80 + 70,          // mas malaki yung clouds
+  vx: (Math.random() - 0.5) * 5,
+  vy: (Math.random() - 0.5) * 3,
+  a: Math.random() * 0.07 + 0.05,      // mas mataas base opacity
+  phase: Math.random() * Math.PI * 2,
+  driftSeed: Math.random() * 100,
+}));
+
+    eng.ambs = [...ambs_sparks, ...ambs_orbs, ...ambs_wisps, ...ambs_embers, ...ambs_dust, ...ambs_smoke];
 
     let lastTime = performance.now();
     let renderAnimId;
     let syncTimer = 0;
+    let lastReactSync = 0;
 
       const rollUpgradeOptions = (playerObj) => {
       // ✅ Nilagay dito ang 4 na upgrades para laging available (walang cap)
@@ -3237,14 +5717,36 @@ useEffect(() => {
       const isCoopActive = Boolean(net.channel);
       const isHost = Boolean(net.isHost) || !isCoopActive;
       
-      if (screen === 'pause') {
+      if (screenRef.current === 'pause') {
         return;
       }
 
       if (eng.bossIntro && eng.bossIntro.active) {
         eng.bossIntro.timer--;
         if (eng.bossIntro.timer <= 0) eng.bossIntro.active = false;
-        return; // Hihinto ang game loop dito para walang gumalaw!
+        
+        // 🔥 FIX: I-update ang UI Text manually para hindi i-reset ng React sa "Wave 1" at "100 HP"
+        const net = netRef.current || {};
+        const isCoopActive = Boolean(net.channel);
+        const isHost = Boolean(net.isHost) || !isCoopActive;
+        const localTarget = (isCoopActive && !isHost) ? eng.p2 : eng.p;
+        
+        if (scoreValueRef.current) scoreValueRef.current.textContent = formatLargeNumber(eng.score);
+        if (waveValueRef.current) {
+          const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
+          waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
+        }
+        if (localTarget) {
+          const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
+          if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
+          if (hpTextRef.current) hpTextRef.current.textContent = `HP ${formatLargeNumber(Math.max(0, localTarget.hp))}/${formatLargeNumber(localTarget.maxHp)}`;
+          
+          const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
+          if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
+          if (xpTextRef.current) xpTextRef.current.textContent = `XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
+        }
+
+        return; // Hihinto ang main physics/gameplay logic, pero updated at naka-freeze ang UI mo sa tamang values!
       }
 
 // 🔥 FIX: Pause ALL gameplay logic during the Victory Cinematic
@@ -3277,7 +5779,7 @@ useEffect(() => {
         }
       }
 
-      if (screen === 'playing' || screen === 'levelup') {
+      if (screenRef.current === 'playing' || screenRef.current === 'levelup') {
         let mx = 0, my = 0;
 
         if (eng.joystick.active) {
@@ -3293,11 +5795,16 @@ useEffect(() => {
         if (ml > 1) { mx /= ml; my /= ml; }
 
         // NORMAL SPAWN LOGIC (UNCOMMENT BELOW TO ENABLE NORMAL SPAWNING)
-        if (!eng.gameStarted && (mx !== 0 || my !== 0)) {
+        if (!eng.gameStarted && !isPreloadingRef.current && (mx !== 0 || my !== 0)) {
           if (isHost) {
             eng.gameStarted = true;
-            setHasStarted(true);
-            activateAudioKeepAlive();
+            // 🔥 LAG FIX: I-defer ang setHasStarted ng 16ms (isang frame) para
+            // hindi ma-block ang unang movement tick ng player.
+            // Ang overlay ay nakalagay na sa DOM (hindi mag-u-unmount), visibility lang
+            // ang magbabago — kaya mabilis ang re-render kahit may setState.
+            setTimeout(() => {
+              setHasStarted(true);
+            }, 16);
           }
         }
 
@@ -3355,21 +5862,27 @@ if (eng.gameStarted) {
 
     if (!isCoopActive || isHost) {
 
-// 🔥 MEMORY PROTECTION: Bawal mag-spawn ng normal minion kung lagpas 80 na ang kalaban sa screen
-          if (eng.spawnT >= eng.spawnRate && eng.enemies.length < 80) {
+// 🔥 MEMORY PROTECTION: Bawal mag-spawn ng normal minion kung lagpas 40 na ang kalaban sa screen
+          if (eng.spawnT >= eng.spawnRate && eng.enemies.length < 40) {
               eng.spawnT = 0;
               
               // 🔥 PACED SWARM SCALING: Dahan-dahang bibilis hanggang Wave 45 (0.20s extreme cap)
               eng.spawnRate = Math.max(0.20, 2 - (eng.wave * 0.04));
               
               // 🔥 MINI-BOSS INCLUSION: Paunti-unting idadagdag ang mga malalakas na minions
-              let pool = [0];
-              if (eng.wave >= 2) pool = [0, 1];               
-              if (eng.wave >= 4) pool = [0, 1, 2];            
-              if (eng.wave >= 10) pool = [0, 1, 2, 2];        
-              if (eng.wave >= 15) pool = [0, 1, 2, 2, 3];     
-              
-              const ti = pool[Math.floor(Math.random() * pool.length)];
+              // ⚡ FIX: Ang array pool mismo ang cina-cache (hindi pinapalitan ng if/else chain
+              // ng percentages), para zero risk na magbago ang drop-rate distribution. Kino-compute
+              // lang ulit ito kapag nagbago ang wave — hindi kada spawn (5x/sec sa late game).
+              if (eng.cachedPoolWave !== eng.wave) {
+                  eng.cachedPoolWave = eng.wave;
+                  let pool = [0];
+                  if (eng.wave >= 2) pool = [0, 1];
+                  if (eng.wave >= 4) pool = [0, 1, 2];
+                  if (eng.wave >= 10) pool = [0, 1, 2, 2];
+                  if (eng.wave >= 15) pool = [0, 1, 2, 2, 3];
+                  eng.cachedSpawnPool = pool;
+              }
+              const ti = eng.cachedSpawnPool[Math.floor(Math.random() * eng.cachedSpawnPool.length)];
               const t = ET[ti]; 
               
               const side = Math.floor(Math.random() * 4); 
@@ -3378,21 +5891,47 @@ if (eng.gameStarted) {
               else if (side === 1) { ex = W + 30; ey = Math.random() * H; }
               else if (side === 2) { ex = Math.random() * W; ey = H + 30; }
               else { ex = -30; ey = Math.random() * H; }
-                
-              const waveScale = Math.max(0, eng.wave - 1); 
-              const diffScale = Math.pow(1.025, Math.max(0, eng.wave - 30));
 
-              // 🔥 LATE GAME MATH: (Base + Scaling) * Exponential DiffScale
-              const calculatedHp = Math.floor((t.hp + (waveScale * 35) + Math.pow(waveScale, 1.5) * 5) * diffScale);
-              const calculatedDmg = Math.floor((t.dmg + (waveScale * 3) + (waveScale * waveScale * 0.05)) * diffScale);
+              // ⚡ FIX: MATH CACHING — Math.pow() (3x dati) at ang ENDLESS SOFT-CAP scaling ay
+              // kino-compute lang ISANG BESES kapag nagbago ang wave, hindi kada spawn.
+              // 🎯 BALANCE: Wave 1-100 (designed na difficulty papunta sa final boss) ay
+              // BYTE-IDENTICAL sa lumang formula — walang nagbabago dito. Pasado Wave 100
+              // (endless mode), pinapagaan lang ang exponential terms (Math.pow 1.5 sa HP,
+              // squared term sa DMG) para hindi sumabog ang numbers nang sobra-sobra sa
+              // matagal na endless runs, pero patuloy pa ring tumataas ang difficulty
+              // (hindi flat/stuck) — kalahati lang ng dating bilis ng pagtaas ng exponent base.
+              if (eng.cachedScaleWave !== eng.wave) {
+                  eng.cachedScaleWave = eng.wave;
+                  const waveScale = Math.max(0, eng.wave - 1);
+                  const ENDLESS_START = 100;
+
+                  let hpExpBase = waveScale;
+                  let dmgExpBase = waveScale;
+                  if (eng.wave > ENDLESS_START) {
+                      const excess = eng.wave - ENDLESS_START;
+                      hpExpBase = Math.max(waveScale * 0.4, waveScale - (excess * 0.5));
+                      dmgExpBase = Math.max(waveScale * 0.4, waveScale - (excess * 0.5));
+                  }
+
+                  eng.cachedWaveScale = waveScale;
+                  eng.cachedDiffScale = Math.pow(1.025, Math.max(0, eng.wave - 30));
+                  eng.cachedHpPowTerm = Math.pow(hpExpBase, 1.5) * 5;
+                  eng.cachedDmgSqTerm = dmgExpBase * dmgExpBase * 0.05;
+                  eng.cachedSpeedAdd = Math.min(250, waveScale * 2.5);
+                  eng.cachedXpMult = Math.pow(1.08, waveScale);
+              }
+
+              // Apply cached math (parehong resulta sa Wave 1-100, mas controlled sa 101+)
+              const calculatedHp = Math.floor((t.hp + (eng.cachedWaveScale * 35) + eng.cachedHpPowTerm) * eng.cachedDiffScale);
+              const calculatedDmg = Math.floor((t.dmg + (eng.cachedWaveScale * 3) + eng.cachedDmgSqTerm) * eng.cachedDiffScale);
 
               eng.enemies.push({ 
                  x: ex, y: ey, r: t.r, 
-                 speed: t.speed + Math.min(250, waveScale * 2.5),
+                 speed: t.speed + eng.cachedSpeedAdd,
                  hp: calculatedHp, 
                  maxHp: calculatedHp, 
                  dmg: calculatedDmg, 
-                 xp: Math.floor(t.xp * Math.pow(1.08, waveScale)),
+                 xp: Math.floor(t.xp * eng.cachedXpMult),
                  color: t.color, glow: t.glow, boss: t.boss, type: t.type, flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
               });
           }
@@ -3431,8 +5970,8 @@ if (eng.gameStarted) {
                    
                     eng.bossIntro = { 
                         active: true, 
-                        timer: 900, 
-                        maxDuration: 900, 
+                        timer: 720, 
+                        maxDuration: 720, 
                         bossName: "THE ABYSS, AWAKENED OBLIVION",
                         subtitle: "WHAT WAS SEALED IN ETERNITY HAS RETURNED" // <-- Dito mo ilalagay ang custom text
                     };
@@ -3477,7 +6016,7 @@ if (eng.gameStarted) {
                 } 
                 else if (currentWave === 75 || (currentWave > 100 && currentWave % 20 === 0)) {
                     eng.screenShake = 2.5;
-                    eng.bossIntro = { active: true, timer: 900, maxDuration: 900, bossName: "THE ABYSS, WORLD EATER" };
+                    eng.bossIntro = { active: true, timer: 720, maxDuration: 720, bossName: "THE ABYSS, WORLD EATER" };
 
                     // 🔥 BOSS MUSIC FIX PARA KAY THE ABYSS
                     if (window.arcaneAudio && !window.arcaneAudio.isBossActive) {
@@ -3516,8 +6055,8 @@ if (eng.gameStarted) {
                         eng.screenShake = 2.0; 
                         eng.bossIntro = { 
                             active: true, 
-                            timer: 900, // 10 seconds duration (600 frames)
-                            maxDuration: 600, 
+                            timer: 720, // 10 seconds duration (600 frames)
+                            maxDuration: 720, 
                             bossName: "VORZAK, KING OF THE VOID", 
                             subtitle: "A KING BORN BEFORE CREATION RETURNS" // Custom text para sa demon
                         };
@@ -3558,6 +6097,23 @@ if (eng.gameStarted) {
           }
         }
        
+        // 🔥 FIX: PENDING SIGIL CASTS DRAIN — dt-synced kapalit ng setTimeout.
+        // Ito ang nag-de-decrement ng "chanting" timer gamit ang parehong dt na
+        // ginagamit ng ibang gameplay logic, kaya automatic na siyang naka-pause
+        // (dahil naka-return na tayo sa itaas kapag screen === 'pause', hindi
+        // pa man umaabot dito ang execution) at naka-sync sa internal game clock
+        // sa halip na sa wall-clock time ng browser.
+        if (eng.pendingSigilCasts && eng.pendingSigilCasts.length > 0) {
+          for (let i = eng.pendingSigilCasts.length - 1; i >= 0; i--) {
+            const pc = eng.pendingSigilCasts[i];
+            pc.timeLeft -= dt;
+            if (pc.timeLeft <= 0) {
+              resolveSigilCast(eng, pc.target, pc.sigilType);
+              eng.pendingSigilCasts.splice(i, 1);
+            }
+          }
+        }
+
         // 💥 DECAL LIFECYCLE UPDATE (Unti-unting pagkawala ng burn marks)
         if (eng.decals) {
           for (let i = eng.decals.length - 1; i >= 0; i--) {
@@ -3592,41 +6148,6 @@ if (eng.tornados) {
 
     if (t.life <= 0) {
       eng.tornados.splice(i, 1);
-    } else if (isHost || !isCoopActive) {
-      
-      const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
-      const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
-      // const tornadoDps = dynamicBaseDmg + (casterDmg * 10); 
-      const tornadoDps = t.isFamiliar ? t.dmg : (1000 + ((eng.wave || 1) * 100) + ((eng.boltDmg || 0) + (eng.p?.dmg || 0)) * 10);
-
-      const tornadoRadius = t.r || 50;
-
-      for (const e of eng.enemies) {
-        if (!e) continue;
-
-        // ✅ OPTIMIZATION 1: Squared Distance (Inalis ang Math.hypot)
-        // Mas mabilis sa CPU ang pagpaparami (multiplication) kaysa sa Square Root
-        const dx = e.x - t.x;
-        const dy = e.y - t.y;
-        const maxDist = tornadoRadius + (e.r || 15);
-        const distSq = (dx * dx) + (dy * dy);
-
-        if (distSq < (maxDist * maxDist)) {
-          e.hp -= tornadoDps * dt;
-          window.recordArcaneDamage(t.isFamiliar ? 'Zephyr Falcon' : 'Flare Inferno', tornadoDps * dt); // 👈 FIXED 
-          e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
-          
-          // ✅ OPTIMIZATION 2: Konting bawas sa FCT Spam (Ginawang 0.08 mula 0.15)
-          // Hindi ito mapapansin sa mata ng player dahil sa bilis ng tama ng tornado, 
-          // pero malaki ang tulong nito para hindi mag-lag kapag x2 na ang tornado.
-          if (Math.random() < 0.08) {
-             e.flash = 0.5;
-             // ✅ Gawaing buong numero (Math.floor) ang damage para iwas lag sa text rendering
-             spawnFCT(eng, e.x, e.y, Math.floor(tornadoDps * 0.15), 'damage', false); 
-          }
-          if (e.hp <= 0) e.deadTrigger = true;
-        }
-      }
     }
   }
 }
@@ -3639,29 +6160,6 @@ if (eng.tornados) {
             waveObj.x += (waveObj.vx || 0) * dt; 
             if (waveObj.life <= 0) {
               eng.waves.splice(i, 1);
-            } else if (isHost || !isCoopActive) {
-
-              // 🟢 DYNAMIC SCALED DPS: Tidal Wave
-              const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100); 
-              const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
-              const waveDps = (dynamicBaseDmg * 1.5) + (casterDmg * 20); 
-              const wWidth = waveObj.width || 100;
-
-              for (const e of eng.enemies) {
-                if (!e) continue;
-                // 🔥 ITO ANG TAMA PARA SA WAVES (Gumagamit ng waveObj.x)
-                if (e.x > waveObj.x - wWidth / 2 && e.x < waveObj.x + wWidth / 2) {
-                  e.hp -= waveDps * dt;
-                  window.recordArcaneDamage('Tidal Wave', waveDps * dt);      
-                  if (!e.boss) e.x += ((waveObj.vx || 0) * 0.4) * dt; 
-                  e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 2.0);
-                  if (Math.random() < 0.15) {
-                      e.flash = 0.5;
-                      spawnFCT(eng, e.x, e.y, waveDps * 0.15, 'damage', false); // 💥 ADDED FCT
-                  }
-                  if (e.hp <= 0) e.deadTrigger = true;
-                }
-              }
             }
           }
         }
@@ -3686,24 +6184,91 @@ if (eng.tornados) {
             s.life -= dt;
             if (s.life <= 0) {
               eng.iceStorms.splice(i, 1);
-            } else if (isHost || !isCoopActive) {
-              
-              // 🔥 SCALED DPS: Base DPS + Wave Scaling + (Player Dmg * 4)
-              // const iceDps = 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4);
-              const iceDps = s.isFamiliar ? s.dmg : 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4);
+            }
+          }
+        }
 
-              for (const e of eng.enemies) {
-                if (Math.hypot(e.x - s.x, e.y - s.y) < s.radius + e.r) {
-                  e.hp -= iceDps * dt; 
-                  window.recordArcaneDamage(s.isFamiliar ? 'Frost Sprite' : 'Ice Storm', iceDps * dt); // 👈 FIXED
-                  // window.recordArcaneDamage('Ice Storm', iceDps * dt);
-                  e.stigmaTime = 1.0; 
-                  e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0); 
-                  if (Math.random() < 0.1) {
-                     e.flash = 0.5;
-                     spawnFCT(eng, e.x, e.y, iceDps * 0.1, 'damage', false); // 💥 ADDED FCT
+        // =====================================================================
+        // 🔥 FIX: MERGED HAZARD-DAMAGE PASS — isang loop na lang sa eng.enemies
+        // sa halip na hiwalay na loop per hazard type (tornado/wave/iceStorm).
+        // Dati: kapag 3 sigils magkasabay active, 3 buong pass sa enemies array
+        // kada frame (O(hazards × enemies)). Ngayon: isang pass lang sa enemies,
+        // tapos sa loob niyan saka tinitignan kung tama ba ang bawat active na
+        // tornado/wave/iceStorm — parehong resulta, mas kaunting array traversal
+        // overhead lalo na kapag malaki na ang enemies array (40-100+ minions).
+        // Fissure at lightning hindi kasama dito dahil instant-hit sila sa cast
+        // mismo (one-time, hindi per-frame continuous damage), kaya wala silang
+        // per-frame enemy loop na dapat i-merge.
+        // =====================================================================
+        if (isHost || !isCoopActive) {
+          const activeTornados = eng.tornados && eng.tornados.length > 0 ? eng.tornados : null;
+          const activeWaves = eng.waves && eng.waves.length > 0 ? eng.waves : null;
+          const activeIceStorms = eng.iceStorms && eng.iceStorms.length > 0 ? eng.iceStorms : null;
+
+          if (activeTornados || activeWaves || activeIceStorms) {
+            const dynamicBaseDmg = 1000 + ((eng.wave || 1) * 100);
+            const casterDmg = (eng.boltDmg || 0) + (eng.p?.dmg || 0);
+            const waveDps = activeWaves ? (dynamicBaseDmg * 1.5) + (casterDmg * 20) : 0;
+            const iceDpsBase = activeIceStorms ? 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4) : 0;
+
+            for (const e of eng.enemies) {
+              if (!e) continue;
+
+              // --- TORNADO(S) ---
+              if (activeTornados) {
+                for (const t of activeTornados) {
+                  const dx = e.x - t.x;
+                  const dy = e.y - t.y;
+                  const tornadoRadius = t.r || 50;
+                  const maxDist = tornadoRadius + (e.r || 15);
+                  const distSq = (dx * dx) + (dy * dy);
+                  if (distSq < (maxDist * maxDist)) {
+                    const tornadoDps = t.isFamiliar ? t.dmg : (1000 + ((eng.wave || 1) * 100) + ((eng.boltDmg || 0) + (eng.p?.dmg || 0)) * 10);
+                    e.hp -= tornadoDps * dt;
+                    window.recordArcaneDamage(t.isFamiliar ? 'Zephyr Falcon' : 'Flare Inferno', tornadoDps * dt);
+                    e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
+                    if (Math.random() < 0.08) {
+                      e.flash = 0.5;
+                      spawnFCT(eng, e.x, e.y, Math.floor(tornadoDps * 0.15), 'damage', false);
+                    }
+                    if (e.hp <= 0) e.deadTrigger = true;
                   }
-                  if (e.hp <= 0) e.deadTrigger = true;
+                }
+              }
+
+              // --- WAVE(S) ---
+              if (activeWaves) {
+                for (const waveObj of activeWaves) {
+                  const wWidth = waveObj.width || 100;
+                  if (e.x > waveObj.x - wWidth / 2 && e.x < waveObj.x + wWidth / 2) {
+                    e.hp -= waveDps * dt;
+                    window.recordArcaneDamage('Tidal Wave', waveDps * dt);
+                    if (!e.boss) e.x += ((waveObj.vx || 0) * 0.4) * dt;
+                    e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 2.0);
+                    if (Math.random() < 0.15) {
+                      e.flash = 0.5;
+                      spawnFCT(eng, e.x, e.y, waveDps * 0.15, 'damage', false);
+                    }
+                    if (e.hp <= 0) e.deadTrigger = true;
+                  }
+                }
+              }
+
+              // --- ICE STORM(S) ---
+              if (activeIceStorms) {
+                for (const s of activeIceStorms) {
+                  if (Math.hypot(e.x - s.x, e.y - s.y) < s.radius + e.r) {
+                    const iceDps = s.isFamiliar ? s.dmg : iceDpsBase;
+                    e.hp -= iceDps * dt;
+                    window.recordArcaneDamage(s.isFamiliar ? 'Frost Sprite' : 'Ice Storm', iceDps * dt);
+                    e.stigmaTime = 1.0;
+                    e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0);
+                    if (Math.random() < 0.1) {
+                      e.flash = 0.5;
+                      spawnFCT(eng, e.x, e.y, iceDps * 0.1, 'damage', false);
+                    }
+                    if (e.hp <= 0) e.deadTrigger = true;
+                  }
                 }
               }
             }
@@ -4007,6 +6572,13 @@ if (eng.tornados) {
 
           // 💨 SHARED DASH & MOVEMENT LOGIC
           const applyPlayerDashAndMovement = (pObj, inX, inY, isP2) => {
+            // 🔒 BAWAL GUMALAW HABANG NAKA-LOADING SCREEN PA: direktang
+            // hinaharang dito ang actual position update (hindi lang yung
+            // gameStarted flag) kaya kahit paano pa man na-trigger ang
+            // gameStarted (host movement, o guest state_sync mula sa host),
+            // walang epekto ang anumang WASD/joystick input habang nagloload.
+            if (isPreloadingRef.current) return;
+
             tickPlayerSkillTrackers(pObj);
             let calcSpeed = pObj.speed || 200;
             if (pObj.skills?.haste?.duration > 0 && pObj.skills?.haste?.enabled !== false) calcSpeed *= 1.45;
@@ -4108,60 +6680,82 @@ if (eng.tornados) {
         }
         
         const localTrackedObj = (isCoopActive && !isHost) ? eng.p2 : eng.p;
-          if (localTrackedObj) {
-          setPlayerLevel(localTrackedObj.level);
-          if (localTrackedObj.skills) {
-            setSkillsState({ ...localTrackedObj.skills });
+        if (localTrackedObj) {
+          
+          // 🔥 THROTTLE REACT STATE UPDATES PARA DI MAG-LAG ANG LARO
+          const nowMs = performance.now();
+          if (nowMs - lastReactSync > 150) {
+            lastReactSync = nowMs;
+            
+            setPlayerLevel(prev => prev !== localTrackedObj.level ? localTrackedObj.level : prev);
+            playerLevelRef.current = localTrackedObj.level;
+            
+            if (localTrackedObj.skills) {
+              setSkillsState({ ...localTrackedObj.skills });
+            }
+
+            const activeBuffs = [];
+            // Gumamit ng Math.ceil para integer lang ang pumasok sa state at hindi laging nag-iiba
+            const peaks = buffPeakDurationRef.current;
+            const trackPeak = (key, life) => {
+              // Kung mas mataas ang life kaysa stored peak (bagong cast / refresh),
+              // i-update ang peak. Ginagamit ito ng radial sweep sa rune medallion.
+              if (!peaks[key] || life > peaks[key]) peaks[key] = life;
+              return peaks[key];
+            };
+
+            if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) {
+              const life = Math.ceil(localTrackedObj.skills.berserk.duration);
+              activeBuffs.push({ type: 'skill', name: 'BERSERK', icon: 'berserk', life, peak: trackPeak('berserk', life) });
+            } else { delete peaks.berserk; }
+            if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) {
+              const life = Math.ceil(localTrackedObj.skills.haste.duration);
+              activeBuffs.push({ type: 'skill', name: 'HASTE', icon: 'haste', life, peak: trackPeak('haste', life) });
+            } else { delete peaks.haste; }
+            if (localTrackedObj.skills?.shield?.duration > 0 && localTrackedObj.skills?.shield?.enabled) {
+              const life = Math.ceil(localTrackedObj.skills.shield.duration);
+              activeBuffs.push({ type: 'skill', name: 'SHIELD', icon: 'shield', life, peak: trackPeak('shield', life) });
+            } else { delete peaks.shield; }
+            if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) {
+              const life = Math.ceil(localTrackedObj.skills.arcaneInstinct.duration);
+              activeBuffs.push({ type: 'skill-instinct', name: 'ARCANE INSTINCT', icon: 'arcaneInstinct', life, peak: trackPeak('arcaneInstinct', life) });
+            } else { delete peaks.arcaneInstinct; }
+
+            if (localTrackedObj.potBuffs) {
+              if (localTrackedObj.potBuffs.power > 0) { const life = Math.ceil(localTrackedObj.potBuffs.power); activeBuffs.push({ type: 'pot-power', name: 'POWER', icon: 'fire', life, peak: trackPeak('pot-power', life) }); } else { delete peaks['pot-power']; }
+              if (localTrackedObj.potBuffs.defense > 0) { const life = Math.ceil(localTrackedObj.potBuffs.defense); activeBuffs.push({ type: 'pot-defense', name: 'DEFENSE', icon: 'shield', life, peak: trackPeak('pot-defense', life) }); } else { delete peaks['pot-defense']; }
+              if (localTrackedObj.potBuffs.crit > 0) { const life = Math.ceil(localTrackedObj.potBuffs.crit); activeBuffs.push({ type: 'pot-crit', name: 'CRIT', icon: 'shootingStar', life, peak: trackPeak('pot-crit', life) }); } else { delete peaks['pot-crit']; }
+              if (localTrackedObj.potBuffs.regen > 0) { const life = Math.ceil(localTrackedObj.potBuffs.regen); activeBuffs.push({ type: 'pot-regen', name: 'REGEN', icon: 'nature', life, peak: trackPeak('pot-regen', life) }); } else { delete peaks['pot-regen']; }
+              if (localTrackedObj.potBuffs.xpBoost > 0) { const life = Math.ceil(localTrackedObj.potBuffs.xpBoost); activeBuffs.push({ type: 'pot-xpBoost', name: 'XP BOOST', icon: 'arcaneInstinct', life, peak: trackPeak('pot-xpBoost', life) }); } else { delete peaks['pot-xpBoost']; }
+            }
+            
+            // Check muna natin kung may nagbago bago mag-trigger ng re-render
+            setActiveBuffsList(prev => {
+              const prevStr = JSON.stringify(prev);
+              const newStr = JSON.stringify(activeBuffs);
+              return prevStr === newStr ? prev : activeBuffs;
+            });
           }
 
-          // ⚠️ Fetches the total stats from equipped items
+          // ⚠️ DIRECT DOM UPDATES: (Hayaan lang ito sa labas dahil mabilis at walang VDOM delay)
           const equipBonuses = getEquipmentStats(localTrackedObj);
 
-          const activeBuffs = [];
-          if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) {
-            activeBuffs.push({ type: 'skill', name: 'BERSERK', icon: '🔥', life: localTrackedObj.skills.berserk.duration });
-          }
-          if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) {
-            activeBuffs.push({ type: 'skill', name: 'HASTE', icon: '👟', life: localTrackedObj.skills.haste.duration });
-          }
-          if (localTrackedObj.skills?.shield?.duration > 0 && localTrackedObj.skills?.shield?.enabled) {
-            activeBuffs.push({ type: 'skill', name: 'SHIELD', icon: '🔮', life: localTrackedObj.skills.shield.duration });
-          }
-          if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) {
-            activeBuffs.push({ type: 'skill-instinct', name: 'ARCANE INSTINCT', icon: '⚡', life: localTrackedObj.skills.arcaneInstinct.duration });
-          }
-
-          if (localTrackedObj.potBuffs) {
-            if (localTrackedObj.potBuffs.power > 0) activeBuffs.push({ type: 'pot-power', name: 'POWER', icon: '💪', life: localTrackedObj.potBuffs.power });
-            if (localTrackedObj.potBuffs.defense > 0) activeBuffs.push({ type: 'pot-defense', name: 'DEFENSE', icon: '🛡️', life: localTrackedObj.potBuffs.defense });
-            if (localTrackedObj.potBuffs.crit > 0) activeBuffs.push({ type: 'pot-crit', name: 'CRIT CHANCE', icon: '🎯', life: localTrackedObj.potBuffs.crit });
-            if (localTrackedObj.potBuffs.regen > 0) activeBuffs.push({ type: 'pot-regen', name: 'REGEN', icon: '🌿', life: localTrackedObj.potBuffs.regen });
-            if (localTrackedObj.potBuffs.xpBoost > 0) activeBuffs.push({ type: 'pot-xpBoost', name: 'XP BOOST', icon: '✨', life: localTrackedObj.potBuffs.xpBoost });
-          }
-          setActiveBuffsList(activeBuffs);
-
-          // ✅ Fixed: Added equipBonuses.atk
           let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0) + equipBonuses.atk;
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
           if (localTrackedObj.potBuffs?.power > 0) currentAtk = Math.ceil(currentAtk * 1.4);
-          // 🔥 BALANCED UI: x2.0 na lang ang damage display para tugma sa totoong damage output
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentAtk = Math.ceil(currentAtk * 2.0);
 
-          // ✅ Fixed: Added equipBonuses.def
           let currentDef = (localTrackedObj.baseDef || 0) + equipBonuses.def;
           if (localTrackedObj.skills?.fortify?.learned && localTrackedObj.skills?.fortify?.enabled) currentDef += 25;
           if (localTrackedObj.potBuffs?.defense > 0) currentDef += 35;
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentDef += 500;
 
-          // ✅ Fixed: Added equipBonuses.crit
           let currentCrit = (localTrackedObj.baseCrit || 0) + equipBonuses.crit;
           if (localTrackedObj.potBuffs?.crit > 0) currentCrit += 35;
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentCrit += 500;
 
-          // ✅ Fixed: Added equipBonuses.speed
           let currentSpd = (localTrackedObj.speed || 200) + equipBonuses.speed;
           if (localTrackedObj.skills?.haste?.duration > 0 && localTrackedObj.skills?.haste?.enabled) currentSpd = Math.ceil(currentSpd * 1.45);
-          // 🔥 BALANCED UI: x2.0 speed para tugma sa request mo at sa totoong movement speed
           if (localTrackedObj.skills?.arcaneInstinct?.duration > 0) currentSpd = Math.ceil(currentSpd * 2.0);
           
           let currentCd = (localTrackedObj.shootRate || 0.6) - equipBonuses.rate;
@@ -4171,18 +6765,16 @@ if (eng.tornados) {
 
           let currentLifesteal = (localTrackedObj.lifeSteal || 0) + equipBonuses.lifesteal;
 
-           if (statAtkRef.current) statAtkRef.current.textContent = formatLargeNumber(currentAtk);
+          if (statAtkRef.current) statAtkRef.current.textContent = formatLargeNumber(currentAtk);
           if (statDefRef.current) {
             let uiReduction = currentDef / (100 + currentDef);
-            uiReduction = Math.min(0.85, uiReduction); // Visual display of the 85% cap
+            uiReduction = Math.min(0.85, uiReduction);
             const damageBlockedPct = (uiReduction * 100).toFixed(1);
             statDefRef.current.textContent = `${currentDef} (${damageBlockedPct}% Block)`;
           }
           if (statCritRef.current) statCritRef.current.textContent = `${currentCrit}%`;
           if (statSpdRef.current) statSpdRef.current.textContent = `${currentSpd} IPS`;
           if (statCdRef.current) statCdRef.current.textContent = `${currentCd.toFixed(2)}s`;
-          
-          // ✅ Fixed: Shows currentLifesteal calculation
           if (statLifestealRef.current) statLifestealRef.current.textContent = `${currentLifesteal} HP/Kill`;
         }
 
@@ -5357,7 +7949,7 @@ if (eng.tornados) {
         // =========================================================================
         // 🔥 STEP 5: GLOBAL LEVEL UP QUEUE HANDLER (Ilagay dito)
         // =========================================================================
-        if (eng.p && !eng.p.dead && eng.p.pendingLevelUps > 0 && screen === 'playing' && !eng.p.isLevelingUp) {
+        if (eng.p && !eng.p.dead && eng.p.pendingLevelUps > 0 && screenRef.current === 'playing' && !eng.p.isLevelingUp) {
             eng.p.isLevelingUp = true;
             eng.p.pendingLevelUps--;
             onLevelUpOffer(rollUpgradeOptions(eng.p));
@@ -5401,7 +7993,7 @@ if (localTarget) {
           
           const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
           if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
-          if (xpTextRef.current) xpTextRef.current.textContent = `LV${localTarget.level} XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
+          if (xpTextRef.current) xpTextRef.current.textContent = `XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
 
           // 👇 IDAGDAG ANG BUONG BLOCK NA ITO PARA SA VIGNETTE GLOW
           if (vignetteRef.current) {
@@ -5452,9 +8044,40 @@ if (localTarget) {
       }
       for (const a of eng.ambs) {
         a.x += a.vx * dt;
-        a.y += a.vy * dt; a.t -= dt * 0.22;
-        if (a.t <= 0 || a.y < -10) { a.x = Math.random() * W; a.y = H + 10;
-        a.t = 1; }
+        a.y += a.vy * dt;
+        if (a.kind === 'spark') {
+          a.t -= dt * 0.22;
+          if (a.t <= 0 || a.y < -10) { a.x = Math.random() * W; a.y = H + 10; a.t = 1; }
+        } else if (a.kind === 'ember') {
+          a.t -= dt * 0.18;
+          a.rot += dt * 1.2;
+          if (a.t <= 0 || a.y < -10) { a.x = Math.random() * W; a.y = H + 10; a.t = 1; }
+        } else if (a.kind === 'orb') {
+          a.phase += dt * 0.6;
+          if (a.x < -60) a.x = W + 60;
+          if (a.x > W + 60) a.x = -60;
+          if (a.y < -60) a.y = H + 60;
+          if (a.y > H + 60) a.y = -60;
+        } else if (a.kind === 'wisp') {
+          a.phase += dt * 0.4;
+          if (a.x < -200) a.x = W + 200;
+          if (a.x > W + 200) a.x = -200;
+          if (a.y < -40) a.y = H + 40;
+          if (a.y > H + 40) a.y = -40;
+        } else if (a.kind === 'dust') {
+          a.phase += dt * 0.5;
+          a.x += Math.sin(a.phase) * dt * 4;
+          if (a.x < -10) a.x = W + 10;
+          if (a.x > W + 10) a.x = -10;
+          if (a.y < -10) a.y = H + 10;
+          if (a.y > H + 10) a.y = -10;
+        } else if (a.kind === 'smoke') {
+          a.phase += dt * 0.25;
+          if (a.x < -a.r) a.x = W + a.r;
+          if (a.x > W + a.r) a.x = -a.r;
+          if (a.y < -a.r) a.y = H + a.r;
+          if (a.y > H + a.r) a.y = -a.r;
+        }
       }
 
 
@@ -6125,18 +8748,305 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
 
 
 
-      // ==========================================
+      // ═══════════════════════════════════════════════════════════════
+      // VOID / FRIEREN MMORPG ENVIRONMENT DRAW
+      // Layer order: base → atmosphere → floor → staticBg → particles → vignette
+      // ═══════════════════════════════════════════════════════════════
 
-      ctx.fillStyle = '#030111';
+      // 1. Ancient stone base — darker warm-black void (not pure black, keeps a hint of warmth)
+      ctx.fillStyle = '#110e0b';
       ctx.fillRect(0, 0, W, H);
-      if (eng.floorPat) { ctx.fillStyle = eng.floorPat; ctx.fillRect(0, 0, W, H);
+
+      // 2. Atmospheric depth — warm ambient bounce + cool arcane shadow on opposite side
+      const _t = performance.now() * 0.00018;
+      // Warm amber-gold torchlight source — top-center (moonlight direction)
+      const bg1 = ctx.createRadialGradient(W*0.5, H*(-0.15), 0, W*0.5, H*(-0.15), W*0.80);
+      bg1.addColorStop(0,   'rgba(210,175,95,0.16)');  // warm moonlight
+      bg1.addColorStop(0.4, 'rgba(140,110,55,0.07)');
+      bg1.addColorStop(0.75,'rgba(60,44,20,0.03)');
+      bg1.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.fillStyle = bg1; ctx.fillRect(0, 0, W, H);
+
+      // Cool arcane blue-purple from bottom — mana seeping from floor runes
+      const bg2 = ctx.createRadialGradient(W*0.50, H*1.10, 0, W*0.50, H*1.10, W*0.65);
+      bg2.addColorStop(0,   'rgba(55,18,115,0.20)');
+      bg2.addColorStop(0.5, 'rgba(28,7,65,0.09)');
+      bg2.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.fillStyle = bg2; ctx.fillRect(0, 0, W, H);
+
+      // Side fills — cool deep shadow corners
+      const bg3 = ctx.createRadialGradient(W*0.72, H*0.60, 0, W*0.72, H*0.60, W*0.45);
+      bg3.addColorStop(0,   'rgba(20,8,40,0.14)');
+      bg3.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.fillStyle = bg3; ctx.fillRect(0, 0, W, H);
+
+      // 3. Hand-baked stone floor — every tile uniquely seeded, no visible repeat
+      if (eng.floorBaked) {
+        ctx.drawImage(eng.floorBaked, 0, 0);
+      } else if (eng.floorPat) {
+        ctx.fillStyle = eng.floorPat;
+        ctx.fillRect(0, 0, W, H);
       }
 
+      // 3b. DRAMATIC DIRECTIONAL MOONLIGHT — top-down shaft hitting the arena floor
+      // This is the "torchlight/moonlight nagbibigay direction ng light" pass
+      // Soft wide moonlight cone from top-center
+      {
+        const moonG = ctx.createRadialGradient(W*0.50, -H*0.05, 0, W*0.50, H*0.55, W*0.62);
+        moonG.addColorStop(0,   'rgba(220,205,170,0.16)'); // warm moonlight center
+        moonG.addColorStop(0.30,'rgba(185,165,120,0.09)');
+        moonG.addColorStop(0.60,'rgba(100,85,60,0.04)');
+        moonG.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = moonG; ctx.fillRect(0, 0, W, H);
+      }
+      // Focused bright shaft — narrow column of direct moonlight
+      {
+        const shaftG = ctx.createRadialGradient(W*0.50, 0, 0, W*0.50, H*0.35, W*0.22);
+        shaftG.addColorStop(0,   'rgba(240,225,185,0.13)');
+        shaftG.addColorStop(0.5, 'rgba(190,170,120,0.05)');
+        shaftG.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = shaftG; ctx.fillRect(W*0.20, 0, W*0.60, H*0.65);
+      }
+      // Shadow falloff on bottom — floor gets darker away from the light source
+      {
+        const shadowG = ctx.createLinearGradient(0, H*0.50, 0, H);
+        shadowG.addColorStop(0, 'rgba(0,0,0,0)');
+        shadowG.addColorStop(1, 'rgba(0,0,0,0.35)');
+        ctx.fillStyle = shadowG; ctx.fillRect(0, H*0.50, W, H*0.50);
+      }
+      // Side shadow falloff — edges darker (creates depth framing)
+      {
+        const leftShadow = ctx.createLinearGradient(0, 0, W*0.22, 0);
+        leftShadow.addColorStop(0, 'rgba(0,0,0,0.28)');
+        leftShadow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = leftShadow; ctx.fillRect(0, 0, W*0.22, H);
+        const rightShadow = ctx.createLinearGradient(W, 0, W*0.78, 0);
+        rightShadow.addColorStop(0, 'rgba(0,0,0,0.28)');
+        rightShadow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = rightShadow; ctx.fillRect(W*0.78, 0, W*0.22, H);
+      }
+
+      // 4. Static pre-baked layer (big cracks, veins, seal) — ONE drawImage call
+      if (eng.staticBg) {
+        ctx.drawImage(eng.staticBg, 0, 0);
+
+        // ⚡ LIVING SEAL OVERLAY — breathing glow + leaking embers drawn fresh
+        // every frame so the ancient broken seal's "last spark" genuinely
+        // pulses instead of sitting frozen in the baked background.
+        {
+          const sealX = W * 0.5, sealY = H * 0.5;
+          const st = performance.now() * 0.001;
+          const breathe = (Math.sin(st * 1.3) + 1) * 0.5; // 0..1 slow breathing
+
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+
+          // Breathing core glow bleeding up through the crack
+          const coreGlowR = 50 + breathe * 18;
+          const coreGrad = ctx.createRadialGradient(sealX, sealY, 0, sealX, sealY, coreGlowR);
+          coreGrad.addColorStop(0, `rgba(255, 214, 120, ${0.18 + breathe * 0.16})`);
+          coreGrad.addColorStop(0.5, `rgba(225, 180, 80, ${0.08 + breathe * 0.08})`);
+          coreGrad.addColorStop(1, 'rgba(225,180,80,0)');
+          ctx.fillStyle = coreGrad;
+          ctx.beginPath(); ctx.arc(sealX, sealY, coreGlowR, 0, Math.PI * 2); ctx.fill();
+
+          ctx.translate(sealX, sealY);
+
+          // Slow rotating arc of residual power tracing the broken outer band
+          ctx.rotate(st * 0.07);
+          ctx.strokeStyle = `rgba(255, 225, 150, ${0.12 + breathe * 0.10})`;
+          ctx.lineWidth = 1;
+          ctx.shadowColor = 'rgba(225,180,80,0.8)';
+          ctx.shadowBlur = 12;
+          ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 1.4); ctx.stroke();
+
+          // Embers leaking from the crack, drifting upward and fading out
+          ctx.fillStyle = 'rgba(255, 205, 120, 0.85)';
+          ctx.shadowBlur = 8;
+          for (let i = 0; i < 7; i++) {
+            const seed = i * 31.7;
+            const cycle = (st * 0.25 + i * 0.37) % 1; // 0..1 loop
+            const ex = Math.sin(seed) * 70;
+            const ey = (Math.cos(seed * 1.3) * 20) - cycle * 60; // drift up
+            ctx.globalAlpha = (1 - cycle) * (0.5 + breathe * 0.5);
+            ctx.beginPath();
+            ctx.arc(ex, ey, 1.4 + Math.sin(seed * 2) * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        }
+      }
+
+      // 4b. LIVING GROUND LIGHT — a warm pool of light that travels with the
+      // player(s), brightening the stone, cracks, dust and debris underfoot
+      // as they walk (like a personal torch/aura lighting the floor). Drawn
+      // with 'lighter' blending so it actually lifts the baked floor colors
+      // instead of just painting a flat circle over them.
+      {
+        const drawGroundLight = (gx, gy, alive, radius, tint) => {
+          if (!alive) return;
+          const flick = 0.88 + 0.12 * Math.sin(_t * 5.2 + gx * 0.01);
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          const gl = ctx.createRadialGradient(gx, gy, 0, gx, gy, radius * flick);
+          gl.addColorStop(0,    `rgba(${tint},0.30)`);
+          gl.addColorStop(0.35, `rgba(${tint},0.16)`);
+          gl.addColorStop(0.7,  `rgba(${tint},0.06)`);
+          gl.addColorStop(1,    'rgba(0,0,0,0)');
+          ctx.fillStyle = gl;
+          ctx.beginPath(); ctx.arc(gx, gy, radius * flick, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+
+          // Soft contact shadow pooling directly beneath, so the light reads
+          // as grounded rather than floating
+          ctx.save();
+          const sh = ctx.createRadialGradient(gx, gy + radius * 0.08, 0, gx, gy + radius * 0.08, radius * 0.45);
+          sh.addColorStop(0, 'rgba(0,0,0,0.22)');
+          sh.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = sh;
+          ctx.beginPath(); ctx.ellipse(gx, gy + radius * 0.08, radius * 0.45, radius * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        };
+
+        if (eng.p) drawGroundLight(eng.p.x, eng.p.y, !eng.p.dead, 165, '225,195,140');
+        if (eng.p2) drawGroundLight(eng.p2.x, eng.p2.y, !eng.p2.dead, 165, '195,170,235');
+      }
+
+      // 5. Central seal pulse — the broken seal breathes with its last gold-arcane power
+      {
+        const pulse = 0.5 + 0.5 * Math.sin(_t * 1.1);
+        const cxS = W*0.5, cyS = H*0.5;
+        // Gold outer glow — brighter now so it genuinely reads as "glowing" in the dark
+        const sg = ctx.createRadialGradient(cxS, cyS, 0, cxS, cyS, 140);
+        sg.addColorStop(0,    `rgba(225,180,80,${0.16 + pulse*0.14})`);  // gold center
+        sg.addColorStop(0.30, `rgba(150,105,235,${0.08 + pulse*0.06})`); // purple mid — its last living core
+        sg.addColorStop(0.65, `rgba(90,40,150,${0.03 + pulse*0.03})`);
+        sg.addColorStop(1,    'rgba(0,0,0,0)');
+        ctx.fillStyle = sg; ctx.fillRect(cxS-140, cyS-140, 280, 280);
+
+        // Faint rotating gold shimmer tracing the broken outer ring — sells the
+        // "still-active, incomplete" magic circle feel
+        ctx.save();
+        ctx.translate(cxS, cyS);
+        ctx.rotate(_t * 0.6);
+        ctx.strokeStyle = `rgba(235,200,110,${0.10 + pulse*0.12})`;
+        ctx.lineWidth = 1.6;
+        ctx.shadowColor = 'rgba(235,200,110,0.8)';
+        ctx.shadowBlur = 16;
+        ctx.setLineDash([14, 36, 6, 20]);
+        ctx.beginPath(); ctx.arc(0, 0, 96, 0, Math.PI*1.5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // 6. Ambient particles
       for (const a of eng.ambs) {
         ctx.save();
-        ctx.globalAlpha = a.a * a.t; ctx.fillStyle = a.c;
-        ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        if (a.kind === 'spark') {
+          ctx.globalAlpha = Math.min(1, a.a * a.t * 1.3);
+          ctx.fillStyle = a.c;
+          ctx.shadowColor = a.c;
+          ctx.shadowBlur = 8;
+          ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.fill();
+
+        } else if (a.kind === 'ember') {
+          // Rune cross-spark — 4 short lines rotated
+          ctx.globalAlpha = Math.min(1, a.a * a.t * 1.3);
+          ctx.strokeStyle = a.c;
+          ctx.shadowColor = a.c;
+          ctx.shadowBlur = 9;
+          ctx.lineWidth = 0.9;
+          ctx.translate(a.x, a.y); ctx.rotate(a.rot);
+          ctx.beginPath();
+          ctx.moveTo(-a.r, 0); ctx.lineTo(a.r, 0);
+          ctx.moveTo(0, -a.r); ctx.lineTo(0, a.r);
+          ctx.stroke();
+          // Diagonal arms (makes 8-point rune star)
+          ctx.globalAlpha = a.a * a.t * 0.5;
+          const d = a.r * 0.65;
+          ctx.beginPath();
+          ctx.moveTo(-d,-d); ctx.lineTo(d,d);
+          ctx.moveTo(d,-d);  ctx.lineTo(-d,d);
+          ctx.stroke();
+
+        } else if (a.kind === 'orb') {
+          const pulse = 0.5 + 0.5 * Math.sin(a.phase);
+          ctx.globalAlpha = Math.min(1, a.a * pulse * 1.25);
+          ctx.shadowColor = a.c;
+          ctx.shadowBlur = 14;
+          const og = ctx.createRadialGradient(a.x,a.y,0, a.x,a.y,a.r);
+          og.addColorStop(0, a.c);
+          og.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = og;
+          ctx.beginPath(); ctx.arc(a.x,a.y,a.r,0,Math.PI*2); ctx.fill();
+
+        } else if (a.kind === 'wisp') {
+          const wAlpha = Math.min(1, a.a * (0.55 + 0.45*Math.sin(a.phase)) * 1.2);
+          ctx.globalAlpha = wAlpha;
+          ctx.shadowColor = 'rgba(124,58,237,0.7)';
+          ctx.shadowBlur = 10;
+          const wg = ctx.createLinearGradient(a.x-a.w/2, a.y, a.x+a.w/2, a.y);
+          wg.addColorStop(0,   'rgba(109,40,217,0)');
+          wg.addColorStop(0.3, 'rgba(109,40,217,0.55)');
+          wg.addColorStop(0.7, 'rgba(124,58,237,0.55)');
+          wg.addColorStop(1,   'rgba(109,40,217,0)');
+          ctx.fillStyle = wg;
+          ctx.beginPath();
+          ctx.ellipse(a.x, a.y, a.w/2, a.h/2, 0, 0, Math.PI*2);
+          ctx.fill();
+
+        } else if (a.kind === 'dust') {
+          // Dust is near-invisible by default — it only really shows up when
+          // caught inside the player's own glow radius, like real motes lit
+          // by a torch passing through them.
+          let lightBoost = 0;
+          if (eng.p && !eng.p.dead) {
+            const dd = Math.hypot(a.x - eng.p.x, a.y - eng.p.y);
+            lightBoost = Math.max(lightBoost, Math.max(0, 1 - dd / 150));
+          }
+          if (eng.p2 && !eng.p2.dead) {
+            const dd2 = Math.hypot(a.x - eng.p2.x, a.y - eng.p2.y);
+            lightBoost = Math.max(lightBoost, Math.max(0, 1 - dd2 / 150));
+          }
+          const shimmer = 0.6 + 0.4 * Math.sin(a.phase * 1.7);
+          ctx.globalAlpha = Math.min(1, (a.a * shimmer) + lightBoost * 0.55);
+          ctx.fillStyle = lightBoost > 0.05 ? 'rgba(235,220,190,0.9)' : 'rgba(180,165,140,0.7)';
+          if (lightBoost > 0.05) { ctx.shadowColor = 'rgba(225,195,130,0.8)'; ctx.shadowBlur = 4 * lightBoost; }
+          ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.fill();
+
+        } else if (a.kind === 'smoke') {
+          // Soft ash-grey fog clouds — built from 3 overlapping soft blobs so
+          // the silhouette never reads as a perfect circle, then breathing
+          // very slowly in size/opacity so it feels like real drifting smoke
+          // rather than a static png. Kept low-alpha on purpose: just enough
+          // volume to add depth, never enough to fog out the floor.
+          const breathe = 0.8 + 0.2 * Math.sin(a.phase);
+          ctx.globalAlpha = a.a * breathe;
+          const lobes = [
+            [0, 0, 1.0],
+            [a.r*0.5, -a.r*0.15, 0.65],
+            [-a.r*0.45, a.r*0.2, 0.6],
+          ];
+          lobes.forEach(([lx,ly,scale]) => {
+            const sg = ctx.createRadialGradient(a.x+lx, a.y+ly, 0, a.x+lx, a.y+ly, a.r*scale*breathe);
+            sg.addColorStop(0,   'rgba(150,140,135,0.55)');
+            sg.addColorStop(0.6, 'rgba(95,88,90,0.30)');
+            sg.addColorStop(1,   'rgba(60,55,60,0)');
+            ctx.fillStyle = sg;
+            ctx.beginPath(); ctx.arc(a.x+lx, a.y+ly, a.r*scale*breathe, 0, Math.PI*2); ctx.fill();
+          });
+        }
+        ctx.restore();
       }
+
+      // 7. Edge vignette — deep stone shadow border pulls focus to lit arena center
+      const vig = ctx.createRadialGradient(W/2, H/2, H*0.20, W/2, H/2, W*0.72);
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(0.65,'rgba(5,3,2,0.42)');  // warm dark brown mid
+      vig.addColorStop(1, 'rgba(2,1,1,0.90)');    // deep warm shadow edge
+      ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
       for (const g of eng.gems) {
         ctx.save();
         ctx.shadowColor = '#34d399'; ctx.shadowBlur = 12; ctx.fillStyle = '#34d399';
@@ -6153,19 +9063,34 @@ if (eng.potions) {
             const time = performance.now() * 0.005;
             const pulse = Math.abs(Math.sin(time)); // Oscillates between 0 and 1
             const bounce = Math.sin(time) * 4; // Floating up and down
-            
-            const baseColor = pot.type === 'freeze' ? '#94a3b8' : '#fef08a'; 
-            const glowColor = pot.type === 'freeze' ? '#38bdf8' : '#fef08a'; // Cyan for Freeze, Gold for Nuke
-            
+
+            const baseColor = pot.type === 'freeze' ? '#bae6fd' : '#fde68a';
+            const deepColor = pot.type === 'freeze' ? '#0ea5e9' : '#f59e0b';
+            const glowColor = pot.type === 'freeze' ? '#38bdf8' : '#fbbf24';
+
+            const cx = pot.x, cy = pot.y + bounce;
+
             // A. Draw glowing outer aura
             ctx.shadowColor = glowColor;
             ctx.shadowBlur = 20 + (pulse * 25);
             ctx.fillStyle = `rgba(255, 255, 255, ${0.15 + (pulse * 0.25)})`; // White/Gold pulse
             ctx.beginPath();
-            ctx.arc(pot.x, pot.y, pot.r * (1.2 + (pulse * 0.4)), 0, Math.PI * 2);
+            ctx.arc(cx, cy, pot.r * (1.2 + (pulse * 0.4)), 0, Math.PI * 2);
             ctx.fill();
 
-            // B. 🏷️ Draw Floating Name Tag (No spin, just bounce)
+            // B. Rotating arcane ward ring orbiting the crystal — dashed,
+            // Frieren-style containment circle holding the magic in place
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(time * 0.6);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${0.30 + pulse * 0.25})`;
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 4]);
+            ctx.beginPath(); ctx.arc(0, 0, pot.r * 1.8, 0, Math.PI * 2); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.restore();
+
+            // C. 🏷️ Draw Floating Name Tag (No spin, just bounce)
             const label = pot.type === 'freeze' ? 'TIME FREEZE' : 'ARCANE NUKE';
             ctx.font = 'bold 10px monospace';
             ctx.textAlign = 'center';
@@ -6174,22 +9099,36 @@ if (eng.potions) {
             ctx.fillStyle = glowColor;
             ctx.fillText(label, pot.x, pot.y - pot.r - 14 + bounce);
 
-            // C. Draw the Crystal/Gem shape (With Hover and Spin)
+            // D. Draw the faceted crystal gem (With Hover and Spin)
             ctx.save(); // Save ulit para yung rotation ay sa crystal lang
-            ctx.translate(pot.x, pot.y + bounce); 
+            ctx.translate(pot.x, pot.y + bounce);
             ctx.rotate(time * 0.4);
 
-            ctx.fillStyle = baseColor;
+            const facetGrad = ctx.createLinearGradient(0, -pot.r, 0, pot.r);
+            facetGrad.addColorStop(0, '#ffffff');
+            facetGrad.addColorStop(0.45, baseColor);
+            facetGrad.addColorStop(1, deepColor);
+            ctx.fillStyle = facetGrad;
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 1.6;
 
+            // Elongated hex-cut crystal silhouette
             ctx.beginPath();
             ctx.moveTo(0, -pot.r);
-            ctx.lineTo(pot.r * 0.7, 0);
-            ctx.lineTo(0, pot.r);
-            ctx.lineTo(-pot.r * 0.7, 0);
+            ctx.lineTo(pot.r * 0.62, -pot.r * 0.3);
+            ctx.lineTo(pot.r * 0.5, pot.r * 0.85);
+            ctx.lineTo(-pot.r * 0.5, pot.r * 0.85);
+            ctx.lineTo(-pot.r * 0.62, -pot.r * 0.3);
             ctx.closePath();
             ctx.fill();
+            ctx.stroke();
+
+            // Internal facet cut lines for a true gem sparkle
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(0, -pot.r); ctx.lineTo(0, pot.r * 0.85);
+            ctx.moveTo(-pot.r * 0.62, -pot.r * 0.3); ctx.lineTo(pot.r * 0.62, -pot.r * 0.3);
             ctx.stroke();
 
             // Inner bright white core
@@ -6199,6 +9138,21 @@ if (eng.potions) {
             ctx.fill();
 
             ctx.restore(); // Undo the rotation so it doesn't affect other items
+
+            // E. Ambient particles — drifting frost motes for freeze, embers for nuke
+            ctx.fillStyle = pot.type === 'freeze' ? 'rgba(224,242,254,0.9)' : 'rgba(253,230,138,0.9)';
+            ctx.shadowBlur = 5;
+            for (let i = 0; i < 5; i++) {
+              const seed = i * 19.7;
+              const cyc = (time * 0.4 + i * 0.3) % 1;
+              const pAng = seed;
+              const pd = pot.r * 1.6 + cyc * 14;
+              const px = cx + Math.cos(pAng) * pd;
+              const py = cy + Math.sin(pAng) * pd - cyc * 10;
+              ctx.globalAlpha = 1 - cyc;
+              ctx.beginPath(); ctx.arc(px, py, 1.2, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1;
           } 
           // 🔴 2. NORMAL POTION DROPS
           else {
@@ -6209,22 +9163,47 @@ if (eng.potions) {
             if (pot.type === 'regen') color = '#22c55e';
             if (pot.type === 'xp') color = '#a855f7';
 
+            const time = performance.now() * 0.004;
+            const bob = Math.sin(time + pot.x * 0.05) * 3;
+            const r = pot.r;
+
+            ctx.translate(pot.x, pot.y + bob);
+
+            // Soft ambient halo behind the gem
             ctx.shadowColor = color;
             ctx.shadowBlur = 14;
+            ctx.fillStyle = color + '26';
+            ctx.beginPath(); ctx.arc(0, 0, r * 1.4, 0, Math.PI * 2); ctx.fill();
+
+            // Faceted crystal body (elongated gem cut, not a flat hexagon)
+            ctx.shadowBlur = 12;
             ctx.fillStyle = color;
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 1.5;
-
+            ctx.lineWidth = 1.3;
             ctx.beginPath();
-            ctx.moveTo(pot.x - pot.r * 0.4, pot.y - pot.r);
-            ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r);
-            ctx.lineTo(pot.x + pot.r * 0.4, pot.y - pot.r * 0.4);
-            ctx.lineTo(pot.x + pot.r, pot.y + pot.r);
-            ctx.lineTo(pot.x - pot.r, pot.y + pot.r);
-            ctx.lineTo(pot.x - pot.r * 0.4, pot.y - pot.r * 0.4);
+            ctx.moveTo(0, -r);
+            ctx.lineTo(r * 0.75, -r * 0.25);
+            ctx.lineTo(r * 0.55, r * 0.85);
+            ctx.lineTo(-r * 0.55, r * 0.85);
+            ctx.lineTo(-r * 0.75, -r * 0.25);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
+
+            // Internal facet cut lines for that polished gem sparkle
+            ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+            ctx.lineWidth = 0.7;
+            ctx.beginPath();
+            ctx.moveTo(0, -r); ctx.lineTo(0, r * 0.85);
+            ctx.moveTo(-r * 0.75, -r * 0.25); ctx.lineTo(r * 0.75, -r * 0.25);
+            ctx.stroke();
+
+            // Bright top-left sparkle highlight
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(-r * 0.25, -r * 0.42, r * 0.16, 0, Math.PI * 2);
+            ctx.fill();
           }
 
           ctx.restore();
@@ -6601,7 +9580,7 @@ if (eng.decals) {
             ctx.globalCompositeOperation = 'source-over';
           }
 
-          // 💎 4. BASE ITEM SHAPE RENDERING (Diamond)
+          // 💎 4. BASE ITEM SHAPE RENDERING (Diamond — faceted gem cut)
           ctx.shadowColor = color;
           ctx.shadowBlur = 20 + Math.abs(Math.sin(time * 0.5)) * 10;
           
@@ -6614,25 +9593,65 @@ if (eng.decals) {
           ctx.closePath();
           ctx.fill();
 
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.lineWidth = 1.2;
+          ctx.stroke();
+
+          // Facet cut lines for a genuine gem-cut sparkle
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.lineWidth = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8);
+          ctx.moveTo(cx - 6, cy); ctx.lineTo(cx + 6, cy);
+          ctx.stroke();
+
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+          ctx.arc(cx - 1.6, cy - 1.6, 1.8, 0, Math.PI * 2);
           ctx.fill();
 
           // 🏷️ 5. NAME TAG RENDERING
           ctx.font = 'bold 10px monospace';
           ctx.textAlign = 'center';
-          ctx.shadowColor = '#000000';
-          ctx.shadowBlur = 6;
+          ctx.shadowBlur = 0;
+          ctx.lineWidth = 2.5;
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+          ctx.strokeText(drop.item.name, cx, cy - 18);
           ctx.fillStyle = color;
-          ctx.fillText(drop.item.name, cx, cy - 18); 
+          ctx.fillText(drop.item.name, cx, cy - 18);
 
           ctx.restore();
         }
       }
       // ==========================================
+      // 🔥 FIX: SIGIL GLOW SCALING — shadowBlur is one of the heaviest canvas
+      // ops (not GPU-accelerated in most browsers), and each tornado/wave/
+      // fissure/lightning/iceStorm draws its own blurred glow layers. Kapag
+      // marami silang magkasabay na active, kino-compute lang natin ito
+      // ISANG BESES bago ang lahat ng 5 render blocks sa halip na paulit-ulit,
+      // at ginagamit para i-scale DOWN ang shadowBlur radius (hindi totally
+      // i-off, para hindi biglang mawala ang glow — unti-unting lumiliit
+      // lang habang dumarami ang sabay-sabay na effects).
+      const _activeSigilHazardCount =
+        (eng.tornados ? eng.tornados.length : 0) +
+        (eng.waves ? eng.waves.length : 0) +
+        (eng.fissures ? eng.fissures.length : 0) +
+        (eng.lightnings ? eng.lightnings.length : 0) +
+        (eng.iceStorms ? eng.iceStorms.length : 0);
+      // 1 hazard = full blur (1.0). Each additional active hazard reduces blur
+      // by 15%, floor of 0.35 so there's always SOME glow, never fully flat.
+      const sigilGlowScale = _activeSigilHazardCount <= 1
+        ? 1.0
+        : Math.max(0.35, 1.0 - (_activeSigilHazardCount - 1) * 0.15);
 
-      if (eng.tornados) {
+ if (eng.tornados && eng.tornados.length > 0) {
+  // 1. Kuhanin ang oras ISANG BESES lang bago mag-loop (Performance boost & sync)
+  const currentTime = performance.now();
+  const tTimeBase = currentTime * 0.015;
+  const fTimeBase = currentTime * 0.02;
+
   for (const t of eng.tornados) {
     if (t.isFamiliar) {
       // ==========================================================
@@ -6640,19 +9659,18 @@ if (eng.decals) {
       // ==========================================================
       ctx.save();
       ctx.translate(t.x, t.y);
-      const tTime = performance.now() * 0.015;
-      ctx.rotate(tTime);
+      ctx.rotate(tTimeBase);
       ctx.globalAlpha = Math.min(1, t.life);
       
       // Layered green wind trails and airflow motion blur
-      ctx.shadowBlur = 25;
+      ctx.shadowBlur = 25 * sigilGlowScale;
       ctx.shadowColor = '#10b981';
       
       // Spiral vortex rings (Outer Layer)
       ctx.strokeStyle = '#34d399';
-      ctx.lineWidth = 4 + Math.sin(tTime * 0.5) * 2;
+      ctx.lineWidth = 4 + Math.sin(tTimeBase * 0.5) * 2;
       ctx.beginPath();
-      ctx.arc(0, 0, t.r + Math.cos(tTime * 0.8) * 10, 0, Math.PI * 1.5);
+      ctx.arc(0, 0, t.r + Math.cos(tTimeBase * 0.8) * 10, 0, Math.PI * 1.5);
       ctx.stroke();
 
       // Gust bursts (Middle Layer)
@@ -6661,6 +9679,10 @@ if (eng.decals) {
       ctx.beginPath();
       ctx.arc(0, 0, t.r * 0.7, Math.PI, Math.PI * 2.5);
       ctx.stroke();
+
+      // 2. I-OFF ANG SHADOW BLUR PARA SA CORE AT DEBRIS (Massive FPS boost)
+      // Hindi kailangan ng shadowBlur ang semi-transparent fills at particles.
+      ctx.shadowBlur = 0; 
 
       // Swirling Energy Core
       ctx.fillStyle = 'rgba(16, 185, 129, 0.4)';
@@ -6671,14 +9693,15 @@ if (eng.decals) {
       // Flying Debris (Leaves, dust, and wind particles)
       ctx.fillStyle = '#065f46';
       for (let i = 0; i < 8; i++) {
-          const debrisAng = tTime * 2 + (i * Math.PI / 4);
-          const debrisDist = t.r * (0.3 + 0.6 * Math.abs(Math.sin(tTime + i)));
+          const debrisAng = tTimeBase * 2 + (i * Math.PI / 4);
+          const debrisDist = t.r * (0.3 + 0.6 * Math.abs(Math.sin(tTimeBase + i)));
           const dx = Math.cos(debrisAng) * debrisDist;
           const dy = Math.sin(debrisAng) * debrisDist;
+          
           ctx.save(); 
           ctx.translate(dx, dy); 
           ctx.rotate(debrisAng * 3);
-          ctx.fillRect(-4, -2, 8, 4); // Leaf particles being pulled inside
+          ctx.fillRect(-4, -2, 8, 4); 
           ctx.restore();
       }
       ctx.restore();
@@ -6689,93 +9712,213 @@ if (eng.decals) {
       // ==========================================================
       ctx.save();
       ctx.translate(t.x, t.y);
-      const fTime = performance.now() * 0.02;
-      ctx.rotate(-fTime); // Reverse spin para sa fire chaos
+      ctx.rotate(-fTimeBase); // Reverse spin
       ctx.globalAlpha = Math.min(1, t.life);
 
       // Strong Fire Simulation Glow & Heat Distortion
-      ctx.shadowBlur = 35;
-      ctx.shadowColor = '#ef4444'; // Red glow anchor
+      ctx.shadowBlur = 35 * sigilGlowScale;
+      ctx.shadowColor = '#ef4444';
 
       // Outer Chaotic Fire Layers (Flickering flames)
-      const firePulse = Math.sin(fTime * 0.5) * 8;
-      ctx.strokeStyle = '#f97316'; // Orange flame trails
+      const firePulse = Math.sin(fTimeBase * 0.5) * 8;
+      ctx.strokeStyle = '#f97316'; 
       ctx.lineWidth = 12;
       ctx.beginPath();
       ctx.arc(0, 0, t.r + firePulse, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.strokeStyle = '#ef4444'; // Red violent outer flames
+      ctx.strokeStyle = '#ef4444'; 
       ctx.lineWidth = 6;
       ctx.beginPath();
       ctx.arc(0, 0, t.r * 1.2 - firePulse, Math.PI / 2, Math.PI * 1.8);
       ctx.stroke();
 
+      // 3. I-OFF ang shadow sa gradient core
+      ctx.shadowBlur = 0; 
+
       // Glowing Fire Core
       const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, t.r * 0.6);
-      coreGrad.addColorStop(0, '#ffffff'); // Blinding white center
-      coreGrad.addColorStop(0.4, '#fef08a'); // Yellow fire layer
+      coreGrad.addColorStop(0, '#ffffff'); 
+      coreGrad.addColorStop(0.4, '#fef08a'); 
       coreGrad.addColorStop(1, 'transparent');
       ctx.fillStyle = coreGrad;
       ctx.beginPath();
       ctx.arc(0, 0, t.r * 0.6, 0, Math.PI * 2);
       ctx.fill();
 
-      // Lingering Embers & Ash Particles drifting off the projectile
+      // Lingering Embers & Ash Particles
       ctx.fillStyle = '#fde047';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 10 * sigilGlowScale;
       ctx.shadowColor = '#f97316';
+      
+      // 4. BATCH RENDERING: Ipunin muna ang mga embers bago i-fill
+      ctx.beginPath(); 
       for (let i = 0; i < 6; i++) {
-          const emberAng = (i * Math.PI / 3) + (fTime * 0.5);
+          const emberAng = (i * Math.PI / 3) + (fTimeBase * 0.5);
           const emberDist = t.r * (0.8 + Math.random() * 0.4);
           const ex = Math.cos(emberAng) * emberDist;
-          // Drifting upward like real ash/smoke physics
           const ey = Math.sin(emberAng) * emberDist - (Math.random() * 12); 
-          ctx.fillRect(ex, ey, 3, 3);
+          
+          // Gagamitin ang rect() imbes na fillRect() para isang lagpasan lang
+          ctx.rect(ex, ey, 3, 3);
       }
+      ctx.fill(); // Isang render lang ng shadow at kulay para sa lahat ng 6 embers!
+
       ctx.restore();
     }
   }
 }
 
-      if (eng.waves) {
-        for (const w of eng.waves) {
-           ctx.save();
-           const grad = ctx.createLinearGradient(w.x - w.width / 2, 0, w.x + w.width / 2, 0);
-           grad.addColorStop(0, 'rgba(56, 189, 248, 0)');
-           grad.addColorStop(0.5, 'rgba(56, 189, 248, 0.8)');
-           grad.addColorStop(1, 'rgba(2, 132, 199, 1)');
-           ctx.fillStyle = grad;
-           ctx.shadowBlur = 30;
-           ctx.shadowColor = '#38bdf8';
-           ctx.fillRect(w.x - w.width / 2, 0, w.width, H);
-           ctx.restore();
-        }
-      }
+if (eng.waves && eng.waves.length > 0) {
+  const tsuTime = performance.now() * 0.001;
 
-      if (eng.fissures) {
-        for (const f of eng.fissures) {
-           ctx.save();
-           ctx.translate(f.x, f.y);
-           ctx.rotate(f.angle);
-           ctx.strokeStyle = `rgba(217, 119, 6, ${f.life})`;
-           ctx.lineWidth = 30 * f.life;
-           ctx.lineCap = 'round';
-           ctx.shadowBlur = 20;
-           ctx.shadowColor = '#f59e0b';
-           ctx.beginPath();
-           ctx.moveTo(0, 0);
-           ctx.lineTo(f.length, 0);
-           ctx.stroke();
-           ctx.strokeStyle = `rgba(254, 240, 138, ${f.life})`;
-           ctx.lineWidth = 8 * f.life;
-           ctx.beginPath();
-           ctx.moveTo(0, 0);
-           ctx.lineTo(f.length, 0);
-           ctx.stroke();
-           ctx.restore();
-        }
-      }
+  for (const w of eng.waves) {
+    ctx.save();
+    const dir = (w.vx || 0) >= 0 ? 1 : -1;
+    const halfWidth = w.width / 2;
+    const leadX = w.x + dir * halfWidth;   // crashing front edge
+    const tailX = w.x - dir * halfWidth;   // receding wake edge
+    const bandX0 = Math.min(tailX, leadX);
+
+    // ── 1. DEEP BODY
+    const bodyGrad = ctx.createLinearGradient(tailX, 0, leadX, 0);
+    bodyGrad.addColorStop(0,    'rgba(7, 30, 48, 0)');
+    bodyGrad.addColorStop(0.3,  'rgba(7, 70, 105, 0.55)');
+    bodyGrad.addColorStop(0.68, 'rgba(14, 165, 233, 0.82)');
+    bodyGrad.addColorStop(0.92, 'rgba(165, 243, 252, 0.92)');
+    bodyGrad.addColorStop(1,    'rgba(255, 255, 255, 0.95)');
+    
+    ctx.fillStyle = bodyGrad;
+    ctx.shadowBlur = 28 * sigilGlowScale;
+    ctx.shadowColor = '#22d3ee';
+    ctx.fillRect(bandX0, 0, w.width, H);
+
+    // 🚨 FIX 1: I-OFF agad ang shadow blur! 
+    // Yung mga internal streaks sa Step 2 ay namamana yung 28 blur mula sa Step 1 kaya sobrang lag.
+    ctx.shadowBlur = 0;
+
+    // ── 2. CHURNING CURRENT STREAKS
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(bandX0, 0, w.width, H);
+    ctx.clip();
+    
+    ctx.globalAlpha = 0.30;
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.7)';
+    ctx.lineWidth = 2.4;
+    
+    // 🚨 FIX 2: BATCH RENDERING. Isang beginPath at isang stroke na lang para sa lahat ng linya.
+    ctx.beginPath();
+    for (let i = 0; i < 7; i++) {
+      const sy = (i / 7) * H + Math.sin(tsuTime * 2 + i * 1.7) * 18;
+      ctx.moveTo(tailX, sy);
+      ctx.bezierCurveTo(
+        tailX + dir * w.width * 0.32, sy + Math.sin(tsuTime * 3 + i) * 16,
+        tailX + dir * w.width * 0.66, sy - Math.sin(tsuTime * 2.4 + i) * 16,
+        leadX, sy
+      );
+    }
+    ctx.stroke(); // Isang draw call na lang imbes na 7!
+    ctx.restore(); // Babalik nito ang globalAlpha sa 1 at aalisin ang clip()
+
+    // ── 3. CRASHING WHITECAP
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.shadowBlur = 16 * sigilGlowScale;
+    ctx.shadowColor = '#e0f2fe';
+    ctx.beginPath();
+    const foamSeg = 22;
+    
+    // 🚨 FIX 3: Pre-calculate ang mga constant math values sa labas ng loop
+    const tsuTime42 = tsuTime * 4.2;
+    const tsuTime65 = tsuTime * 6.5;
+    
+    for (let i = 0; i <= foamSeg; i++) {
+      const sy = (i / foamSeg) * H;
+      const foam = Math.sin(sy * 0.05 + tsuTime42) * 9 + Math.sin(sy * 0.13 - tsuTime65) * 5;
+      ctx.lineTo(leadX + dir * (6 + Math.max(0, foam)), sy);
+    }
+    for (let i = foamSeg; i >= 0; i--) {
+      const sy = (i / foamSeg) * H;
+      ctx.lineTo(leadX - dir * 5, sy);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // ── 4. FLYING SPRAY
+    ctx.shadowBlur = 4;
+    
+    // Ilabas ang Math.floor sa loop para hindi paulit-ulit icompute
+    const sprayBaseTime = Math.floor(tsuTime * 3); 
+    
+    for (let i = 0; i < 12; i++) {
+      const seed = i * 13.37 + sprayBaseTime;
+      const sy = ((Math.sin(seed) * 0.5) + 0.5) * H;
+      const spread = (Math.sin(seed * 1.7) + 1) * 0.5;
+      const sx = leadX + dir * (10 + spread * 34);
+      const dr = Math.max(0.6, 1 + Math.sin(seed * 3.1) * 1.2);
+      
+      // 🚨 FIX 4: Imbes na baguhin ang globalAlpha paulit-ulit, i-set na lang ang opacity via fillStyle.
+      // Ang pagpapalit ng globalAlpha sa Canvas API ay mabigat na state change.
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + spread * 0.5})`;
+      
+      ctx.beginPath();
+      ctx.arc(sx, sy, dr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // ── 5. TRAILING MIST
+    ctx.shadowBlur = 0;
+    const mistGrad = ctx.createLinearGradient(tailX - dir * 30, 0, tailX, 0);
+    mistGrad.addColorStop(0, 'rgba(125, 211, 252, 0)');
+    mistGrad.addColorStop(1, 'rgba(125, 211, 252, 0.18)');
+    ctx.fillStyle = mistGrad;
+    ctx.fillRect(Math.min(tailX - dir * 30, tailX), 0, 30, H);
+
+    ctx.restore();
+  }
+}
+
+if (eng.fissures && eng.fissures.length > 0) {
+  ctx.save(); // I-save ang state bago baguhin ang mga global settings
+  
+  // 1. ILABAS SA LOOP: Ang mga settings na hindi naman nagbabago per fissure
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#f59e0b';
+
+  for (const f of eng.fissures) {
+     ctx.save();
+     ctx.translate(f.x, f.y);
+     ctx.rotate(f.angle);
+     
+     // 2. GLOBAL ALPHA VS RGBA STRINGS: Mas mabilis ang hex colors + globalAlpha
+     ctx.globalAlpha = f.life;
+     
+     // Outer thick fissure (Lava glow)
+     ctx.strokeStyle = '#d97706'; // Equivalent ng rgb(217, 119, 6)
+     ctx.lineWidth = 30 * f.life;
+     ctx.shadowBlur = 20 * sigilGlowScale; 
+     
+     ctx.beginPath();
+     ctx.moveTo(0, 0);
+     ctx.lineTo(f.length, 0);
+     ctx.stroke();
+     
+     // Inner bright core (Heat)
+     ctx.strokeStyle = '#fef08a'; // Equivalent ng rgb(254, 240, 138)
+     ctx.lineWidth = 8 * f.life;
+     
+     // 3. I-OFF ANG SHADOW: Hindi na kailangan ng inner stroke ng sariling shadow
+     ctx.shadowBlur = 0; 
+     
+     ctx.beginPath();
+     ctx.moveTo(0, 0);
+     ctx.lineTo(f.length, 0);
+     ctx.stroke();
+     
+     ctx.restore();
+  }
+  ctx.restore(); // I-reset ang lineCap at shadowColor para sa ibang skills
+}
 
  // =========================================================================
         // 🦇 UMBRAL BAT: SHADOW BLADES RENDERER (CRASH & BUG FIX)
@@ -6840,312 +9983,743 @@ if (eng.decals) {
 // =========================================================================
         // 🪨 STONE GOLEM: ULTRA ELEVATED EARTH IMPACT SYSTEM (OVERHAULED)
         // =========================================================================
-        if (eng.earthSmashes) {
-            const dt = 0.016; 
-            for (let i = eng.earthSmashes.length - 1; i >= 0; i--) {
-                const rock = eng.earthSmashes[i];
-                rock.life -= dt;
-                if (rock.life <= 0) { eng.earthSmashes.splice(i, 1); continue; }
+if (eng.earthSmashes && eng.earthSmashes.length > 0) {
+    const dt = 0.016; 
+    
+    // 1. ILABAS SA LOOP: Kunin ang oras at pulse multiplier nang isang beses lang
+    const currentTime = performance.now();
+    const pulse = 1 + Math.sin(currentTime * 0.015) * 0.15;
 
-                ctx.save(); 
-                ctx.translate(rock.x, rock.y); 
-                ctx.globalAlpha = Math.min(1, rock.life * 2.5); 
+    for (let i = eng.earthSmashes.length - 1; i >= 0; i--) {
+        const rock = eng.earthSmashes[i];
+        rock.life -= dt;
+        if (rock.life <= 0) { eng.earthSmashes.splice(i, 1); continue; }
 
-                // 1. 🕳️ NEW: DARK CRATER SHADOW (Para magmukhang bumagsak talaga ang lupa)
-                ctx.fillStyle = `rgba(0, 0, 0, ${rock.life * 0.7})`;
-                ctx.beginPath();
-                ctx.ellipse(0, 0, rock.radius * 0.95, rock.radius * 0.8, 0, 0, Math.PI * 2);
-                ctx.fill();
+        ctx.save(); 
+        ctx.translate(rock.x, rock.y); 
+        ctx.globalAlpha = Math.min(1, rock.life * 2.5); 
 
-                // 2. 🔥 PULSING MOLTEN SHOCKWAVE BURST
-                const pulse = 1 + Math.sin(performance.now() * 0.015) * 0.15;
-                ctx.save(); 
-                ctx.globalCompositeOperation = 'lighter'; 
-                ctx.strokeStyle = `rgba(245, 158, 11, ${rock.life * 0.8})`; 
-                ctx.lineWidth = 30 * rock.life; 
-                ctx.shadowBlur = 40; 
-                ctx.shadowColor = '#f59e0b';
-                ctx.beginPath(); 
-                ctx.arc(0, 0, rock.radius * (1 - rock.life / 1.2) * pulse, 0, Math.PI * 2); 
-                ctx.stroke(); 
-                ctx.restore();
+        // 1. 🕳️ DARK CRATER SHADOW
+        ctx.fillStyle = `rgba(0, 0, 0, ${rock.life * 0.7})`;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rock.radius * 0.95, rock.radius * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-                // 3. ⚡ SEVERE GROUND CRACKS (3 Layers ng Lava glow para mas nagbabaga)
-                ctx.shadowBlur = 0; 
-                for(let c = 0; c < 8; c++) {
-                    const cAng = (c * Math.PI * 2) / 8 + 0.1;
-                    const midDist = rock.radius * 0.35; 
-                    const endDist = rock.radius * 0.9;
-                    const jitterAng = cAng + (Math.random() * 0.15 - 0.075); // Jagged effect
+        // 2. 🔥 PULSING MOLTEN SHOCKWAVE BURST
+        ctx.save(); 
+        ctx.globalCompositeOperation = 'lighter'; 
+        ctx.strokeStyle = `rgba(245, 158, 11, ${rock.life * 0.8})`; 
+        ctx.lineWidth = 30 * rock.life; 
+        ctx.shadowBlur = 40; 
+        ctx.shadowColor = '#f59e0b';
+        ctx.beginPath(); 
+        ctx.arc(0, 0, rock.radius * (1 - rock.life / 1.2) * pulse, 0, Math.PI * 2); 
+        ctx.stroke(); 
+        ctx.restore();
 
-                    ctx.beginPath(); 
-                    ctx.moveTo(0, 0);
-                    ctx.lineTo(Math.cos(jitterAng) * midDist, Math.sin(jitterAng) * midDist);
-                    ctx.lineTo(Math.cos(cAng) * endDist, Math.sin(cAng) * endDist); 
-                    
-                    // Layer 1: Dark Base Crack
-                    ctx.strokeStyle = '#1c1917'; ctx.lineWidth = 10; ctx.stroke();
-                    // Layer 2: Orange Lava Core
-                    ctx.save(); ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.shadowBlur = 15; ctx.shadowColor = '#ef4444'; ctx.stroke(); ctx.restore();
-                    // Layer 3: White-Hot Center
-                    ctx.save(); ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
-                }
-
-                // 4. ⛰️ MASSIVE 3D STONE SPIKES (Mas makapal at siksik)
-                ctx.shadowBlur = 35; ctx.shadowColor = 'rgba(0,0,0,0.85)'; 
-                const spikeCount = 10; // Ginawang 10 bato
-                for(let s = 0; s < spikeCount; s++) {
-                    const ang = (s * Math.PI * 2) / spikeCount; 
-                    const dist = rock.radius * 0.5; // Pinasok nang konti sa gitna
-                    ctx.save(); 
-                    ctx.translate(Math.cos(ang) * dist, Math.sin(ang) * dist); 
-                    ctx.rotate(ang + Math.PI / 2);
-                    
-                    const spikeHeight = 55 + (s % 3 * 25); // Mas matataas na bato
-                    
-                    // Kanang bahagi (Madilim)
-                    ctx.fillStyle = '#292524'; ctx.beginPath(); ctx.moveTo(0, -spikeHeight); ctx.lineTo(24, 0); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill();
-                    // Kaliwang bahagi (Maliwanag + Silver Edge Highlight)
-                    ctx.fillStyle = '#57534e'; ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = 2.5;
-                    ctx.beginPath(); ctx.moveTo(0, -spikeHeight); ctx.lineTo(-24, 0); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
-                    ctx.restore();
-                }
-
-                // 5. ☄️ NEW: FLYING ROCK DEBRIS (Lumilipad na bato mula sa pagsabog)
-                ctx.fillStyle = '#44403c';
-                ctx.strokeStyle = '#a8a29e';
-                ctx.lineWidth = 1.5;
-                ctx.shadowBlur = 10; ctx.shadowColor = '#000000';
-                for (let b = 0; b < 6; b++) {
-                    const bAng = b * (Math.PI * 2 / 6) + rock.life;
-                    const bDist = rock.radius * (1.2 - rock.life); // Palayo
-                    ctx.save();
-                    // Tumataas pa-ere tapos babagsak
-                    ctx.translate(Math.cos(bAng) * bDist, Math.sin(bAng) * bDist - (rock.life * 50)); 
-                    ctx.rotate(rock.life * 15 + b); // Umiikot habang lumilipad
-                    ctx.beginPath(); ctx.rect(-6, -6, 12, 12); ctx.fill(); ctx.stroke();
-                    ctx.restore();
-                }
-
-                // 6. ✨ LINGERING SMOKE/DUST CLOUDS
-                ctx.fillStyle = `rgba(120, 113, 108, ${rock.life * 0.6})`;
-                ctx.shadowBlur = 0;
-                for(let d = 0; d < 8; d++) {
-                    const dAng = d * (Math.PI / 4) + (1 - rock.life);
-                    const rX = Math.cos(dAng) * (rock.radius * 0.6);
-                    const rY = Math.sin(dAng) * (rock.radius * 0.6);
-                    ctx.beginPath();
-                    ctx.arc(rX, rY, 30 * (1.5 - rock.life), 0, Math.PI * 2);
-                    ctx.fill();
-                }
-
-                ctx.restore();
-            }
+        // 3. ⚡ SEVERE GROUND CRACKS (BATCH RENDERING)
+        ctx.shadowBlur = 0; 
+        
+        // I-compute muna ang posisyon ng cracks para magamit ng 3 layers nang walang loop-in-loop
+        const cracks = [];
+        for(let c = 0; c < 8; c++) {
+            const cAng = (c * Math.PI * 2) / 8 + 0.1;
+            cracks.push({
+                jitterAng: cAng + (Math.random() * 0.15 - 0.075),
+                cAng: cAng,
+                midDist: rock.radius * 0.35,
+                endDist: rock.radius * 0.9
+            });
         }
+
+        // Layer 1: Dark Base Crack (Isang draw call na lang para sa 8 linya)
+        ctx.beginPath();
+        for (const c of cracks) {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(c.jitterAng) * c.midDist, Math.sin(c.jitterAng) * c.midDist);
+            ctx.lineTo(Math.cos(c.cAng) * c.endDist, Math.sin(c.cAng) * c.endDist);
+        }
+        ctx.strokeStyle = '#1c1917'; ctx.lineWidth = 10; ctx.stroke();
+
+        // Layer 2: Orange Lava Core
+        ctx.beginPath();
+        for (const c of cracks) {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(c.jitterAng) * c.midDist, Math.sin(c.jitterAng) * c.midDist);
+            ctx.lineTo(Math.cos(c.cAng) * c.endDist, Math.sin(c.cAng) * c.endDist);
+        }
+        ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 4; ctx.shadowBlur = 15; ctx.shadowColor = '#ef4444'; ctx.stroke();
+        
+        // Layer 3: White-Hot Center
+        ctx.beginPath();
+        for (const c of cracks) {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(c.jitterAng) * c.midDist, Math.sin(c.jitterAng) * c.midDist);
+            ctx.lineTo(Math.cos(c.cAng) * c.endDist, Math.sin(c.cAng) * c.endDist);
+        }
+        ctx.shadowBlur = 0; // I-off agad ang shadow
+        ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 1.5; ctx.stroke();
+
+        // 4. ⛰️ MASSIVE 3D STONE SPIKES 
+        // 🚨 MASSIVE FPS BOOST: Imbes na 20 separate shadows, gagawa tayo ng isang base shadow para sa ilalim ng lahat ng bato.
+        ctx.shadowBlur = 35; 
+        ctx.shadowColor = 'rgba(0,0,0,0.85)';
+        ctx.fillStyle = 'rgba(0,0,0,1)';
+        ctx.beginPath();
+        ctx.arc(0, 0, rock.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill(); // Isang shadow calculation lang!
+
+        ctx.shadowBlur = 0; // Wala nang shadow yung bato mismo para hindi bumigat
+        const spikeCount = 10; 
+        for(let s = 0; s < spikeCount; s++) {
+            const ang = (s * Math.PI * 2) / spikeCount; 
+            const dist = rock.radius * 0.5; 
+            ctx.save(); 
+            ctx.translate(Math.cos(ang) * dist, Math.sin(ang) * dist); 
+            ctx.rotate(ang + Math.PI / 2);
+            
+            const spikeHeight = 55 + (s % 3 * 25); 
+            
+            // Kanang bahagi
+            ctx.fillStyle = '#292524'; ctx.beginPath(); ctx.moveTo(0, -spikeHeight); ctx.lineTo(24, 0); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill();
+            // Kaliwang bahagi
+            ctx.fillStyle = '#57534e'; ctx.strokeStyle = '#f5f5f4'; ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.moveTo(0, -spikeHeight); ctx.lineTo(-24, 0); ctx.lineTo(0, 15); ctx.closePath(); ctx.fill(); ctx.stroke();
+            
+            ctx.restore();
+        }
+
+        // 5. ☄️ FLYING ROCK DEBRIS 
+        ctx.fillStyle = '#44403c';
+        ctx.strokeStyle = '#a8a29e';
+        ctx.lineWidth = 1.5;
+        // In-off ang shadow dito. Sobrang liit ng 12x12 debris para lagyan ng shadowBlur, sayang ang CPU.
+        for (let b = 0; b < 6; b++) {
+            const bAng = b * (Math.PI * 2 / 6) + rock.life;
+            const bDist = rock.radius * (1.2 - rock.life); 
+            ctx.save();
+            ctx.translate(Math.cos(bAng) * bDist, Math.sin(bAng) * bDist - (rock.life * 50)); 
+            ctx.rotate(rock.life * 15 + b); 
+            ctx.beginPath(); ctx.rect(-6, -6, 12, 12); ctx.fill(); ctx.stroke();
+            ctx.restore();
+        }
+
+        // 6. ✨ LINGERING SMOKE/DUST CLOUDS (BATCH RENDERING)
+        ctx.fillStyle = `rgba(120, 113, 108, ${rock.life * 0.6})`;
+        ctx.beginPath();
+        const smokeRadius = 30 * (1.5 - rock.life);
+        for(let d = 0; d < 8; d++) {
+            const dAng = d * (Math.PI / 4) + (1 - rock.life);
+            const rX = Math.cos(dAng) * (rock.radius * 0.6);
+            const rY = Math.sin(dAng) * (rock.radius * 0.6);
+            
+            // Ginamit ang moveTo para hindi mag-konekta ang mga usok gamit ang linya
+            ctx.moveTo(rX + smokeRadius, rY); 
+            ctx.arc(rX, rY, smokeRadius, 0, Math.PI * 2);
+        }
+        ctx.fill(); // Isang fill call para sa 8 na bilog!
+
+        ctx.restore();
+    }
+}
 
 // =========================================================================
         // ⚡ SPARK FOX: VIOLET PLASMA CHAIN LIGHTNING (ULTRA DESIGN)
         // =========================================================================
-        if (eng.lightnings) {
-          for (const l of eng.lightnings) {
-            if (l.isFamiliar) {
-              ctx.save(); 
-              ctx.globalAlpha = Math.min(1, l.life * 2.5); // Fast erratic flash
-              
-              const startPt = l.pts[0];
-              const endPt = l.pts[l.pts.length - 1];
+if (eng.lightnings && eng.lightnings.length > 0) {
+  // Global Setup na pwede gamitin ng lahat ng lightning (Tipid sa state changes)
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
 
-              ctx.lineJoin = 'round';
-              ctx.lineCap = 'round';
+  for (const l of eng.lightnings) {
+    if (l.isFamiliar) {
+      ctx.save(); 
+      ctx.globalAlpha = Math.min(1, l.life * 2.5);
+      
+      const startPt = l.pts[0];
+      const endPt = l.pts[l.pts.length - 1];
 
-              // 1. Outer Massive Plasma Glow
-              ctx.strokeStyle = 'rgba(192, 132, 252, 0.4)'; // Faint violet radiation
-              ctx.lineWidth = 15;
-              ctx.shadowBlur = 30; 
-              ctx.shadowColor = '#d946ef';
-              ctx.beginPath(); ctx.moveTo(startPt.x, startPt.y);
-              for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); 
-              ctx.stroke();
+      // BATCH PATHING: Gagawa tayo ng iisang path data tapos gagamitin ulit para sa lahat ng layers!
+      // Ito yung pinakamalaking fps booster dahil hindi na ulit-ulit icocompute ng browser yung mga linya.
+      const mainPath = new Path2D();
+      mainPath.moveTo(startPt.x, startPt.y);
+      for (let i = 1; i < l.pts.length; i++) {
+        mainPath.lineTo(l.pts[i].x, l.pts[i].y);
+      }
 
-              // 2. Inner Heavy Lightning Core
-              ctx.strokeStyle = '#d946ef'; // Intense violet core
-              ctx.lineWidth = 6;
-              ctx.shadowBlur = 15;
-              ctx.beginPath(); ctx.moveTo(startPt.x, startPt.y);
-              for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); 
-              ctx.stroke();
+      // 1. Outer Massive Plasma Glow
+      ctx.strokeStyle = 'rgba(192, 132, 252, 0.4)'; 
+      ctx.lineWidth = 15;
+      ctx.shadowBlur = 30 * sigilGlowScale; 
+      ctx.shadowColor = '#d946ef';
+      ctx.stroke(mainPath);
 
-              // 3. Blinding White Electric Center
-              ctx.strokeStyle = '#ffffff'; 
-              ctx.lineWidth = 2; 
-              ctx.shadowBlur = 0;
-              ctx.beginPath(); ctx.moveTo(startPt.x, startPt.y);
-              for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); 
-              ctx.stroke();
+      // 2. Inner Heavy Lightning Core
+      ctx.strokeStyle = '#d946ef'; 
+      ctx.lineWidth = 6;
+      ctx.shadowBlur = 15 * sigilGlowScale;
+      ctx.stroke(mainPath);
 
-              // 4. Chaotic Zig-Zag Branching Sparks
-              if (l.branching) {
-                  for (let i = 0; i < l.pts.length - 1; i++) {
-                      // Mataas na chance mag-branch para mas agresibo
-                      if (Math.random() > 0.25) {
-                          const midX = (l.pts[i].x + l.pts[i+1].x) / 2; 
-                          const midY = (l.pts[i].y + l.pts[i+1].y) / 2;
-                          // Violent erratic jump
-                          const branchX = midX + (Math.random() - 0.5) * 120; 
-                          const branchY = midY + (Math.random() - 0.5) * 120;
-                          
-                          ctx.strokeStyle = '#f0abfc'; // Pinkish-violet sparks
-                          ctx.lineWidth = 1.5;
-                          ctx.shadowBlur = 10;
-                          ctx.beginPath(); 
-                          ctx.moveTo(midX, midY); 
-                          
-                          // Draw a jagged elbow joint para hindi straight line ang kuryente
-                          const elbowX = midX + (branchX - midX) * 0.5 + (Math.random() - 0.5) * 30;
-                          const elbowY = midY + (branchY - midY) * 0.5 + (Math.random() - 0.5) * 30;
-                          ctx.lineTo(elbowX, elbowY);
-                          ctx.lineTo(branchX, branchY); 
-                          ctx.stroke();
-                      }
-                  }
-              }
+      // 3. Blinding White Electric Center
+      ctx.strokeStyle = '#ffffff'; 
+      ctx.lineWidth = 2; 
+      ctx.shadowBlur = 0; // Patayin ang shadow para sa puting linya, sapat na yung ilalim
+      ctx.stroke(mainPath);
 
-              // 5. Electric Impact Explosion & Shockwave Ring at Target
-              ctx.fillStyle = '#ffffff'; 
-              ctx.shadowBlur = 20;
-              ctx.shadowColor = '#d946ef';
-              ctx.beginPath(); ctx.arc(endPt.x, endPt.y, 8 + Math.random() * 6, 0, Math.PI * 2); ctx.fill();
-
-              ctx.strokeStyle = `rgba(217, 70, 239, ${l.life})`;
-              ctx.lineWidth = 3;
-              ctx.beginPath(); ctx.arc(endPt.x, endPt.y, 35 * (1.5 - l.life), 0, Math.PI * 2); ctx.stroke();
-
-              ctx.restore();
-            } else {
-              // 🧑‍🚀 OLD PLAYER LIGHTNING
-              ctx.save(); ctx.strokeStyle = `rgba(167, 139, 250, ${l.life * 2})`; ctx.lineWidth = 8;
-              ctx.shadowBlur = 20; ctx.shadowColor = '#c084fc'; ctx.lineJoin = 'miter'; ctx.beginPath();
-              ctx.moveTo(l.pts[0].x, l.pts[0].y); for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); ctx.stroke();
-              ctx.strokeStyle = `rgba(255, 255, 255, ${l.life * 2})`; ctx.lineWidth = 3; ctx.beginPath();
-              ctx.moveTo(l.pts[0].x, l.pts[0].y); for (let i = 1; i < l.pts.length; i++) ctx.lineTo(l.pts[i].x, l.pts[i].y); ctx.stroke(); ctx.restore();
-            }
+      // 4. Chaotic Zig-Zag Branching Sparks (BATCH RENDERING)
+      if (l.branching) {
+        ctx.strokeStyle = '#f0abfc'; 
+        ctx.lineWidth = 1.5;
+        ctx.shadowBlur = 10;
+        
+        ctx.beginPath(); // Isang beginPath lang para sa LAHAT ng sparks!
+        
+        for (let i = 0; i < l.pts.length - 1; i++) {
+          if (Math.random() > 0.25) {
+            const pt1 = l.pts[i];
+            const pt2 = l.pts[i+1];
+            const midX = (pt1.x + pt2.x) / 2; 
+            const midY = (pt1.y + pt2.y) / 2;
+            
+            const branchX = midX + (Math.random() - 0.5) * 120; 
+            const branchY = midY + (Math.random() - 0.5) * 120;
+            const elbowX = midX + (branchX - midX) * 0.5 + (Math.random() - 0.5) * 30;
+            const elbowY = midY + (branchY - midY) * 0.5 + (Math.random() - 0.5) * 30;
+            
+            ctx.moveTo(midX, midY); 
+            ctx.lineTo(elbowX, elbowY);
+            ctx.lineTo(branchX, branchY); 
           }
         }
+        ctx.stroke(); // Isang stroke() call lang para i-draw lahat ng nag-branch!
+      }
 
-if (eng.iceStorms) {
-        for (const s of eng.iceStorms) {
-          if (s.isFamiliar) {
-            // ==========================================================
-            // 🧚 FAMILIAR SKILL: FROST SPRITE (CYAN SNOWFLAKE + ICE STORM)
-            // ==========================================================
-            ctx.save();
-            
-            // 1. IYONG ORIGINAL BACKGROUND AURA (Kulay Cyan-Blue Variant)
-            ctx.fillStyle = `rgba(34, 211, 238, ${Math.min(0.25, s.life / 2)})`;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // 2. IYONG ORIGINAL DASHED ROTATING PERIMETER BORDER
-            ctx.strokeStyle = `rgba(165, 243, 252, ${Math.min(0.8, s.life)})`;
-            ctx.lineWidth = 2;
-            ctx.setLineDash([15, 15]);
-            ctx.lineDashOffset = performance.now() * 0.05;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]); // Reset line dash agad
+      // 5. Electric Impact Explosion & Shockwave Ring at Target
+      ctx.fillStyle = '#ffffff'; 
+      ctx.shadowBlur = 20;
+      // ctx.shadowColor ay '#d946ef' na from layer 1, so no need palitan
 
-            // 3. IYONG ORIGINAL FALLING ICE STORM PARTICLES LOOP
-            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, s.life)})`;
-            for (let i = 0; i < 15; i++) {
-              const a = Math.random() * Math.PI * 2;
-              const d = Math.random() * s.radius;
-              ctx.fillRect(
-                s.x + Math.cos(a) * d, 
-                s.y + Math.sin(a) * d + (performance.now() * 0.2) % 20, 
-                3, 
-                8
-              );
-            }
+      ctx.beginPath(); 
+      ctx.arc(endPt.x, endPt.y, 8 + Math.random() * 6, 0, Math.PI * 2); 
+      ctx.fill();
 
-            // 4. ✨ ADDED: GLOWING NEON CYAN SNOWFLAKE CORE
-            ctx.translate(s.x, s.y);
-            ctx.rotate(performance.now() * 0.001); // Dahan-dahang umiikot na snowflake
-            ctx.strokeStyle = '#e0f2fe'; 
-            ctx.lineWidth = 2.5;
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = '#0ea5e9'; // Intense cyan-blue neon glow
-            
-            for (let j = 0; j < 6; j++) {
-              ctx.rotate((Math.PI * 2) / 6);
-              ctx.beginPath();
-              ctx.moveTo(0, 0); ctx.lineTo(s.radius * 0.75, 0); // Main branch
-              ctx.moveTo(s.radius * 0.4, 0); ctx.lineTo(s.radius * 0.55, s.radius * 0.12);
-              ctx.moveTo(s.radius * 0.4, 0); ctx.lineTo(s.radius * 0.55, -s.radius * 0.12);
-              ctx.stroke();
-            }
+      // Shockwave ring
+      // I-off na natin ang glow dito para malinis, tsaka malayo na sya sa impact core
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = `rgba(217, 70, 239, ${l.life})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath(); 
+      ctx.arc(endPt.x, endPt.y, 35 * (1.5 - l.life), 0, Math.PI * 2); 
+      ctx.stroke();
 
-            ctx.restore();
+      ctx.restore();
+      
+    } else {
+      // 🧑‍🚀 OLD PLAYER LIGHTNING (Optimized with Path2D caching)
+      ctx.save(); 
+      ctx.globalAlpha = l.life * 2;
+      
+      const oldPath = new Path2D();
+      oldPath.moveTo(l.pts[0].x, l.pts[0].y); 
+      for (let i = 1; i < l.pts.length; i++) {
+        oldPath.lineTo(l.pts[i].x, l.pts[i].y);
+      }
+      
+      // Layer 1: Glow
+      ctx.strokeStyle = '#a78bfa'; // Gumamit ng hex imbes na rgba
+      ctx.lineWidth = 8;
+      ctx.shadowBlur = 20 * sigilGlowScale; 
+      ctx.shadowColor = '#c084fc'; 
+      ctx.lineJoin = 'miter'; 
+      ctx.stroke(oldPath);
+      
+      // Layer 2: White Core
+      ctx.strokeStyle = '#ffffff'; 
+      ctx.lineWidth = 3; 
+      ctx.shadowBlur = 0; // Off glow
+      ctx.stroke(oldPath);
+      
+      ctx.restore();
+    }
+  }
+  ctx.restore(); // I-reset ang outer save()
+}
 
-          } else {
-            // ==========================================================
-            // 🧑‍🚀 PLAYER SPELL: ORIGINAL ICE STORM (DEEP BLUE SNOWFLAKE)
-            // ==========================================================
-            ctx.save();
-            
-            // 1. IYONG ORIGINAL SPELL BACKGROUND AURA
-            ctx.fillStyle = `rgba(125, 211, 252, ${Math.min(0.2, s.life / 2)})`;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // 2. IYONG ORIGINAL SPELL DASHED ROTATING BORDER
-            ctx.strokeStyle = `rgba(186, 230, 253, ${Math.min(0.8, s.life)})`;
-            ctx.lineWidth = 2;
-            ctx.setLineDash([15, 15]);
-            ctx.lineDashOffset = performance.now() * 0.05;
-            ctx.beginPath();
-            ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]); // Reset line dash agad
+if (eng.iceStorms && eng.iceStorms.length > 0) {
+  // ─── Deterministic noise helpers ───────────────────────────────────────
+  const frostJ  = (seed) => { const x = Math.sin(seed * 12.9898) * 43758.5453; return x - Math.floor(x); };
+  const frostJ2 = (seed) => { const x = Math.sin(seed * 78.233 + 43.21) * 43758.5453; return x - Math.floor(x); };
 
-            // 3. IYONG ORIGINAL SPELL FALLING ICE STORM PARTICLES LOOP
-            ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(0.8, s.life)})`;
-            for (let i = 0; i < 15; i++) {
-              const a = Math.random() * Math.PI * 2;
-              const d = Math.random() * s.radius;
-              ctx.fillRect(
-                s.x + Math.cos(a) * d, 
-                s.y + Math.sin(a) * d + (performance.now() * 0.2) % 20, 
-                3, 
-                8
-              );
-            }
+  for (const s of eng.iceStorms) {
+    // ── One-time stable seed + particle initialisation ──────────────────
+    if (typeof s._coreSeed !== 'number') {
+      s._coreSeed    = Math.random() * 1000;
+      s._blobSeed    = Math.random() * 1000;
+      s._glacierSeed = Math.random() * 1000;
+      s._particles = Array.from({ length: 40 }, (_, i) => ({
+        angle:  frostJ(i * 17.3)  * Math.PI * 2,
+        dist:   frostJ(i * 31.7)  * 0.9,
+        speed:  0.00018 + frostJ(i * 43.1) * 0.00045,
+        size:   0.8 + frostJ(i * 23.9) * 2.8,
+        phase:  frostJ(i * 61.3)  * Math.PI * 2,
+        sway:   (frostJ(i * 11.7) - 0.5) * 0.9,
+      }));
+      s._glaciers = Array.from({ length: 12 }, (_, i) => ({
+        angle: (i / 12) * Math.PI * 2 + frostJ(1000 + i)  * 0.4,
+        dist:  0.52 + frostJ(1000 + i * 7)  * 0.40,
+        scale: 0.07 + frostJ(1000 + i * 13) * 0.11,
+        rot:   frostJ(1000 + i * 19) * Math.PI,
+        sides: 5 + Math.floor(frostJ(1000 + i * 29) * 3),
+      }));
+    }
 
-            // 4. ✨ ADDED: GLOWING HEAVY WHITE SNOWFLAKE CORE
-            ctx.translate(s.x, s.y);
-            ctx.rotate(performance.now() * -0.0006); // Baligtad na ikot naman sa player
-            ctx.strokeStyle = '#ffffff'; 
-            ctx.lineWidth = 3.5; // Mas makapal nang konti para sa player spell
-            ctx.shadowBlur = 25;
-            ctx.shadowColor = '#2563eb'; // Deep royal blue glow anchor
-            
-            for (let j = 0; j < 6; j++) {
-              ctx.rotate((Math.PI * 2) / 6);
-              ctx.beginPath();
-              ctx.moveTo(0, 0); ctx.lineTo(s.radius * 0.8, 0); 
-              ctx.moveTo(s.radius * 0.35, 0); ctx.lineTo(s.radius * 0.55, s.radius * 0.16);
-              ctx.moveTo(s.radius * 0.35, 0); ctx.lineTo(s.radius * 0.55, -s.radius * 0.16);
-              ctx.moveTo(s.radius * 0.55, 0); ctx.lineTo(s.radius * 0.68, s.radius * 0.1);
-              ctx.moveTo(s.radius * 0.55, 0); ctx.lineTo(s.radius * 0.68, -s.radius * 0.1);
-              ctx.stroke();
-            }
+    const isFam    = !!s.isFamiliar;
+    const now2     = performance.now();
+    const lifeR    = Math.min(1, s.life / 3.0);   
 
-            ctx.restore();
-          }
+    const v = isFam ? {
+      cloud:'rgba(34,211,238,',   edge:'rgba(8,47,73,',
+      mist1:'rgba(186,230,253,',  mist2:'rgba(224,242,254,',
+      vortex:'rgba(103,232,249,', wind:'rgba(165,243,252,0.65)',
+      windSpeed:0.00045, windCount:5, vortexCount:3,
+      shardColor:'rgba(200,240,255,0.92)', shardGlow:'#67e8f9',
+      shardCount:22, flakeCount:9, sparkCount:6,
+      glacierFill:'rgba(186,230,253,', glacierStroke:'#67e8f9',
+      border:'rgba(165,243,252,0.75)', glow:'#0ea5e9', glow2:'#22d3ee',
+      coreColor:'#e0f2fe', coreGlowIn:'rgba(224,242,254,0.97)', coreGlowOut:'rgba(14,165,233,0)',
+      coreRotSpeed:0.0009, crackleChance:0.20,
+    } : {
+      cloud:'rgba(125,211,252,',  edge:'rgba(15,23,60,',
+      mist1:'rgba(147,197,253,',  mist2:'rgba(191,219,254,',
+      vortex:'rgba(147,197,253,', wind:'rgba(186,230,253,0.65)',
+      windSpeed:-0.0004, windCount:6, vortexCount:4,
+      shardColor:'rgba(225,239,255,0.96)', shardGlow:'#93c5fd',
+      shardCount:30, flakeCount:13, sparkCount:11,
+      glacierFill:'rgba(147,197,253,', glacierStroke:'#93c5fd',
+      border:'rgba(191,219,254,0.80)', glow:'#2563eb', glow2:'#3b82f6',
+      coreColor:'#ffffff', coreGlowIn:'rgba(255,255,255,0.98)', coreGlowOut:'rgba(37,99,235,0)',
+      coreRotSpeed:-0.0006, crackleChance:0.26,
+    };
+
+    ctx.save();
+    ctx.shadowBlur = 0; // Siguraduhing walang nakalusot na shadow sa start
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 1 ▸ DEEP ATMOSPHERIC COLD BASE
+    // ══════════════════════════════════════════════════════════════════
+    const outerG = ctx.createRadialGradient(s.x, s.y, s.radius * 0.45, s.x, s.y, s.radius * 1.08);
+    outerG.addColorStop(0,   `${v.edge}0)`);
+    outerG.addColorStop(0.55,`${v.edge}${0.14 * lifeR})`);
+    outerG.addColorStop(1,   `${v.edge}${0.50 * lifeR})`);
+    ctx.fillStyle = outerG;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.radius * 1.08, 0, Math.PI * 2); ctx.fill();
+
+    for (let i = 0; i < 5; i++) {
+      const seed  = s._blobSeed + i * 37.1;
+      const bAng  = frostJ(seed) * Math.PI * 2 + Math.sin(now2 * 0.00032 + seed) * 0.65;
+      const bDist = s.radius * (0.07 + frostJ(seed * 1.7) * 0.43);
+      const bx    = s.x + Math.cos(bAng) * bDist;
+      const by    = s.y + Math.sin(bAng) * bDist;
+      const br    = s.radius * (0.52 + frostJ(seed * 2.3) * 0.30);
+      const alpha = Math.min(0.30, s.life / 2.0) * lifeR;
+      const cg = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+      cg.addColorStop(0,   `${v.cloud}${alpha})`);
+      cg.addColorStop(0.6, `${v.cloud}${alpha * 0.45})`);
+      cg.addColorStop(1,   `${v.edge}0)`);
+      ctx.fillStyle = cg;
+      ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 2 ▸ ICE VAPOR / COLD MIST
+    // ══════════════════════════════════════════════════════════════════
+    const mistT = now2 * 0.00026;
+    for (let m = 0; m < 7; m++) {
+      const ms   = s._blobSeed + m * 83.7;
+      const mDir = m % 2 === 0 ? 1 : -1;
+      const mAng = frostJ2(ms) * Math.PI * 2 + mistT * mDir * (0.45 + m * 0.12);
+      const mD   = s.radius * (0.10 + frostJ(ms * 1.3) * 0.57);
+      const mx2  = s.x + Math.cos(mAng) * mD;
+      const my2  = s.y + Math.sin(mAng) * mD;
+      const mr   = s.radius * (0.26 + frostJ(ms * 2.1) * 0.24);
+      const pulse= 0.5 + 0.5 * Math.sin(now2 * 0.0011 + ms);
+      const mA   = (0.055 + pulse * 0.085) * lifeR;
+      const mg2  = ctx.createRadialGradient(mx2, my2, 0, mx2, my2, mr);
+      mg2.addColorStop(0,   `${m % 2 === 0 ? v.mist2 : v.mist1}${mA})`);
+      mg2.addColorStop(0.5, `${v.mist1}${mA * 0.38})`);
+      mg2.addColorStop(1,   `${v.mist1}0)`);
+      ctx.fillStyle = mg2;
+      ctx.beginPath(); ctx.arc(mx2, my2, mr, 0, Math.PI * 2); ctx.fill();
+    }
+    for (let cm = 0; cm < 4; cm++) {
+      const cmp  = now2 * 0.00055 + cm * 1.57;
+      const cmX  = s.x + Math.cos(cmp * 0.38 + cm) * s.radius * 0.18;
+      const cmY  = s.y + Math.sin(cmp * 0.29 + cm) * s.radius * 0.18;
+      const cmR  = s.radius * (0.22 + cm * 0.07);
+      const cmG  = ctx.createRadialGradient(cmX, cmY, 0, cmX, cmY, cmR);
+      const cmA  = (0.09 + 0.06 * Math.sin(cmp)) * lifeR;
+      cmG.addColorStop(0, `${v.mist2}${cmA})`);
+      cmG.addColorStop(1, `${v.mist2}0)`);
+      ctx.fillStyle = cmG;
+      ctx.beginPath(); ctx.arc(cmX, cmY, cmR, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 3 ▸ SPIRAL VORTEX ARMS (BATCHED)
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.shadowBlur = 14 * sigilGlowScale; ctx.shadowColor = v.glow2;
+    
+    ctx.globalAlpha = 0.30 * lifeR;
+    ctx.strokeStyle = `${v.vortex}0.75)`;
+    ctx.lineWidth = 2.8;
+    
+    ctx.beginPath(); // BATCH RENDERING: 1 Path for all arms
+    for (let arm = 0; arm < v.vortexCount; arm++) {
+      const armOff = (arm / v.vortexCount) * Math.PI * 2;
+      const armT   = now2 * v.windSpeed * 0.65;
+      for (let k = 0; k <= 45; k++) {
+        const t   = k / 45;
+        const sAng= armOff + armT + t * Math.PI * 1.7;
+        const sR  = s.radius * (0.06 + t * 0.88);
+        const wob = Math.sin(now2 * 0.0008 + arm * 1.4 + t * 5.5) * s.radius * 0.042;
+        const px4 = s.x + Math.cos(sAng) * (sR + wob);
+        const py4 = s.y + Math.sin(sAng) * (sR + wob);
+        if (k === 0) ctx.moveTo(px4, py4); else ctx.lineTo(px4, py4);
+      }
+    }
+    ctx.stroke(); // 1 Stroke
+
+    // Classic wind arcs
+    ctx.globalAlpha = 0.42 * lifeR;
+    ctx.strokeStyle = v.wind;
+    ctx.lineWidth = 2.6;
+    
+    ctx.beginPath(); // BATCH RENDERING: 1 Path for all wind arcs
+    for (let w = 0; w < v.windCount; w++) {
+      const wS  = s._blobSeed + w * 91.3;
+      const wT  = now2 * v.windSpeed * (1 + w * 0.22);
+      const rA  = s.radius * (0.22 + w * 0.15);
+      const a0  = wT + frostJ(wS) * Math.PI * 2;
+      const a1  = a0 + Math.PI * 0.62 + Math.sin(now2 * 0.0007 + wS) * 0.38;
+      const wx0 = s.x + Math.cos(a0) * rA, wy0 = s.y + Math.sin(a0) * rA;
+      const wx1 = s.x + Math.cos(a1) * rA, wy1 = s.y + Math.sin(a1) * rA;
+      const wmA = (a0 + a1) / 2;
+      const wmR = rA * (1 + Math.sin(now2 * 0.0012 + wS) * 0.24);
+      const wmX = s.x + Math.cos(wmA) * wmR, wmY = s.y + Math.sin(wmA) * wmR;
+      ctx.moveTo(wx0, wy0); ctx.quadraticCurveTo(wmX, wmY, wx1, wy1); 
+    }
+    ctx.stroke(); // 1 Stroke
+    ctx.restore();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 4 ▸ GLACIER FORMATIONS
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.shadowBlur = 16 * sigilGlowScale; ctx.shadowColor = v.glow;
+    for (const g of s._glaciers) {
+      const gRot = g.angle + now2 * v.windSpeed * 0.12;
+      const gx   = s.x + Math.cos(gRot) * s.radius * g.dist;
+      const gy   = s.y + Math.sin(gRot) * s.radius * g.dist;
+      const gr   = s.radius * g.scale;
+      const pulse= 0.88 + 0.12 * Math.sin(now2 * 0.0014 + g.angle * 2.7);
+      
+      ctx.save();
+      ctx.translate(gx, gy);
+      ctx.rotate(g.rot + now2 * v.coreRotSpeed * 0.28);
+      ctx.scale(pulse, pulse);
+      
+      ctx.beginPath();
+      for (let p = 0; p < g.sides; p++) {
+        const pS   = s._glacierSeed + g.angle * 97 + p * 7.3;
+        const pAng = (p / g.sides) * Math.PI * 2 + (frostJ(pS) - 0.5) * 0.52;
+        const pR   = gr * (0.65 + frostJ(pS * 1.7) * 0.65);
+        if (p === 0) ctx.moveTo(Math.cos(pAng) * pR, Math.sin(pAng) * pR);
+        else         ctx.lineTo(Math.cos(pAng) * pR, Math.sin(pAng) * pR);
+      }
+      ctx.closePath();
+      
+      const gAlpha = (0.22 + frostJ(g.angle * 37) * 0.22) * lifeR;
+      ctx.fillStyle = `${v.glacierFill}${gAlpha})`;
+      ctx.shadowBlur = 16 * sigilGlowScale; // Shadow on fill ONLY
+      ctx.fill();
+      
+      ctx.shadowBlur = 0; // FIX: Alisin ang shadow ng stroke para di mabigat
+      ctx.globalAlpha = 0.55 * lifeR;
+      ctx.strokeStyle = v.glacierStroke;
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      
+      ctx.globalAlpha = 0.28 * lifeR;
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-gr * 0.28, -gr * 0.42); ctx.lineTo( gr * 0.18,  gr * 0.28);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 5 ▸ JAGGED ICY BOUNDARY WALL
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.shadowBlur = 16 * sigilGlowScale; ctx.shadowColor = v.glow;
+    ctx.globalAlpha = Math.min(0.90, s.life) * lifeR;
+    
+    ctx.strokeStyle = `${v.vortex}0.22)`; ctx.lineWidth = 12;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.stroke();
+    
+    ctx.strokeStyle = `${v.vortex}0.40)`; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.stroke();
+    
+    ctx.strokeStyle = v.border; ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    const rimSeg = 64;
+    for (let i = 0; i <= rimSeg; i++) {
+      const ang  = (i / rimSeg) * Math.PI * 2;
+      const jit  = (frostJ(s._coreSeed + i * 7.7) - 0.5) * s.radius * 0.055;
+      const spk  = frostJ(s._coreSeed + i * 13.1) > 0.80 ? s.radius * 0.044 : 0;
+      const rip  = Math.sin(now2 * 0.0014 + i * 1.35) * 2.5;
+      const rr   = s.radius + jit + spk + rip;
+      const px5  = s.x + Math.cos(ang) * rr, py5 = s.y + Math.sin(ang) * rr;
+      if (i === 0) ctx.moveTo(px5, py5); else ctx.lineTo(px5, py5);
+    }
+    ctx.stroke();
+
+    // Ice spike accents (BATCHED)
+    ctx.shadowBlur = 0; // Di kailangan ng intense shadow ang maliit na spikes
+    ctx.fillStyle = v.border;
+    ctx.globalAlpha = 0.65 * lifeR;
+    ctx.beginPath(); 
+    for (let i = 0; i < 22; i++) {
+      const sAng = (i / 22) * Math.PI * 2 + now2 * v.windSpeed * 0.04;
+      const sH   = s.radius * (0.038 + frostJ(s._coreSeed + i * 23.1) * 0.055);
+      const sW   = s.radius * 0.016;
+      const bx5  = s.x + Math.cos(sAng) * s.radius;
+      const by5  = s.y + Math.sin(sAng) * s.radius;
+      ctx.moveTo(bx5 + Math.cos(sAng + Math.PI / 2) * sW, by5 + Math.sin(sAng + Math.PI / 2) * sW);
+      ctx.lineTo(bx5 + Math.cos(sAng) * sH,               by5 + Math.sin(sAng) * sH);
+      ctx.lineTo(bx5 + Math.cos(sAng - Math.PI / 2) * sW, by5 + Math.sin(sAng - Math.PI / 2) * sW);
+    }
+    ctx.fill(); // 1 Fill
+    ctx.restore();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 6 ▸ DENSE BLIZZARD SNOW STREAKS
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.shadowBlur = 5 * sigilGlowScale; ctx.shadowColor = v.shardGlow;
+    ctx.strokeStyle = v.shardColor;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < v.shardCount; i++) {
+      const p   = s._particles[i % 40];
+      const t   = now2 * p.speed * 2.0 + p.phase;
+      const swrl= t * 0.65 + p.sway;
+      const d   = s.radius * (p.dist * 0.88 + 0.07 * Math.sin(t * 1.4));
+      const ang  = p.angle + swrl + Math.sin(t * 0.75) * 0.42;
+      const px6 = s.x + Math.cos(ang) * d;
+      const py6 = s.y + Math.sin(ang) * d;
+      const len = 3.5 + p.size * 2.8;
+      const dAng= ang + Math.PI * 0.38 + Math.sin(t * 2.1) * 0.48;
+      ctx.globalAlpha = (0.32 + Math.abs(Math.sin(t * 1.8 + p.phase)) * 0.40) * lifeR;
+      ctx.lineWidth = 0.65 + p.size * 0.38;
+      ctx.beginPath();
+      ctx.moveTo(px6, py6);
+      ctx.lineTo(px6 + Math.cos(dAng) * len, py6 + Math.sin(dAng) * len);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 7 ▸ PROPER 6-POINTED SNOWFLAKES (MASSIVE FPS FIX)
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.shadowBlur = 9 * sigilGlowScale; ctx.shadowColor = v.shardGlow;
+    ctx.strokeStyle = 'rgba(215,240,255,0.92)';
+    ctx.lineCap = 'round';
+    
+    for (let i = 0; i < v.flakeCount; i++) {
+      const p    = s._particles[(i * 3 + 5) % 40];
+      const t    = now2 * p.speed * 0.75 + p.phase;
+      const fd   = s.radius * (0.08 + p.dist * 0.87);
+      const fAng = p.angle + t * (isFam ? 0.48 : -0.48) + Math.sin(t * 0.52) * 0.35;
+      const fx3  = s.x + Math.cos(fAng) * fd;
+      const fy3  = s.y + Math.sin(fAng) * fd;
+      const fsz  = 2.8 + p.size * 2.2;
+      const fRot = t * 0.72;
+      
+      ctx.globalAlpha = (0.48 + 0.30 * Math.sin(t * 2.5)) * lifeR;
+      ctx.lineWidth = 0.85 + p.size * 0.18;
+      
+      ctx.beginPath(); // FIX: Isang path para sa LAHAT ng linya ng isang snowflake
+      for (let arm = 0; arm < 6; arm++) {
+        const aRot = fRot + (arm / 6) * Math.PI * 2;
+        const ax2  = fx3 + Math.cos(aRot) * fsz;
+        const ay2  = fy3 + Math.sin(aRot) * fsz;
+        ctx.moveTo(fx3, fy3); ctx.lineTo(ax2, ay2); 
+        
+        const brL = fsz * 0.40;
+        const bM  = 0.52;
+        const bmx = fx3 + Math.cos(aRot) * fsz * bM;
+        const bmy = fy3 + Math.sin(aRot) * fsz * bM;
+        for (const bDir of [1, -1]) {
+          const bAng3 = aRot + bDir * (Math.PI / 3);
+          ctx.moveTo(bmx, bmy);
+          ctx.lineTo(bmx + Math.cos(bAng3) * brL, bmy + Math.sin(bAng3) * brL);
         }
       }
+      ctx.stroke(); // 1 Stroke per snowflake (imbes na 18!)
+      
+      // Centre dot
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(fx3, fy3, 0.9, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 8 ▸ FROST SPARKS & COLD MOTES
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.shadowBlur = 11 * sigilGlowScale; ctx.shadowColor = v.glow2;
+    for (let i = 0; i < v.sparkCount + 5; i++) {
+      const p   = s._particles[(i * 4 + 2) % 40];
+      const t   = now2 * p.speed * 1.3 + p.phase * 1.5;
+      const dd  = s.radius * (0.04 + p.dist * 0.92);
+      const da  = p.angle + t * (i % 2 === 0 ? 1 : -1.35);
+      const dx2 = s.x + Math.cos(da) * dd;
+      const dy2 = s.y + Math.sin(da) * dd;
+      const flk = 0.35 + 0.60 * Math.abs(Math.sin(t * 3.2 + i));
+      ctx.globalAlpha = flk * 0.80 * lifeR;
+      
+      if (i % 3 === 0) {
+        ctx.fillStyle = 'rgba(255,255,255,0.97)';
+        ctx.beginPath(); ctx.arc(dx2, dy2, 0.7 + p.size * 0.5, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = `${v.mist2}0.85)`;
+        ctx.beginPath(); ctx.arc(dx2, dy2, 1.1 + p.size * 0.65, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 9 ▸ FROST CORE 
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    ctx.translate(s.x, s.y);
+    ctx.rotate(now2 * v.coreRotSpeed);
+
+    const haloR  = s.radius * 0.38;
+    const haloG  = ctx.createRadialGradient(0, 0, s.radius * 0.04, 0, 0, haloR);
+    haloG.addColorStop(0,   `${v.mist2}${0.18 * lifeR})`);
+    haloG.addColorStop(0.5, `${v.cloud}${0.08 * lifeR})`);
+    haloG.addColorStop(1,   `${v.edge}0)`);
+    ctx.fillStyle = haloG;
+    ctx.beginPath(); ctx.arc(0, 0, haloR, 0, Math.PI * 2); ctx.fill();
+
+    const coreR  = s.radius * 0.23;
+    const coreG2 = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR);
+    coreG2.addColorStop(0,   v.coreGlowIn);
+    coreG2.addColorStop(0.38,`${v.mist2}0.65)`);
+    coreG2.addColorStop(1,   v.coreGlowOut);
+    ctx.fillStyle = coreG2;
+    ctx.beginPath(); ctx.arc(0, 0, coreR, 0, Math.PI * 2); ctx.fill();
+
+    // Primary asymmetric spikes (BATCHED)
+    ctx.fillStyle   = v.coreColor;
+    ctx.strokeStyle = v.coreColor;
+    ctx.shadowBlur  = 22; ctx.shadowColor = v.glow;
+    const spkCnt = 7;
+    
+    ctx.beginPath();
+    for (let i = 0; i < spkCnt; i++) {
+      const seed = s._coreSeed + i * 13.7;
+      const ang  = (i / spkCnt) * Math.PI * 2 + (frostJ(seed) - 0.5) * 0.5;
+      const len  = s.radius * (0.54 + frostJ(seed * 1.9) * 0.32);
+      const wid  = 1.6 + frostJ(seed * 2.3) * 1.7;
+      const tipX = Math.cos(ang) * len, tipY = Math.sin(ang) * len;
+      const b1x  = Math.cos(ang + Math.PI / 2) * wid, b1y = Math.sin(ang + Math.PI / 2) * wid;
+      const b2x  = Math.cos(ang - Math.PI / 2) * wid, b2y = Math.sin(ang - Math.PI / 2) * wid;
+      const mLen = len * (0.42 + frostJ(seed * 3.1) * 0.18);
+      const mX   = Math.cos(ang) * mLen, mY = Math.sin(ang) * mLen;
+      ctx.moveTo(b1x, b1y); ctx.lineTo(mX, mY); ctx.lineTo(tipX, tipY);
+      ctx.lineTo(mX, mY);   ctx.lineTo(b2x, b2y); 
+    }
+    ctx.fill(); // 1 Fill
+    
+    ctx.shadowBlur = 0; // Turn off shadow for sub-branches to prevent glowing lines overlap
+    ctx.beginPath();
+    ctx.lineWidth = 1.3;
+    for (let i = 0; i < spkCnt; i++) {
+      const seed = s._coreSeed + i * 13.7;
+      const ang  = (i / spkCnt) * Math.PI * 2 + (frostJ(seed) - 0.5) * 0.5;
+      const len  = s.radius * (0.54 + frostJ(seed * 1.9) * 0.32);
+      const mLen = len * (0.42 + frostJ(seed * 3.1) * 0.18);
+      const mX   = Math.cos(ang) * mLen, mY = Math.sin(ang) * mLen;
+      if (frostJ(seed * 4.7) > 0.33) {
+        const subA  = ang + (frostJ(seed * 5.3) - 0.5) * 1.3;
+        const subL  = len * 0.37;
+        ctx.moveTo(mX, mY);
+        ctx.lineTo(mX + Math.cos(subA) * subL, mY + Math.sin(subA) * subL); 
+        if (frostJ(seed * 6.1) > 0.48) {
+          const subA2 = ang - (frostJ(seed * 7.3) - 0.5) * 1.3;
+          ctx.moveTo(mX * 0.65, mY * 0.65);
+          ctx.lineTo(mX * 0.65 + Math.cos(subA2) * subL * 0.65, mY * 0.65 + Math.sin(subA2) * subL * 0.65);
+        }
+      }
+    }
+    ctx.stroke(); // 1 Stroke
+
+    // Counter-rotating secondary ring spikes (BATCHED)
+    ctx.shadowBlur = 12; ctx.shadowColor = v.glow2;
+    ctx.globalAlpha = 0.58 * lifeR;
+    const revRot = -now2 * v.coreRotSpeed * 1.6;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const ang2 = (i / 6) * Math.PI * 2 + Math.PI / 6 + revRot;
+      const len2 = s.radius * 0.24;
+      ctx.moveTo(Math.cos(ang2) * s.radius * 0.06, Math.sin(ang2) * s.radius * 0.06);
+      ctx.lineTo(Math.cos(ang2) * len2, Math.sin(ang2) * len2);
+    }
+    ctx.stroke();
+    ctx.restore(); // Restores from translate/rotate
+
+    // ══════════════════════════════════════════════════════════════════
+    // LAYER 10 ▸ FROST CRACKLE 
+    // ══════════════════════════════════════════════════════════════════
+    ctx.save();
+    if (Math.random() < v.crackleChance) {
+      const nCracks = 1 + Math.floor(Math.random() * 3);
+      for (let c = 0; c < nCracks; c++) {
+        ctx.strokeStyle = 'rgba(224,242,254,0.92)';
+        ctx.lineWidth   = 1.1 + Math.random() * 1.1;
+        ctx.shadowBlur  = 16; ctx.shadowColor = v.glow;
+        
+        let clx = s.x, cly = s.y, clAng = Math.random() * Math.PI * 2; // FIX: translate isn't active here, must use s.x/s.y
+        ctx.beginPath(); ctx.moveTo(clx, cly);
+        const cSeg = 4 + Math.floor(Math.random() * 4);
+        for (let k = 0; k < cSeg; k++) {
+          clAng += (Math.random() - 0.5) * 1.9;
+          clx   += Math.cos(clAng) * (s.radius * 0.13 + Math.random() * s.radius * 0.07);
+          cly   += Math.sin(clAng) * (s.radius * 0.13 + Math.random() * s.radius * 0.07);
+          ctx.lineTo(clx, cly);
+        }
+        ctx.stroke();
+        
+        ctx.shadowBlur = 0; // Turn off shadow for the echo
+        ctx.globalAlpha = 0.28;
+        ctx.lineWidth   = 4;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    ctx.restore(); // Main save restore
+  }
+}
 
 // =========================================================================
   // ⚡ OPTIMIZED AAA MYTHIC RENDERER (NO LAG, BALANCED COLORS)
@@ -7709,207 +11283,188 @@ if (skin === 'shadow') {
           ctx.lineCap = 'butt'; // Reset
 
           ctx.restore();
-        }
+        } else if (e.type === 'normal') {
+    // ==================================================
+    // 🧟 NORMAL MINION (ULTRA-OPTIMIZED CACHED SPRITE)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    
+    // 1. I-retain natin ang wriggling motion (Wiggle effect)
+    ctx.rotate(Math.sin(now * 0.005 + e.x) * 0.1); 
+    
+    // 2. FAKE SQUISH: Imbes na i-recompute yung mga dots ng katawan kada frame, 
+    // i-sstretch/i-ssquash na lang natin yung naka-cache na picture!
+    const squish = Math.sin(now * 0.01 + e.x) * 0.08;
+    ctx.scale(1.0 + squish, 1.0 - squish); 
+    
+    // 3. 💥 DRAW IMAGE: Ito ang nagpapabilis ng rendering dahil isang hardware instruction na lang.
+    const spriteToDraw = isFlash ? normalMinionFlashImage : normalMinionImage;
+    ctx.drawImage(spriteToDraw, -25, -25); // Ang -25 ay galing sa kalahati ng SPRITE_SIZE (50 / 2) para gitna
+    
+    ctx.restore();
+} else if (e.type === 'fast') {
+    // ==================================================
+    // 🦇 FAST MINION (ULTRA-OPTIMIZED CACHED SPRITE)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    
+    // 1. Mabilis na spin effect (Naiwan ang motion!)
+    ctx.rotate(now * 0.008); 
+    
+    // 2. Dynamic Scaling: Kino-compute ang tamang size base sa e.r
+    // Dahil gumamit tayo ng CACHE_R*6 sa pag-create, ang draw size dapat ay e.r*6
+    const drawSize = e.r * 6;
+    
+    // 3. DRAW IMAGE
+    const spriteToDraw = isFlash ? fastFlashImg : fastImg;
+    ctx.drawImage(spriteToDraw, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+    
+    ctx.restore();
 
+} else if (e.type === 'tank') {
+    // ==================================================
+    // 🪨 TANK MINION (ULTRA-OPTIMIZED CACHED SPRITE)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    
+    // 1. Mabigat na paglalakad / Stomping motion (Naiwan ang motion!)
+    const stomp = Math.abs(Math.sin(now * 0.003)) * (e.r * 0.15);
+    ctx.translate(0, -stomp);
 
+    // 2. Dynamic Scaling
+    // Dahil gumamit tayo ng CACHE_R*4 sa pag-create, ang draw size dapat ay e.r*4
+    const drawSize = e.r * 4;
+
+    // 3. DRAW IMAGE
+    const spriteToDraw = isFlash ? tankFlashImg : tankImg;
+    ctx.drawImage(spriteToDraw, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+    
+    ctx.restore();
+} else if (e.type === 'miniBoss') {
+    // ==================================================
+    // 👁️ GENERIC MINI-BOSS (Eldritch Tentacle Terror)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+
+    // 1. Abyssal Glow Aura
+    let auraGlow = ctx.createRadialGradient(0, 0, e.r, 0, 0, e.r * 3);
+    auraGlow.addColorStop(0, `rgba(217, 119, 6, 0.4)`); // Amber aura
+    auraGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = auraGlow;
+    ctx.beginPath(); 
+    ctx.arc(0, 0, e.r * 3, 0, Math.PI * 2); 
+    ctx.fill();
+
+    // 2. 8 Writhing Tentacles (BATCH RENDERING)
+    ctx.strokeStyle = isFlash ? '#ffffff' : '#78350f'; 
+    ctx.lineCap = 'round';
+    ctx.lineWidth = e.r * 0.3; // Ilabas sa loop dahil pare-pareho lang naman ang kapal
+    
+    ctx.beginPath(); // Isang path lang para sa lahat ng galamay
+    for(let i = 0; i < 8; i++) {
+        let a = (i / 8) * Math.PI * 2;
+        let wave = Math.sin(now * 0.002 + i) * (e.r * 0.8);
         
-       else if (e.type === 'normal') {
-            // ==================================================
-            // 🧟 NORMAL MINION (Shadow Ghoul with Bone Mask)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            ctx.rotate(Math.sin(now * 0.005 + e.x) * 0.1); // Wriggling motion
+        ctx.moveTo(0, 0);
+        let cp1x = Math.cos(a) * e.r * 1.5 - Math.sin(a) * wave;
+        let cp1y = Math.sin(a) * e.r * 1.5 + Math.cos(a) * wave;
+        let endX = Math.cos(a) * e.r * 2.5 + Math.sin(a) * wave * 1.5;
+        let endY = Math.sin(a) * e.r * 2.5 - Math.cos(a) * wave * 1.5;
+        
+        ctx.quadraticCurveTo(cp1x, cp1y, endX, endY);
+    }
+    ctx.stroke(); // Isang draw call na lang imbes na 8!
 
-            // Organic, squishy blob body
-            ctx.fillStyle = isFlash ? '#ffffff' : '#1e293b'; 
-            ctx.beginPath();
-            for(let i = 0; i < 12; i++) {
-                let ang = (i / 12) * Math.PI * 2;
-                let rad = e.r * (0.8 + Math.sin(now * 0.01 + i) * 0.2); // Umiiba ang hugis (Squishy)
-                ctx.lineTo(Math.cos(ang) * rad, Math.sin(ang) * rad);
-            }
-            ctx.fill();
+    // 3. Deformed Fleshy Main Body
+    ctx.fillStyle = isFlash ? '#ffffff' : '#b45309';
+    ctx.beginPath();
+    for(let i = 0; i < 16; i++) {
+        let a = (i / 16) * Math.PI * 2;
+        let pulse = Math.sin(now * 0.005 + i * 2) * (e.r * 0.15); 
+        ctx.lineTo(Math.cos(a) * (e.r * 1.2 + pulse), Math.sin(a) * (e.r * 1.2 + pulse));
+    }
+    ctx.fill();
 
-            // Bone Skull Mask sa ibabaw ng katawan
-            ctx.fillStyle = isFlash ? '#000000' : '#cbd5e1';
-            ctx.beginPath();
-            ctx.arc(0, -e.r * 0.2, e.r * 0.6, Math.PI, 0); // Hugis bungo sa itaas
-            ctx.quadraticCurveTo(e.r * 0.6, e.r * 0.5, e.r * 0.3, e.r * 0.5); // Kanang panga
-            ctx.lineTo(-e.r * 0.3, e.r * 0.5); // Baba
-            ctx.quadraticCurveTo(-e.r * 0.6, e.r * 0.5, -e.r * 0.6, -e.r * 0.2); // Kaliwang panga
-            ctx.fill();
+    // 4. Asymmetrical Blinking Eyes (BATCH RENDERING)
+    // Ilabas ang static array declaration para hindi mabigat sa memory (mas maganda kung sa labas pa ito ng function)
+    const eyes = [
+        {x: 0, y: 0, size: 0.5},       // Main center eye
+        {x: -0.6, y: -0.4, size: 0.25}, // Top left
+        {x: 0.6, y: -0.3, size: 0.2},   // Top right
+        {x: -0.3, y: 0.6, size: 0.3},   // Bottom left
+        {x: 0.5, y: 0.5, size: 0.25}    // Bottom right
+    ];
 
-            // Sunken Glowing Red Eyes
-            ctx.fillStyle = isFlash ? '#ffffff' : '#991b1b';
-            ctx.beginPath(); ctx.ellipse(-e.r * 0.25, 0, e.r * 0.15, e.r * 0.2, 0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.beginPath(); ctx.ellipse(e.r * 0.25, 0, e.r * 0.15, e.r * 0.2, -0.2, 0, Math.PI * 2); ctx.fill();
-            ctx.restore();
+    // Paghiwalayin ang nakadilat at nakapikit para madaling i-batch
+    const openEyes = [];
+    const closedEyes = [];
 
-        } else if (e.type === 'fast') {
-            // ==================================================
-            // 🦇 FAST MINION (Scythe-Winged Phantom)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            ctx.rotate(now * 0.008); // Mabilis na spin
-
-            // 3 Dark Scythe Wings (Parang paniki/shuriken)
-            ctx.fillStyle = isFlash ? '#ffffff' : '#9a3412'; // Dark burnt orange
-            ctx.strokeStyle = isFlash ? '#000000' : '#ea580c';
-            ctx.lineWidth = 1.5;
-
-            for(let i = 0; i < 3; i++) {
-                ctx.rotate((Math.PI * 2) / 3);
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                // Matulis na kurbada ng pakpak
-                ctx.quadraticCurveTo(e.r * 1.5, -e.r * 1.5, e.r * 2.5, 0); 
-                ctx.quadraticCurveTo(e.r * 1.0, -e.r * 0.5, 0, e.r * 0.5);
-                ctx.fill(); 
-                ctx.stroke();
-            }
-
-            // Cluster ng Spider Eyes sa gitna
-            ctx.fillStyle = isFlash ? '#000000' : '#fef08a';
-            for(let i = 0; i < 3; i++) {
-                let a = (i / 3) * Math.PI * 2 + (now * 0.005);
-                ctx.beginPath(); 
-                ctx.arc(Math.cos(a) * e.r * 0.4, Math.sin(a) * e.r * 0.4, e.r * 0.25, 0, Math.PI * 2); 
-                ctx.fill();
-            }
-            ctx.restore();
-
-        } else if (e.type === 'tank') {
-            // ==================================================
-            // 🪨 TANK MINION (Armored Void Behemoth)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            
-            // Mabigat na paglalakad (Stomping motion)
-            let stomp = Math.abs(Math.sin(now * 0.003)) * (e.r * 0.15);
-            ctx.translate(0, -stomp);
-
-            // Dambuhalang Asymmetrical Carapace (Baluti)
-            ctx.fillStyle = isFlash ? '#ffffff' : '#1e1b4b'; // Deepest indigo armor
-            ctx.strokeStyle = isFlash ? '#000000' : '#4338ca';
-            ctx.lineWidth = 2.5;
-
-            ctx.beginPath();
-            ctx.moveTo(-e.r * 1.2, e.r * 0.5); // Bottom left
-            ctx.lineTo(-e.r * 1.5, -e.r * 0.2); // Left shoulder spike
-            ctx.lineTo(-e.r * 0.6, -e.r * 1.2); // Top left ridge
-            ctx.lineTo(0, -e.r * 0.8);          // Center dip (batok)
-            ctx.lineTo(e.r * 0.6, -e.r * 1.2);   // Top right ridge
-            ctx.lineTo(e.r * 1.5, -e.r * 0.2);   // Right shoulder spike
-            ctx.lineTo(e.r * 1.2, e.r * 0.5);    // Bottom right
-            ctx.lineTo(0, e.r * 0.8);            // Bottom center
-            ctx.closePath();
-            ctx.fill(); 
-            ctx.stroke();
-
-            // Glowing Internal Furnace (Tiyan na gawa sa Void Magma)
-            let coreGlow = Math.sin(now * 0.005) * 0.5 + 0.5;
-            ctx.fillStyle = isFlash ? '#000000' : `rgba(99, 102, 241, ${0.5 + coreGlow * 0.5})`;
-            ctx.beginPath();
-            ctx.arc(0, e.r * 0.2, e.r * 0.55, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Iron Prison Bars sa ibabaw ng kumikinang na tiyan
-            ctx.strokeStyle = isFlash ? '#ffffff' : '#0f172a';
-            ctx.lineWidth = 3;
-            ctx.beginPath(); ctx.moveTo(-e.r * 0.7, e.r * 0.2); ctx.lineTo(e.r * 0.7, e.r * 0.2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(-e.r * 0.3, -e.r * 0.3); ctx.lineTo(-e.r * 0.3, e.r * 0.7); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(e.r * 0.3, -e.r * 0.3); ctx.lineTo(e.r * 0.3, e.r * 0.7); ctx.stroke();
-            ctx.restore();
-
-        } else if (e.type === 'miniBoss') {
-            // ==================================================
-            // 👁️ GENERIC MINI-BOSS (Eldritch Tentacle Terror)
-            // ==================================================
-            const now = performance.now();
-            const isFlash = e.flash > 0;
-            ctx.save();
-            ctx.translate(e.x, e.y);
-
-            // Abyssal Glow Aura
-            let auraGlow = ctx.createRadialGradient(0, 0, e.r, 0, 0, e.r * 3);
-            auraGlow.addColorStop(0, `rgba(217, 119, 6, 0.4)`); // Amber aura
-            auraGlow.addColorStop(1, 'transparent');
-            ctx.fillStyle = auraGlow;
-            ctx.beginPath(); ctx.arc(0, 0, e.r * 3, 0, Math.PI * 2); ctx.fill();
-
-            // 8 Writhing Tentacles (Gumagalaw na galamay)
-            ctx.strokeStyle = isFlash ? '#ffffff' : '#78350f'; // Dark amber
-            ctx.lineCap = 'round';
-            for(let i = 0; i < 8; i++) {
-                let a = (i / 8) * Math.PI * 2;
-                let wave = Math.sin(now * 0.002 + i) * (e.r * 0.8);
-                ctx.lineWidth = e.r * 0.3;
-                
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                // Curve magic para sa galamay
-                let cp1x = Math.cos(a) * e.r * 1.5 - Math.sin(a) * wave;
-                let cp1y = Math.sin(a) * e.r * 1.5 + Math.cos(a) * wave;
-                let endX = Math.cos(a) * e.r * 2.5 + Math.sin(a) * wave * 1.5;
-                let endY = Math.sin(a) * e.r * 2.5 - Math.cos(a) * wave * 1.5;
-                ctx.quadraticCurveTo(cp1x, cp1y, endX, endY);
-                ctx.stroke();
-            }
-
-            // Deformed Fleshy Main Body
-            ctx.fillStyle = isFlash ? '#ffffff' : '#b45309';
-            ctx.beginPath();
-            for(let i = 0; i < 16; i++) {
-                let a = (i / 16) * Math.PI * 2;
-                let pulse = Math.sin(now * 0.005 + i * 2) * (e.r * 0.15); // Pulsating mass
-                ctx.lineTo(Math.cos(a) * (e.r * 1.2 + pulse), Math.sin(a) * (e.r * 1.2 + pulse));
-            }
-            ctx.fill();
-
-            // Asymmetrical Blinking Eyes (Maraming mata na kumukurap)
-            ctx.fillStyle = isFlash ? '#000000' : '#fef3c7'; 
-            let pupilColor = isFlash ? '#ffffff' : '#000000';
-            const eyes = [
-                {x: 0, y: 0, size: 0.5},       // Main center eye
-                {x: -0.6, y: -0.4, size: 0.25}, // Top left
-                {x: 0.6, y: -0.3, size: 0.2},   // Top right
-                {x: -0.3, y: 0.6, size: 0.3},   // Bottom left
-                {x: 0.5, y: 0.5, size: 0.25}    // Bottom right
-            ];
-
-            eyes.forEach((eye, idx) => {
-                let isBlinking = Math.sin(now * 0.001 + idx * 5) > 0.95; // Random blink timing
-                
-                if (!isBlinking) {
-                    // Sclera (Puti ng mata)
-                    ctx.beginPath(); ctx.arc(eye.x * e.r, eye.y * e.r, eye.size * e.r, 0, Math.PI * 2); ctx.fill();
-                    // Pupil (Itim ng mata)
-                    ctx.fillStyle = pupilColor;
-                    ctx.beginPath(); ctx.arc(eye.x * e.r, eye.y * e.r, eye.size * e.r * 0.4, 0, Math.PI * 2); ctx.fill();
-                    ctx.fillStyle = isFlash ? '#000000' : '#fef3c7'; // Reset para sa next eye
-                } else {
-                    // Closed Eye Slit (Pag nakapikit)
-                    ctx.strokeStyle = isFlash ? '#000000' : '#78350f';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath(); 
-                    ctx.moveTo(eye.x * e.r - eye.size * e.r, eye.y * e.r); 
-                    ctx.lineTo(eye.x * e.r + eye.size * e.r, eye.y * e.r); 
-                    ctx.stroke();
-                }
-            });
-
-            ctx.restore();
-
+    for (let idx = 0; idx < eyes.length; idx++) {
+        if (Math.sin(now * 0.001 + idx * 5) > 0.95) {
+            closedEyes.push(eyes[idx]);
+        } else {
+            openEyes.push(eyes[idx]);
         }
+    }
+
+    if (openEyes.length > 0) {
+        // I-draw lahat ng Sclera (Puti ng mata) ng sabay-sabay
+        ctx.fillStyle = isFlash ? '#000000' : '#fef3c7';
+        ctx.beginPath();
+        for (const eye of openEyes) {
+            const ex = eye.x * e.r;
+            const ey = eye.y * e.r;
+            const eSize = eye.size * e.r;
+            ctx.moveTo(ex + eSize, ey); // Para hindi magkonekta ang mga bilog ng linya
+            ctx.arc(ex, ey, eSize, 0, Math.PI * 2);
+        }
+        ctx.fill();
+
+        // I-draw lahat ng Pupil (Itim ng mata) ng sabay-sabay
+        ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
+        ctx.beginPath();
+        for (const eye of openEyes) {
+            const ex = eye.x * e.r;
+            const ey = eye.y * e.r;
+            const pSize = eye.size * e.r * 0.4;
+            ctx.moveTo(ex + pSize, ey);
+            ctx.arc(ex, ey, pSize, 0, Math.PI * 2);
+        }
+        ctx.fill();
+    }
+
+    if (closedEyes.length > 0) {
+        // I-draw lahat ng nakapikit na mata ng sabay-sabay
+        ctx.strokeStyle = isFlash ? '#000000' : '#78350f';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); 
+        for (const eye of closedEyes) {
+            const ex = eye.x * e.r;
+            const ey = eye.y * e.r;
+            const eSize = eye.size * e.r;
+            ctx.moveTo(ex - eSize, ey); 
+            ctx.lineTo(ex + eSize, ey); 
+        }
+        ctx.stroke();
+    }
+
+    ctx.restore();
+}
         
         else if (e.type === 'archdemon') {
           // ==================================================
@@ -8075,759 +11630,828 @@ if (skin === 'shadow') {
             ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, Math.PI * 2); ctx.fill();
             ctx.globalCompositeOperation = 'source-over'; // Reset for solid bodies
 
-     if (e.type === 'primordial') {
-                // ==================================================
-                // 🌌 PRIMORDIAL DEMON (King of the Void / World Ender)
-                // ==================================================
-                const isFlash = e.flash > 0;
-                
-                // --- 1. APOCALYPTIC FAUX GLOW (Fiery Void Aura) ---
-                const glowColor = isFlash ? '255, 255, 255' : '220, 20, 60'; // Crimson Core
-                const glowColor2 = isFlash ? '255, 255, 255' : '255, 100, 0'; // Fiery Orange Edge
-                const blurSize = isFlash ? 120 : 200;
-                const maxGlowRadius = e.r * 3.5 + blurSize;
-                
-                const grad = ctx.createRadialGradient(0, 0, e.r * 0.5, 0, 0, maxGlowRadius);
-                grad.addColorStop(0, `rgba(${glowColor}, 0.9)`);
-                grad.addColorStop(0.35, `rgba(${glowColor2}, 0.5)`);
-                grad.addColorStop(1, `rgba(${glowColor2}, 0)`);
-                
-                ctx.fillStyle = grad;
-                ctx.beginPath();
-                ctx.arc(0, 0, maxGlowRadius, 0, Math.PI * 2);
-                ctx.fill();
+if (e.type === 'primordial') {
+    // ==================================================
+    // 🌌 PRIMORDIAL DEMON (King of the Void / World Ender)
+    // ==================================================
+    const now = performance.now();
+    const isFlash = e.flash > 0;
+    
+    // 1. PROPERTY CACHING: I-save sa local variable
+    const r = e.r;
 
-                // 🛑 I-OFF ANG HARDWARE SHADOW PARA DI MAG-LAG
-                ctx.shadowBlur = 0;
+    // --- 1. APOCALYPTIC FAUX GLOW (Fiery Void Aura) ---
+    const blurSize = isFlash ? 120 : 200;
+    const maxGlowRadius = r * 3.5 + blurSize;
+    
+    const grad = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, maxGlowRadius);
+    
+    // BATCHED COLORS: Umiwas tayo sa template string parsing tulad ng `rgba(${glowColor}, 0.9)`
+    if (isFlash) {
+        grad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+        grad.addColorStop(0.35, 'rgba(255, 255, 255, 0.5)');
+        grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    } else {
+        grad.addColorStop(0, 'rgba(220, 20, 60, 0.9)');
+        grad.addColorStop(0.35, 'rgba(255, 100, 0, 0.5)');
+        grad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+    }
+    
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, maxGlowRadius, 0, Math.PI * 2);
+    ctx.fill();
 
-                // --- 2. ANCIENT KING'S SEAL (ROTATING TEXT) ---
-                ctx.save();
-                ctx.rotate(-now / 2000); // Mabagal na ikot counter-clockwise
-                ctx.fillStyle = isFlash ? '#ffffff' : 'rgba(255, 150, 0, 0.8)';
-                ctx.font = `bold ${e.r * 0.6}px "Courier New", monospace`;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                const runes = ['ᛞ','ᛟ','ᚢ','ᛗ','ᛚ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛒ','ᛖ', '✦', '✧'];
-                
-                for (let i = 0; i < 14; i++) {
-                    let a = (i / 14) * Math.PI * 2;
-                    let dist = e.r * 4.2; // Mas malawak na radius para sa text
-                    ctx.save();
-                    ctx.translate(Math.cos(a) * dist, Math.sin(a) * dist);
-                    ctx.rotate(a + Math.PI / 2);
-                    ctx.fillText(runes[i], 0, 0);
-                    ctx.restore();
-                }
-                
-                // Inner spinning magical ring (Clockwise)
-                ctx.rotate(now / 1000);
-                ctx.strokeStyle = isFlash ? '#ffffff' : 'rgba(220, 20, 60, 0.6)';
-                ctx.lineWidth = 3;
-                ctx.setLineDash([20, 15, 5, 15]);
-                ctx.beginPath();
-                ctx.arc(0, 0, e.r * 3.5, 0, Math.PI * 2);
-                ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.restore();
+    // 🛑 I-OFF ANG HARDWARE SHADOW PARA DI MAG-LAG
+    ctx.shadowBlur = 0;
 
-                // --- 3. FIRE EMBERS LOGIC (Lumilipad paitaas sa gilid) ---
-                ctx.fillStyle = isFlash ? '#ffffff' : '#ffaa00';
-                for (let i = 0; i < 24; i++) {
-                    // X position nagwe-wave sa gilid
-                    let emberX = Math.cos(now * 0.001 + i) * (e.r * 2.5 + (i % 3) * e.r);
-                    // Y position umaakyat at naglu-loop
-                    let emberY = e.r * 3 - ((now * 0.06 + i * 35) % (e.r * 6));
-                    let emberSize = 1.5 + Math.sin(now * 0.01 + i) * 1.5; // Pumipintig na laki
-                    
-                    ctx.beginPath();
-                    ctx.arc(emberX, emberY, Math.max(0.1, emberSize), 0, Math.PI * 2);
-                    ctx.fill();
-                }
+    // --- 2. ANCIENT KING'S SEAL (ROTATING TEXT) ---
+    ctx.save();
+    const sealRot = -now / 2000;
+    ctx.rotate(sealRot); // Mabagal na ikot counter-clockwise
+    ctx.fillStyle = isFlash ? '#ffffff' : 'rgba(255, 150, 0, 0.8)';
+    ctx.font = `bold ${r * 0.6}px "Courier New", monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    const runes = ['ᛞ','ᛟ','ᚢ','ᛗ','ᛚ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛒ','ᛖ', '✦', '✧'];
+    const textDist = r * 4.2; 
+    
+    // INVERSE TRANSLATION (Massive FPS boost over save/restore in loop)
+    for (let i = 0; i < 14; i++) {
+        let a = (i / 14) * Math.PI * 2;
+        let cx = Math.cos(a) * textDist;
+        let cy = Math.sin(a) * textDist;
+        let letterRot = a + Math.PI / 2;
 
-                // --- 4. REALITY SHATTER (Fiery Cracks) ---
-                ctx.strokeStyle = isFlash ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 80, 0, 0.8)';
-                ctx.lineWidth = 2.5;
-                for (let i = 0; i < 8; i++) {
-                    let ang = (i * Math.PI / 4) + (Math.sin(now * 0.002) * 0.1); // Swaying cracks
-                    let crackLength = e.r * (7 + Math.random() * 4); 
-                    ctx.beginPath();
-                    ctx.moveTo(0, 0);
-                    let currX = 0, currY = 0;
-                    for (let j = 0; j < 4; j++) {
-                        currX += Math.cos(ang) * (crackLength / 4) + (Math.random() * 20 - 10);
-                        currY += Math.sin(ang) * (crackLength / 4) + (Math.random() * 20 - 10);
-                        ctx.lineTo(currX, currY);
-                    }
-                    ctx.stroke();
-                }
-
-                // --- 5. THE VOID KING'S BODY (Pulsing Black Hole with fiery crust) ---
-                ctx.fillStyle = isFlash ? '#ffffff' : '#050005';
-                ctx.strokeStyle = isFlash ? '#000000' : '#ff3300';
-                ctx.lineWidth = 4;
-                ctx.beginPath();
-                for (let i = 0; i < 36; i++) {
-                    let ang = (Math.PI * 2 / 36) * i + (now / 200); 
-                    // Nade-deform ang katawan niya
-                    let pulse = Math.sin(now * 0.01 + i * 2) * 0.15;
-                    let dist = e.r * (0.9 + pulse); 
-                    ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
-                }
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-
-                // --- 6. THE WORLD-ENDER CROWN ---
-                // Lumulutang sa taas ng ulo na may gold/orange edges
-                let crownY = -e.r * 1.1 + Math.sin(now * 0.005) * 6; // Float effect
-                let crownW = e.r * 1.3;
-                
-                ctx.fillStyle = isFlash ? '#ffffff' : '#0a0000';
-                ctx.strokeStyle = isFlash ? '#000000' : '#ffaa00'; 
-                ctx.lineWidth = 2.5;
-                
-                ctx.beginPath();
-                ctx.moveTo(-crownW, crownY);
-                ctx.lineTo(-crownW * 1.4, crownY - e.r * 1.3); // Outer left spike
-                ctx.lineTo(-crownW * 0.5, crownY - e.r * 0.4); 
-                ctx.lineTo(0, crownY - e.r * 1.8);             // Center highest spike
-                ctx.lineTo(crownW * 0.5, crownY - e.r * 0.4);  
-                ctx.lineTo(crownW * 1.4, crownY - e.r * 1.3);  // Outer right spike
-                ctx.lineTo(crownW, crownY);
-                ctx.quadraticCurveTo(0, crownY + e.r * 0.4, -crownW, crownY); // Curved bottom
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-
-                // Crown Jewel (Glowing Center)
-                ctx.fillStyle = isFlash ? '#000000' : '#ff0000';
-                ctx.beginPath();
-                ctx.arc(0, crownY - e.r * 0.6, e.r * 0.25, 0, Math.PI * 2);
-                ctx.fill();
-
-                // --- 7. TERRIFYING OMNIPRESENT EYES ---
-                ctx.fillStyle = isFlash ? '#000000' : '#ffea00'; // Glowing yellow/orange eyes
-                ctx.shadowColor = '#ff0000';
-                ctx.shadowBlur = 40; // Buhayin saglit ang shadow para sa mata
-                
-                let eyeGlitch = Math.random() > 0.9 ? 5 : 0; 
-                
-                // Giant Center Eye
-                ctx.beginPath(); 
-                ctx.ellipse(0, -e.r * 0.1 + eyeGlitch, e.r * 0.55, e.r * 0.25, 0, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Main Pupil (Reptilian slit)
-                ctx.fillStyle = isFlash ? '#ffffff' : '#ff0000';
-                ctx.beginPath();
-                ctx.ellipse(0, -e.r * 0.1 + eyeGlitch, e.r * 0.1, e.r * 0.25, 0, 0, Math.PI * 2);
-                ctx.fill();
-
-                // 4 Smaller Sub-eyes (Biblically Accurate Demon Vibe)
-                ctx.fillStyle = isFlash ? '#000000' : '#ffaa00';
-                // Top Angled Eyes
-                ctx.beginPath(); ctx.ellipse(-e.r * 0.65, -e.r * 0.4, e.r * 0.2, e.r * 0.08, -Math.PI/5, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.ellipse(e.r * 0.65, -e.r * 0.4, e.r * 0.2, e.r * 0.08, Math.PI/5, 0, Math.PI * 2); ctx.fill();
-                
-                // Bottom Angled Eyes
-                ctx.beginPath(); ctx.ellipse(-e.r * 0.55, e.r * 0.35, e.r * 0.15, e.r * 0.06, Math.PI/5, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.ellipse(e.r * 0.55, e.r * 0.35, e.r * 0.15, e.r * 0.06, -Math.PI/5, 0, Math.PI * 2); ctx.fill();
-
-                ctx.shadowBlur = 0; // I-reset ang shadow pabalik sa normal
-            }
-            
-            else if (e.type === 'abyss_awakened') {
-                // ==================================================
-                // 👁️ THE ABYSS AWAKENED (The Sovereign of Annihilation)
-                // ==================================================
-                
-                const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
-                const isEnraged = hpRatio <= 0.3;
-                const isFlash = e.flash > 0;
-                
-                const enrageMult = isEnraged ? 1.5 : 1;
-                const coreR = e.r * 1.5;
-                const pi2 = 6.283185307; // Pre-calculate Math.PI * 2
-                
-                ctx.save();
-
-                // ==================================================
-                // 1. GLOBAL MAP AURA & SHOCKWAVES
-                // ==================================================
-                const auraPulse = Math.sin(now * 0.00125) * 0.1; // now / 800
-                const auraRadius = coreR * (40 + auraPulse * 10); 
-                
-                const mapAuraGrad = ctx.createRadialGradient(0, 0, coreR * 5, 0, 0, auraRadius);
-                mapAuraGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-                mapAuraGrad.addColorStop(0.3, `rgba(153, 27, 27, ${0.15 + auraPulse})`);
-                mapAuraGrad.addColorStop(0.7, `rgba(10, 0, 10, ${0.4 + auraPulse})`);
-                mapAuraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
-                
-                ctx.fillStyle = mapAuraGrad;
-                ctx.beginPath();
-                ctx.arc(0, 0, auraRadius, 0, pi2);
-                ctx.fill();
-
-                // APOCALYPTIC SHOCKWAVES 
-                const swTime = (now / (isEnraged ? 400 : 800)) % 1;
-                const swRadius = coreR * (5 + swTime * 20);
-                ctx.beginPath();
-                ctx.arc(0, 0, swRadius, 0, pi2);
-                ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 * (1 - swTime)})`;
-                ctx.lineWidth = isEnraged ? 15 * (1 - swTime) : 5 * (1 - swTime);
-                ctx.stroke();
-
-                // ==================================================
-                // 2. NEW: ANNIHILATION ARRAY & ASCENDING EMBERS
-                // ==================================================
-                
-                // --- Outer Rotating Geometric Array (Optimized to 1 path) ---
-                const outerRot = now / 6000;
-                ctx.save(); // Needed for lineDash and rotation isolation
-                ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.3 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.15 + Math.abs(auraPulse)})`;
-                ctx.lineWidth = isEnraged ? 3 : 1;
-                ctx.rotate(outerRot); 
-                
-                ctx.beginPath();
-                ctx.arc(0, 0, coreR * 5.5, 0, pi2);
-                // Hexagram pattern batching
-                const hexRad = coreR * 5.5;
-                for(let i=0; i<6; i++) {
-                    let a1 = i * 1.04719755; // Math.PI / 3
-                    let a2 = (i + 2) * 1.04719755;
-                    ctx.moveTo(Math.cos(a1) * hexRad, Math.sin(a1) * hexRad);
-                    ctx.lineTo(Math.cos(a2) * hexRad, Math.sin(a2) * hexRad);
-                }
-                ctx.stroke(); // 1 stroke for circle + hexagram!
-                ctx.restore();
-
-                // --- Inner Reverse Rotating Ring ---
-                ctx.save();
-                ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.5 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.3 + Math.abs(auraPulse)})`;
-                ctx.lineWidth = 2;
-                ctx.rotate(now / -3000); 
-                ctx.setLineDash([coreR * 0.8, coreR * 0.4]);
-                ctx.beginPath();
-                ctx.arc(0, 0, coreR * 4.2, 0, pi2);
-                ctx.stroke();
-                ctx.restore();
-
-                // --- Ascending Void Embers ---
-                ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444';
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = '#ef4444';
-                const numEmbers = isEnraged ? 40 : 20;
-                const totalHeight = coreR * 11;
-                
-                for (let i = 0; i < numEmbers; i++) {
-                    let emberX = (Math.sin(i * 123.45) * coreR * 6); 
-                    let speed = 1 + (i % 3); 
-                    let emberY = (coreR * 5) - ((now / (10 * speed) + i * 80) % totalHeight); 
-                    
-                    let fade = 1 - (Math.abs(emberY) / (coreR * 5.5));
-                    if (fade > 0) {
-                        ctx.globalAlpha = fade;
-                        ctx.beginPath();
-                        ctx.arc(emberX, emberY, isEnraged ? Math.random() * 3 + 1 : 1.5, 0, pi2);
-                        ctx.fill();
-                    }
-                }
-                ctx.globalAlpha = 1.0;
-                ctx.shadowBlur = 0; // Turn off immediately to save performance
-
-                // ==================================================
-                // 3. LEVITATION & ENTITY JITTER 
-                // ==================================================
-                let shakeX = 0, shakeY = 0;
-                if (isEnraged) {
-                    shakeX = (Math.random() - 0.5) * (coreR * 0.25);
-                    shakeY = (Math.random() - 0.5) * (coreR * 0.25);
-                }
-                const floatY = Math.sin(now * 0.000833) * (coreR * 0.4) + shakeY; // now/1200
-                ctx.translate(shakeX, floatY);
-
-                // 4. THE ECLIPSE HALO (Optimized with Faux Glow instead of shadowBlur 150)
-                const haloGlowSz = isEnraged ? 150 : 50;
-                const fauxGlowRad = coreR * 3.5 + haloGlowSz;
-                
-                const haloGlowGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5 - 10, 0, -coreR * 0.5, fauxGlowRad);
-                haloGlowGrad.addColorStop(0, 'rgba(220, 38, 38, 1)'); // shadowColor
-                haloGlowGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
-                
-                ctx.fillStyle = haloGlowGrad;
-                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, fauxGlowRad, 0, pi2); ctx.fill();
-
-                ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
-                ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + Math.sin(now * 0.005) * 0.4})`;
-                ctx.lineWidth = coreR * 0.4;
-                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 3.5, 0, pi2); ctx.fill(); ctx.stroke();
-                
-                const eclipseGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5, 0, -coreR * 0.5, coreR * 6);
-                eclipseGrad.addColorStop(0, 'rgba(153, 27, 27, 0.8)');
-                eclipseGrad.addColorStop(0.5, 'rgba(45, 10, 70, 0.3)');
-                eclipseGrad.addColorStop(1, 'transparent');
-                ctx.fillStyle = eclipseGrad;
-                ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 6.5, 0, pi2); ctx.fill();
-
-                // 5. AWAKENED CROWN (Optimized Math: No ctx.save/rotate loop!)
-                const crownSpeed = isEnraged ? 800 : 2500;
-                const crownRot = now / crownSpeed;
-                
-                ctx.save();
-                ctx.translate(0, -coreR * 0.5);
-                ctx.rotate(crownRot);
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = isEnraged ? 4 : 2;
-                ctx.setLineDash([coreR * 0.8, coreR * 1.2]);
-                ctx.beginPath(); ctx.arc(0, 0, coreR * 3.8, 0, pi2); ctx.stroke();
-                ctx.restore();
-
-                // Pre-calculate diamond points rotation
-                const dSin = Math.sin(now * 0.002) * 12; // now / 500
-                const dCos = Math.cos(now * 0.002) * 12;
-                
-                ctx.fillStyle = '#ef4444';
-                ctx.beginPath();
-                for(let i=0; i<4; i++) {
-                    let gAng = (i * 1.5707963) + crownRot; // Math.PI / 2
-                    let cx = Math.cos(gAng) * (coreR * 3.8);
-                    let cy = Math.sin(gAng) * (coreR * 3.8) - coreR * 0.5; // Offset by translate Y
-                    
-                    // Direct math rotation (Fastest rendering)
-                    ctx.moveTo(cx + dSin, cy - dCos);
-                    ctx.lineTo(cx + dCos, cy + dSin);
-                    ctx.lineTo(cx - dSin, cy + dCos);
-                    ctx.lineTo(cx - dCos, cy - dSin);
-                }
-                ctx.fill();
-
-                // 6. REALITY RIBBONS (Optimized to 1 Batched Path)
-                ctx.strokeStyle = isEnraged ? '#ef4444' : 'rgba(153, 27, 27, 0.9)';
-                ctx.lineWidth = isEnraged ? 6 : 4;
-                ctx.setLineDash([]);
-                
-                ctx.beginPath();
-                let ribbonDots = [];
-                for(let i=0; i<4; i++) {
-                    let rAng = (now * -0.0005) + (i * 1.5707963);
-                    let flow = coreR * (3 + Math.sin(now * 0.0025 + i) * 2);
-                    let cCos = Math.cos(rAng);
-                    let cSin = Math.sin(rAng);
-
-                    // Math rotation for quadraticCurve
-                    let cx = cCos * (coreR * 2.5) - cSin * coreR;
-                    let cy = cSin * (coreR * 2.5) + cCos * coreR;
-                    let ex = cCos * flow - cSin * (-coreR * 2.5);
-                    let ey = cSin * flow + cCos * (-coreR * 2.5);
-
-                    ctx.moveTo(0, 0);
-                    ctx.quadraticCurveTo(cx, cy, ex, ey);
-                    ribbonDots.push({x: ex, y: ey});
-                }
-                ctx.stroke(); // 1 Stroke pass for all 4 ribbons!
-
-                ctx.fillStyle = '#ffffff';
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#ef4444';
-                ctx.beginPath();
-                for(let i=0; i<4; i++) {
-                    ctx.moveTo(ribbonDots[i].x + 4, ribbonDots[i].y);
-                    ctx.arc(ribbonDots[i].x, ribbonDots[i].y, 4, 0, pi2);
-                }
-                ctx.fill();
-                ctx.shadowBlur = 0; // Reset
-
-                // 7. DARK SERAPH WINGS (Matrix Math Optimization -> 1 fill, 1 stroke)
-                const wingFlap = Math.cos(now / (isEnraged ? 600 : 1000)) * 0.2 * enrageMult; 
-                ctx.fillStyle = isFlash ? '#ffffff' : '#030303';
-                ctx.strokeStyle = isEnraged ? '#ef4444' : '#991b1b';
-                ctx.lineWidth = 3;
-                
-                const wingAngles = [-0.8, -0.3, 0.2, 0.7]; 
-                ctx.beginPath();
-                for (let j = 0; j < 2; j++) { 
-                    let flip = j === 0 ? 1 : -1;
-                    for (let i = 0; i < 4; i++) {
-                        let rot = wingAngles[i] + wingFlap * (i % 2 === 0 ? 1 : -1);
-                        let cosR = Math.cos(rot), sinR = Math.sin(rot);
-                        let wLen = coreR * (isEnraged ? 8 : 6) - (i * coreR);
-                        
-                        // Matrix translation instead of expensive ctx.save/rotate
-                        let tX = (x, y) => (x * cosR - y * sinR) * flip;
-                        let tY = (x, y) => (x * sinR + y * cosR);
-
-                        ctx.moveTo(0, 0);
-                        ctx.lineTo(tX(coreR * 1.8, -wLen * 0.5), tY(coreR * 1.8, -wLen * 0.5));
-                        ctx.lineTo(tX(coreR * 0.6, -wLen), tY(coreR * 0.6, -wLen));
-                        ctx.lineTo(tX(-coreR * 0.6, -wLen * 0.7), tY(-coreR * 0.6, -wLen * 0.7));
-                        ctx.closePath();
-                    }
-                }
-                ctx.fill(); ctx.stroke(); // All 8 wings rendered in one go!
-
-                // 8. SOVEREIGN CARAPACE (Batched Subpaths)
-                ctx.fillStyle = isFlash ? '#ffffff' : '#09090b'; 
-                ctx.strokeStyle = '#ef4444'; 
-                ctx.lineWidth = isEnraged ? 3 : 2;
-                
-                const breathe = Math.sin(now * 0.0025) * (coreR * 0.15);
-                ctx.beginPath(); 
-                // Right
-                ctx.moveTo(coreR * 1.2 + breathe, -coreR); ctx.lineTo(coreR * 2.8 + breathe, -coreR * 1.6); ctx.lineTo(coreR * 1.8 + breathe, -coreR * 0.2); ctx.closePath();
-                // Left
-                ctx.moveTo(-coreR * 1.2 - breathe, -coreR); ctx.lineTo(-coreR * 2.8 - breathe, -coreR * 1.6); ctx.lineTo(-coreR * 1.8 - breathe, -coreR * 0.2); ctx.closePath();
-                // Center
-                ctx.moveTo(0, -coreR * 2.8); ctx.lineTo(coreR * 1.6, -coreR * 0.8); ctx.lineTo(coreR * 0.9, coreR * 2.0); 
-                ctx.lineTo(0, coreR * 3.0); ctx.lineTo(-coreR * 0.9, coreR * 2.0); ctx.lineTo(-coreR * 1.6, -coreR * 0.8); ctx.closePath();
-                ctx.fill(); ctx.stroke();
-
-                // 9. SOUL VORTEX / DEBRIS
-                ctx.fillStyle = '#ef4444';
-                for(let i=0; i<8; i++) {
-                    let pTime = ((now / (isEnraged ? 300 : 600)) + (i * 0.125)) % 1; // i / 8
-                    let pAngle = (i * 0.785398) + (now * 0.002); // i * Math.PI / 4
-                    let pRadius = coreR * 5 * (1 - pTime); 
-                    
-                    ctx.globalAlpha = Math.sin(pTime * Math.PI); 
-                    ctx.beginPath(); 
-                    ctx.arc(Math.cos(pAngle) * pRadius, Math.sin(pAngle) * pRadius, coreR * 0.15, 0, pi2); 
-                    ctx.fill();
-                }
-                ctx.globalAlpha = 1.0;
-
-                // 10. THE BLACK STAR CORE (Replaced heavy shadowBlur with Faux Glow)
-                const coreBeat = Math.sin(now / (isEnraged ? 100 : 250)) * (isEnraged ? 0.3 : 0.2);
-                const innerCoreR = coreR * (0.8 + coreBeat);
-                const coreGlowSz = isEnraged ? 80 : 40;
-                
-                const coreGlowGrad = ctx.createRadialGradient(0, 0, innerCoreR * 0.5, 0, 0, innerCoreR * 1.8 + coreGlowSz);
-                coreGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)'); 
-                coreGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-                ctx.fillStyle = coreGlowGrad;
-                ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 1.8 + coreGlowSz, 0, pi2); ctx.fill();
-                
-                ctx.fillStyle = isFlash ? '#ffffff' : '#ef4444';
-                ctx.beginPath();
-                for(let i=0; i<8; i++) { 
-                    let ang = (i * 0.785398) + (now/ (isEnraged ? 500 : 1000));
-                    let dist = i % 2 === 0 ? innerCoreR * 1.8 : innerCoreR * 0.8;
-                    ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
-                }
-                ctx.fill();
-                
-                ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
-                ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 0.7, 0, pi2); ctx.fill();
-
-                // 11. THE ZENITH EYE (Replaced heavy shadowBlur with Faux Glow)
-                const eyeY = -coreR * 3.8; 
-                const eyeBlink = isEnraged ? 1 : Math.max(0.1, Math.sin(now / 1200)); 
-                const eyeHeight = coreR * 1.0 * eyeBlink;
-                const eyeGlowSz = isEnraged ? 80 : 40;
-                
-                const eyeGlowGrad = ctx.createRadialGradient(0, eyeY, coreR * 0.5, 0, eyeY, coreR * 1.6 + eyeGlowSz);
-                eyeGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)');
-                eyeGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-                ctx.fillStyle = eyeGlowGrad;
-                ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6 + eyeGlowSz, eyeHeight + eyeGlowSz, 0, 0, pi2); ctx.fill();
-                
-                ctx.fillStyle = '#050505';
-                ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6, eyeHeight, 0, 0, pi2); ctx.fill(); 
-                
-                if (eyeBlink > 0.2) { 
-                    const pupilTrackX = Math.sin(now / 800) * (coreR * 0.5);
-                    
-                    ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444'; 
-                    ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.6, eyeHeight * 0.6, 0, 0, pi2); ctx.fill(); 
-                    
-                    ctx.fillStyle = '#000000';
-                    ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.15, eyeHeight * 0.5, 0, 0, pi2); ctx.fill();
-                    
-                    ctx.fillStyle = '#ef4444';
-                    for(let i=0; i<5; i++) {
-                        let dropY = eyeY + eyeHeight + ((now / (isEnraged ? 15 : 20) + i * 25) % (isEnraged ? 80 : 50));
-                        ctx.globalAlpha = 1 - ((dropY - eyeY) / (isEnraged ? 80 : 50));
-                        ctx.beginPath(); ctx.arc(pupilTrackX + (i-2)*6, dropY, isEnraged ? 3 : 2, 0, pi2); ctx.fill();
-                    }
-                    ctx.globalAlpha = 1.0;
-                }
-
-                ctx.restore();
-            } 
-            
-            else if (e.type === 'abyss') {
-        // ==================================================
-        // 🌋 PRIMORDIAL DEMON (World-Ending God of Destruction)
-        // ==================================================
+        ctx.translate(cx, cy);
+        ctx.rotate(letterRot);
+        ctx.fillText(runes[i], 0, 0);
         
-        const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
-        const isEnraged = hpRatio <= 0.25;
-        const isFlash = e.flash > 0;
+        // I-reverse ang transform imbes na tumawag ng ctx.restore()
+        ctx.rotate(-letterRot);
+        ctx.translate(-cx, -cy);
+    }
+    
+    // Inner spinning magical ring (Clockwise)
+    // Tandaan: May sealRot pa tayong nauna, kaya ia-add natin yun pabalik
+    ctx.rotate((now / 1000) - sealRot); 
+    ctx.strokeStyle = isFlash ? '#ffffff' : 'rgba(220, 20, 60, 0.6)';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([20, 15, 5, 15]);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 3.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // --- 3. FIRE EMBERS LOGIC (BATCH RENDERING) ---
+    ctx.fillStyle = isFlash ? '#ffffff' : '#ffaa00';
+    ctx.beginPath(); // Isang path para sa lahat ng embers
+    for (let i = 0; i < 24; i++) {
+        let emberX = Math.cos(now * 0.001 + i) * (r * 2.5 + (i % 3) * r);
+        let emberY = r * 3 - ((now * 0.06 + i * 35) % (r * 6));
+        let emberSize = Math.max(0.1, 1.5 + Math.sin(now * 0.01 + i) * 1.5);
         
-        const enrageScale = isEnraged ? 1.5 : 1;
-        const baseR = e.r * 1.4; 
-        const coreR = baseR * enrageScale;
-        const pi2 = 6.283185307; // Fast Math.PI * 2
+        ctx.moveTo(emberX + emberSize, emberY);
+        ctx.arc(emberX, emberY, emberSize, 0, Math.PI * 2);
+    }
+    ctx.fill(); // Isang tawag lang imbes na 24!
+
+    // --- 4. REALITY SHATTER (BATCH RENDERING) ---
+    ctx.strokeStyle = isFlash ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 80, 0, 0.8)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); // Isang path para sa lahat ng bitak
+    
+    const crackSway = Math.sin(now * 0.002) * 0.1;
+    for (let i = 0; i < 8; i++) {
+        let ang = (i * Math.PI / 4) + crackSway;
+        let crackLength = r * (7 + Math.random() * 4); 
+        let segLen = crackLength / 4;
         
-        ctx.save();
-        
-        // 💥 REALITY DISTORTION / ENRAGE SCREEN SHAKE
-        if (isEnraged) {
-            const intensity = 3 + Math.random() * 4;
-            ctx.translate((Math.random() - 0.5) * intensity, (Math.random() - 0.5) * intensity);
+        ctx.moveTo(0, 0);
+        let currX = 0, currY = 0;
+        for (let j = 0; j < 4; j++) {
+            currX += Math.cos(ang) * segLen + (Math.random() * 20 - 10);
+            currY += Math.sin(ang) * segLen + (Math.random() * 20 - 10);
+            ctx.lineTo(currX, currY);
         }
+    }
+    ctx.stroke(); // Isang stroke call imbes na 8!
 
-        // 0. APOCALYPTIC ENVIRONMENT (Optimized: Removed massive fillRect, used Arc)
-        const distPulse = Math.sin(now * 0.00666) * 0.15; // now / 150
-        const envGrad = ctx.createRadialGradient(0, 0, coreR * 2, 0, 0, coreR * 15);
-        envGrad.addColorStop(0, 'transparent');
-        envGrad.addColorStop(0.6, `rgba(153, 27, 27, ${0.1 + distPulse})`); 
-        envGrad.addColorStop(1, `rgba(69, 10, 10, ${0.3 + distPulse})`);
-        ctx.fillStyle = envGrad;
-        ctx.beginPath();
-        ctx.arc(0, 0, coreR * 15, 0, pi2);
-        ctx.fill();
+    // --- 5. THE VOID KING'S BODY ---
+    ctx.fillStyle = isFlash ? '#ffffff' : '#050005';
+    ctx.strokeStyle = isFlash ? '#000000' : '#ff3300';
+    ctx.lineWidth = 4;
+    
+    const bodyStep = Math.PI / 18; // Pre-computed (Math.PI * 2 / 36)
+    const bodyRot = now / 200;
+    
+    ctx.beginPath();
+    for (let i = 0; i < 36; i++) {
+        let ang = (bodyStep * i) + bodyRot; 
+        let pulse = Math.sin(now * 0.01 + i * 2) * 0.15;
+        let dist = r * (0.9 + pulse); 
+        ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
 
-        // 1. MULTI-LAYERED APOCALYPTIC AURA
-        const auraPulse = Math.abs(Math.sin(now * 0.005));
-        const auraRadius = coreR * (isEnraged ? 6 + auraPulse * 2 : 4 + auraPulse);
+    // --- 6. THE WORLD-ENDER CROWN ---
+    let crownY = -r * 1.1 + Math.sin(now * 0.005) * 6; 
+    let crownW = r * 1.3;
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : '#0a0000';
+    ctx.strokeStyle = isFlash ? '#000000' : '#ffaa00'; 
+    ctx.lineWidth = 2.5;
+    
+    ctx.beginPath();
+    ctx.moveTo(-crownW, crownY);
+    ctx.lineTo(-crownW * 1.4, crownY - r * 1.3); 
+    ctx.lineTo(-crownW * 0.5, crownY - r * 0.4); 
+    ctx.lineTo(0, crownY - r * 1.8);            
+    ctx.lineTo(crownW * 0.5, crownY - r * 0.4);  
+    ctx.lineTo(crownW * 1.4, crownY - r * 1.3);  
+    ctx.lineTo(crownW, crownY);
+    ctx.quadraticCurveTo(0, crownY + r * 0.4, -crownW, crownY); 
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Crown Jewel
+    ctx.fillStyle = isFlash ? '#000000' : '#ff0000';
+    ctx.beginPath();
+    ctx.arc(0, crownY - r * 0.6, r * 0.25, 0, Math.PI * 2);
+    ctx.fill();
+
+    // --- 7. TERRIFYING OMNIPRESENT EYES (BATCHED) ---
+    ctx.fillStyle = isFlash ? '#000000' : '#ffea00'; 
+    ctx.shadowColor = '#ff0000';
+    ctx.shadowBlur = 40; 
+    
+    let eyeGlitch = Math.random() > 0.9 ? 5 : 0; 
+    
+    // Giant Center Eye
+    ctx.beginPath(); 
+    ctx.ellipse(0, -r * 0.1 + eyeGlitch, r * 0.55, r * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Main Pupil
+    ctx.fillStyle = isFlash ? '#ffffff' : '#ff0000';
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.1 + eyeGlitch, r * 0.1, r * 0.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4 Smaller Sub-eyes (Biblically Accurate Demon Vibe)
+    ctx.fillStyle = isFlash ? '#000000' : '#ffaa00';
+    ctx.beginPath(); 
+    
+    // Top Left
+    ctx.ellipse(-r * 0.65, -r * 0.4, r * 0.2, r * 0.08, -Math.PI/5, 0, Math.PI * 2);
+    
+    // Top Right (Exact moveTo para walang connecting line)
+    ctx.moveTo(r * 0.65 + r * 0.2 * Math.cos(Math.PI/5), -r * 0.4 + r * 0.2 * Math.sin(Math.PI/5));
+    ctx.ellipse(r * 0.65, -r * 0.4, r * 0.2, r * 0.08, Math.PI/5, 0, Math.PI * 2);
+    
+    // Bottom Left
+    ctx.moveTo(-r * 0.55 + r * 0.15 * Math.cos(Math.PI/5), r * 0.35 + r * 0.15 * Math.sin(Math.PI/5));
+    ctx.ellipse(-r * 0.55, r * 0.35, r * 0.15, r * 0.06, Math.PI/5, 0, Math.PI * 2);
+    
+    // Bottom Right
+    ctx.moveTo(r * 0.55 + r * 0.15 * Math.cos(-Math.PI/5), r * 0.35 + r * 0.15 * Math.sin(-Math.PI/5));
+    ctx.ellipse(r * 0.55, r * 0.35, r * 0.15, r * 0.06, -Math.PI/5, 0, Math.PI * 2);
+    
+    ctx.fill(); // Isang fill() call na lang para sa apat na maliliit na mata!
+
+    ctx.shadowBlur = 0; 
+} else if (e.type === 'abyss_awakened') {
+    // ==================================================
+    // 👁️ THE ABYSS AWAKENED (The Sovereign of Annihilation)
+    // ==================================================
+    
+    const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
+    const isEnraged = hpRatio <= 0.3;
+    const isFlash = e.flash > 0;
+    
+    const enrageMult = isEnraged ? 1.5 : 1;
+    const coreR = e.r * 1.5;
+    const pi2 = 6.283185307; 
+    
+    ctx.save();
+
+    // ==================================================
+    // 1. GLOBAL MAP AURA & SHOCKWAVES
+    // ==================================================
+    const auraPulse = Math.sin(now * 0.00125) * 0.1; 
+    const auraRadius = coreR * (40 + auraPulse * 10); 
+    
+    const mapAuraGrad = ctx.createRadialGradient(0, 0, coreR * 5, 0, 0, auraRadius);
+    mapAuraGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    mapAuraGrad.addColorStop(0.3, `rgba(153, 27, 27, ${0.15 + auraPulse})`);
+    mapAuraGrad.addColorStop(0.7, `rgba(10, 0, 10, ${0.4 + auraPulse})`);
+    mapAuraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = mapAuraGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, auraRadius, 0, pi2);
+    ctx.fill();
+
+    const swTime = (now / (isEnraged ? 400 : 800)) % 1;
+    const swRadius = coreR * (5 + swTime * 20);
+    ctx.beginPath();
+    ctx.arc(0, 0, swRadius, 0, pi2);
+    ctx.strokeStyle = `rgba(239, 68, 68, ${0.8 * (1 - swTime)})`;
+    ctx.lineWidth = isEnraged ? 15 * (1 - swTime) : 5 * (1 - swTime);
+    ctx.stroke();
+
+    // ==================================================
+    // 2. ANNIHILATION ARRAY & ASCENDING EMBERS
+    // ==================================================
+    
+    const outerRot = now / 6000;
+    ctx.save(); 
+    ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.3 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.15 + Math.abs(auraPulse)})`;
+    ctx.lineWidth = isEnraged ? 3 : 1;
+    ctx.rotate(outerRot); 
+    
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 5.5, 0, pi2);
+    
+    // 🚨 OPTIMIZATION: Pre-computed Hexagram Angles
+    // Hindi na gagamit ng Math.cos at Math.sin sa loob ng loop para sa static na shape!
+    const hexCos = [1, 0.5, -0.5, -1, -0.5, 0.5];
+    const hexSin = [0, 0.866025, 0.866025, 0, -0.866025, -0.866025];
+    const hexRad = coreR * 5.5;
+    
+    for(let i=0; i<6; i++) {
+        let i2 = (i + 2) % 6; 
+        ctx.moveTo(hexCos[i] * hexRad, hexSin[i] * hexRad);
+        ctx.lineTo(hexCos[i2] * hexRad, hexSin[i2] * hexRad);
+    }
+    ctx.stroke(); 
+    ctx.restore();
+
+    ctx.save();
+    ctx.strokeStyle = isEnraged ? `rgba(239, 68, 68, ${0.5 + Math.abs(auraPulse)})` : `rgba(153, 27, 27, ${0.3 + Math.abs(auraPulse)})`;
+    ctx.lineWidth = 2;
+    ctx.rotate(now / -3000); 
+    ctx.setLineDash([coreR * 0.8, coreR * 0.4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 4.2, 0, pi2);
+    ctx.stroke();
+    ctx.restore();
+
+    // 🚨 OPTIMIZATION: Tinanggal ang shadowBlur at pinalitan ang globalAlpha ng RGBA
+    ctx.shadowBlur = 0; 
+    const numEmbers = isEnraged ? 40 : 20;
+    const totalHeight = coreR * 11;
+    const emberRGB = isEnraged ? '255, 255, 255' : '239, 68, 68';
+    
+    for (let i = 0; i < numEmbers; i++) {
+        let emberX = (Math.sin(i * 123.45) * coreR * 6); 
+        let speed = 1 + (i % 3); 
+        let emberY = (coreR * 5) - ((now / (10 * speed) + i * 80) % totalHeight); 
         
-        const aura = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, auraRadius);
-        aura.addColorStop(0, '#ffffff'); 
-        aura.addColorStop(0.2, '#facc15'); 
-        aura.addColorStop(0.4, '#ea580c'); 
-        aura.addColorStop(0.7, '#7f1d1d'); 
-        aura.addColorStop(1, 'transparent'); 
-        
-        ctx.fillStyle = isFlash ? '#ffffff' : aura;
-        ctx.globalAlpha = 0.8;
-        ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, pi2); ctx.fill();
-        ctx.globalAlpha = 1.0;
-
-        // Swirling Infernal Vortexes (Optimized: Built-in ellipse rotation)
-        const vortRot1 = now * 0.005;
-        const vortRot2 = vortRot1 + 1.570796; // + Math.PI / 2
-        
-        ctx.lineWidth = coreR * 0.4;
-        ctx.strokeStyle = `rgba(234, 88, 12, ${0.3 + distPulse})`;
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 3, coreR * 3, vortRot1, 0, Math.PI); ctx.stroke();
-        
-        ctx.strokeStyle = `rgba(153, 27, 27, ${0.2 + distPulse})`;
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4, coreR * 4, vortRot2, 0, Math.PI); ctx.stroke();
-
-        // 2. GYROSCOPIC INFERNAL SIGILS 
-        const sigilSpeedMult = isEnraged ? 0.00666 : 0.00333; 
-        const outRot = now * -sigilSpeedMult;
-        
-        ctx.strokeStyle = 'rgba(153, 27, 27, 0.6)';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([20, 15, 5, 15]);
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 5.5, coreR * 5.5, outRot, 0, pi2); ctx.stroke();
-
-        const inRot = now * (sigilSpeedMult * 1.25); 
-        ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([40, 20]);
-        ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4.5, coreR * 4.5, inRot, 0, pi2); ctx.stroke();
-        
-        ctx.font = `${coreR * 0.6}px "Courier New", monospace`;
-        ctx.fillStyle = '#facc15';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        const charBase = 0x16A0;
-        for (let i = 0; i < 12; i++) {
-            let ang = (i * 0.523598) + inRot; 
-            let rune = String.fromCharCode(charBase + (i % 20)); 
-            ctx.fillText(rune, Math.cos(ang) * coreR * 4.5, Math.sin(ang) * coreR * 4.5);
-        }
-        
-        ctx.setLineDash([]);
-        ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 4; i++) {
-            ctx.ellipse(0, 0, coreR * 4.2, coreR * 0.8, (i * 0.785398), 0, pi2);
-        }
-        ctx.stroke();
-
-        // 3. 12 WINGS (Optimized Matrix Math -> 1 Batched Path)
-        const wingFlap = Math.cos(now * 0.00666) * 0.4;
-        const wingLen = isEnraged ? coreR * 8 : coreR * 5;
-        
-        // Shadow Wings (Background Layer)
-        ctx.fillStyle = isFlash ? '#ffffff' : '#09090b';
-        ctx.strokeStyle = '#4c1d95'; 
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            let rot = (1.047197 * i) + wingFlap * 0.8 + 0.2; 
-            let cR = Math.cos(rot), sR = Math.sin(rot);
-            let tX = (x, y) => x * cR - y * sR;
-            let tY = (x, y) => x * sR + y * cR;
-
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(tX(-coreR * 2, -coreR * 2), tY(-coreR * 2, -coreR * 2), tX(-wingLen * 1.1, -wingLen * 0.9), tY(-wingLen * 1.1, -wingLen * 0.9));
-            ctx.lineTo(tX(-coreR * 3, -coreR * 1), tY(-coreR * 3, -coreR * 1));
-            ctx.lineTo(tX(-wingLen * 0.8, 0), tY(-wingLen * 0.8, 0));
-            ctx.lineTo(0, 0);
-        }
-        ctx.fill(); ctx.stroke();
-
-        // Hellfire Wings (Foreground Layer)
-        ctx.fillStyle = isFlash ? '#ffffff' : '#7c2d12';
-        ctx.strokeStyle = '#fef08a'; 
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            let rot = (1.047197 * i) - wingFlap;
-            let cR = Math.cos(rot), sR = Math.sin(rot);
-            let tX = (x, y) => x * cR - y * sR;
-            let tY = (x, y) => x * sR + y * cR;
-
-            ctx.moveTo(0, 0);
-            ctx.quadraticCurveTo(tX(coreR * 2, -coreR * 2.5), tY(coreR * 2, -coreR * 2.5), tX(wingLen, -wingLen * 0.8), tY(wingLen, -wingLen * 0.8)); 
-            ctx.lineTo(tX(coreR * 2.5, -coreR * 1.5), tY(coreR * 2.5, -coreR * 1.5));
-            ctx.lineTo(tX(wingLen * 0.7, -coreR * 0.5), tY(wingLen * 0.7, -coreR * 0.5));
-            ctx.lineTo(0, 0);
-        }
-        ctx.fill(); ctx.stroke();
-
-        // 4. COLOSSAL TITAN CARAPACE
-        const corePulse = Math.sin(now * 0.0125) * 0.3; 
-        const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * (1.3 + corePulse));
-        coreGrad.addColorStop(0, '#ffffff'); 
-        coreGrad.addColorStop(0.3, '#facc15'); 
-        coreGrad.addColorStop(0.7, '#b91c1c'); 
-        coreGrad.addColorStop(1, 'transparent');
-        
-        ctx.fillStyle = isFlash ? '#ffffff' : coreGrad;
-        ctx.beginPath(); ctx.arc(0, 0, coreR * 1.4, 0, pi2); ctx.fill();
-
-        // Floating Obsidian Armor Plates (Optimized Batched Path with Faux Glow)
-        const armorGlow = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, coreR * 2.5);
-        armorGlow.addColorStop(0.5, 'rgba(234, 88, 12, 0.5)'); // #ea580c glow
-        armorGlow.addColorStop(1, 'transparent');
-        ctx.fillStyle = armorGlow;
-        ctx.beginPath(); ctx.arc(0, 0, coreR * 2.5, 0, pi2); ctx.fill();
-
-        ctx.fillStyle = isFlash ? '#ffffff' : '#0c0a09';
-        ctx.strokeStyle = '#dc2626'; 
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            let pAng = (i * 1.047197) + (now * 0.002); 
-            let breathe = Math.sin((now * 0.00666) + i) * 0.15; 
-            let pDist = coreR * (0.5 + breathe); 
-            
-            let cx = Math.cos(pAng) * pDist;
-            let cy = Math.sin(pAng) * pDist;
-            let cR = Math.cos(pAng), sR = Math.sin(pAng);
-            let tX = (x, y) => (x * cR - y * sR) + cx;
-            let tY = (x, y) => (x * sR + y * cR) + cy;
-            
-            ctx.moveTo(tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
-            ctx.quadraticCurveTo(tX(coreR * 1.6, -coreR * 0.2), tY(coreR * 1.6, -coreR * 0.2), tX(coreR * 1.6, 0), tY(coreR * 1.6, 0));
-            ctx.quadraticCurveTo(tX(coreR * 1.6, coreR * 0.2), tY(coreR * 1.6, coreR * 0.2), tX(0, coreR * 0.6), tY(0, coreR * 0.6));
-            ctx.quadraticCurveTo(tX(coreR * 0.6, 0), tY(coreR * 0.6, 0), tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
-        }
-        ctx.fill(); ctx.stroke();
-
-        // 5. OMNIPRESENT EYES (Body & Main)
-        const eyeColors = ['#ffffff', '#facc15', '#dc2626', '#09090b'];
-        const flickerColor = eyeColors[Math.floor((now * 0.01) % eyeColors.length)];
-        
-        // Main Eye with Faux Glow
-        const eyeGlowGrad = ctx.createRadialGradient(0, -coreR * 0.3, coreR * 0.1, 0, -coreR * 0.3, coreR * 1.5);
-        let fcRGB = flickerColor === '#ffffff' ? '255,255,255' : flickerColor === '#facc15' ? '250,204,21' : flickerColor === '#dc2626' ? '220,38,38' : '9,9,11';
-        eyeGlowGrad.addColorStop(0, `rgba(${fcRGB}, 0.8)`);
-        eyeGlowGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = eyeGlowGrad;
-        ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 1.5, coreR * 0.6, 0, 0, pi2); ctx.fill();
-        
-        ctx.fillStyle = isFlash ? '#000000' : flickerColor;
-        ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 0.6, coreR * 0.2, 0, 0, pi2); ctx.fill();
-        
-        // Additional body eyes 
-        const eyeCount = isEnraged ? 8 : 4;
-        for (let i = 0; i < eyeCount; i++) {
-            let eAng = (i / eyeCount) * pi2 + Math.PI;
-            let eDist = coreR * 0.9;
-            let eScale = (i % 2 === 0) ? 0.2 : 0.15;
-            ctx.fillStyle = eyeColors[Math.floor(((now + i * 50) * 0.01) % eyeColors.length)];
-            ctx.beginPath(); 
-            ctx.ellipse(Math.cos(eAng) * eDist, Math.sin(eAng) * eDist, coreR * eScale, coreR * (eScale * 0.4), eAng, 0, pi2); 
+        let fade = 1 - (Math.abs(emberY) / (coreR * 5.5));
+        if (fade > 0) {
+            // Mas mabilis ang string fillStyle kaysa globalAlpha state change
+            ctx.fillStyle = `rgba(${emberRGB}, ${fade})`;
+            ctx.beginPath();
+            // Pinalitan ang Math.random() ng pseudo-random na i%3 para hindi mag-jitter ang size per frame
+            ctx.arc(emberX, emberY, isEnraged ? (i % 3) + 1.5 : 1.5, 0, pi2);
             ctx.fill();
         }
+    }
 
-        // 6. FLOATING INFERNAL CROWN (Matrix Math)
-        const crownY = -coreR * 2 + Math.sin(now * 0.00666) * 15;
+    // ==================================================
+    // 3. LEVITATION & ENTITY JITTER 
+    // ==================================================
+    let shakeX = 0, shakeY = 0;
+    if (isEnraged) {
+        shakeX = (Math.random() - 0.5) * (coreR * 0.25);
+        shakeY = (Math.random() - 0.5) * (coreR * 0.25);
+    }
+    const floatY = Math.sin(now * 0.000833) * (coreR * 0.4) + shakeY; 
+    ctx.translate(shakeX, floatY);
+
+    // ==================================================
+    // 4. THE ECLIPSE HALO
+    // ==================================================
+    const haloGlowSz = isEnraged ? 150 : 50;
+    const fauxGlowRad = coreR * 3.5 + haloGlowSz;
+    
+    const haloGlowGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5 - 10, 0, -coreR * 0.5, fauxGlowRad);
+    haloGlowGrad.addColorStop(0, 'rgba(220, 38, 38, 1)'); 
+    haloGlowGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+    
+    ctx.fillStyle = haloGlowGrad;
+    ctx.beginPath(); ctx.arc(0, -coreR * 0.5, fauxGlowRad, 0, pi2); ctx.fill();
+
+    ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
+    ctx.strokeStyle = `rgba(220, 38, 38, ${0.5 + Math.sin(now * 0.005) * 0.4})`;
+    ctx.lineWidth = coreR * 0.4;
+    ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 3.5, 0, pi2); ctx.fill(); ctx.stroke();
+    
+    const eclipseGrad = ctx.createRadialGradient(0, -coreR * 0.5, coreR * 3.5, 0, -coreR * 0.5, coreR * 6);
+    eclipseGrad.addColorStop(0, 'rgba(153, 27, 27, 0.8)');
+    eclipseGrad.addColorStop(0.5, 'rgba(45, 10, 70, 0.3)');
+    eclipseGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = eclipseGrad;
+    ctx.beginPath(); ctx.arc(0, -coreR * 0.5, coreR * 6.5, 0, pi2); ctx.fill();
+
+    // ==================================================
+    // 5. AWAKENED CROWN 
+    // ==================================================
+    const crownSpeed = isEnraged ? 800 : 2500;
+    const crownRot = now / crownSpeed;
+    
+    ctx.save();
+    ctx.translate(0, -coreR * 0.5);
+    ctx.rotate(crownRot);
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = isEnraged ? 4 : 2;
+    ctx.setLineDash([coreR * 0.8, coreR * 1.2]);
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 3.8, 0, pi2); ctx.stroke();
+    ctx.restore();
+
+    const dSin = Math.sin(now * 0.002) * 12; 
+    const dCos = Math.cos(now * 0.002) * 12;
+    
+    ctx.fillStyle = '#ef4444';
+    ctx.beginPath();
+    for(let i=0; i<4; i++) {
+        let gAng = (i * 1.5707963) + crownRot; 
+        let cx = Math.cos(gAng) * (coreR * 3.8);
+        let cy = Math.sin(gAng) * (coreR * 3.8) - coreR * 0.5; 
         
-        ctx.fillStyle = '#0c0a09';
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for (let i = 0; i < 5; i++) {
-            let cAng = (now * -0.005) + (i * 1.256637); 
-            let cDist = coreR * 1.2;
-            let cx = Math.cos(cAng) * cDist;
-            let cy = Math.sin(cAng) * cDist * 0.3 + crownY; 
-            let rot = now * 0.01;
+        ctx.moveTo(cx + dSin, cy - dCos);
+        ctx.lineTo(cx + dCos, cy + dSin);
+        ctx.lineTo(cx - dSin, cy + dCos);
+        ctx.lineTo(cx - dCos, cy - dSin);
+    }
+    ctx.fill();
+
+    // ==================================================
+    // 6. REALITY RIBBONS
+    // ==================================================
+    ctx.strokeStyle = isEnraged ? '#ef4444' : 'rgba(153, 27, 27, 0.9)';
+    ctx.lineWidth = isEnraged ? 6 : 4;
+    ctx.setLineDash([]);
+    
+    ctx.beginPath();
+    let ribbonDots = [];
+    for(let i=0; i<4; i++) {
+        let rAng = (now * -0.0005) + (i * 1.5707963);
+        let flow = coreR * (3 + Math.sin(now * 0.0025 + i) * 2);
+        let cCos = Math.cos(rAng);
+        let cSin = Math.sin(rAng);
+
+        let cx = cCos * (coreR * 2.5) - cSin * coreR;
+        let cy = cSin * (coreR * 2.5) + cCos * coreR;
+        let ex = cCos * flow - cSin * (-coreR * 2.5);
+        let ey = cSin * flow + cCos * (-coreR * 2.5);
+
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(cx, cy, ex, ey);
+        ribbonDots.push({x: ex, y: ey});
+    }
+    ctx.stroke(); 
+
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ef4444';
+    ctx.beginPath();
+    for(let i=0; i<4; i++) {
+        ctx.moveTo(ribbonDots[i].x + 4, ribbonDots[i].y);
+        ctx.arc(ribbonDots[i].x, ribbonDots[i].y, 4, 0, pi2);
+    }
+    ctx.fill();
+    ctx.shadowBlur = 0; 
+
+    // ==================================================
+    // 7. DARK SERAPH WINGS
+    // ==================================================
+    const wingFlap = Math.cos(now / (isEnraged ? 600 : 1000)) * 0.2 * enrageMult; 
+    ctx.fillStyle = isFlash ? '#ffffff' : '#030303';
+    ctx.strokeStyle = isEnraged ? '#ef4444' : '#991b1b';
+    ctx.lineWidth = 3;
+    
+    const wingAngles = [-0.8, -0.3, 0.2, 0.7]; 
+    ctx.beginPath();
+    for (let j = 0; j < 2; j++) { 
+        let flip = j === 0 ? 1 : -1;
+        for (let i = 0; i < 4; i++) {
+            let rot = wingAngles[i] + wingFlap * (i % 2 === 0 ? 1 : -1);
+            let cosR = Math.cos(rot), sinR = Math.sin(rot);
+            let wLen = coreR * (isEnraged ? 8 : 6) - (i * coreR);
             
-            let cR = Math.cos(rot), sR = Math.sin(rot);
-            let tX = (x, y) => x * cR - y * sR + cx;
-            let tY = (x, y) => x * sR + y * cR + cy;
+            let tX = (x, y) => (x * cosR - y * sinR) * flip;
+            let tY = (x, y) => (x * sinR + y * cosR);
 
-            ctx.moveTo(tX(0, -coreR * 0.4), tY(0, -coreR * 0.4)); 
-            ctx.quadraticCurveTo(tX(coreR * 0.1, 0), tY(coreR * 0.1, 0), tX(coreR * 0.2, 0), tY(coreR * 0.2, 0)); 
-            ctx.quadraticCurveTo(tX(coreR * 0.1, coreR * 0.2), tY(coreR * 0.1, coreR * 0.2), tX(0, coreR * 0.4), tY(0, coreR * 0.4)); 
-            ctx.quadraticCurveTo(tX(-coreR * 0.1, coreR * 0.2), tY(-coreR * 0.1, coreR * 0.2), tX(-coreR * 0.2, 0), tY(-coreR * 0.2, 0));
-            ctx.quadraticCurveTo(tX(-coreR * 0.1, 0), tY(-coreR * 0.1, 0), tX(0, -coreR * 0.4), tY(0, -coreR * 0.4));
+            ctx.moveTo(0, 0);
+            ctx.lineTo(tX(coreR * 1.8, -wLen * 0.5), tY(coreR * 1.8, -wLen * 0.5));
+            ctx.lineTo(tX(coreR * 0.6, -wLen), tY(coreR * 0.6, -wLen));
+            ctx.lineTo(tX(-coreR * 0.6, -wLen * 0.7), tY(-coreR * 0.6, -wLen * 0.7));
+            ctx.closePath();
         }
-        ctx.fill(); ctx.stroke();
+    }
+    ctx.fill(); ctx.stroke(); 
+
+    // ==================================================
+    // 8. SOVEREIGN CARAPACE
+    // ==================================================
+    ctx.fillStyle = isFlash ? '#ffffff' : '#09090b'; 
+    ctx.strokeStyle = '#ef4444'; 
+    ctx.lineWidth = isEnraged ? 3 : 2;
+    
+    const breathe = Math.sin(now * 0.0025) * (coreR * 0.15);
+    ctx.beginPath(); 
+    ctx.moveTo(coreR * 1.2 + breathe, -coreR); ctx.lineTo(coreR * 2.8 + breathe, -coreR * 1.6); ctx.lineTo(coreR * 1.8 + breathe, -coreR * 0.2); ctx.closePath();
+    ctx.moveTo(-coreR * 1.2 - breathe, -coreR); ctx.lineTo(-coreR * 2.8 - breathe, -coreR * 1.6); ctx.lineTo(-coreR * 1.8 - breathe, -coreR * 0.2); ctx.closePath();
+    ctx.moveTo(0, -coreR * 2.8); ctx.lineTo(coreR * 1.6, -coreR * 0.8); ctx.lineTo(coreR * 0.9, coreR * 2.0); 
+    ctx.lineTo(0, coreR * 3.0); ctx.lineTo(-coreR * 0.9, coreR * 2.0); ctx.lineTo(-coreR * 1.6, -coreR * 0.8); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+
+    // ==================================================
+    // 9. SOUL VORTEX / DEBRIS
+    // ==================================================
+    // 🚨 OPTIMIZATION: Pinalitan ng dynamic string ang globalAlpha
+    for(let i=0; i<8; i++) {
+        let pTime = ((now / (isEnraged ? 300 : 600)) + (i * 0.125)) % 1; 
+        let pAngle = (i * 0.785398) + (now * 0.002); 
+        let pRadius = coreR * 5 * (1 - pTime); 
+        let alpha = Math.max(0, Math.sin(pTime * Math.PI)); 
         
-        // Burning Crown Runes (Inner Ring) - Removed ShadowBlur
-        ctx.fillStyle = '#ea580c';
-        ctx.font = `${coreR * 0.4}px "Georgia"`;
-        ctx.textAlign = 'center';
-        for (let i = 0; i < 3; i++) {
-            let rAng = (now * 0.00666) + (i * 2.094395); 
-            ctx.fillText("✦", Math.cos(rAng) * coreR * 0.7, Math.sin(rAng) * coreR * 0.2 + crownY);
-        }
+        ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+        ctx.beginPath(); 
+        ctx.arc(Math.cos(pAngle) * pRadius, Math.sin(pAngle) * pRadius, coreR * 0.15, 0, pi2); 
+        ctx.fill();
+    }
 
-        // 7. PARTICLES (Lava Embers, Ash, Sparks - Optimized Batched Paths)
-        let parts = [[], [], []];
-        for (let k = 0; k < 40; k++) {
-            let pType = k % 3; 
-            let pX = (Math.random() - 0.5) * coreR * 20;
-            let pY = (Math.random() - 0.5) * coreR * 20 - ((now / (pType === 1 ? 5 : 15)) + k * 80) % (coreR * 15);
-            parts[pType].push({x: pX, y: pY});
-        }
+    // ==================================================
+    // 10. THE BLACK STAR CORE 
+    // ==================================================
+    const coreBeat = Math.sin(now / (isEnraged ? 100 : 250)) * (isEnraged ? 0.3 : 0.2);
+    const innerCoreR = coreR * (0.8 + coreBeat);
+    const coreGlowSz = isEnraged ? 80 : 40;
+    
+    const coreGlowGrad = ctx.createRadialGradient(0, 0, innerCoreR * 0.5, 0, 0, innerCoreR * 1.8 + coreGlowSz);
+    coreGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)'); 
+    coreGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = coreGlowGrad;
+    ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 1.8 + coreGlowSz, 0, pi2); ctx.fill();
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : '#ef4444';
+    ctx.beginPath();
+    for(let i=0; i<8; i++) { 
+        let ang = (i * 0.785398) + (now/ (isEnraged ? 500 : 1000));
+        let dist = i % 2 === 0 ? innerCoreR * 1.8 : innerCoreR * 0.8;
+        ctx.lineTo(Math.cos(ang) * dist, Math.sin(ang) * dist);
+    }
+    ctx.fill();
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : '#000000';
+    ctx.beginPath(); ctx.arc(0, 0, innerCoreR * 0.7, 0, pi2); ctx.fill();
+
+    // ==================================================
+    // 11. THE ZENITH EYE 
+    // ==================================================
+    const eyeY = -coreR * 3.8; 
+    const eyeBlink = isEnraged ? 1 : Math.max(0.1, Math.sin(now / 1200)); 
+    const eyeHeight = coreR * 1.0 * eyeBlink;
+    const eyeGlowSz = isEnraged ? 80 : 40;
+    
+    const eyeGlowGrad = ctx.createRadialGradient(0, eyeY, coreR * 0.5, 0, eyeY, coreR * 1.6 + eyeGlowSz);
+    eyeGlowGrad.addColorStop(0, 'rgba(239, 68, 68, 1)');
+    eyeGlowGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+    ctx.fillStyle = eyeGlowGrad;
+    ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6 + eyeGlowSz, eyeHeight + eyeGlowSz, 0, 0, pi2); ctx.fill();
+    
+    ctx.fillStyle = '#050505';
+    ctx.beginPath(); ctx.ellipse(0, eyeY, coreR * 1.6, eyeHeight, 0, 0, pi2); ctx.fill(); 
+    
+    if (eyeBlink > 0.2) { 
+        const pupilTrackX = Math.sin(now / 800) * (coreR * 0.5);
         
-        // Type 0: Ash
-        ctx.fillStyle = 'rgba(87, 83, 78, 0.8)';
-        ctx.beginPath();
-        for (let p of parts[0]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, Math.random() * 2 + 1, 0, pi2); }
-        ctx.fill();
+        ctx.fillStyle = isEnraged ? '#ffffff' : '#ef4444'; 
+        ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.6, eyeHeight * 0.6, 0, 0, pi2); ctx.fill(); 
+        
+        ctx.fillStyle = '#000000';
+        ctx.beginPath(); ctx.ellipse(pupilTrackX, eyeY, coreR * 0.15, eyeHeight * 0.5, 0, 0, pi2); ctx.fill();
+        
+        // 🚨 OPTIMIZATION: RGBA Blood Drops imbes na globalAlpha
+        const dropLimit = isEnraged ? 80 : 50;
+        for(let i=0; i<5; i++) {
+            let dropY = eyeY + eyeHeight + ((now / (isEnraged ? 15 : 20) + i * 25) % dropLimit);
+            let alpha = Math.max(0, 1 - ((dropY - eyeY) / dropLimit));
+            ctx.fillStyle = `rgba(239, 68, 68, ${alpha})`;
+            ctx.beginPath(); 
+            ctx.arc(pupilTrackX + (i-2)*6, dropY, isEnraged ? 3 : 2, 0, pi2); 
+            ctx.fill();
+        }
+    }
 
-        // Type 1: Embers with Faux Glow
-        ctx.fillStyle = '#facc15';
-        ctx.beginPath();
-        for (let p of parts[1]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, Math.random() * 3 + 1, 0, pi2); }
-        ctx.fill();
-        ctx.fillStyle = 'rgba(234, 88, 12, 0.4)';
-        ctx.beginPath();
-        for (let p of parts[1]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, 6, 0, pi2); }
-        ctx.fill();
+    ctx.restore();
+} else if (e.type === 'abyss') {
+    // ==================================================
+    // 🌋 PRIMORDIAL DEMON (World-Ending God of Destruction)
+    // ==================================================
+    
+    const hpRatio = (e.hp !== undefined && e.maxHp !== undefined) ? (e.hp / e.maxHp) : 1;
+    const isEnraged = hpRatio <= 0.25;
+    const isFlash = e.flash > 0;
+    
+    const enrageScale = isEnraged ? 1.5 : 1;
+    const baseR = e.r * 1.4; 
+    const coreR = baseR * enrageScale;
+    const pi2 = 6.283185307; // Fast Math.PI * 2
+    
+    // 🚨 OPTIMIZATION: Pseudo-random function para iwasan ang `Math.random()` lag sa loop
+    const seededRandom = (seed) => {
+        const x = Math.sin(seed * 9999) * 10000;
+        return x - Math.floor(x);
+    };
+    
+    ctx.save();
+    
+    // 💥 REALITY DISTORTION / ENRAGE SCREEN SHAKE (Optimized without Math.random)
+    if (isEnraged) {
+        // Gumamit tayo ng sine wave na nakabase sa time para smooth ang shake, hindi erratic jitter
+        const shakeX = Math.sin(now * 0.05) * 5;
+        const shakeY = Math.cos(now * 0.04) * 5;
+        ctx.translate(shakeX, shakeY);
+    }
 
-        // Type 2: Obsidian Fragments
-        ctx.fillStyle = '#0c0a09';
-        ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (let p of parts[2]) { ctx.moveTo(p.x, p.y); ctx.arc(p.x, p.y, 2.5, 0, pi2); }
-        ctx.fill(); ctx.stroke();
+    // 0. APOCALYPTIC ENVIRONMENT 
+    const distPulse = Math.sin(now * 0.00666) * 0.15; 
+    const envGrad = ctx.createRadialGradient(0, 0, coreR * 2, 0, 0, coreR * 15);
+    envGrad.addColorStop(0, 'transparent');
+    envGrad.addColorStop(0.6, `rgba(153, 27, 27, ${0.1 + distPulse})`); 
+    envGrad.addColorStop(1, `rgba(69, 10, 10, ${0.3 + distPulse})`);
+    ctx.fillStyle = envGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreR * 15, 0, pi2);
+    ctx.fill();
 
-        ctx.restore();
-      }
+    // 1. MULTI-LAYERED APOCALYPTIC AURA
+    const auraPulse = Math.abs(Math.sin(now * 0.005));
+    const auraRadius = coreR * (isEnraged ? 6 + auraPulse * 2 : 4 + auraPulse);
+    
+    const aura = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, auraRadius);
+    aura.addColorStop(0, '#ffffff'); 
+    aura.addColorStop(0.2, '#facc15'); 
+    aura.addColorStop(0.4, '#ea580c'); 
+    aura.addColorStop(0.7, '#7f1d1d'); 
+    aura.addColorStop(1, 'transparent'); 
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : aura;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, pi2); ctx.fill();
+    ctx.globalAlpha = 1.0;
+
+    // Swirling Infernal Vortexes 
+    const vortRot1 = now * 0.005;
+    const vortRot2 = vortRot1 + 1.570796; 
+    
+    ctx.lineWidth = coreR * 0.4;
+    ctx.strokeStyle = `rgba(234, 88, 12, ${0.3 + distPulse})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 3, coreR * 3, vortRot1, 0, Math.PI); ctx.stroke();
+    
+    ctx.strokeStyle = `rgba(153, 27, 27, ${0.2 + distPulse})`;
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4, coreR * 4, vortRot2, 0, Math.PI); ctx.stroke();
+
+    // 2. GYROSCOPIC INFERNAL SIGILS 
+    const sigilSpeedMult = isEnraged ? 0.00666 : 0.00333; 
+    const outRot = now * -sigilSpeedMult;
+    
+    ctx.strokeStyle = 'rgba(153, 27, 27, 0.6)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([20, 15, 5, 15]);
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 5.5, coreR * 5.5, outRot, 0, pi2); ctx.stroke();
+
+    const inRot = now * (sigilSpeedMult * 1.25); 
+    ctx.strokeStyle = 'rgba(234, 88, 12, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([40, 20]);
+    ctx.beginPath(); ctx.ellipse(0, 0, coreR * 4.5, coreR * 4.5, inRot, 0, pi2); ctx.stroke();
+    
+    ctx.font = `${coreR * 0.6}px "Courier New", monospace`;
+    ctx.fillStyle = '#facc15';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const charBase = 0x16A0;
+    for (let i = 0; i < 12; i++) {
+        let ang = (i * 0.523598) + inRot; 
+        let rune = String.fromCharCode(charBase + (i % 20)); 
+        ctx.fillText(rune, Math.cos(ang) * coreR * 4.5, Math.sin(ang) * coreR * 4.5);
+    }
+    
+    ctx.setLineDash([]);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+        ctx.ellipse(0, 0, coreR * 4.2, coreR * 0.8, (i * 0.785398), 0, pi2);
+    }
+    ctx.stroke();
+
+    // 3. 12 WINGS 
+    const wingFlap = Math.cos(now * 0.00666) * 0.4;
+    const wingLen = isEnraged ? coreR * 8 : coreR * 5;
+    
+    // Shadow Wings
+    ctx.fillStyle = isFlash ? '#ffffff' : '#09090b';
+    ctx.strokeStyle = '#4c1d95'; 
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        let rot = (1.047197 * i) + wingFlap * 0.8 + 0.2; 
+        let cR = Math.cos(rot), sR = Math.sin(rot);
+        let tX = (x, y) => x * cR - y * sR;
+        let tY = (x, y) => x * sR + y * cR;
+
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(tX(-coreR * 2, -coreR * 2), tY(-coreR * 2, -coreR * 2), tX(-wingLen * 1.1, -wingLen * 0.9), tY(-wingLen * 1.1, -wingLen * 0.9));
+        ctx.lineTo(tX(-coreR * 3, -coreR * 1), tY(-coreR * 3, -coreR * 1));
+        ctx.lineTo(tX(-wingLen * 0.8, 0), tY(-wingLen * 0.8, 0));
+        ctx.lineTo(0, 0);
+    }
+    ctx.fill(); ctx.stroke();
+
+    // Hellfire Wings
+    ctx.fillStyle = isFlash ? '#ffffff' : '#7c2d12';
+    ctx.strokeStyle = '#fef08a'; 
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        let rot = (1.047197 * i) - wingFlap;
+        let cR = Math.cos(rot), sR = Math.sin(rot);
+        let tX = (x, y) => x * cR - y * sR;
+        let tY = (x, y) => x * sR + y * cR;
+
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(tX(coreR * 2, -coreR * 2.5), tY(coreR * 2, -coreR * 2.5), tX(wingLen, -wingLen * 0.8), tY(wingLen, -wingLen * 0.8)); 
+        ctx.lineTo(tX(coreR * 2.5, -coreR * 1.5), tY(coreR * 2.5, -coreR * 1.5));
+        ctx.lineTo(tX(wingLen * 0.7, -coreR * 0.5), tY(wingLen * 0.7, -coreR * 0.5));
+        ctx.lineTo(0, 0);
+    }
+    ctx.fill(); ctx.stroke();
+
+    // 4. COLOSSAL TITAN CARAPACE
+    const corePulse = Math.sin(now * 0.0125) * 0.3; 
+    const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR * (1.3 + corePulse));
+    coreGrad.addColorStop(0, '#ffffff'); 
+    coreGrad.addColorStop(0.3, '#facc15'); 
+    coreGrad.addColorStop(0.7, '#b91c1c'); 
+    coreGrad.addColorStop(1, 'transparent');
+    
+    ctx.fillStyle = isFlash ? '#ffffff' : coreGrad;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 1.4, 0, pi2); ctx.fill();
+
+    const armorGlow = ctx.createRadialGradient(0, 0, coreR * 0.5, 0, 0, coreR * 2.5);
+    armorGlow.addColorStop(0.5, 'rgba(234, 88, 12, 0.5)'); 
+    armorGlow.addColorStop(1, 'transparent');
+    ctx.fillStyle = armorGlow;
+    ctx.beginPath(); ctx.arc(0, 0, coreR * 2.5, 0, pi2); ctx.fill();
+
+    ctx.fillStyle = isFlash ? '#ffffff' : '#0c0a09';
+    ctx.strokeStyle = '#dc2626'; 
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        let pAng = (i * 1.047197) + (now * 0.002); 
+        let breathe = Math.sin((now * 0.00666) + i) * 0.15; 
+        let pDist = coreR * (0.5 + breathe); 
+        
+        let cx = Math.cos(pAng) * pDist;
+        let cy = Math.sin(pAng) * pDist;
+        let cR = Math.cos(pAng), sR = Math.sin(pAng);
+        let tX = (x, y) => (x * cR - y * sR) + cx;
+        let tY = (x, y) => (x * sR + y * cR) + cy;
+        
+        ctx.moveTo(tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
+        ctx.quadraticCurveTo(tX(coreR * 1.6, -coreR * 0.2), tY(coreR * 1.6, -coreR * 0.2), tX(coreR * 1.6, 0), tY(coreR * 1.6, 0));
+        ctx.quadraticCurveTo(tX(coreR * 1.6, coreR * 0.2), tY(coreR * 1.6, coreR * 0.2), tX(0, coreR * 0.6), tY(0, coreR * 0.6));
+        ctx.quadraticCurveTo(tX(coreR * 0.6, 0), tY(coreR * 0.6, 0), tX(0, -coreR * 0.6), tY(0, -coreR * 0.6));
+    }
+    ctx.fill(); ctx.stroke();
+
+    // 5. OMNIPRESENT EYES
+    // 🚨 OPTIMIZATION: Inalis natin ang arrays sa loop para sa performance
+    const eyePhase = Math.floor((now * 0.01) % 4);
+    const flickerColor = eyePhase === 0 ? '#ffffff' : eyePhase === 1 ? '#facc15' : eyePhase === 2 ? '#dc2626' : '#09090b';
+    
+    const eyeGlowGrad = ctx.createRadialGradient(0, -coreR * 0.3, coreR * 0.1, 0, -coreR * 0.3, coreR * 1.5);
+    const fcRGB = eyePhase === 0 ? '255,255,255' : eyePhase === 1 ? '250,204,21' : eyePhase === 2 ? '220,38,38' : '9,9,11';
+    eyeGlowGrad.addColorStop(0, `rgba(${fcRGB}, 0.8)`);
+    eyeGlowGrad.addColorStop(1, 'transparent');
+    ctx.fillStyle = eyeGlowGrad;
+    ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 1.5, coreR * 0.6, 0, 0, pi2); ctx.fill();
+    
+    ctx.fillStyle = isFlash ? '#000000' : flickerColor;
+    ctx.beginPath(); ctx.ellipse(0, -coreR * 0.3, coreR * 0.6, coreR * 0.2, 0, 0, pi2); ctx.fill();
+    
+    const eyeCount = isEnraged ? 8 : 4;
+    for (let i = 0; i < eyeCount; i++) {
+        let eAng = (i / eyeCount) * pi2 + Math.PI;
+        let eDist = coreR * 0.9;
+        let eScale = (i % 2 === 0) ? 0.2 : 0.15;
+        let subPhase = Math.floor(((now + i * 50) * 0.01) % 4);
+        ctx.fillStyle = subPhase === 0 ? '#ffffff' : subPhase === 1 ? '#facc15' : subPhase === 2 ? '#dc2626' : '#09090b';
+        ctx.beginPath(); 
+        ctx.ellipse(Math.cos(eAng) * eDist, Math.sin(eAng) * eDist, coreR * eScale, coreR * (eScale * 0.4), eAng, 0, pi2); 
+        ctx.fill();
+    }
+
+    // 6. FLOATING INFERNAL CROWN 
+    const crownY = -coreR * 2 + Math.sin(now * 0.00666) * 15;
+    
+    ctx.fillStyle = '#0c0a09';
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+        let cAng = (now * -0.005) + (i * 1.256637); 
+        let cDist = coreR * 1.2;
+        let cx = Math.cos(cAng) * cDist;
+        let cy = Math.sin(cAng) * cDist * 0.3 + crownY; 
+        let rot = now * 0.01;
+        
+        let cR = Math.cos(rot), sR = Math.sin(rot);
+        let tX = (x, y) => x * cR - y * sR + cx;
+        let tY = (x, y) => x * sR + y * cR + cy;
+
+        ctx.moveTo(tX(0, -coreR * 0.4), tY(0, -coreR * 0.4)); 
+        ctx.quadraticCurveTo(tX(coreR * 0.1, 0), tY(coreR * 0.1, 0), tX(coreR * 0.2, 0), tY(coreR * 0.2, 0)); 
+        ctx.quadraticCurveTo(tX(coreR * 0.1, coreR * 0.2), tY(coreR * 0.1, coreR * 0.2), tX(0, coreR * 0.4), tY(0, coreR * 0.4)); 
+        ctx.quadraticCurveTo(tX(-coreR * 0.1, coreR * 0.2), tY(-coreR * 0.1, coreR * 0.2), tX(-coreR * 0.2, 0), tY(-coreR * 0.2, 0));
+        ctx.quadraticCurveTo(tX(-coreR * 0.1, 0), tY(-coreR * 0.1, 0), tX(0, -coreR * 0.4), tY(0, -coreR * 0.4));
+    }
+    ctx.fill(); ctx.stroke();
+    
+    ctx.fillStyle = '#ea580c';
+    ctx.font = `${coreR * 0.4}px "Georgia"`;
+    ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++) {
+        let rAng = (now * 0.00666) + (i * 2.094395); 
+        ctx.fillText("✦", Math.cos(rAng) * coreR * 0.7, Math.sin(rAng) * coreR * 0.2 + crownY);
+    }
+
+    // 7. PARTICLES (Lava Embers, Ash, Sparks - Optimized with seeded randoms!)
+    let parts = [[], [], []];
+    // 🚨 OPTIMIZATION: Tinanggal natin ang array instantiation per frame at Math.random.
+    for (let k = 0; k < 40; k++) {
+        let pType = k % 3; 
+        
+        // Ginamit natin ang `seededRandom` function gamit ang index (`k`) bilang seed.
+        // Ibig sabihin, ang particle #1 ay laging nasa specific X position na yun kahit magpalit ng frame.
+        let pX = (seededRandom(k) - 0.5) * coreR * 20;
+        
+        // Ang pag-angat nila ay based parin sa oras (now) para umaangat ang animation.
+        let pY = (seededRandom(k * 2) - 0.5) * coreR * 20 - ((now / (pType === 1 ? 5 : 15)) + k * 80) % (coreR * 15);
+        parts[pType].push({x: pX, y: pY, sizeMod: seededRandom(k * 3)});
+    }
+    
+    // Type 0: Ash
+    ctx.fillStyle = 'rgba(87, 83, 78, 0.8)';
+    ctx.beginPath();
+    for (let p of parts[0]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, p.sizeMod * 2 + 1, 0, pi2); 
+    }
+    ctx.fill();
+
+    // Type 1: Embers with Faux Glow
+    ctx.fillStyle = '#facc15';
+    ctx.beginPath();
+    for (let p of parts[1]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, p.sizeMod * 3 + 1, 0, pi2); 
+    }
+    ctx.fill();
+    
+    ctx.fillStyle = 'rgba(234, 88, 12, 0.4)';
+    ctx.beginPath();
+    for (let p of parts[1]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, 6, 0, pi2); 
+    }
+    ctx.fill();
+
+    // Type 2: Obsidian Fragments
+    ctx.fillStyle = '#0c0a09';
+    ctx.strokeStyle = '#dc2626';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let p of parts[2]) { 
+        ctx.moveTo(p.x, p.y); 
+        ctx.arc(p.x, p.y, 2.5, 0, pi2); 
+    }
+    ctx.fill(); ctx.stroke();
+
+    ctx.restore();
+}
             
             ctx.restore();
 
@@ -8888,15 +12512,15 @@ if (skin === 'shadow') {
           ctx.shadowBlur = 0;
         }
         
-// 🔥 VISUAL STATUS DEBUFFS (OPTIMIZED - NO SHADOW BLUR) 🔥
+// 🔥 VISUAL STATUS DEBUFFS (OPTIMIZED - VECTOR ICONS, NO EMOJI/FONT LOOKUP) 🔥
       if (e.hp > 0 && e.hp < e.maxHp) { 
         let activeDebuffs = [];
-        if (e.arcaneBurnTime > 0) activeDebuffs.push('💥');
-        if (e.temporalSlowTime > 0) activeDebuffs.push('❄️');
-        if (e.stunnedTime > 0) activeDebuffs.push('💫');
-        if (e.stigmaTime > 0) activeDebuffs.push('🩸');
-        if (e.voidExhaustTime > 0) activeDebuffs.push('🌌');
-        if (e.instabTime > 0) activeDebuffs.push('💔');
+        if (e.arcaneBurnTime > 0) activeDebuffs.push('burn');
+        if (e.temporalSlowTime > 0) activeDebuffs.push('slow');
+        if (e.stunnedTime > 0) activeDebuffs.push('stun');
+        if (e.stigmaTime > 0) activeDebuffs.push('bleed');
+        if (e.voidExhaustTime > 0) activeDebuffs.push('void');
+        if (e.instabTime > 0) activeDebuffs.push('instab');
 
         if (activeDebuffs.length > 0) {
           const spacing = 14; 
@@ -8907,14 +12531,10 @@ if (skin === 'shadow') {
           ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
           ctx.fillRect(e.x - totalWidth / 2 - 2, startY - 7, totalWidth + 4, 15);
 
-          // 2. I-render ang mga Emojis
-          ctx.font = `12px Arial`; 
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          
+          // 2. I-render ang mga vector icons (walang font/emoji lookup, mas mabilis)
           let startX = e.x - totalWidth / 2 + (spacing / 2);
-          activeDebuffs.forEach((icon) => {
-            ctx.fillText(icon, startX, startY);
+          activeDebuffs.forEach((type) => {
+            drawDebuffIcon(ctx, type, startX, startY, 5);
             startX += spacing;
           });
         }
@@ -11233,94 +14853,215 @@ else if (f.id === 'golem') {
         ctx.restore();
       }
    else if (f.id === 'thunder') {
-  // Mabilis na pulse para sa kuryente
-  const pulse = Math.sin(t * 0.1) * 2; 
+  // ⚡ THUNDER SOVEREIGN — Full cinematic lightning entity
+  const pulse  = Math.sin(t * 0.08) * 2;
+  const flicker = Math.sin(t * 0.22) * 0.5 + 0.5; // fast intensity flicker
 
-  // --- 1. FAKE GLOW (Neon Purple Aura) ---
-  ctx.fillStyle = `rgba(217, 70, 239, ${0.15 + pulse * 0.02})`;
-  ctx.beginPath(); 
-  ctx.arc(0, 0, 20 + pulse, 0, Math.PI*2); 
+  // Helper: draw one jagged lightning bolt between two points
+  const drawBolt = (x1, y1, x2, y2, segs, spread, color, lw, alpha) => {
+    const pts = [{ x: x1, y: y1 }];
+    for (let s = 1; s < segs; s++) {
+      const frac = s / segs;
+      const px = x1 + (x2 - x1) * frac + (Math.random() - 0.5) * spread;
+      const py = y1 + (y2 - y1) * frac + (Math.random() - 0.5) * spread;
+      pts.push({ x: px, y: py });
+    }
+    pts.push({ x: x2, y: y2 });
+    // Outer glow pass
+    ctx.strokeStyle = color.replace(')', `, ${alpha * 0.35})`).replace('rgb', 'rgba');
+    ctx.lineWidth = lw * 3.5;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+    // Core bright pass
+    ctx.strokeStyle = color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+  };
+
+  // ── LAYER 0: AMBIENT SURGE CORONA ──────────────────────────────────────
+  // Wide electric aura — pale violet-white wash
+  const coronaR = 26 + pulse;
+  const coronaGrad = ctx.createRadialGradient(0, 0, 4, 0, 0, coronaR);
+  coronaGrad.addColorStop(0,   `rgba(240,200,255,${0.28 + flicker * 0.12})`);
+  coronaGrad.addColorStop(0.5, `rgba(180,100,255,${0.14 + flicker * 0.06})`);
+  coronaGrad.addColorStop(1,   'rgba(100,20,200,0)');
+  ctx.fillStyle = coronaGrad;
+  ctx.beginPath();
+  ctx.arc(0, 0, coronaR, 0, Math.PI * 2);
   ctx.fill();
 
-  // ✨ LEVEL 10 TRANSFORMATION: Electric Wings (Nasa likod kaya unang idinraw)
+  // ── LAYER 1: GROUND CHARGE SURGE PATH ──────────────────────────────────
+  // Tendrils reaching downward like ground contact static
+  if (Math.random() < 0.55) {
+    const surgeCount = 2 + Math.floor(Math.random() * 2);
+    for (let s = 0; s < surgeCount; s++) {
+      const sx = (Math.random() - 0.5) * 14;
+      const sy = 10 + Math.random() * 6;
+      const ex = sx + (Math.random() - 0.5) * 18;
+      const ey = sy + 10 + Math.random() * 10;
+      drawBolt(sx, sy, ex, ey, 4, 4, 'rgb(200,140,255)', 0.9, 0.7 + flicker * 0.25);
+    }
+  }
+
+  // ── LAYER 2: SMOKE / OZONE WISPS (semi-opaque dark puffs) ───────────────
+  const smokePhase = (t * 0.018) % (Math.PI * 2);
+  for (let sm = 0; sm < 5; sm++) {
+    const sa  = smokePhase + sm * 1.26;
+    const sr  = 14 + sm * 2.5;
+    const sx  = Math.cos(sa) * sr * 0.6 + Math.sin(t * 0.031 + sm) * 3;
+    const sy  = Math.sin(sa) * sr * 0.4 - 5 + sm * 1.8;
+    const ss  = 3 + sm * 1.2;
+    const smokeAlpha = 0.10 + (sm / 5) * 0.08;
+    const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, ss);
+    sg.addColorStop(0,   `rgba(60,10,80,${smokeAlpha})`);
+    sg.addColorStop(0.6, `rgba(100,30,120,${smokeAlpha * 0.5})`);
+    sg.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = sg;
+    ctx.beginPath();
+    ctx.arc(sx, sy, ss, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── LAYER 3: REMNANT LIGHTNING ARCS around the body ─────────────────────
+  // These are the "daan" / path marks — like after-images of where lightning passed
+  const arcCount = 3 + (f.level >= 5 ? 2 : 0);
+  for (let a = 0; a < arcCount; a++) {
+    if (Math.random() < 0.5) continue; // Flicker effect
+    const arcAngle = (a / arcCount) * Math.PI * 2 + t * 0.015;
+    const arcR1 = 10 + Math.random() * 4;
+    const arcR2 = 18 + Math.random() * 8;
+    const ax1 = Math.cos(arcAngle) * arcR1;
+    const ay1 = Math.sin(arcAngle) * arcR1;
+    const ax2 = Math.cos(arcAngle + 0.6) * arcR2;
+    const ay2 = Math.sin(arcAngle + 0.6) * arcR2;
+    const arcAlpha = 0.45 + flicker * 0.35;
+    drawBolt(ax1, ay1, ax2, ay2, 3, 5, 'rgb(220,180,255)', 0.8, arcAlpha);
+  }
+
+  // ── LAYER 4: ELECTRIC WINGS (level 10) ──────────────────────────────────
   if (f.level >= 10) {
-    const flap = Math.cos(t * 0.15) * 4; // Mabilis na pagkampay
-    ctx.strokeStyle = '#f0abfc'; // Bright pinkish-white
-    ctx.lineWidth = 2;
-    
-    // Left Electric Wing (Zig-zag)
-    ctx.beginPath();
-    ctx.moveTo(-4, 0); 
-    ctx.lineTo(-12, -8 - flap); 
-    ctx.lineTo(-10, -4 - flap); 
-    ctx.lineTo(-20, 2 - flap);
-    ctx.stroke();
-    
-    // Right Electric Wing (Zig-zag)
-    ctx.beginPath();
-    ctx.moveTo(4, 0); 
-    ctx.lineTo(12, -8 - flap); 
-    ctx.lineTo(10, -4 - flap); 
-    ctx.lineTo(20, 2 - flap);
-    ctx.stroke();
+    const flap = Math.cos(t * 0.12) * 5;
+    // Draw wing as multiple micro-bolt segments — feels alive
+    const wingSegs = [
+      [[-4, 0], [-14, -10 - flap], [-11, -5 - flap], [-22, 0 - flap]],
+      [[-4, 0], [-16, -6 - flap], [-13, 2 - flap]],
+      [[4, 0],  [14, -10 - flap], [11, -5 - flap],  [22, 0 - flap]],
+      [[4, 0],  [16, -6 - flap],  [13, 2 - flap]],
+    ];
+    wingSegs.forEach((pts, wi) => {
+      // Glow layer
+      ctx.strokeStyle = `rgba(240,180,255,${0.25 + flicker * 0.1})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.stroke();
+      // Core
+      ctx.strokeStyle = `rgba(255,230,255,${0.7 + flicker * 0.25})`;
+      ctx.lineWidth = wi % 2 === 0 ? 1.5 : 1;
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y));
+      ctx.stroke();
+    });
   }
 
-  // --- 2. LIGHTNING HORNS (Mga sungay na parang kidlat) ---
-  ctx.fillStyle = '#fdf4ff'; // Bright neon white
-  // Left Horn
-  ctx.beginPath(); 
-  ctx.moveTo(-3, -6); ctx.lineTo(-8, -12); ctx.lineTo(-5, -14); ctx.lineTo(-10, -20); ctx.lineTo(-2, -8); 
-  ctx.fill();
+  // ── LAYER 5: LIGHTNING HORNS ──────────────────────────────────────────
+  // Glowing jagged horns instead of plain fill
+  ctx.shadowBlur = 10 + flicker * 6;
+  ctx.shadowColor = '#e879f9';
+  ctx.fillStyle = `rgba(253,240,255,${0.85 + flicker * 0.12})`;
+  // Left Horn — main shard
+  ctx.beginPath();
+  ctx.moveTo(-3, -6); ctx.lineTo(-7, -13); ctx.lineTo(-4, -15);
+  ctx.lineTo(-9, -22); ctx.lineTo(-1, -9); ctx.fill();
+  // Left Horn — micro branch
+  ctx.beginPath();
+  ctx.moveTo(-6, -12); ctx.lineTo(-11, -16); ctx.lineTo(-8, -10); ctx.fill();
   // Right Horn
-  ctx.beginPath(); 
-  ctx.moveTo(3, -6); ctx.lineTo(8, -12); ctx.lineTo(5, -14); ctx.lineTo(10, -20); ctx.lineTo(2, -8); 
+  ctx.beginPath();
+  ctx.moveTo(3, -6); ctx.lineTo(7, -13); ctx.lineTo(4, -15);
+  ctx.lineTo(9, -22); ctx.lineTo(1, -9); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(6, -12); ctx.lineTo(11, -16); ctx.lineTo(8, -10); ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // ── LAYER 6: DEMON BODY ────────────────────────────────────────────────
+  // Dark mecha-demon core with electric edge highlight
+  ctx.shadowBlur = 12;
+  ctx.shadowColor = '#a855f7';
+  ctx.fillStyle = '#4a0264'; // Very dark purple
+  ctx.beginPath();
+  ctx.moveTo(0, -9); ctx.lineTo(8, -2); ctx.lineTo(5, 9);
+  ctx.lineTo(0, 13); ctx.lineTo(-5, 9); ctx.lineTo(-8, -2);
+  ctx.closePath();
   ctx.fill();
+  // Edge highlight — thin electric rim
+  ctx.strokeStyle = `rgba(232,121,249,${0.55 + flicker * 0.3})`;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
 
-  // --- 3. DEMON CORE BODY (Angular / Mecha-Demon Face) ---
-  ctx.fillStyle = '#701a75'; // Dark intense purple
+  // ── LAYER 7: DEMON EYES ───────────────────────────────────────────────
+  // Bright slit eyes with inner glow
+  ctx.shadowBlur = 8 + flicker * 5;
+  ctx.shadowColor = '#f0abfc';
+  ctx.fillStyle = `rgba(253,244,255,${0.9 + flicker * 0.1})`;
   ctx.beginPath();
-  ctx.moveTo(0, -8);  // Tuktok ng ulo
-  ctx.lineTo(7, -2);  // Kanang pisngi
-  ctx.lineTo(4, 8);   // Kanang panga
-  ctx.lineTo(0, 12);  // Matulis na baba
-  ctx.lineTo(-4, 8);  // Kaliwang panga
-  ctx.lineTo(-7, -2); // Kaliwang pisngi
-  ctx.fill();
+  ctx.moveTo(-2.5, -0.5); ctx.lineTo(-6.5, -2.5); ctx.lineTo(-2.5, 1.5); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(2.5, -0.5); ctx.lineTo(6.5, -2.5); ctx.lineTo(2.5, 1.5); ctx.fill();
+  // Inner hot-white core of eyes
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(-4.2, -0.8, 0.9, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4.2, -0.8, 0.9, 0, Math.PI*2); ctx.fill();
+  ctx.shadowBlur = 0;
 
-  // --- 4. DEMON EYES (Nagniningning na neon slits) ---
-  ctx.fillStyle = '#fdf4ff';
-  ctx.beginPath();
-  ctx.moveTo(-2, -1); ctx.lineTo(-6, -3); ctx.lineTo(-2, 1); ctx.fill(); // Left eye
-  ctx.beginPath();
-  ctx.moveTo(2, -1); ctx.lineTo(6, -3); ctx.lineTo(2, 1); ctx.fill(); // Right eye
-
-  // ✨ LEVEL 5 TRANSFORMATION: Rotating Electric Halo (Atom-style)
+  // ── LAYER 8: ROTATING ELECTRON ORBIT HALO (Level 5+) ─────────────────
   if (f.level >= 5) {
-    ctx.strokeStyle = '#d946ef'; // Neon Magenta
-    ctx.lineWidth = 1.5;
     ctx.save();
-    ctx.rotate(t * 0.02); // Mabilis na pag-ikot
-    // Dalawang nagkrus na ellipse parang electron orbit
-    ctx.beginPath(); ctx.ellipse(0, 0, 16, 4, 0, 0, Math.PI*2); ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(0, 0, 16, 4, Math.PI/2, 0, Math.PI*2); ctx.stroke();
+    ctx.rotate(t * 0.025);
+    ctx.strokeStyle = `rgba(217,70,239,${0.65 + flicker * 0.25})`;
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = '#d946ef';
+    ctx.beginPath(); ctx.ellipse(0, 0, 17, 5, 0, 0, Math.PI*2); ctx.stroke();
     ctx.restore();
+    ctx.save();
+    ctx.rotate(-t * 0.018);
+    ctx.strokeStyle = `rgba(167,139,250,${0.5 + flicker * 0.2})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(0, 0, 17, 5, Math.PI/2.5, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+    ctx.shadowBlur = 0;
   }
 
-  // ✨ LEVEL 10 TRANSFORMATION: High Voltage Lightning Strikes
-  if (f.level >= 10 && Math.random() < 0.4) { // Tumaas ang chance pumitik
-    ctx.strokeStyle = '#ffffff'; 
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); 
-    ctx.moveTo(0,0); 
-    
-    // Imbes na isang diretso, ginawa nating "zig-zag" ang kidlat para mas realistic!
-    const midX = (Math.random() - 0.5) * 20;
-    const midY = (Math.random() - 0.5) * 20;
-    const endX = midX + (Math.random() - 0.5) * 25;
-    const endY = midY + (Math.random() - 0.5) * 25;
-    
-    ctx.lineTo(midX, midY); // Unang pitik ng kidlat
-    ctx.lineTo(endX, endY); // Pangalawang pitik ng kidlat
+  // ── LAYER 9: KINETIC LIGHTNING STRIKES around body (level 10) ─────────
+  if (f.level >= 10) {
+    const strikeCount = Math.floor(Math.random() * 3) + 1;
+    for (let str = 0; str < strikeCount; str++) {
+      if (Math.random() > 0.45) continue;
+      const sAngle = Math.random() * Math.PI * 2;
+      const sStart = 5 + Math.random() * 5;
+      const sEnd   = 18 + Math.random() * 16;
+      const sx1 = Math.cos(sAngle) * sStart;
+      const sy1 = Math.sin(sAngle) * sStart;
+      const sx2 = Math.cos(sAngle + (Math.random()-0.5)*1.2) * sEnd;
+      const sy2 = Math.sin(sAngle + (Math.random()-0.5)*1.2) * sEnd;
+      drawBolt(sx1, sy1, sx2, sy2, 5, 6, 'rgb(255,255,255)', 1.5, 0.9);
+    }
+  }
+
+  // ── LAYER 10: MICRO STATIC SPARKS always firing ──────────────────────
+  if (Math.random() < 0.7) {
+    const sparkX = (Math.random() - 0.5) * 24;
+    const sparkY = (Math.random() - 0.5) * 24;
+    ctx.strokeStyle = `rgba(255,240,255,${0.6 + Math.random() * 0.35})`;
+    ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(sparkX, sparkY);
+    ctx.lineTo(sparkX + (Math.random()-0.5)*8, sparkY + (Math.random()-0.5)*8);
     ctx.stroke();
   }
 }
@@ -12494,181 +16235,199 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
     const down = (e) => { 
 
 
-      if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
+      if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll();
+      activateAudioKeepAlive();
       eng.keys[e.key] = true;
 
-      if (e.key === ' ' && screen === 'playing') {
+      if (e.key === ' ' && screenRef.current === 'playing') {
         e.preventDefault(); // Iwas scroll sa browser
         window.triggerDash();
       }
 
-      if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && screen === 'playing') {
+// PAUSE / UNPAUSE HOTKEY (P or ESC)
+      if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (screenRef.current === 'playing' || screenRef.current === 'paused')) {
         const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+        
         if (!isCoopActive || netRef.current.isHost) {
+          // 1. I-trigger yung engine pause
           if (window.executeNetworkPauseAction) {
             window.executeNetworkPauseAction();
           }
+
+          // 2. I-update yung React UI state manually para lumabas yung menu
+          // Kung nasa 'playing' gawing 'paused', kung 'paused' gawing 'playing'
+          setScreen(prev => prev === 'playing' ? 'pause' : 'playing');
         }
       }
       
-      if ((e.key === 'k' || e.key === 'K' || e.key === 't' || e.key === 'T') && screen === 'playing') {
+      if ((e.key === 'k' || e.key === 'K') && screenRef.current === 'playing') {
         setIsTreeOpen(prev => !prev);
       }
 
-      if ((e.key === 'i' || e.key === 'I') && screen === 'playing') {
+      if ((e.key === 't' || e.key === 'T') && screenRef.current === 'playing') {
+        setIsStatsOpen(prev => !prev);
+      }
+
+      if ((e.key === 'i' || e.key === 'I') && screenRef.current === 'playing') {
         setIsInventoryOpen(prev => !prev); 
       }
+
+      if ((e.key === 'h' || e.key === 'H') && screenRef.current === 'playing') {
+        setIsHelpOpen(prev => !prev);
+      }
       
-      if (screen === 'playing') {
+      if (screenRef.current === 'playing') {
 
         // ==========================================
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 100;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 11185;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 100;      // Max Crit Chance Cap (60%)
+             target.baseDef = 11185;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
         
         // END CHEAT CODES
 
@@ -12676,17 +16435,19 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
         
 
 
-       if (playerLevel >= 10) {
-        if (e.key === '1') learnSkillTreeTech('bodyCutter');
-        if (e.key === '2') learnSkillTreeTech('shootingStar');
-        if (e.key === '3') learnSkillTreeTech('cubeBash');
-        if (e.key === '4') learnSkillTreeTech('vacuumSlash');
+       if (playerLevelRef.current >= 10) {
+        if (e.key === '1') castElementalSigil('flareInferno');
+        if (e.key === '2') castElementalSigil('tidalWave');
+        if (e.key === '3') castElementalSigil('fissureSlam');
+        if (e.key === '4') castElementalSigil('lightningSurge');
+        if (e.key === '5') castElementalSigil('iceStorm');
+        if (e.key === '6') castHealingSigil('');
        }
 
-        if (playerLevel >= 16) {
-            if (e.key === '5') castArcaneCollapseUltimate();
-            if (e.key === '6') castArcaneInstinctUltimate(); 
-            if (e.key === '7') castArcaneResurrectionUltimate();
+        if (playerLevelRef.current >= 16) {
+            if (e.key === 'q') castArcaneCollapseUltimate();
+            if (e.key === 'e') castArcaneInstinctUltimate(); 
+            if (e.key === 'r') castArcaneResurrectionUltimate();
         }
       }
     };
@@ -12704,11 +16465,13 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
       cancelAnimationFrame(renderAnimId);
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
+      if (eng.pendingSigilCasts) eng.pendingSigilCasts.length = 0; // 🔥 FIX: safety net — walang resolveSigilCast na tatakbo pagkatapos mag-unmount
     };
-  }, [screen]);
+  }, []);
 
 const handlePointerDown = (e) => {
-    if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll(); 
+    if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll();
+    activateAudioKeepAlive();
     const eng = engineRef.current;
     
     if (e.clientX < window.innerWidth / 2 && !eng.joystick.active) {
@@ -12873,10 +16636,126 @@ const renderTooltipStats = (item) => {
 >
       <style>{focusStyles}</style>
 
-      <div className="orientation-warning">
-  <span style={{ fontSize: '3rem' }}>🔄</span>
-  <h2>Please Rotate Your Device</h2>
-  <p>Arcane Survival requires landscape orientation to harness spell parameters.</p>
+<div className="orientation-warning" style={{ padding: 0 }}>
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap');
+    @keyframes spin-phone {
+      0%,25%  { transform: rotate(0deg); }
+      65%,100%{ transform: rotate(90deg); }
+    }
+    @keyframes pulse-ring {
+      0%,100%{ opacity:.2; }
+      50%    { opacity:.5; }
+    }
+    @keyframes drift {
+      0%,100%{ transform: translateY(0px); opacity:.3; }
+      50%    { transform: translateY(-3px); opacity:.6; }
+    }
+    @keyframes flicker {
+      0%,100%{ opacity:.5; }
+      50%    { opacity:.9; }
+    }
+    .phone-anim { transform-origin: center center; animation: spin-phone 3s ease-in-out infinite; }
+    .pulse { animation: pulse-ring 3s ease-in-out infinite; }
+    .rune  { animation: drift 4s ease-in-out infinite; }
+    .rune:nth-child(2){ animation-delay:.6s; }
+    .rune:nth-child(3){ animation-delay:1.2s; }
+    .rune:nth-child(4){ animation-delay:1.8s; }
+    .rune:nth-child(5){ animation-delay:.4s; }
+    .rune:nth-child(6){ animation-delay:1s; }
+    .rune:nth-child(7){ animation-delay:1.6s; }
+    .rune:nth-child(8){ animation-delay:2.2s; }
+    .bflicker { animation: flicker 2.8s ease-in-out infinite; }
+  `}</style>
+
+  {/* 🌟 GINAWANG FULL HEIGHT AT SPACE-BETWEEN PARA SAKOP ANG BUONG SCREEN */}
+  <div style={{ 
+    display: 'flex', 
+    flexDirection: 'column', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    width: '100%', 
+    height: '100%', 
+    padding: '8vh 5vw', // Dynamically spaced base sa laki ng phone screen
+    boxSizing: 'border-box' 
+  }}>
+    
+    {/* Top Runes & Banner (Naka-pin sa itaas) */}
+    <div style={{ width: '100%', maxWidth: '420px' }}>
+      <svg width="100%" viewBox="0 0 380 56" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
+        <text className="rune" x="22" y="40" fontSize="20" fill="#7F77DD" fontFamily="serif" textAnchor="middle">ᚠ</text>
+        <text className="rune" x="54" y="24" fontSize="15" fill="#AFA9EC" fontFamily="serif" textAnchor="middle">ᛟ</text>
+        <text className="rune" x="84" y="46" fontSize="18" fill="#534AB7" fontFamily="serif" textAnchor="middle">ᚹ</text>
+        <text className="rune" x="112" y="20" fontSize="13" fill="#7F77DD" fontFamily="serif" textAnchor="middle">ᛁ</text>
+        <text className="rune" x="268" y="20" fontSize="13" fill="#7F77DD" fontFamily="serif" textAnchor="middle">ᛗ</text>
+        <text className="rune" x="296" y="46" fontSize="18" fill="#534AB7" fontFamily="serif" textAnchor="middle">ᚺ</text>
+        <text className="rune" x="326" y="24" fontSize="15" fill="#AFA9EC" fontFamily="serif" textAnchor="middle">ᛞ</text>
+        <text className="rune" x="358" y="40" fontSize="20" fill="#7F77DD" fontFamily="serif" textAnchor="middle">ᚲ</text>
+        <line x1="128" y1="28" x2="252" y2="28" stroke="#534AB7" strokeWidth="0.5" opacity="0.4"/>
+        <polygon points="128,28 134,24 134,32" fill="#534AB7" opacity="0.35"/>
+        <polygon points="252,28 246,24 246,32" fill="#534AB7" opacity="0.35"/>
+        <text x="190" y="32" fontFamily="'Cinzel',serif" fontSize="9" fill="#7F77DD" opacity="0.7" textAnchor="middle" letterSpacing="3">✦ ARCANE SURVIVAL ✦</text>
+      </svg>
+    </div>
+
+    {/* Gitnang Content (Naka-flex: 1 para itulak ang Top at Bottom sa dulo) */}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '0 10px' }}>
+      
+      {/* Center Magic Circle & Spinning Phone - Pinalaki to 150px */}
+      <svg width="150" height="150" viewBox="0 0 120 120" style={{ display: 'block', margin: '0 auto 2rem' }}>
+        <polygon points="60,5 74,21 92,14 92,34 110,42 100,60 110,78 92,78 92,98 74,91 60,107 46,91 28,98 28,78 10,78 20,60 10,42 28,34 28,14 46,21"
+          fill="none" stroke="#534AB7" strokeWidth="0.7" opacity="0.25"/>
+        <circle className="pulse" cx="60" cy="60" r="50" fill="none" stroke="#7F77DD" strokeWidth="1" strokeDasharray="5 4"/>
+        <circle cx="60" cy="60" r="42" fill="none" stroke="#AFA9EC" strokeWidth="0.5" opacity="0.4"/>
+        <text x="60" y="15" fontFamily="serif" fontSize="12" fill="#7F77DD" opacity="0.55" textAnchor="middle">ᚱ</text>
+        <text x="105" y="64" fontFamily="serif" fontSize="12" fill="#7F77DD" opacity="0.55" textAnchor="middle">ᛏ</text>
+        <text x="60" y="112" fontFamily="serif" fontSize="12" fill="#7F77DD" opacity="0.55" textAnchor="middle">ᚨ</text>
+        <text x="15" y="64" fontFamily="serif" fontSize="12" fill="#7F77DD" opacity="0.55" textAnchor="middle">ᛜ</text>
+        
+        <g className="phone-anim" style={{ transformBox: 'fill-box' }}>
+          <rect x="44" y="28" width="32" height="54" rx="5" fill="#3C3489"/>
+          <rect x="48" y="34" width="24" height="38" rx="2" fill="#EEEDFE" opacity="0.9"/>
+          <circle cx="60" cy="75" r="3" fill="#EEEDFE" opacity="0.5"/>
+          <line x1="52" y1="30" x2="68" y2="30" stroke="#AFA9EC" strokeWidth="1" opacity="0.5"/>
+        </g>
+      </svg>
+
+      {/* Text Display */}
+      <div style={{ position: 'relative', display: 'inline-block', padding: '0 2rem', marginBottom: '1rem' }}>
+        <svg className="bflicker" width="100%" height="52" viewBox="0 0 300 52" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
+          <path d="M8,4 L18,4 L18,1 L282,1 L282,4 L292,4" fill="none" stroke="#534AB7" strokeWidth="0.8" opacity="0.65"/>
+          <path d="M8,48 L18,48 L18,51 L282,51 L282,48 L292,48" fill="none" stroke="#534AB7" strokeWidth="0.8" opacity="0.65"/>
+          <text x="12" y="18" fontFamily="serif" fontSize="9" fill="#7F77DD" opacity="0.5">ᚦᚨᚱ</text>
+          <text x="265" y="18" fontFamily="serif" fontSize="9" fill="#7F77DD" opacity="0.5">ᚷᛖᛒ</text>
+        </svg>
+        <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: '22px', fontWeight: 600, color: '#e2e8f0', margin: 0, padding: '10px 0', letterSpacing: '1.5px', lineHeight: 1.4, whiteSpace: 'nowrap' }}>
+          Rotate your device
+        </h2>
+      </div>
+
+      <p style={{ fontFamily: "'Cinzel', serif", fontSize: '13.5px', color: '#94a3b8', margin: '0 auto', maxWidth: '300px', lineHeight: 1.8, letterSpacing: '0.5px', textAlign: 'center' }}>
+        Landscape orientation is required to harness the full power of your spell parameters.
+      </p>
+    </div>
+
+    {/* Bottom Details (Naka-pin sa ibaba) */}
+    <div style={{ width: '100%', maxWidth: '420px' }}>
+      <svg width="100%" viewBox="0 0 380 36" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
+        <line x1="40" y1="18" x2="155" y2="18" stroke="#534AB7" strokeWidth="0.5" opacity="0.35"/>
+        <line x1="225" y1="18" x2="340" y2="18" stroke="#534AB7" strokeWidth="0.5" opacity="0.35"/>
+        <text x="190" y="23" fontFamily="serif" fontSize="18" fill="#7F77DD" opacity="0.55" textAnchor="middle">ᛝ ᚾ ᛝ</text>
+        <polygon points="40,18 46,15 46,21" fill="#534AB7" opacity="0.3"/>
+        <polygon points="340,18 334,15 334,21" fill="#534AB7" opacity="0.3"/>
+        <text x="72" y="14" fontFamily="serif" fontSize="10" fill="#AFA9EC" opacity="0.4" textAnchor="middle">ᚦ</text>
+        <text x="100" y="27" fontFamily="serif" fontSize="10" fill="#AFA9EC" opacity="0.4" textAnchor="middle">ᛖ</text>
+        <text x="130" y="13" fontFamily="serif" fontSize="10" fill="#AFA9EC" opacity="0.4" textAnchor="middle">ᚷ</text>
+        <text x="250" y="13" fontFamily="serif" fontSize="10" fill="#AFA9EC" opacity="0.4" textAnchor="middle">ᛒ</text>
+        <text x="280" y="27" fontFamily="serif" fontSize="10" fill="#AFA9EC" opacity="0.4" textAnchor="middle">ᚺ</text>
+        <text x="308" y="14" fontFamily="serif" fontSize="10" fill="#AFA9EC" opacity="0.4" textAnchor="middle">ᛞ</text>
+      </svg>
+    </div>
+
+  </div>
 </div>
       <div className="game-container">
         <canvas ref={canvasRef} id="gameCanvas" />
@@ -12962,356 +16841,504 @@ const renderTooltipStats = (item) => {
           </button>
         )}
 
-        {screen === 'playing' && playerLevel >= 12 && (
-          <div className="elemental-sigils-container">
-            <div className="sigil-btn sigil-fire" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('flareInferno'); }}>
-              🔥
-              {skillsState.flareInferno?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.flareInferno.cd)}s</div>}
-              <span className="sigil-title">Flare Inferno</span>
+{/* 🔮 BDO-STYLE ORBITAL SKILL BUTTONS — Inner ring: Elemental Sigils */}
+        {screen === 'playing' && playerLevel >= 12 && (() => {
+          // Gamit na ang shared, orientation-aware na isMobileLayout state (tingnan sa taas)
+          // sa halip na lokal na "window.innerWidth <= 840" lang.
+          
+          // PINALAKI ANG RADIUS AT SAKTONG CENTER:
+          // Center of mobile Dash is exactly at 80px (50px margin + 30px half-width)
+          const sigilRadius = isMobileLayout ? 88 : 145; 
+          const anchorOffset = isMobileLayout ? '80px' : '90px'; 
+          
+          const sigilDefs = [
+            { key: 'flareInferno',   cls: 'sigil-fire',      icon: 'fire',      label: 'Flare',    maxCd: 30, fn: () => castElementalSigil('flareInferno') },
+            { key: 'tidalWave',      cls: 'sigil-water',     icon: 'water',     label: 'Wave',     maxCd: 30, fn: () => castElementalSigil('tidalWave') },
+            { key: 'fissureSlam',    cls: 'sigil-earth',     icon: 'earth',     label: 'Fissure',  maxCd: 30, fn: () => castElementalSigil('fissureSlam') },
+            { key: 'lightningSurge', cls: 'sigil-lightning', icon: 'lightning', label: 'Storm',    maxCd: 30, fn: () => castElementalSigil('lightningSurge') },
+            { key: 'iceStorm',       cls: 'sigil-ice',       icon: 'ice',       label: 'Ice',      maxCd: 30, fn: () => castElementalSigil('iceStorm') },
+            { key: 'natureRecovery', cls: 'sigil-nature',    icon: 'nature',    label: 'Heal',     maxCd: 45, fn: () => castHealingSigil() },
+          ];
+          
+          // PINALUWAG NA ARC PARA HINDI DIKIT-DIKIT ANG 6 SIGILS:
+          // Start: 80° (Medyo pa-kanan sa taas) -> End: 190° (Medyo pababa sa kaliwa)
+          const arcStart = isMobileLayout ? 60 : 75;
+          const arcEnd = isMobileLayout ? 220 : 205;
+          const step = (arcEnd - arcStart) / (sigilDefs.length - 1);
+          const angles = sigilDefs.map((_, i) => ((arcStart + step * i) * Math.PI) / 180);
+          
+          return (
+            <div className="elemental-sigils-container" style={{ right: anchorOffset, bottom: anchorOffset }}>
+              {sigilDefs.map((s, i) => {
+                const angle = angles[i];
+                const bx = Math.cos(angle) * sigilRadius;
+                const by = Math.sin(angle) * sigilRadius;
+                const sCd = skillsState[s.key]?.cd || 0;
+                const sFrac = Math.max(0, Math.min(1, sCd / s.maxCd));
+                const S_R = 23;
+                const S_CIRC = 2 * Math.PI * S_R;
+                
+                return (
+                  <div
+                    key={s.key}
+                    className={`sigil-btn ${s.cls}`}
+                    style={{ left: `${bx}px`, top: `${-by}px` }}
+                    onPointerDown={(e) => { e.stopPropagation(); s.fn(); }}
+                  >
+                    <ArcaneIcon type={s.icon} size={24} />
+                    {sCd > 0 && (
+                      <>
+                        <svg className="skill-cd-ring-svg" viewBox="0 0 50 50">
+                          <circle className="skill-cd-ring-track" cx="25" cy="25" r={S_R} fill="none" stroke="#1a1230" strokeWidth="3" />
+                          <circle
+                            className="skill-cd-ring-sweep"
+                            cx="25" cy="25" r={S_R} fill="none"
+                            stroke="currentColor" strokeWidth="3" strokeLinecap="round"
+                            strokeDasharray={S_CIRC}
+                            strokeDashoffset={S_CIRC * (1 - sFrac)}
+                            transform="rotate(-90 25 25)"
+                            style={{ filter: 'drop-shadow(0 0 4px currentColor)' }}
+                          />
+                        </svg>
+                        <div className="sigil-cd-overlay">{Math.ceil(sCd)}</div>
+                      </>
+                    )}
+                    <span className="sigil-title">{s.label}</span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="sigil-btn sigil-water" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('tidalWave'); }}>
-              🌊
-              {skillsState.tidalWave?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.tidalWave.cd)}s</div>}
-              <span className="sigil-title">Tidal Wave</span>
-            </div>
-            <div className="sigil-btn sigil-earth" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('fissureSlam'); }}>
-              🪨
-              {skillsState.fissureSlam?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.fissureSlam.cd)}s</div>}
-              <span className="sigil-title">Fissure Slam</span>
-            </div>
-            <div className="sigil-btn sigil-lightning" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('lightningSurge'); }}>
-              ⚡
-              {skillsState.lightningSurge?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.lightningSurge.cd)}s</div>}
-              <span className="sigil-title">Lightning Surge</span>
-            </div>
-            <div className="sigil-btn sigil-ice" onPointerDown={(e) => { e.stopPropagation(); castElementalSigil('iceStorm'); }}>
-              ❄️
-              {skillsState.iceStorm?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.iceStorm.cd)}s</div>}
-              <span className="sigil-title">Ice Storm</span>
-            </div>
-            <div className="sigil-btn sigil-nature" onPointerDown={(e) => { e.stopPropagation(); castHealingSigil(); }}>
-              🌿
-              {skillsState.natureRecovery?.cd > 0 && <div className="sigil-cd-overlay">{Math.ceil(skillsState.natureRecovery.cd)}s</div>}
-              <span className="sigil-title">Nature's Recovery</span>
-            </div>
+          );
+        })()}
 
-          </div>
-        )}
-
-        {screen === 'playing' && (
-          <div className="game-hud-top" style={{ pointerEvents: 'auto', alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', marginTop: '2px' }}>
-              <div>SCORE: <span ref={scoreValueRef}>0</span></div>
-            </div>
-
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center', marginTop: '0px' }}>
-              {isHostInstance && (
-                <button 
-                  onClick={() => {
-                    if (window.executeNetworkPauseAction && isNetworked) {
-                      window.executeNetworkPauseAction();
-                    } else {
-                      setScreen('pause');
-                    }
-                  }}
-                  style={{
-                    background: 'rgba(27, 16, 59, 0.6)',
-                    border: '1px solid #4c2d82',
-                    color: '#a78bfa',
-                    fontFamily: 'Georgia, serif',
-                    fontSize: '0.75rem',
-                    fontWeight: '800',
-                    letterSpacing: '0.05em',
-                    padding: '6px 16px',
-                    borderRadius: '20px',
-                    cursor: 'pointer',
-                    boxShadow: '0 0 10px rgba(124, 58, 237, 0.25)',
-                    transition: 'all 0.2s ease-in-out',
-                    pointerEvents: 'auto'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(44, 26, 92, 0.8)';
-                    e.currentTarget.style.borderColor = '#6d28d9';
-                    e.currentTarget.style.boxShadow = '0 0 14px rgba(167, 139, 250, 0.45)';
-                    e.currentTarget.style.color = '#ffffff';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(27, 16, 59, 0.6)';
-                    e.currentTarget.style.borderColor = '#4c2d82';
-                    e.currentTarget.style.boxShadow = '0 0 10px rgba(124, 58, 237, 0.25)';
-                    e.currentTarget.style.color = '#a78bfa';
-                  }}
-                >
-                  PAUSE?
-                </button>
-              )}
-            </div>
-
-            <div className="game-hud-right-group" style={{ flex: 1 }}>
-              <div ref={waveValueRef} style={{ fontSize: '1rem', fontWeight: 'bold', color: '#ffffff', textShadow: '0 0 8px rgba(255,255,255,0.5)', marginTop: '2px' }}>
-                WAVE 1 | 30s
+        {(screen === 'playing' || screen === 'levelup' || screen === 'pause') && (
+          <>
+            {/* SCORE left | CENTER menu buttons | WAVE right — BDO Style Top Bar */}
+            <div className="game-hud-top">
+              <div className="hud-score-block">
+                SCORE: <span ref={scoreValueRef}>0</span>
               </div>
-              
-              <div className="hud-menu-title">
-                <span className="arc">ARCANE</span><br/>
-                <span className="sur">SURVIVAL</span>
+              {/* BDO-style upper-right icon group: Stats + Inventory + Skills */}
+              <div className="game-hud-right-group">
+                <div ref={waveValueRef} style={{ fontSize: '1rem', fontWeight: 'bold', color: '#ffffff', textShadow: '0 0 8px rgba(255,255,255,0.5)' }}>
+                  WAVE 1 | 30s
+                </div>
+                {/* Icon buttons — inserted between WAVE text and game title */}
+                <div className="bdo-top-menu-btns" style={{ pointerEvents: 'auto', display: 'flex', gap: '6px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                  <button
+                    className="bdo-menu-icon-btn"
+                    onPointerDown={(e) => { e.stopPropagation(); setIsStatsOpen(prev => !prev); }}
+                    title="Stats"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 2 L15.5 8.5 L22 9.5 L17 14.5 L18.2 21 L12 18 L5.8 21 L7 14.5 L2 9.5 L8.5 8.5 Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
+                    </svg>
+                    <span>Stats</span>
+                  </button>
+                  <button
+                    className="bdo-menu-icon-btn"
+                    onPointerDown={(e) => { e.stopPropagation(); setIsInventoryOpen(prev => !prev); }}
+                    title="Inventory"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <rect x="3" y="9" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.8"/>
+                      <path d="M8 9V7a4 4 0 0 1 8 0v2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                    </svg>
+                    <span>Bag</span>
+                  </button>
+                  {playerLevel >= 5 && (
+                    <button
+                      className="bdo-menu-icon-btn"
+                      onPointerDown={(e) => { e.stopPropagation(); setIsTreeOpen(prev => !prev); }}
+                      title="Skill Tree"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3 V9 M12 9 L6 15 M12 9 L18 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                        <circle cx="12" cy="3" r="2" fill="currentColor" opacity="0.8"/>
+                        <circle cx="6" cy="17" r="2.5" fill="currentColor" opacity="0.7"/>
+                        <circle cx="18" cy="17" r="2.5" fill="currentColor" opacity="0.7"/>
+                      </svg>
+                      <span>Skills</span>
+                    </button>
+                  )}
+                  <button
+                    className="bdo-menu-icon-btn"
+                    onPointerDown={(e) => { e.stopPropagation(); setIsHelpOpen(prev => !prev); }}
+                    title="Help (H)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.8"/>
+                      <path d="M9.3 9.6 C9.3 7.9 10.6 6.6 12 6.6 C13.5 6.6 14.7 7.7 14.7 9.1 C14.7 11 12 11.2 12 13.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      <circle cx="12" cy="16.8" r="1.05" fill="currentColor"/>
+                    </svg>
+                    <span>Help</span>
+                  </button>
+                </div>
+                <div className="hud-menu-title">
+                  <span className="arc">ARCANE</span><br/>
+                  <span className="sur">SURVIVAL</span>
+                </div>
+                <div className="hud-menu-sub">The Last Covenant</div>
               </div>
-              <div className="hud-menu-sub">The Last Covenant</div>
             </div>
-          </div>
+
+            {/* PAUSE — absolutely pinned to top-center, never pushes SCORE or WAVE */}
+            {isHostInstance && (
+              <button
+                className="hud-pause-btn"
+                onClick={() => {
+                  if (window.executeNetworkPauseAction && isNetworked) {
+                    window.executeNetworkPauseAction();
+                  } else {
+                    setScreen('pause');
+                  }
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle', marginRight: '5px', marginBottom: '1px' }}>
+                  <rect x="5" y="4" width="4" height="16" rx="1" fill="currentColor" opacity="0.85"/>
+                  <rect x="15" y="4" width="4" height="16" rx="1" fill="currentColor" opacity="0.85"/>
+                </svg>
+                PAUSE
+              </button>
+            )}
+          </>
         )}
 
         {screen === 'playing' && activeBuffsList.length > 0 && (
           <div className="rpg-buff-container">
-            {activeBuffsList.map((buff, idx) => (
-              <div key={idx} className={`rpg-buff-badge ${buff.type}`}>
-                <span>{buff.icon}</span>
-                <span>{buff.name} ({Math.ceil(buff.life)}s)</span>
-              </div>
-            ))}
+            {activeBuffsList.map((buff, idx) => {
+              const buffColor =
+                buff.icon === 'berserk'      ? '#fb923c' :
+                buff.icon === 'haste'        ? '#67e8f9' :
+                buff.type === 'pot-power'    ? '#fb923c' :
+                buff.type === 'pot-defense'  ? '#60a5fa' :
+                buff.type === 'pot-crit'     ? '#fbbf24' :
+                buff.type === 'pot-regen'    ? '#4ade80' :
+                buff.type === 'pot-xpBoost'  ? '#c084fc' :
+                buff.icon === 'shield'       ? '#60a5fa' :
+                '#e879f9';
+              const peak = buff.peak && buff.peak > 0 ? buff.peak : buff.life;
+              const frac = Math.max(0, Math.min(1, buff.life / peak));
+              const RING_R = 16;
+              const CIRC = 2 * Math.PI * RING_R;
+              const lowTime = buff.life <= 3;
+              return (
+                <div key={idx} className={`rune-buff ${lowTime ? 'rune-buff-low' : ''}`} style={{ '--buff-color': buffColor }}>
+                  <svg className="rune-buff-ring" viewBox="0 0 40 40" width="40" height="40">
+                    {/* Outer etched rune circle — slow rotating, decorative */}
+                    <circle cx="20" cy="20" r="18.5" fill="none" stroke={buffColor} strokeWidth="0.6" opacity="0.35" />
+                    <g className="rune-buff-glyphs" opacity="0.55">
+                      {[0, 90, 180, 270].map(a => {
+                        const rad = (a * Math.PI) / 180;
+                        const x = 20 + Math.cos(rad) * 18.5;
+                        const y = 20 + Math.sin(rad) * 18.5;
+                        return <circle key={a} cx={x} cy={y} r="0.9" fill={buffColor} />;
+                      })}
+                    </g>
+                    {/* Track */}
+                    <circle cx="20" cy="20" r={RING_R} fill="none" stroke="#1a1230" strokeWidth="2.4" />
+                    {/* Radial countdown sweep */}
+                    <circle
+                      cx="20" cy="20" r={RING_R} fill="none"
+                      stroke={buffColor} strokeWidth="2.4" strokeLinecap="round"
+                      strokeDasharray={CIRC}
+                      strokeDashoffset={CIRC * (1 - frac)}
+                      transform="rotate(-90 20 20)"
+                      className="rune-buff-sweep"
+                    />
+                  </svg>
+                  <div className="rune-buff-core">
+                    <ArcaneIcon type={buff.icon} size={15} style={{ color: buffColor }} />
+                  </div>
+                  <span className="rune-buff-timer" style={{ color: buffColor }}>{Math.ceil(buff.life)}</span>
+                  <span className="rune-buff-label">{buff.name}</span>
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {screen === 'playing' && (
+        {(screen === 'playing' || screen === 'levelup' || screen === 'pause') && (
           <div className="game-hud-bottom">
-            <button 
-              className="stats-toggle-btn" 
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                setIsStatsOpen(prev => !prev);
-              }}
-            >
-              {isStatsOpen ? "▼ Hide Stats Panel" : "▲ Show Character Stats"}
-            </button>
+            <div className="hud-level-badge">
+              <span className="hud-level-label">Lv.</span>
+              <span className="hud-level-value">{playerLevel}</span>
+            </div>
+            <div className="hud-bars-stack">
+              <div className="hud-bar-container">
+                <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
+                <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
+              </div>
+              <div className="hud-bar-container">
+                <div ref={xpFillRef} className="hud-bar-fill" style={{ background: '#3b82f6', width: '0%' }}></div>
+                <div ref={xpTextRef} className="hud-bar-text">XP 0/80</div>
+              </div>
+            </div>
+          </div>
+        )}
 
-            {isStatsOpen && (
-              <div className="rpg-stats-panel">
-                <div className="stats-header">⚔️ HERO STATUS ATTRIBUTES</div>
+        {/* Stats panel — absolute overlay from upper-right when open */}
+        {(screen === 'playing' || screen === 'levelup' || screen === 'pause') && isStatsOpen && (
+          <div className="rpg-stats-panel">
+                <div className="stats-header" style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle' }}>
+                    <path d="M12 2 L15.5 8.5 L22 9.5 L17 14.5 L18.2 21 L12 18 L5.8 21 L7 14.5 L2 9.5 L8.5 8.5 Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
+                    <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.8"/>
+                  </svg>
+                  HERO STATUS ATTRIBUTES
+                </div>
                 <div className="stats-row">
-                  <span className="stats-label">Character Name:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.8"/><path d="M4 20 Q4 14 12 14 Q20 14 20 20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                    Character Name:
+                  </span>
                   <span className="stats-value" style={{ color: '#a855f7' }}>
                     {playerName || (isHostInstance ? "Player 1" : "Player 2")}
                   </span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Attack Power:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M14 3 L7 13 H12 L10 21 L17 11 H12 Z" fill="currentColor" opacity="0.85"/></svg>
+                    Attack Power:
+                  </span>
                   <span ref={statAtkRef} className="stats-value">22</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Attack Rate:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8"/><path d="M12 7 V12 L15 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                    Attack Rate:
+                  </span>
                   <span ref={statCdRef} className="stats-value">0.60s</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Crit Chance:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2 L14.5 9 L22 9.5 L16 14 L18 21 L12 17 L6 21 L8 14 L2 9.5 L9.5 9 Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+                    Crit Chance:
+                  </span>
                   <span ref={statCritRef} className="stats-value">0%</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Armor Rating:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 2 L20 6 V12 C20 17 16.5 21 12 22 C7.5 21 4 17 4 12 V6 Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/></svg>
+                    Armor Rating:
+                  </span>
                   <span ref={statDefRef} className="stats-value">0 (0% Block)</span>
                 </div>
                 <div className="stats-row">
-                  <span className="stats-label">Life Steal:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 4 C8 4 5 7 5 10.5 C5 16 12 20 12 20 C12 20 19 16 19 10.5 C19 7 16 4 12 4 Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/><path d="M9 11 L11 13 L15 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Life Steal:
+                  </span>
                   <span ref={statLifestealRef} className="stats-value" style={{ color: '#ef4444' }}>0 HP/Kill</span>
                 </div>
 
                 <div className="stats-row">
-                  <span className="stats-label">Movement Speed:</span>
+                  <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 12 L19 12 M14 7 L19 12 L14 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    Movement Speed:
+                  </span>
                   <span ref={statSpdRef} className="stats-value">200 IPS</span>
                 </div>
               </div>
-            )}
-
-            <div className="hud-bar-container">
-              <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
-              <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
-            </div>
-            <div className="hud-bar-container">
-              <div ref={xpFillRef} className="hud-bar-fill" style={{ background: '#3b82f6', width: '0%' }}></div>
-              <div ref={xpTextRef} className="hud-bar-text">LV{playerLevel} XP 0/80</div>
-            </div>
-          </div>
         )}
 
-{screen === 'playing' && playerLevel >= 10 && (
-          <div className="mmo-hotbar-container">
-            <div 
-              className={`mmo-hotbar-slot ${!skillsState.bodyCutter?.learned ? 'not-learned' : (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle')}`}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (skillsState.bodyCutter?.learned) learnSkillTreeTech('bodyCutter');
-              }}
-            >
-              <span className="hotbar-key-bind">1</span>
-              <span className="hotbar-icon">🩸</span>
-              <span className="hotbar-name">B.Cutter</span>
-              {skillsState.bodyCutter?.learned && (
-                <span className={`hotbar-status-dot ${skillsState.bodyCutter.enabled ? 'on' : 'off'}`}>
-                  {skillsState.bodyCutter.enabled ? 'ON' : 'OFF'}
-                </span>
-              )}
+{/* 🌟 ULTIMATE SPELLS */}
+        {screen === 'playing' && playerLevel >= 16 && (() => {
+          // Gamit na ang shared, orientation-aware na isMobileLayout state (tingnan sa taas)
+
+          const dashAnchorX = isMobileLayout ? 80 : 90; // True center
+          const dashAnchorY = isMobileLayout ? 80 : 90;
+          
+          // INILAYO SA SIGILS: Radius ginawang 155 para hindi magpatong
+          const ultRadius = isMobileLayout ? 140 : 220; 
+
+          // PINAGDIKIT ANG 3 BUTTONS SA ISA'T ISA:
+          // Dati 170 to 100 (malawak), ngayon 165 to 105 para mas compact silang tatlo
+          const startAngle = isMobileLayout ? 195 : 180;
+          const endAngle = isMobileLayout ? 85 : 90;
+
+          const ultDefs = [
+            {
+              key: 'arcaneCollapse', cls: 'bdo-ult-collapse', label: 'Collapse', keyBind: '5',
+              color: '#a78bfa', rgb: '167,139,250', fn: castArcaneCollapseUltimate,
+              icon: <ArcaneIcon type="arcaneCollapse" size={isMobileLayout ? 26 : 34} style={{ color: '#a78bfa' }} />,
+              cdKey: 'arcaneCollapse', maxCd: 50, readyFx: 'aura'
+            },
+            {
+              key: 'arcaneInstinct', cls: 'bdo-ult-instinct', label: 'Instinct', keyBind: '6',
+              color: '#f472b6', rgb: '244,114,182', fn: castArcaneInstinctUltimate,
+              icon: <ArcaneIcon type="arcaneInstinct" size={isMobileLayout ? 26 : 34} style={{ color: '#f472b6' }} />,
+              cdKey: 'arcaneInstinct', maxCd: 55, readyFx: 'ember'
+            },
+            {
+              key: 'arcaneResurrect', cls: 'bdo-ult-resurrect', label: 'Resurrect', keyBind: '7',
+              color: '#34d399', rgb: '52,211,153', fn: castArcaneResurrectionUltimate,
+              icon: <ArcaneIcon type="arcaneResurrect" size={isMobileLayout ? 26 : 34} style={{ color: '#34d399' }} />,
+              cdKey: 'arcaneResurrection', maxCd: 300, readyFx: 'fire'
+            },
+          ];
+
+          return (
+            <>
+              {ultDefs.map((u, i) => {
+                const cd = skillsState[u.cdKey]?.cd;
+                const uFrac = Math.max(0, Math.min(1, (cd || 0) / u.maxCd));
+                const U_R = 41;
+                const U_CIRC = 2 * Math.PI * U_R;
+                const isReady = !(cd > 0);
+                const PARTICLE_COUNT = 8;
+
+                const step = (endAngle - startAngle) / (ultDefs.length - 1);
+                const angleRad = ((startAngle + step * i) * Math.PI) / 180;
+
+                const currentRight = dashAnchorX - (Math.cos(angleRad) * ultRadius);
+                const currentBottom = dashAnchorY + (Math.sin(angleRad) * ultRadius);
+
+                return (
+                  <div
+                    key={u.key}
+                    className={`bdo-ult-btn ${u.cls}`}
+                    style={{
+                      position: 'absolute',
+                      right: `${currentRight}px`,
+                      bottom: `${currentBottom}px`,
+                      pointerEvents: 'auto',
+                    }}
+                    onPointerDown={(e) => { e.stopPropagation(); u.fn(); }}
+                    title={u.label}
+                  >
+                    <span className="bdo-ult-key">{u.keyBind}</span>
+                    {u.icon}
+                    <span className="bdo-ult-label" style={{ color: u.color }}>{u.label}</span>
+                    {cd > 0 && (
+                      <>
+                        <svg className="skill-cd-ring-svg" viewBox="0 0 90 90">
+                          <circle className="skill-cd-ring-track" cx="45" cy="45" r={U_R} fill="none" stroke="#1a1230" strokeWidth="4" />
+                          <circle
+                            className="skill-cd-ring-sweep"
+                            cx="45" cy="45" r={U_R} fill="none"
+                            stroke={u.color} strokeWidth="4" strokeLinecap="round"
+                            strokeDasharray={U_CIRC}
+                            strokeDashoffset={U_CIRC * (1 - uFrac)}
+                            transform="rotate(-90 45 45)"
+                            style={{ filter: `drop-shadow(0 0 5px ${u.color})` }}
+                          />
+                        </svg>
+                        <div className="bdo-ult-cd" style={{ display: 'flex', color: u.color, textShadow: `0 0 8px ${u.color}` }}>
+                          {Math.ceil(cd)}
+                        </div>
+                      </>
+                    )}
+                    {isReady && (
+                      <div className={`ult-ready-fx ult-ready-${u.readyFx}`} style={{ '--fx-color': u.color, '--fx-rgb': u.rgb }}>
+                        <span className="ult-ready-glow"></span>
+                        <svg className="ult-ready-circle-svg" viewBox="0 0 100 100">
+                          <defs>
+                            <radialGradient id={`urc-core-${u.key}`} cx="50%" cy="50%" r="50%">
+                              <stop offset="0%" stopColor={u.color} stopOpacity="0.28" />
+                              <stop offset="60%" stopColor={u.color} stopOpacity="0.08" />
+                              <stop offset="100%" stopColor={u.color} stopOpacity="0" />
+                            </radialGradient>
+                          </defs>
+                          <circle cx="50" cy="50" r="44" fill={`url(#urc-core-${u.key})`} />
+                          <g className="urc-outer-ring">
+                            <circle cx="50" cy="50" r="47" fill="none" stroke={u.color} strokeWidth="0.7" strokeDasharray="0.8 3.6" opacity="0.55" />
+                            <circle cx="50" cy="50" r="43.5" fill="none" stroke={u.color} strokeWidth="0.35" opacity="0.3" />
+                            {Array.from({ length: 16 }).map((_, ti) => (
+                              <line key={`t${ti}`} x1="50" y1="3.2" x2="50" y2="8.2" stroke={u.color} strokeWidth="1" strokeLinecap="round" opacity={ti % 4 === 0 ? 0.9 : 0.5} transform={`rotate(${(360 / 16) * ti} 50 50)`} />
+                            ))}
+                            {Array.from({ length: 4 }).map((_, si) => (
+                              <line key={`s${si}`} x1="50" y1="6.5" x2="50" y2="20" stroke={u.color} strokeWidth="0.4" opacity="0.25" transform={`rotate(${90 * si} 50 50)`} />
+                            ))}
+                          </g>
+                          <g className="urc-mid-ring">
+                            <circle cx="50" cy="50" r="38" fill="none" stroke={u.color} strokeWidth="0.5" strokeDasharray="5 2.5" opacity="0.4" />
+                            {['✦', '◇', '✧', '◇', '✦', '◇', '✧', '◇'].map((g, gi) => {
+                              const rad = (gi * 45 * Math.PI) / 180;
+                              return (
+                                <text key={gi} x={50 + Math.cos(rad) * 38} y={50 + Math.sin(rad) * 38} fontSize="4.2" fill={u.color} textAnchor="middle" dominantBaseline="central" opacity="0.8">{g}</text>
+                              );
+                            })}
+                          </g>
+                          <g className="urc-inner-ring">
+                            <polygon points="50,20 76.9,65.5 23.1,65.5" fill="none" stroke={u.color} strokeWidth="0.55" opacity="0.5" />
+                            <polygon points="50,80 23.1,34.5 76.9,34.5" fill="none" stroke={u.color} strokeWidth="0.35" opacity="0.3" />
+                            <circle cx="50" cy="50" r="13" fill="none" stroke={u.color} strokeWidth="0.5" strokeDasharray="2 2" opacity="0.5" />
+                          </g>
+                          <circle className="urc-core-dot" cx="50" cy="50" r="2.2" fill={u.color} />
+                        </svg>
+                        <div className="ult-smoke-container">
+                          {Array.from({ length: PARTICLE_COUNT }).map((_, pi) => {
+                            const ang = (360 / PARTICLE_COUNT) * pi;
+                            const rad = (ang * Math.PI) / 180;
+                            const wr = 30;
+                            const px = Math.cos(rad) * wr;
+                            const py = Math.sin(rad) * wr;
+                            const sway = 6 + (pi % 3) * 3;
+                            return (
+                              <span
+                                key={pi}
+                                className="ult-smoke-wisp"
+                                style={{
+                                  '--p-x': `${px.toFixed(1)}px`,
+                                  '--p-y': `${py.toFixed(1)}px`,
+                                  '--p-sway': `${sway}px`,
+                                  '--p-delay': `${(pi * (2.2 / PARTICLE_COUNT)).toFixed(2)}s`,
+                                }}
+                              ></span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
+
+        {/* 💨 THE DASH BUTTON — BDO Sword Center Button */}
+        {screen === 'playing' && (
+          <div
+            className="dash-btn-container"
+            style={{
+              visibility: hasStarted ? 'visible' : 'hidden',
+              pointerEvents: hasStarted ? 'auto' : 'none',
+            }}
+            onPointerDown={(e) => { e.stopPropagation(); window.triggerDash(); }}
+          >
+            <div className="dash-icon">
+<svg width="30" height="30" viewBox="0 0 24 24" fill="none" style={{ color: '#5eead4' }}>
+  {/* Head */}
+  <circle cx="16" cy="5" r="2" fill="currentColor"/>
+
+  {/* Torso (leaning forward, running posture) */}
+  <line x1="15" y1="7" x2="11" y2="13" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/>
+
+  {/* Reaching arm */}
+  <path d="M14.5,8 L18,9.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+
+  {/* Front leg (knee up, kicking forward) */}
+  <path d="M11,13 L13.5,15.5 L11.5,19" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" fill="none"/>
+
+  {/* Back leg (trailing, extended) */}
+  <path d="M11,13 L7.5,15 L4.5,13.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" fill="none"/>
+
+  {/* Speed/motion trail lines */}
+  <line x1="1" y1="17" x2="7" y2="17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.6"/>
+  <line x1="1" y1="19.3" x2="5" y2="19.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.4"/>
+  <line x1="1.5" y1="21.5" x2="4" y2="21.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity="0.25"/>
+</svg>
             </div>
-
-            <div 
-              className={`mmo-hotbar-slot ${!skillsState.shootingStar?.learned ? 'not-learned' : (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle')}`}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (skillsState.shootingStar?.learned) learnSkillTreeTech('shootingStar');
-              }}
-            >
-              <span className="hotbar-key-bind">2</span>
-              <span className="hotbar-icon">🌠</span>
-              <span className="hotbar-name">S.Star</span>
-              {skillsState.shootingStar?.learned && (
-                <>
-                  <span className={`hotbar-status-dot ${skillsState.shootingStar.enabled ? 'on' : 'off'}`}>
-                    {skillsState.shootingStar.enabled ? 'ON' : 'OFF'}
-                  </span>
-                  {skillsState.shootingStar.enabled && skillsState.shootingStar.cd > 0 && (
-                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.shootingStar.cd)}s</div>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div 
-              className={`mmo-hotbar-slot ${!skillsState.cubeBash?.learned ? 'not-learned' : (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle')}`}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (skillsState.cubeBash?.learned) learnSkillTreeTech('cubeBash');
-              }}
-            >
-              <span className="hotbar-key-bind">3</span>
-              <span className="hotbar-icon">📦</span>
-              <span className="hotbar-name">C.Bash</span>
-              {skillsState.cubeBash?.learned && (
-                <>
-                  <span className={`hotbar-status-dot ${skillsState.cubeBash.enabled ? 'on' : 'off'}`}>
-                    {skillsState.cubeBash.enabled ? 'ON' : 'OFF'}
-                  </span>
-                  {skillsState.cubeBash.enabled && skillsState.cubeBash.cd > 0 && (
-                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.cubeBash.cd)}s</div>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div 
-              className={`mmo-hotbar-slot ${!skillsState.vacuumSlash?.learned ? 'not-learned' : (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle')}`}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                if (skillsState.vacuumSlash?.learned) learnSkillTreeTech('vacuumSlash');
-              }}
-            >
-              <span className="hotbar-key-bind">4</span>
-              <span className="hotbar-icon">🌀</span>
-              <span className="hotbar-name">V.Slash</span>
-              {skillsState.vacuumSlash?.learned && (
-                <>
-                  <span className={`hotbar-status-dot ${skillsState.vacuumSlash.enabled ? 'on' : 'off'}`}>
-                    {skillsState.vacuumSlash.enabled ? 'ON' : 'OFF'}
-                  </span>
-                  {skillsState.vacuumSlash.enabled && skillsState.vacuumSlash.cd > 0 && (
-                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.vacuumSlash.cd)}s</div>
-                  )}
-                </>
-              )}
-            </div>
-
-            {playerLevel >= 16 && (
-              <>
-                <div 
-                  className="mmo-hotbar-ult-slot"
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    castArcaneCollapseUltimate();
-                  }}
-                  title="Arcane Collapse: Judgment of the Wizard Council"
-                >
-                  <span className="hotbar-key-bind">5</span>
-                  <span className="hotbar-icon">🌌</span>
-                  <span className="hotbar-name">A.Collapse</span>
-                  {skillsState.arcaneCollapse?.cd > 0 && (
-                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneCollapse.cd)}s</div>
-                  )}
-                </div>
-
-                <div 
-                  className="mmo-hotbar-ult-slot"
-                  style={{ border: '3px solid #e879f9', background: 'radial-gradient(circle, #4c0519 0%, #0c0004 100%)' }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    castArcaneInstinctUltimate();
-                  }}
-                  title="Arcane Instinct: Transcendent State"
-                >
-                  <span className="hotbar-key-bind">6</span>
-                  <span className="hotbar-icon">⚡</span>
-                  <span className="hotbar-name">A.Instinct</span>
-                  {skillsState.arcaneInstinct?.cd > 0 && (
-                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneInstinct.cd)}s</div>
-                  )}
-                </div>
-
-                <div 
-                  className="mmo-hotbar-ult-slot"
-                  style={{ border: '3px solid #10b981', background: 'radial-gradient(circle, #064e3b 0%, #022c22 100%)' }}
-                  onPointerDown={(e) => {
-                    e.stopPropagation();
-                    castArcaneResurrectionUltimate();
-                  }}
-                  title="Forbidden Spell: Resurrection of Arcane"
-                >
-                  <span className="hotbar-key-bind">7</span>
-                  <span className="hotbar-icon">⚚</span>
-                  <span className="hotbar-name">A.Resurrect</span>
-                  {skillsState.arcaneResurrection?.cd > 0 && (
-                    <div className="hotbar-cooldown-overlay">{Math.ceil(skillsState.arcaneResurrection.cd)}s</div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* 💨 THE DASH BUTTON (MOBA STYLE PLACEMENT) */}
-        {screen === 'playing' && hasStarted && (
-          <div className="dash-btn-container" onPointerDown={(e) => { e.stopPropagation(); window.triggerDash(); }}>
-            <div className="dash-icon">💨</div>
             <div className="dash-label">DASH</div>
             <div ref={dashCdRef} className="dash-cd-overlay"></div>
           </div>
         )}
 
-{/* ========================================== */}
-        {/* BOTTOM RIGHT MENUS: INVENTORY & SKILLS     */}
         {/* ========================================== */}
-        {screen === 'playing' && (
-          <div style={{ position: 'absolute', bottom: '12px', right: '12px', display: 'flex', gap: '8px', zIndex: 60, alignItems: 'flex-end' }}>
-            
-            {/* INVENTORY BUTTON (Laging visible from Level 1) */}
-            <button 
-              className="inventory-toggle-btn" 
-              style={{ position: 'relative', bottom: 'auto', right: 'auto', margin: 0 }}
-              onPointerDown={(e) => { e.stopPropagation(); setIsInventoryOpen(prev => !prev); }}
-            >
-              🎒 {isInventoryOpen ? "Close Bag [I]" : "Inventory [I]"}
-            </button>
-
-            {/* SKILLS BUTTON (Lalabas lang pag Level 5+) */}
-            {playerLevel >= 5 && (
-              <button 
-                className="skill-tree-toggle-btn" 
-                style={{ position: 'relative', bottom: 'auto', right: 'auto', margin: 0 }} // Ino-override nito yung absolute positioning sa CSS mo
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  setIsTreeOpen(prev => !prev);
-                }}
-              >
-                {isTreeOpen ? "Hide Skills [K]" : "Show Skills [K]"}
-              </button>
-            )}
-          </div>
-        )}
+        {/* BOTTOM RIGHT MENUS: moved to upper-right BDO style */}
+        {/* ========================================== */}
 
         {/* ========================================== */}
         {/* THE INVENTORY MODAL */}
@@ -13327,7 +17354,15 @@ const renderTooltipStats = (item) => {
             onClick={e => e.stopPropagation()} // 🔥 Dagdag na pangharang para sa React Synthetic Clicks
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <span style={{ fontWeight: 'bold', color: '#fef08a' }}>🎒 EQUIPMENT & INVENTORY</span>
+              <span style={{ fontWeight: 'bold', color: '#fef08a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle' }}>
+                  <rect x="3" y="9" width="18" height="13" rx="2" stroke="#fef08a" strokeWidth="1.8"/>
+                  <path d="M8 9V7a4 4 0 0 1 8 0v2" stroke="#fef08a" strokeWidth="1.8" strokeLinecap="round"/>
+                  <line x1="3" y1="14" x2="21" y2="14" stroke="#fef08a" strokeWidth="1.2" opacity="0.5"/>
+                  <circle cx="12" cy="16.5" r="1.3" fill="#fef08a" opacity="0.8"/>
+                </svg>
+                EQUIPMENT &amp; INVENTORY
+              </span>
               <button 
                 onPointerDown={(e) => { e.stopPropagation(); setIsInventoryOpen(false); }} 
                 style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
@@ -13355,7 +17390,31 @@ const renderTooltipStats = (item) => {
                     >
                       {item ? (
                         <>
-                          <span style={{ fontSize: '1.5rem' }}>{slot === 'wand' ? '🪄' : slot === 'robe' ? '🧙' : '👢'}</span>
+                        <span style={{ fontSize: '1.5rem' }}>
+                          {slot === 'wand' ? (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                              <line x1="3" y1="21" x2="15" y2="9" stroke="#c4b5fd" strokeWidth="2.2" strokeLinecap="round"/>
+                              <path d="M15 9 L17 4 L19 9 L14 7 L19 7 L14 9 Z" fill="#e879f9" opacity="0.9"/>
+                              <circle cx="15" cy="9" r="1.5" fill="#f0abfc"/>
+                              <line x1="18" y1="3" x2="18" y2="6" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
+                              <line x1="20" y1="5" x2="17" y2="5" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
+                            </svg>
+                          ) : slot === 'robe' ? (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                              <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinejoin="round"/>
+                              <path d="M8 3 Q12 6 16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round"/>
+                              <path d="M9 3 L7 8 M15 3 L17 8" stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7"/>
+                              <circle cx="12" cy="8" r="1.2" fill="#e879f9" opacity="0.9"/>
+                            </svg>
+                          ) : (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                              <path d="M4 17 Q4 21 8 21 L18 21 Q21 21 21 18 L21 16 L9 16 L9 9 L5 9 Q4 9 4 12 Z" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round"/>
+                              <path d="M9 9 L9 16" stroke="#60a5fa" strokeWidth="1.5"/>
+                              <line x1="9" y1="19" x2="17" y2="19" stroke="#93c5fd" strokeWidth="1.2" opacity="0.7"/>
+                              <path d="M5 9 Q6 6 9 6 L9 9" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+                            </svg>
+                          )}
+                        </span>
                           
                           {/* AUTO-DETECT: Plus Badge Indicator */}
                           {(() => {
@@ -13369,7 +17428,7 @@ const renderTooltipStats = (item) => {
 
                           <div className="item-tooltip" style={{ borderColor: RARITY_COLORS[item.rarity] }}>
                             <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
-                            <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()}</div>
+                            <div style={{ color: '#b9c4d8', fontSize: '0.68rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()}</div>
                             {renderTooltipStats(item)}
                             <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
                             <div style={{ color: '#ef4444', marginTop: '4px', fontSize: '0.55rem' }}>(Click to Unequip)</div>
@@ -13428,7 +17487,31 @@ const renderTooltipStats = (item) => {
                           ✕
                         </button>
                         
-                        <span style={{ fontSize: '1.5rem' }}>{item.type === 'wand' ? '🪄' : item.type === 'robe' ? '🧙' : '👢'}</span>
+                        <span style={{ fontSize: '1.5rem' }}>
+                          {item.type === 'wand' ? (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                              <line x1="3" y1="21" x2="15" y2="9" stroke="#c4b5fd" strokeWidth="2.2" strokeLinecap="round"/>
+                              <path d="M15 9 L17 4 L19 9 L14 7 L19 7 L14 9 Z" fill="#e879f9" opacity="0.9"/>
+                              <circle cx="15" cy="9" r="1.5" fill="#f0abfc"/>
+                              <line x1="18" y1="3" x2="18" y2="6" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
+                              <line x1="20" y1="5" x2="17" y2="5" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
+                            </svg>
+                          ) : item.type === 'robe' ? (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                              <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinejoin="round"/>
+                              <path d="M8 3 Q12 6 16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round"/>
+                              <path d="M9 3 L7 8 M15 3 L17 8" stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7"/>
+                              <circle cx="12" cy="8" r="1.2" fill="#e879f9" opacity="0.9"/>
+                            </svg>
+                          ) : (
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                              <path d="M4 17 Q4 21 8 21 L18 21 Q21 21 21 18 L21 16 L9 16 L9 9 L5 9 Q4 9 4 12 Z" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round"/>
+                              <path d="M9 9 L9 16" stroke="#60a5fa" strokeWidth="1.5"/>
+                              <line x1="9" y1="19" x2="17" y2="19" stroke="#93c5fd" strokeWidth="1.2" opacity="0.7"/>
+                              <path d="M5 9 Q6 6 9 6 L9 9" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+                            </svg>
+                          )}
+                        </span>
                         
                         {/* AUTO-DETECT: Plus Badge Indicator */}
                         {(() => {
@@ -13488,7 +17571,7 @@ const renderTooltipStats = (item) => {
                           }}>
                             <div style={{ color: '#34d399', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(52, 211, 153, 0.4)', paddingBottom: '2px' }}>IN INVENTORY</div>
                             <div style={{ color: RARITY_COLORS[item.rarity], fontWeight: 'bold' }}>{item.name}</div>
-                            <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
+                            <div style={{ color: '#b9c4d8', fontSize: '0.68rem', marginBottom: '4px' }}>{item.rarity.toUpperCase()} {item.type.toUpperCase()}</div>
                             {renderTooltipStats(item)}
                             <div style={{ color: '#fbbf24', marginTop: '4px' }}>{item.desc}</div>
                             <div style={{ color: '#10b981', marginTop: '6px', fontSize: '0.55rem' }}>(Click to Equip)</div>
@@ -13509,7 +17592,7 @@ const renderTooltipStats = (item) => {
                             }}>
                               <div style={{ color: '#fef08a', fontSize: '0.55rem', marginBottom: '4px', borderBottom: '1px solid rgba(254, 240, 138, 0.4)', paddingBottom: '2px' }}>CURRENTLY EQUIPPED</div>
                               <div style={{ color: RARITY_COLORS[equippedItem.rarity], fontWeight: 'bold' }}>{equippedItem.name}</div>
-                              <div style={{ color: '#94a3b8', fontSize: '0.6rem', marginBottom: '4px' }}>{equippedItem.rarity.toUpperCase()} {equippedItem.type.toUpperCase()}</div>
+                              <div style={{ color: '#b9c4d8', fontSize: '0.68rem', marginBottom: '4px' }}>{equippedItem.rarity.toUpperCase()} {equippedItem.type.toUpperCase()}</div>
                               {renderTooltipStats(equippedItem)}
                               <div style={{ color: '#fbbf24', marginTop: '4px' }}>{equippedItem.desc}</div>
                             </div>
@@ -13520,6 +17603,145 @@ const renderTooltipStats = (item) => {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================== */}
+        {/* THE HELP MODAL — Hotkeys & How To Play */}
+        {/* ========================================== */}
+        {screen === 'playing' && isHelpOpen && (
+          <div
+            className="help-modal"
+            onPointerDown={e => e.stopPropagation()}
+            onPointerUp={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
+            onTouchEnd={e => e.stopPropagation()}
+            onTouchMove={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontWeight: 'bold', color: '#fef08a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle' }}>
+                  <circle cx="12" cy="12" r="9.2" stroke="#fef08a" strokeWidth="1.8"/>
+                  <path d="M9.3 9.6 C9.3 7.9 10.6 6.6 12 6.6 C13.5 6.6 14.7 7.7 14.7 9.1 C14.7 11 12 11.2 12 13.6" stroke="#fef08a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  <circle cx="12" cy="16.8" r="1.05" fill="#fef08a"/>
+                </svg>
+                HELP &amp; HOTKEYS
+              </span>
+              <button
+                onPointerDown={(e) => { e.stopPropagation(); setIsHelpOpen(false); }}
+                style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="help-modal-body">
+
+              <div className="help-section-title">How To Play</div>
+              <p className="help-text">
+                Survive the endless waves of enemies and bosses. Move your hero around the
+                arena, auto-attack nearby foes, and collect XP orbs they drop to level up.
+                Defeated enemies sometimes drop gear &mdash; pick it up and equip it from your
+                Bag to grow stronger. The longer you survive, the tougher the waves get, so
+                use your Dash to dodge danger and your Elemental Sigils &amp; Ultimates to
+                turn the tide of battle.
+              </p>
+
+              <div className="help-section-title">Movement &amp; Combat</div>
+              {isTouchDevice ? (
+                <div className="help-key-row">
+                  <span className="help-key-combo">
+                    <span className="help-key help-key-icon" title="Virtual Joystick">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" opacity="0.55"/>
+                        <circle cx="12" cy="12" r="3.6" fill="currentColor"/>
+                      </svg>
+                    </span>
+                  </span>
+                  <span className="help-key-desc">Touch &amp; drag on the left side of the screen to move</span>
+                </div>
+              ) : (
+                <div className="help-key-row">
+                  <span className="help-key-combo"><span className="help-key">W</span><span className="help-key">A</span><span className="help-key">S</span><span className="help-key">D</span><span className="help-key-or">or</span><span className="help-key">▲▼◀▶</span></span>
+                  <span className="help-key-desc">Move your hero</span>
+                </div>
+              )}
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key help-key-wide">SPACE</span></span>
+                <span className="help-key-desc">Dash (dodge enemies &amp; attacks)</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">P</span><span className="help-key-or">or</span><span className="help-key help-key-wide">ESC</span></span>
+                <span className="help-key-desc">Pause / Resume the match</span>
+              </div>
+
+              <div className="help-section-title">Menus</div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">T</span></span>
+                <span className="help-key-desc">Toggle Stats panel</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">I</span></span>
+                <span className="help-key-desc">Toggle Bag (Inventory)</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">K</span></span>
+                <span className="help-key-desc">Toggle Skill Tree <em>(unlocks at Lv.5)</em></span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">H</span></span>
+                <span className="help-key-desc">Toggle this Help menu</span>
+              </div>
+
+              <div className="help-section-title">Elemental Sigils <em>(unlocks at Lv.10)</em></div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">1</span></span>
+                <span className="help-key-desc">Flare &mdash; fire blast sigil</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">2</span></span>
+                <span className="help-key-desc">Wave &mdash; tidal wave sigil</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">3</span></span>
+                <span className="help-key-desc">Fissure &mdash; earth slam sigil</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">4</span></span>
+                <span className="help-key-desc">Storm &mdash; lightning surge sigil</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">5</span></span>
+                <span className="help-key-desc">Ice &mdash; ice storm sigil</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">6</span></span>
+                <span className="help-key-desc">Heal &mdash; nature recovery sigil</span>
+              </div>
+
+              <div className="help-section-title">Ultimate Spells <em>(unlocks at Lv.16)</em></div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">Q</span></span>
+                <span className="help-key-desc">Arcane Collapse</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">E</span></span>
+                <span className="help-key-desc">Arcane Instinct</span>
+              </div>
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">R</span></span>
+                <span className="help-key-desc">Arcane Resurrection</span>
+              </div>
+
+              <div className="help-section-title">Touch Controls</div>
+              <p className="help-text">
+                On phones and tablets, touch and drag on the left side of the screen to
+                move your hero, and tap the on-screen icons (Stats, Bag, Skills, Help) and
+                buttons (Dash, Sigils, Ultimates) to use them.
+              </p>
+
             </div>
           </div>
         )}
@@ -13537,7 +17759,15 @@ const renderTooltipStats = (item) => {
                 onClick={(e) => e.stopPropagation()}
               >
             <div className="skill-tree-title-row">
-              <span className="skill-tree-title">✨ DEFENSIVE SPELLS (LV 5+)</span>
+              <span className="skill-tree-title">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle', marginRight: 5 }}>
+                  <path d="M12 2 L20 5.5 V11 C20 16.5 16.5 20.5 12 22 C7.5 20.5 4 16.5 4 11 V5.5 Z" stroke="#a78bfa" strokeWidth="1.6" strokeLinejoin="round"/>
+                  <path d="M6.5 10 H17.5 M6.5 14 H17.5" stroke="#a78bfa" strokeWidth="1.1" opacity="0.55"/>
+                  <path d="M12 6 V18" stroke="#a78bfa" strokeWidth="1.1" opacity="0.55"/>
+                  <circle cx="12" cy="11" r="2.2" fill="#7c3aed" opacity="0.7"/>
+                </svg>
+                DEFENSIVE SPELLS (LV 5+)
+              </span>
               <button 
                 className="skill-tree-close-x" 
                 onPointerDown={(e) => { e.stopPropagation(); setIsTreeOpen(false); }}
@@ -13550,7 +17780,7 @@ const renderTooltipStats = (item) => {
               className={`skill-row-btn ${skillsState.berserk?.learned ? (skillsState.berserk.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('berserk'); }}
             >
-              <span>🔥 Berserk Aura {skillsState.berserk?.learned ? (skillsState.berserk.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              <span><ArcaneIcon type="berserk" size={15} /> Berserk Aura {skillsState.berserk?.learned ? (skillsState.berserk.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.berserk?.learned && (
                 <span className="skill-cd-text">
                   {skillsState.berserk.duration > 0 ? `Active ${Math.ceil(skillsState.berserk.duration)}s` : `CD ${Math.ceil(skillsState.berserk.cd)}s`}
@@ -13563,7 +17793,7 @@ const renderTooltipStats = (item) => {
               className={`skill-row-btn ${skillsState.haste?.learned ? (skillsState.haste.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('haste'); }}
             >
-              <span>⚡ Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              <span><ArcaneIcon type="haste" size={15} /> Massive Haste {skillsState.haste?.learned ? (skillsState.haste.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.haste?.learned && (
                 <span className="skill-cd-text">
                   {skillsState.haste.duration > 0 ? `Active ${Math.ceil(skillsState.haste.duration)}s` : `CD ${Math.ceil(skillsState.haste.cd)}s`}
@@ -13576,7 +17806,7 @@ const renderTooltipStats = (item) => {
               className={`skill-row-btn ${skillsState.fortify?.learned ? (skillsState.fortify.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('fortify'); }}
             >
-              <span>🛡️ Fortify {skillsState.fortify?.learned ? (skillsState.fortify.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              <span><ArcaneIcon type="fortify" size={15} /> Fortify {skillsState.fortify?.learned ? (skillsState.fortify.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.fortify?.learned && <span className="skill-cd-text">PERMANENT</span>}
             </button>
             <div className="skill-node-desc">Hardens your wizard robes to grant a flat, permanent 25% damage reduction from all sources.</div>
@@ -13585,7 +17815,7 @@ const renderTooltipStats = (item) => {
               className={`skill-row-btn ${skillsState.shield?.learned ? (skillsState.shield.enabled ? 'learned' : 'disabled-toggle') : ''}`}
               onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('shield'); }}
             >
-              <span>🔮 Rigid's Defender {skillsState.shield?.learned ? (skillsState.shield.enabled ? '[ON]' : '[OFF]') : ''}</span>
+              <span><ArcaneIcon type="shield" size={15} /> Rigid's Defender {skillsState.shield?.learned ? (skillsState.shield.enabled ? '[ON]' : '[OFF]') : ''}</span>
               {skillsState.shield?.learned && (
                 <span className="skill-cd-text">
                   {skillsState.shield.duration > 0 ? `Active ${Math.ceil(skillsState.shield.duration)}s` : `CD ${Math.ceil(skillsState.shield.cd)}s`}
@@ -13597,14 +17827,22 @@ const renderTooltipStats = (item) => {
             {playerLevel >= 10 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>⚔️ OFFENSIVE SPELLS (LV 10+)</span>
+                  <span className="skill-tree-title" style={{ color: '#f43f5e' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle', marginRight: 5 }}>
+                      <path d="M5 19 L17 7" stroke="#f43f5e" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M13 7 L19 5 L17 11 Z" fill="#f43f5e" opacity="0.9"/>
+                      <path d="M7 17 Q5.5 19 5 21 Q6.8 20.3 8 19" fill="#fb7185" opacity="0.85"/>
+                      <path d="M9 13 L11 11" stroke="#fda4af" strokeWidth="1.2" strokeLinecap="round" opacity="0.6"/>
+                    </svg>
+                    OFFENSIVE SPELLS (LV 10+)
+                  </span>
                 </div>
 
                 <button 
                   className={`skill-row-btn ${skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('bodyCutter'); }}
                 >
-                  <span>🩸 Body Cutter {skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  <span><ArcaneIcon type="bodyCutter" size={15} /> Body Cutter {skillsState.bodyCutter?.learned ? (skillsState.bodyCutter.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.bodyCutter?.learned && <span className="skill-cd-text">PASSIVE</span>}
                 </button>
                 <div className="skill-node-desc">Applies stigma/debuff and damage-over-time effects to your enemies.</div>
@@ -13613,7 +17851,7 @@ const renderTooltipStats = (item) => {
                   className={`skill-row-btn ${skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('shootingStar'); }}
                 >
-                  <span>🌠 Shooting Star {skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  <span><ArcaneIcon type="shootingStar" size={15} /> Shooting Star {skillsState.shootingStar?.learned ? (skillsState.shootingStar.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.shootingStar?.learned && <span className="skill-cd-text">AUTO</span>}
                 </button>
                 <div className="skill-node-desc">Summons explosive cube effects for area damage.</div>
@@ -13622,7 +17860,7 @@ const renderTooltipStats = (item) => {
                   className={`skill-row-btn ${skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('cubeBash'); }}
                 >
-                  <span>📦 Cube Bash {skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  <span><ArcaneIcon type="cubeBash" size={15} /> Cube Bash {skillsState.cubeBash?.learned ? (skillsState.cubeBash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.cubeBash?.learned && <span className="skill-cd-text">AUTO</span>}
                 </button>
                 <div className="skill-node-desc">Cube-based control attack that can disable or stun enemies.</div>
@@ -13631,7 +17869,7 @@ const renderTooltipStats = (item) => {
                   className={`skill-row-btn ${skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? 'learned' : 'disabled-toggle') : ''}`}
                   onPointerDown={(e) => { e.stopPropagation(); learnSkillTreeTech('vacuumSlash'); }}
                 >
-                  <span>🌀 Vacuum Slash {skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? '[ON]' : '[OFF]') : ''}</span>
+                  <span><ArcaneIcon type="vacuumSlash" size={15} /> Vacuum Slash {skillsState.vacuumSlash?.learned ? (skillsState.vacuumSlash.enabled ? '[ON]' : '[OFF]') : ''}</span>
                   {skillsState.vacuumSlash?.learned && <span className="skill-cd-text">AUTO</span>}
                 </button>
                 <div className="skill-node-desc">Powerful attack by slashing the air generating massive force to damage the enemy.</div>
@@ -13641,14 +17879,17 @@ const renderTooltipStats = (item) => {
             {playerLevel >= 16 && (
               <>
                 <div className="skill-tree-title-row" style={{ marginTop: '12px' }}>
-                  <span className="skill-tree-title" style={{ color: '#d946ef' }}>🌌 ULTIMATE SPELLS (LV 12+)</span>
+                  <span className="skill-tree-title" style={{ color: '#d946ef', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <ArcaneIcon type="ultimateSeal" size={15} />
+                    ULTIMATE SPELLS (LV 12+)
+                  </span>
                 </div>
 
                 <button 
                   className="skill-row-btn learned"
                   onPointerDown={(e) => { e.stopPropagation(); castArcaneCollapseUltimate(); }}
                 >
-                  <span>🌌 Arcane Collapse [Press 5]</span>
+                  <span><ArcaneIcon type="arcaneCollapse" size={15} /> Arcane Collapse [Press Q]</span>
                   <span className="skill-cd-text">25s CD</span>
                 </button>
                 <div className="skill-node-desc" style={{ borderColor: '#d946ef' }}>
@@ -13660,7 +17901,7 @@ const renderTooltipStats = (item) => {
                   style={{ border: '1px solid #e879f9' }}
                   onPointerDown={(e) => { e.stopPropagation(); castArcaneInstinctUltimate(); }}
                 >
-                  <span>⚡ Arcane Instinct [Press 6]</span>
+                  <span><ArcaneIcon type="arcaneInstinct" size={15} /> Arcane Instinct [Press E]</span>
                   <span className="skill-cd-text">40s CD</span>
                 </button>
                 <div className="skill-node-desc" style={{ borderColor: '#e879f9' }}>
@@ -13672,7 +17913,7 @@ const renderTooltipStats = (item) => {
                   style={{ border: '1px solid #10b981' }}
                   onPointerDown={(e) => { e.stopPropagation(); castArcaneResurrectionUltimate(); }}
                 >
-                  <span>⚚ Arcane Resurrection [Press 7]</span>
+                  <span><ArcaneIcon type="arcaneResurrect" size={15} /> Arcane Resurrection [Press R]</span>
                   <span className="skill-cd-text">300s CD</span>
                 </button>
                 <div className="skill-node-desc" style={{ borderColor: '#10b981' }}>
@@ -13683,39 +17924,186 @@ const renderTooltipStats = (item) => {
           </div>
         )}
 
-        {screen === 'playing' && !hasStarted && (
-          <div className="hud-start-overlay">
+        {screen === 'playing' && isPreloading && (
+          <LoadingScreen
+            duration={7000}
+            isCoop={Boolean(isCoop || (netRef.current && netRef.current.channel))}
+            onComplete={() => {
+              isPreloadingRef.current = false;
+              setIsPreloading(false);
+            }}
+          />
+        )}
+
+        {screen === 'playing' && (
+          <div
+            className="hud-start-overlay"
+            style={{
+              visibility: (hasStarted || isPreloading) ? 'hidden' : 'visible',
+              pointerEvents: (hasStarted || isPreloading) ? 'none' : 'auto',
+              transition: 'visibility 0s, opacity 0.2s',
+              opacity: (hasStarted || isPreloading) ? 0 : 1,
+            }}
+          >
             <div className="hud-start-modal">
+              
+              <div className="hud-corner hud-corner-tl"></div>
+              <div className="hud-corner hud-corner-tr"></div>
+              <div className="hud-corner hud-corner-bl"></div>
+              <div className="hud-corner hud-corner-br"></div>
+
+              <div className="hud-rune-row">
+                <span>ᚦ</span><span>ᚨ</span><span>ᚱ</span><span>ᛁ</span><span>ᛏ</span>
+              </div>
+
+              <svg className="hud-sigil" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="20,2 37,11 37,29 20,38 3,29 3,11" fill="none" stroke="#534AB7" strokeWidth="0.8" opacity="0.7"/>
+                <polygon points="20,7 32,14 32,26 20,33 8,26 8,14" fill="none" stroke="#7F77DD" strokeWidth="0.5" opacity="0.5"/>
+                <circle cx="20" cy="20" r="4" fill="none" stroke="#AFA9EC" strokeWidth="0.8" opacity="0.8"/>
+                <line x1="20" y1="2" x2="20" y2="14" stroke="#534AB7" strokeWidth="0.5" opacity="0.5"/>
+                <line x1="20" y1="26" x2="20" y2="38" stroke="#534AB7" strokeWidth="0.5" opacity="0.5"/>
+                <line x1="3" y1="11" x2="14" y2="17" stroke="#534AB7" strokeWidth="0.5" opacity="0.5"/>
+                <line x1="26" y1="23" x2="37" y2="29" stroke="#534AB7" strokeWidth="0.5" opacity="0.5"/>
+                <line x1="37" y1="11" x2="26" y2="17" stroke="#534AB7" strokeWidth="0.5" opacity="0.5"/>
+                <line x1="14" y1="23" x2="3" y2="29" stroke="#534AB7" strokeWidth="0.5" opacity="0.5"/>
+              </svg>
+
+              <div className="hud-divider">
+                <span></span><i>✦</i><i>ᛝ</i><i>✦</i><span></span>
+              </div>
+
               <h2>{isHostInstance ? "MOVE TO START GAME" : "WAITING FOR HOST"}</h2>
+
+              <div className="hud-divider hud-divider-sm">
+                <span></span><i>ᚾ</i><span></span>
+              </div>
+
               <p>
                 {isHostInstance 
-                  ? (('ontouchstart' in window || navigator.maxTouchPoints > 0) 
+                  ? (isTouchDevice 
                       ? "Touch and drag on the left side of the screen to begin battle." 
                       : "Press WASD or Arrow Keys to begin battle.")
                   : "The arena will initialize once the match host begins moving."}
               </p>
+
+              {/* Dynamic Input Hint Rendering */}
+              {isHostInstance && (
+                isTouchDevice ? (
+                  <div className="hud-touch-hint">
+                    <div className="hud-touch-zone">
+                      <div className="hud-touch-dot"></div>
+                      <div className="hud-touch-ring"></div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="hud-wasd-hint">
+                    <span className="hud-key hud-key-w">W</span>
+                    <div className="hud-key-row">
+                      <span className="hud-key hud-key-a">A</span>
+                      <span className="hud-key hud-key-s">S</span>
+                      <span className="hud-key hud-key-d">D</span>
+                    </div>
+                  </div>
+                )
+              )}
+
+              <div className="hud-rune-footer">
+                <span></span><i>ᛟ</i><i>ᚷ</i><i>ᛖ</i><span></span>
+              </div>
+
             </div>
           </div>
         )}
 
         {screen === 'pause' && isNetworked && !netRef.current.isHost && (
-          <div className="hud-start-overlay" style={{ zIndex: 110 }}>
-            <div className="hud-start-modal" style={{ borderColor: '#a78bfa' }}>
-              <h2>MATCH PAUSED</h2>
-              <p>The Host has paused the session. Standing by for resumption...</p>
-            </div>
-          </div>
+ <div className="hud-start-overlay" style={{ zIndex: 110 }}>
+      <div className="hud-start-modal" style={{ borderColor: '#a78bfa' }}>
+        <div className="hud-corner hud-corner-tl" style={{ borderColor: '#a78bfa' }}></div>
+        <div className="hud-corner hud-corner-tr" style={{ borderColor: '#a78bfa' }}></div>
+        <div className="hud-corner hud-corner-bl" style={{ borderColor: '#a78bfa' }}></div>
+        <div className="hud-corner hud-corner-br" style={{ borderColor: '#a78bfa' }}></div>
+ 
+        <div className="hud-rune-row">
+          <span>ᛒ</span><span>ᛁ</span><span>ᛞ</span><span>ᚨ</span><span>ᚾ</span>
+        </div>
+ 
+        <svg className="hud-sigil" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="20" cy="20" r="17" fill="none" stroke="#a78bfa" strokeWidth="1" opacity="0.6"/>
+          <line x1="15" y1="13" x2="15" y2="27" stroke="#c4b5fd" strokeWidth="2.5" opacity="0.85" strokeLinecap="round"/>
+          <line x1="25" y1="13" x2="25" y2="27" stroke="#c4b5fd" strokeWidth="2.5" opacity="0.85" strokeLinecap="round"/>
+        </svg>
+ 
+        <div className="hud-divider">
+          <span></span><i>✦</i><i>ᛝ</i><i>✦</i><span></span>
+        </div>
+ 
+        <h2>MATCH PAUSED</h2>
+ 
+        <div className="hud-divider hud-divider-sm">
+          <span></span><i>ᚾ</i><span></span>
+        </div>
+ 
+        <p>The Host has paused the session. Standing by for resumption...</p>
+ 
+        <div className="hud-pulse-dots">
+          <span></span><span></span><span></span>
+        </div>
+ 
+        <div className="hud-rune-footer">
+          <span></span><i>ᛟ</i><i>ᚷ</i><i>ᛖ</i><span></span>
+        </div>
+      </div>
+    </div>
         )}
 
         {hostExitedCountdown !== null && (
-          <div className="hud-start-overlay" style={{ zIndex: 120 }}>
-            <div className="hud-start-modal" style={{ borderColor: '#ef4444' }}>
-              <h2>HOST EXITED THE ROOM</h2>
-              <p style={{ fontSize: '1.2rem', color: '#f87171', fontWeight: 'bold', margin: '10px 0' }}>
-                Exiting to main menu in {hostExitedCountdown}s...
-              </p>
-            </div>
-          </div>
+ <div className="hud-start-overlay" style={{ zIndex: 120 }}>
+      <div className="hud-start-modal" style={{ borderColor: '#ef4444' }}>
+        <div className="hud-corner hud-corner-tl" style={{ borderColor: '#ef4444' }}></div>
+        <div className="hud-corner hud-corner-tr" style={{ borderColor: '#ef4444' }}></div>
+        <div className="hud-corner hud-corner-bl" style={{ borderColor: '#ef4444' }}></div>
+        <div className="hud-corner hud-corner-br" style={{ borderColor: '#ef4444' }}></div>
+ 
+        <div className="hud-rune-row hud-rune-row-danger">
+          <span>ᚺ</span><span>ᚨ</span><span>ᚷ</span><span>ᚨ</span><span>ᛚ</span>
+        </div>
+ 
+        <svg className="hud-sigil" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="20,3 36,12 36,28 20,37 4,28 4,12" fill="none" stroke="#ef4444" strokeWidth="1" opacity="0.7"/>
+          <line x1="14" y1="14" x2="26" y2="26" stroke="#f87171" strokeWidth="2.5" opacity="0.85" strokeLinecap="round"/>
+          <line x1="26" y1="14" x2="14" y2="26" stroke="#f87171" strokeWidth="2.5" opacity="0.85" strokeLinecap="round"/>
+        </svg>
+ 
+        <div className="hud-divider hud-divider-danger">
+          <span></span><i>✦</i><i>ᛝ</i><i>✦</i><span></span>
+        </div>
+ 
+        <h2 className="hud-title-danger">HOST EXITED THE ROOM</h2>
+ 
+        <div className="hud-divider hud-divider-sm hud-divider-danger">
+          <span></span><i>ᚾ</i><span></span>
+        </div>
+ 
+        <p style={{ fontSize: '1.2rem', color: '#f87171', fontWeight: 'bold', margin: '10px 0' }}>
+          Exiting to main menu in {hostExitedCountdown}s...
+        </p>
+ 
+        <div className="hud-countdown-ring">
+          <svg viewBox="0 0 36 36">
+            <circle className="hud-countdown-track" cx="18" cy="18" r="15"></circle>
+            <circle
+              className="hud-countdown-fill"
+              cx="18" cy="18" r="15"
+              style={{ animationDuration: `${hostExitedCountdown}s` }}
+            ></circle>
+          </svg>
+        </div>
+ 
+        <div className="hud-rune-footer hud-rune-footer-danger">
+          <span></span><i>ᛟ</i><i>ᚷ</i><i>ᛖ</i><span></span>
+        </div>
+      </div>
+    </div>
         )}
 
         {guestExitedAlert && (
