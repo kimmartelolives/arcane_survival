@@ -2823,7 +2823,7 @@ const upgradeFamiliar = (fam) => {
               </div>
               {/*  DEVELOPER TOOLS */}
               
-              <button 
+              {/* <button 
                 onClick={() => {
                   const newC = crystals + 10000000;
                   setCrystals(newC);
@@ -2835,7 +2835,7 @@ const upgradeFamiliar = (fam) => {
                   fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 'bold' 
                 }}>
                 <Icon name="wrench" size={13} color="#c084fc" style={{ marginRight: '4px' }} /> +10M Crystals (Test Mode)
-              </button> 
+              </button>  */}
              
             </div>
 
