@@ -1307,14 +1307,19 @@ const renderDamageRecap = () => {
 
           /* 🔥 NA-FIX PARA SA SAFARI BARS (IMG_1163 & IMG_1164 FIX):
              Binabaan ang max-height sa 80svh/80vh para piliting pumasok sa loob ng screen 
-             ang Title at ang mga bottom buttons nang hindi sila napuputol. */
+             ang Title at ang mga bottom buttons nang hindi sila napuputol.
+             🔥 ORDER FIX: dating "svh" muna bago "vh" — pero sa CSS, panalo yung
+             PINAKAHULING declaration, kaya yung "vh" (fallback) ang sumalakay sa
+             LAHAT ng browser at na-cancel ang buong svh fix kahit suportado ito!
+             Tama na ang order ngayon: vh (fallback) muna, svh (modern/totoong fix)
+             sumusunod — para gumana ito tulad ng intensyon. */
           .wizard-panel, .council-news-box {
             width: 96vw !important;
             min-width: 0 !important;      
             min-height: 0 !important;     
             height: auto !important;      
-            max-height: 80svh !important;  /* Bawas ang sukat ng Safari Address Bar */
             max-height: 80vh !important;   /* Fallback para sa mga lumang browser */
+            max-height: 80svh !important;  /* Bawas ang sukat ng Safari Address Bar */
             padding: 6px 12px !important;  /* Mas pinalit pa ang padding para sa hininga ng UI */
             margin-top: 0px !important; 
             overflow-y: auto !important;    
@@ -1468,104 +1473,6 @@ const renderDamageRecap = () => {
           animation: arcaneGlow 2.5s infinite ease-in-out !important;
         }
 
-        /* 🔥 PURE CSS MOBILE RESPONSIVE OVERRIDES (GRIMOIRE) 🔥 */
-            
-        /* 1. PORTRAIT FIX: Native overlay scroll, expand full height, tabs at top */
-        @media (max-width: 768px) and (orientation: portrait) {
-          .grimoire-modal-overlay {
-            align-items: flex-start !important;
-            padding-top: 65px !important; /* Space para hindi makain ang tabs sa taas */
-            padding-bottom: 40px !important;
-            overflow-y: auto !important;
-            overflow-x: hidden !important;
-          }
-          .grimoire-book { 
-            flex-direction: column !important; 
-            height: auto !important;
-            max-height: none !important; /* Tanggalin ang height restriction para mag-expand */
-            margin-top: 0 !important;
-            overflow: visible !important; /* 👈 MUST BE VISIBLE FOR TABS TO SHOW! */
-          }
-          .grimoire-page {
-            flex: none !important;
-            min-height: auto !important;
-            height: auto !important;
-          }
-          .grimoire-left { 
-            border-radius: 8px 8px 0 0 !important; 
-            border-right: 1.5px solid #c5a059 !important; 
-            border-bottom: 1px dashed rgba(197,160,89,0.4) !important; 
-          }
-          .grimoire-right { 
-            border-radius: 0 0 8px 8px !important; 
-            border-left: 1.5px solid #c5a059 !important; 
-            border-top: none !important; 
-          }
-          .grimoire-spine { 
-            display: none !important; 
-          }
-          .grimoire-tabs-container {
-            flex-direction: row !important;
-            top: -42px !important;
-            left: 0 !important;
-            width: 100% !important;
-            justify-content: center !important;
-          }
-          .mobile-tab-btn {
-            writing-mode: horizontal-tb !important;
-            transform: none !important;
-            padding: 10px 16px !important;
-            border-radius: 8px 8px 0 0 !important;
-            border-right: 1.5px solid #c5a059 !important;
-            border-bottom: none !important;
-            height: auto !important;
-          }
-          .grimoire-page-inner {
-            height: auto !important;
-            overflow: visible !important; /* Hayaan lang na i-stretch ng content ang container */
-          }
-        }
-
-        /* 2. LANDSCAPE FIX: Prevent cutoff, restrict height, icon tabs */
-        @media (max-width: 932px) and (orientation: landscape) {
-          .grimoire-book {
-            margin-left: 45px !important; 
-            width: calc(100vw - 70px) !important; 
-            min-height: 0 !important;     
-            height: 85svh !important;     
-            max-height: 85svh !important; 
-            overflow: visible !important; /* 👈 Ensure tabs don't clip left */
-          }
-          .grimoire-tabs-container {
-            left: -38px !important; 
-          }
-          .mobile-tab-btn {
-            font-size: 0 !important;      
-            padding: 12px 6px !important; 
-            writing-mode: horizontal-tb !important; 
-            transform: none !important; 
-            min-width: 38px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-          }
-          .mobile-tab-btn:nth-child(1)::after {
-            content: '📜'; 
-            font-size: 1.2rem !important;
-          }
-          .mobile-tab-btn:nth-child(2)::after {
-            content: '🦇'; 
-            font-size: 1.2rem !important;
-          }
-        }
-
-        /* 3. UNIVERSAL PAGE CLIPPING FIX */
-        @media (max-width: 932px) {
-          .grimoire-page-inner {
-            overflow-y: auto !important;  
-            padding: 16px !important; 
-          }
-        }
       `}</style>
 
 
@@ -2853,6 +2760,8 @@ const renderDamageRecap = () => {
                 margin-left: 45px !important; 
                 width: calc(100vw - 70px) !important; 
                 min-height: 0 !important;     
+                height: 85vh !important;      /* fallback para sa mga lumang browser na walang svh support */
+                max-height: 85vh !important; 
                 height: 85svh !important;     
                 max-height: 85svh !important; 
                 overflow: visible !important; /* 👈 Ensure tabs don't clip left */

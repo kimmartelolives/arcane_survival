@@ -2478,7 +2478,6 @@ const focusStyles = `
        to every mobile-landscape browser (not gated behind the old
        @supports iOS check above), so the behavior is consistent rather
        than relying on browser sniffing. */
-
     .skill-tree-container, .coop-party-panel {
       top: 90px !important;
       bottom: 8px !important;
@@ -4693,14 +4692,19 @@ useEffect(() => {
 
   useEffect(() => {
     const net = netRef.current;
+    let restartTimeoutId; // 🔥 FIX: i-track ang timeout para ma-cancel kung mag-unvote
+                            // bago mag-1 second, o kung mag-unmount bago ito tumakbo.
     if (net && net.channel && net.isHost) {
       if (p1VotedRestart && p2VotedRestart) {
-       setTimeout(() => {
+       restartTimeoutId = setTimeout(() => {
            net.channel.send('restart_game', {}); 
            setScreen('playing');
         }, 1000);
       }
     }
+    return () => {
+      if (restartTimeoutId) clearTimeout(restartTimeoutId);
+    };
   }, [p1VotedRestart, p2VotedRestart, setScreen, netRef]);
 
   // 🔮 useLayoutEffect (HINDI useEffect): kailangan ma-commit ang
@@ -16466,6 +16470,7 @@ if (e.key === 'm' || e.key === 'M') {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
       if (eng.pendingSigilCasts) eng.pendingSigilCasts.length = 0; // 🔥 FIX: safety net — walang resolveSigilCast na tatakbo pagkatapos mag-unmount
+      if (exitTimerRef.current) clearInterval(exitTimerRef.current); // 🔥 FIX: huwag patakbuhin ang host-exited countdown lampas sa unmount
     };
   }, []);
 
