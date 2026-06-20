@@ -984,9 +984,19 @@ const focusStyles = `
   }
   .game-hud-bottom {
     position: absolute;
-    bottom: 12px;
+    /* ✅ Bottom offset proporsyonal na rin sa --ui-scale, para hindi
+       "lumulutang" papalayo sa screen edge sa malalaking screen o
+       sumisingit masyado sa maliliit. */
+    bottom: calc(12px * var(--ui-scale, 1));
     left: 50%;
-    transform: translateX(-50%);
+    /* ✅ UNIFIED SCALE: isang transform na lang dito ang nagdidikta ng laki
+       ng buong grupo (level badge + HP bar + XP bar). Dating magkahiwalay
+       na fixed px/rem ang bawat anak na element, kaya iba ang lumalabas na
+       proportion depende sa physical screen — ngayon, parehong-pareho na
+       sila dahil parehong --ui-scale lang ang ginagamit, kasing source ng
+       canvas scale mismo. */
+    transform: translateX(-50%) scale(var(--ui-scale, 1));
+    transform-origin: bottom center;
     display: flex;
     flex-direction: row;
     align-items: stretch;
@@ -1041,7 +1051,7 @@ const focusStyles = `
   }
   /* ── HP / XP Bars — BDO Center Style ── */
   .hud-bar-container {
-    width: 300px;
+    width: 250px;
     background: rgba(4, 2, 18, 0.88);
     border: 1px solid rgba(100, 70, 200, 0.28);
     border-top-color: rgba(139, 92, 246, 0.45);
@@ -1186,14 +1196,21 @@ const focusStyles = `
 
   .rpg-buff-container {
     position: absolute;
-    bottom: 80px;
+    bottom: calc(80px * var(--ui-scale, 1));
     left: 50%;
-    transform: translateX(-50%);
+    
+    /* ✅ DITO ANG BABAGUHIN: Nagdagdag tayo ng calc() at * 0.8 sa loob ng scale */
+    transform: translateX(-50%) scale(calc(var(--ui-scale, 1) * 0.8));
+    
+    transform-origin: bottom center;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
     max-width: 70vw;
-    gap: 14px;
+    
+    /* Option: Pwede mong gawing 10px or 8px itong gap kung gusto mong mas magdikit-dikit sila dahil pinaliit mo na */
+    gap: 14px; 
+    
     z-index: 80;
     font-family: 'Cinzel', 'Georgia', serif;
     pointer-events: none;
@@ -2042,26 +2059,11 @@ const focusStyles = `
     display: none !important;
   }
 
-  /* Buffs above HP bar, smaller gap on mobile */
-  .rpg-buff-container {
-    bottom: 72px !important;
-    gap: 10px !important;
-  }
-
-  /* HP bars narrower on mobile */
-  .hud-bar-container {
-    width: 200px !important;
-  }
-
-  .hud-level-badge {
-    padding: 3px 7px !important;
-  }
-  .hud-level-label {
-    font-size: 0.52rem !important;
-  }
-  .hud-level-value {
-    font-size: 0.78rem !important;
-  }
+  /* NOTE: HP/XP bar at level badge sizing ay hawak na ng .game-hud-bottom
+     transform: scale(var(--ui-scale)) — tinanggal na ang fixed-px override
+     dito dati para hindi mag-conflict at sumira ng proporsyon sa pagitan ng
+     iba't ibang screen size. Active buffs (.rpg-buff-container) ay hawak na
+     rin ng sarili nilang --ui-scale transform sa ibaba. */
 }
 
 
@@ -2443,10 +2445,11 @@ const focusStyles = `
       padding: 4px 12px !important;
     }
 
-    /* 👇 TINAASAN NATIN YUNG BOTTOM VALUE (Gagawing 85px) */
+    /* ✅ Proporsyonal na rin sa --ui-scale (dating fixed 85px) para
+       manatiling magkasundo ang spacing sa HP bar kahit sa landscape mode. */
     .rpg-buff-container {
       top: auto !important;
-      bottom: 85px !important; 
+      bottom: calc(85px * var(--ui-scale, 1)) !important;
     }
 
     @supports (-webkit-touch-callout: none) {
@@ -2458,10 +2461,12 @@ const focusStyles = `
         top: 56px !important;
       }
 
-      /* 👇 TINAASAN DIN PARA SA IPHONE/IOS (Gagawing 95px) */
+      /* ✅ Proporsyonal na rin sa --ui-scale (dating fixed 95px), para
+         iOS/iPhone notch spacing ay sumusunod pa rin sa parehong unified
+         scale gaya ng ibang platform. */
       .rpg-buff-container {
         top: auto !important;
-        bottom: 95px !important; 
+        bottom: calc(95px * var(--ui-scale, 1)) !important;
       }
     }
 
@@ -2523,31 +2528,10 @@ const focusStyles = `
       top: 4px !important;
     }
 
-    .hud-bar-container {
-      width: 120px !important; 
-      height: 8px !important;  
-    }
-    .hud-bar-text {
-      font-size: 0.5rem !important;
-      line-height: 8px !important;
-    }
-    .hud-level-badge {
-      padding: 2px 5px !important;
-    }
-    .hud-level-label {
-      font-size: 0.42rem !important;
-    }
-    .hud-level-value {
-      font-size: 0.6rem !important;
-    }
-
-    .rpg-buff-container {
-      top: auto !important; 
-      bottom: 75px !important; /* Itutulak nito ang buffs pataas ng HP bar */
-      gap: 10px !important;
-      transform: translateX(-50%) scale(0.6) !important; 
-      transform-origin: bottom center !important; 
-    }
+    /* NOTE: HP/XP bar, level badge, at active buffs sizing/position ay
+       hawak na ng --ui-scale transform (.game-hud-bottom at
+       .rpg-buff-container). Tinanggal ang duplicate fixed-px overrides
+       na dati nasa breakpoint na 'to para hindi mag-conflict. */
 
     .mmo-hotbar-container {
       gap: 3px !important;
@@ -4262,6 +4246,18 @@ const handleResize = () => {
       const sx = (winW - 12) / W;
       const sy = (winH - 12) / H;
       const s = Math.min(sx, sy, 1.8);
+
+      // ✅ UNIFIED UI SCALE: Ito na ang SINGLE SOURCE OF TRUTH para sa laki/posisyon
+      // ng buong HUD (HP/XP bar, level badge, active buffs, atbp). Dati, magkahiwalay
+      // ang scale ng canvas (dito) sa scale ng HUD (na nakapako sa fixed px/rem sa CSS
+      // at may sari-sariling @media breakpoint overrides) — kaya iba-iba ang itsura
+      // depende sa physical screen size kahit magkaparehong resolution category.
+      // Ngayon, ang lahat ng HUD CSS ay gumagamit ng calc(...* var(--ui-scale)) para
+      // laging proporsyonal sila sa parehong multiplier na ginagamit ng canvas mismo.
+      // Naka-clamp sa pagitan ng 0.45 (pinaka-maliit, para hindi mawala sa sobrang
+      // liit na screen) at 1.3 (pinaka-malaki, para hindi sumobra sa malalaking screen).
+      const uiScale = Math.min(Math.max(s, 0.45), 1.3);
+      document.documentElement.style.setProperty('--ui-scale', uiScale.toFixed(4));
 
       if (winW <= 932) {
         canvas.style.width = winW + 'px';
