@@ -16249,20 +16249,27 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
       }
 
 // PAUSE / UNPAUSE HOTKEY (P or ESC)
-      if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (screenRef.current === 'playing' || screenRef.current === 'paused')) {
-        const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-        
-        if (!isCoopActive || netRef.current.isHost) {
-          // 1. I-trigger yung engine pause
-          if (window.executeNetworkPauseAction) {
-            window.executeNetworkPauseAction();
-          }
-
-          // 2. I-update yung React UI state manually para lumabas yung menu
-          // Kung nasa 'playing' gawing 'paused', kung 'paused' gawing 'playing'
-          setScreen(prev => prev === 'playing' ? 'pause' : 'playing');
-        }
+      if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (screenRef.current === 'playing' || screenRef.current === 'pause')) {
+  const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+  
+  if (!isCoopActive || netRef.current.isHost) {
+    if (screenRef.current === 'playing') {
+      // 1. I-PAUSE ANG LARO
+      setScreen('pause');
+      if (isCoopActive && window.executeNetworkPauseAction) {
+        // Magpapadala ito ng 'host_paused' signal sa guest
+        window.executeNetworkPauseAction();
       }
+    } else if (screenRef.current === 'pause') {
+      // 2. I-RESUME ANG LARO
+      setScreen('playing');
+      if (isCoopActive && window.executeNetworkResumeAction) {
+        // Magpapadala ito ng 'host_resumed' signal sa guest
+        window.executeNetworkResumeAction();
+      }
+    }
+  }
+}
       
       if ((e.key === 'k' || e.key === 'K') && screenRef.current === 'playing') {
         setIsTreeOpen(prev => !prev);
