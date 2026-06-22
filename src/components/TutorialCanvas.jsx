@@ -17786,6 +17786,65 @@ const renderTooltipStats = (item) => {
             transition: border-color .2s, color .2s;
           }
           .tut-skip-btn:hover { border-color:rgba(220,100,100,0.7); color:#ffd0d0; }
+
+          /* ── Mobile compact overrides ── */
+          @media (max-width: 480px) {
+            .tut-banner {
+              top: 8px;
+              min-width: 0;
+              max-width: 78vw;
+              padding: 6px 12px 8px;
+            }
+            .tut-banner-step {
+              font-size: 8px;
+              letter-spacing: 2px;
+              margin-bottom: 2px;
+            }
+            .tut-banner-desc {
+              font-size: 9.5px;
+              line-height: 1.4;
+            }
+            .tut-top-right-group {
+              top: 6px;
+              right: 6px;
+              gap: 4px;
+            }
+            .tut-skip-btn,
+            .tut-help-btn {
+              padding: 4px 7px;
+              font-size: 8.5px;
+              letter-spacing: 1px;
+            }
+          }
+          /* ── Landscape mobile (short viewport height) ── */
+          @media (max-height: 430px) {
+            .tut-banner {
+              top: 5px;
+              min-width: 0;
+              max-width: 55vw;
+              padding: 4px 10px 5px;
+            }
+            .tut-banner-step {
+              font-size: 7px;
+              letter-spacing: 1.5px;
+              margin-bottom: 1px;
+            }
+            .tut-banner-desc {
+              font-size: 8px;
+              line-height: 1.3;
+            }
+            .tut-top-right-group {
+              top: 5px;
+              right: 5px;
+              gap: 3px;
+            }
+            .tut-skip-btn,
+            .tut-help-btn {
+              padding: 3px 6px;
+              font-size: 7.5px;
+              letter-spacing: 0.8px;
+            }
+          }
         `}</style>
         <div className="tut-banner">
           <div className="tut-banner-corner tut-banner-corner-tl" />
@@ -17954,16 +18013,18 @@ const renderTooltipStats = (item) => {
 
             /* ── Shared modal/overlay styles ── */
             .tut-intro-overlay {
-              position: absolute; inset: 0;
+              position: fixed; inset: 0;
               background: rgba(6, 3, 22, 0.94);
               backdrop-filter: blur(6px);
               -webkit-backdrop-filter: blur(6px);
               display: flex; align-items: center; justify-content: center;
               z-index: 200000; pointer-events: auto;
+              padding: 16px;
+              box-sizing: border-box;
             }
             .tut-complete-modal {
               position: relative;
-              width: 90%; max-width: 360px;
+              width: 100%; max-width: 360px;
               background: linear-gradient(170deg, #110b2e 0%, #0a0619 55%, #0d0820 100%);
               border: 0.5px solid rgba(127,119,221,0.4);
               border-radius: 12px;
@@ -17971,6 +18032,8 @@ const renderTooltipStats = (item) => {
               text-align: center;
               box-sizing: border-box;
               overflow: hidden;
+              max-height: calc(100vh - 32px);
+              overflow-y: auto;
             }
             .tut-complete-modal::before {
               content: '';
@@ -18088,6 +18151,109 @@ const renderTooltipStats = (item) => {
               color:#f0dfa0;
               animation: tut-btn-glow-gold 3s ease-in-out infinite;
               animation-delay:.8s;
+            }
+
+            /* ── Mobile compact: Start the Training modal ── */
+            @media (max-width: 480px) {
+              .tut-intro-overlay,
+              .tut-complete-overlay {
+                padding: 12px !important;
+              }
+              .tut-complete-modal {
+                padding: 1rem 1rem 0.9rem !important;
+                max-height: calc(100vh - 24px) !important;
+              }
+              .tut-sigil-wrap {
+                width: 36px !important;
+                height: 36px !important;
+                margin-bottom: 0.5rem !important;
+              }
+              .tut-rune-row {
+                margin-bottom: 0.45rem !important;
+                gap: 7px !important;
+              }
+              .tut-rune-row span { font-size: 13px !important; }
+              .tut-intro-title {
+                font-size: 13px !important;
+                letter-spacing: 2.5px !important;
+              }
+              .tut-intro-sub {
+                font-size: 8.5px !important;
+                line-height: 1.5 !important;
+              }
+              .tut-intro-steps-list {
+                margin: 0.4rem 0 0.2rem !important;
+                gap: 3px !important;
+              }
+              .tut-intro-step-badge {
+                padding: 3px 7px !important;
+                gap: 6px !important;
+              }
+              .tut-intro-step-num { font-size: 7px !important; min-width: 36px !important; }
+              .tut-intro-step-text { font-size: 8px !important; }
+              .tut-divider { margin: 0.45rem 0 !important; }
+              .tut-divider-sm { margin: 0.3rem 0 !important; }
+              .tut-btn {
+                padding: 8px 0 !important;
+                font-size: 9.5px !important;
+                letter-spacing: 1.8px !important;
+              }
+              .tut-rune-footer { margin-top: 0.4rem !important; }
+            }
+            /* ── Landscape mobile (short screens) ── */
+            @media (max-height: 430px) {
+              .tut-intro-overlay,
+              .tut-complete-overlay {
+                padding: 6px !important;
+              }
+              .tut-complete-modal {
+                max-width: 420px !important;
+                padding: 0.6rem 1rem 0.6rem !important;
+                max-height: calc(100vh - 12px) !important;
+              }
+              .tut-sigil-wrap {
+                width: 28px !important;
+                height: 28px !important;
+                margin-bottom: 0.3rem !important;
+              }
+              .tut-rune-row {
+                margin-bottom: 0.25rem !important;
+                gap: 5px !important;
+              }
+              .tut-rune-row span { font-size: 11px !important; }
+              .tut-intro-title,
+              .tut-complete-title {
+                font-size: 11px !important;
+                letter-spacing: 2px !important;
+              }
+              .tut-intro-sub,
+              .tut-complete-sub {
+                font-size: 8px !important;
+                line-height: 1.4 !important;
+              }
+              .tut-complete-quote {
+                font-size: 7.5px !important;
+                line-height: 1.4 !important;
+                margin-top: 0.2rem !important;
+              }
+              .tut-intro-steps-list {
+                margin: 0.25rem 0 0.15rem !important;
+                gap: 2px !important;
+              }
+              .tut-intro-step-badge {
+                padding: 2px 6px !important;
+                gap: 5px !important;
+              }
+              .tut-intro-step-num { font-size: 6.5px !important; min-width: 30px !important; }
+              .tut-intro-step-text { font-size: 7.5px !important; }
+              .tut-divider { margin: 0.25rem 0 !important; }
+              .tut-divider-sm { margin: 0.15rem 0 !important; }
+              .tut-btn {
+                padding: 6px 0 !important;
+                font-size: 8.5px !important;
+                letter-spacing: 1.5px !important;
+              }
+              .tut-rune-footer { margin-top: 0.25rem !important; }
             }
           `}</style>
 
@@ -18263,16 +18429,18 @@ const renderTooltipStats = (item) => {
               50%     { opacity:1; }
             }
             .tut-complete-overlay {
-              position: absolute; inset: 0;
+              position: fixed; inset: 0;
               background: rgba(6, 3, 22, 0.94);
               backdrop-filter: blur(6px);
               -webkit-backdrop-filter: blur(6px);
               display: flex; align-items: center; justify-content: center;
               z-index: 200000; pointer-events: auto;
+              padding: 16px;
+              box-sizing: border-box;
             }
             .tut-complete-modal {
               position: relative;
-              width: 90%; max-width: 360px;
+              width: 100%; max-width: 360px;
               background: linear-gradient(170deg, #110b2e 0%, #0a0619 55%, #0d0820 100%);
               border: 0.5px solid rgba(127,119,221,0.4);
               border-radius: 12px;
@@ -18280,6 +18448,8 @@ const renderTooltipStats = (item) => {
               text-align: center;
               box-sizing: border-box;
               overflow: hidden;
+              max-height: calc(100vh - 32px);
+              overflow-y: auto;
             }
             /* subtle inner top glow like move-to-start */
             .tut-complete-modal::before {
@@ -18377,6 +18547,90 @@ const renderTooltipStats = (item) => {
             }
             .tut-rune-footer span { width:34px; height:.5px; background:#3C3489; opacity:.6; }
             .tut-rune-footer i { font-size:11px; color:#534AB7; font-style:normal; }
+
+            /* ── Mobile compact: Tutorial Complete modal ── */
+            @media (max-width: 480px) {
+              .tut-complete-overlay {
+                padding: 12px !important;
+              }
+              .tut-complete-modal {
+                padding: 1rem 1rem 0.9rem !important;
+                max-height: calc(100vh - 24px) !important;
+              }
+              .tut-sigil-wrap {
+                width: 36px !important;
+                height: 36px !important;
+                margin-bottom: 0.5rem !important;
+              }
+              .tut-rune-row {
+                margin-bottom: 0.45rem !important;
+                gap: 7px !important;
+              }
+              .tut-rune-row span { font-size: 13px !important; }
+              .tut-complete-title {
+                font-size: 13px !important;
+                letter-spacing: 2.5px !important;
+              }
+              .tut-complete-sub {
+                font-size: 9px !important;
+                line-height: 1.5 !important;
+              }
+              .tut-complete-quote {
+                font-size: 8.5px !important;
+                line-height: 1.5 !important;
+                margin-top: 0.3rem !important;
+              }
+              .tut-divider { margin: 0.45rem 0 !important; }
+              .tut-divider-sm { margin: 0.3rem 0 !important; }
+              .tut-btn {
+                padding: 8px 0 !important;
+                font-size: 9.5px !important;
+                letter-spacing: 1.8px !important;
+              }
+              .tut-rune-footer { margin-top: 0.4rem !important; }
+            }
+            /* ── Landscape mobile (short screens) ── */
+            @media (max-height: 430px) {
+              .tut-complete-overlay {
+                padding: 6px !important;
+              }
+              .tut-complete-modal {
+                max-width: 420px !important;
+                padding: 0.6rem 1rem 0.6rem !important;
+                max-height: calc(100vh - 12px) !important;
+              }
+              .tut-sigil-wrap {
+                width: 28px !important;
+                height: 28px !important;
+                margin-bottom: 0.3rem !important;
+              }
+              .tut-rune-row {
+                margin-bottom: 0.25rem !important;
+                gap: 5px !important;
+              }
+              .tut-rune-row span { font-size: 11px !important; }
+              .tut-complete-title {
+                font-size: 11px !important;
+                letter-spacing: 2px !important;
+              }
+              .tut-complete-sub {
+                font-size: 8px !important;
+                line-height: 1.4 !important;
+              }
+              .tut-complete-quote {
+                font-size: 7.5px !important;
+                line-height: 1.4 !important;
+                margin-top: 0.2rem !important;
+              }
+              .tut-divider { margin: 0.25rem 0 !important; }
+              .tut-divider-sm { margin: 0.15rem 0 !important; }
+              .tut-btn {
+                padding: 6px 0 !important;
+                font-size: 8.5px !important;
+                letter-spacing: 1.5px !important;
+              }
+              .tut-rune-footer { margin-top: 0.25rem !important; }
+            }
           `}</style>
 
           <div className="tut-complete-overlay">

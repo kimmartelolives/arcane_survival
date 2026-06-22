@@ -1093,6 +1093,207 @@ function VortexOverlay({ phase }) {
   );
 }
 
+// ─── Device Notice ────────────────────────────────────────────────────────────
+function DeviceNotice() {
+  // SVG icons: Desktop PC, Tablet (Android), iPad (Apple)
+  const devices = [
+    {
+      label: 'Desktop PC',
+      color: 'rgba(192,132,252,1)',
+      glow: 'rgba(168,85,247,0.55)',
+      icon: (
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" aria-hidden>
+          {/* Monitor frame */}
+          <rect x="3" y="3" width="30" height="20" rx="2.5"
+            stroke="currentColor" strokeWidth="1.6" fill="none" />
+          {/* Screen inner glow area */}
+          <rect x="5.5" y="5.5" width="25" height="15" rx="1.2"
+            fill="currentColor" fillOpacity="0.08" />
+          {/* Runic cross scanline */}
+          <line x1="13" y1="13" x2="23" y2="13" stroke="currentColor" strokeWidth="0.9" strokeOpacity="0.5" strokeDasharray="2 2" />
+          <line x1="18" y1="8" x2="18" y2="18" stroke="currentColor" strokeWidth="0.9" strokeOpacity="0.5" strokeDasharray="2 2" />
+          {/* Stand neck */}
+          <path d="M15 23 L14 31 M21 23 L22 31" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          {/* Base */}
+          <path d="M11 31 L25 31" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          {/* Small rune glyph on screen */}
+          <text x="18" y="15.5" textAnchor="middle" fontSize="6" fill="currentColor" fillOpacity="0.7" fontFamily="serif">ᚦ</text>
+        </svg>
+      ),
+    },
+    {
+      label: 'Tablet',
+      color: 'rgba(255,220,100,1)',
+      glow: 'rgba(251,191,36,0.5)',
+      icon: (
+        <svg width="32" height="36" viewBox="0 0 32 36" fill="none" aria-hidden>
+          {/* Tablet body */}
+          <rect x="3" y="1" width="26" height="34" rx="3"
+            stroke="currentColor" strokeWidth="1.6" fill="none" />
+          {/* Screen bezel */}
+          <rect x="5.5" y="4" width="21" height="27" rx="1.5"
+            fill="currentColor" fillOpacity="0.08" />
+          {/* Home button circle */}
+          <circle cx="16" cy="33" r="0" fill="currentColor" /> {/* hidden; aesthetics via camera */}
+          {/* Top camera dot */}
+          <circle cx="16" cy="2.6" r="0.9" fill="currentColor" fillOpacity="0.5" />
+          {/* Runic sigil on screen */}
+          <text x="16" y="19.5" textAnchor="middle" fontSize="7" fill="currentColor" fillOpacity="0.65" fontFamily="serif">ᛟ</text>
+          {/* Decorative corner ticks */}
+          <path d="M6.5 5.5 L6.5 8 M6.5 5.5 L9 5.5" stroke="currentColor" strokeWidth="0.85" strokeOpacity="0.45" />
+          <path d="M25.5 5.5 L25.5 8 M25.5 5.5 L23 5.5" stroke="currentColor" strokeWidth="0.85" strokeOpacity="0.45" />
+          <path d="M6.5 29.5 L6.5 27 M6.5 29.5 L9 29.5" stroke="currentColor" strokeWidth="0.85" strokeOpacity="0.45" />
+          <path d="M25.5 29.5 L25.5 27 M25.5 29.5 L23 29.5" stroke="currentColor" strokeWidth="0.85" strokeOpacity="0.45" />
+        </svg>
+      ),
+    },
+    {
+      label: 'iPad',
+      color: 'rgba(100,200,255,1)',
+      glow: 'rgba(56,189,248,0.5)',
+      icon: (
+        <svg width="30" height="36" viewBox="0 0 30 36" fill="none" aria-hidden>
+          {/* iPad body – slightly thinner bezel than tablet */}
+          <rect x="2" y="1" width="26" height="34" rx="3.5"
+            stroke="currentColor" strokeWidth="1.6" fill="none" />
+          {/* Screen */}
+          <rect x="4.5" y="3.5" width="21" height="28" rx="1.8"
+            fill="currentColor" fillOpacity="0.08" />
+          {/* Face ID bar (top) */}
+          <rect x="11" y="2.2" width="8" height="1.2" rx="0.6"
+            fill="currentColor" fillOpacity="0.45" />
+          {/* Home bar (bottom) */}
+          <rect x="11" y="32.6" width="8" height="1.2" rx="0.6"
+            fill="currentColor" fillOpacity="0.45" />
+          {/* Runic sigil on screen */}
+          <text x="15" y="19" textAnchor="middle" fontSize="7" fill="currentColor" fillOpacity="0.65" fontFamily="serif">✦</text>
+          {/* Apple-ish logo placeholder: small diamond */}
+          <path d="M13 9 L15 6.5 L17 9 L15 11.5 Z" stroke="currentColor" strokeWidth="0.8" strokeOpacity="0.4" fill="none" />
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <div
+      aria-label="Best experience notice"
+      style={{
+        position: 'relative',
+        marginTop: 20,
+        width: '100%',
+        maxWidth: 340,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 12,
+        zIndex: 10,
+        animation: 'sc-ancient-text-fade 12s ease-in-out 1.2s infinite',
+        '--at-op': '1',
+      }}
+    >
+      {/* ── Runic top divider ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:8 }} aria-hidden>
+        <div style={{ width:44, height:1, background:'linear-gradient(to left,rgba(192,132,252,.28),transparent)' }} />
+        <span style={{ fontFamily:'serif', fontSize:9, color:'rgba(192,132,252,.38)', letterSpacing:'0.3em' }}>ᚠ ᛟ ᚠ</span>
+        <div style={{ width:44, height:1, background:'linear-gradient(to right,rgba(192,132,252,.28),transparent)' }} />
+      </div>
+
+      {/* ── Device icons row ── */}
+      <div style={{ display:'flex', alignItems:'flex-end', gap:20, flexWrap:'wrap', justifyContent:'center' }} role="list">
+        {devices.map(({ label, color, glow, icon }) => (
+          <div
+            key={label}
+            role="listitem"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            {/* Icon wrapper with subtle glow pulse */}
+            <div style={{
+              color,
+              filter: `drop-shadow(0 0 6px ${glow}) drop-shadow(0 0 14px ${glow})`,
+              animation: `sc-pulse ${3.2 + ['Desktop PC','Tablet','iPad'].indexOf(label) * 0.6}s ease-in-out infinite`,
+              lineHeight: 0,
+            }}>
+              {icon}
+            </div>
+            {/* Device label */}
+            <span style={{
+              fontFamily: "'Cinzel',serif",
+              fontSize: 7,
+              letterSpacing: '.22em',
+              color,
+              textTransform: 'uppercase',
+              textShadow: `0 0 10px ${glow}`,
+              opacity: 0.72,
+              whiteSpace: 'nowrap',
+            }}>{label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Notice panel ── */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        boxSizing: 'border-box',
+        padding: '12px 18px',
+        textAlign: 'center',
+        border: '1px solid rgba(192,132,252,0.18)',
+        borderRadius: 2,
+        background: 'linear-gradient(135deg,rgba(168,85,247,0.05) 0%,rgba(124,58,237,0.03) 50%,rgba(255,220,100,0.02) 100%)',
+        boxShadow: '0 0 18px rgba(168,85,247,0.08), inset 0 0 24px rgba(168,85,247,0.04)',
+      }}>
+        {/* Runic corner brackets */}
+        {[
+          { top:-1, left:-1, right:'auto', bottom:'auto', rotate:0 },
+          { top:-1, left:'auto', right:-1, bottom:'auto', rotate:90 },
+          { top:'auto', left:-1, right:'auto', bottom:-1, rotate:270 },
+          { top:'auto', left:'auto', right:-1, bottom:-1, rotate:180 },
+        ].map((c, i) => (
+          <span key={i} style={{
+            position:'absolute', width:10, height:10,
+            top:c.top, right:c.right, bottom:c.bottom, left:c.left,
+            transform:`rotate(${c.rotate}deg)`, pointerEvents:'none',
+          }} aria-hidden>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <line x1="0" y1="0" x2="10" y2="0" stroke="rgba(192,132,252,.5)" strokeWidth="1" />
+              <line x1="0" y1="0" x2="0" y2="10" stroke="rgba(192,132,252,.5)" strokeWidth="1" />
+            </svg>
+          </span>
+        ))}
+
+        <p style={{
+          margin: 0,
+          fontFamily: "'Cinzel',serif",
+          fontSize: 10,
+          lineHeight: 1.75,
+          letterSpacing: '.06em',
+          color: 'rgba(220,200,255,0.58)',
+          textShadow: '0 0 12px rgba(168,85,247,0.22)',
+        }}>
+          For the best experience, play on a{' '}
+          <span style={{ color:'rgba(192,132,252,0.82)', textShadow:'0 0 10px rgba(192,132,252,0.4)' }}>Desktop PC</span>,{' '}
+          <span style={{ color:'rgba(255,220,100,0.8)', textShadow:'0 0 10px rgba(251,191,36,0.35)' }}>Tablet</span>, or{' '}
+          <span style={{ color:'rgba(100,200,255,0.8)', textShadow:'0 0 10px rgba(56,189,248,0.35)' }}>iPad</span>.{' '}
+          Master powerful spells, conquer endless waves, and forge your legend in{' '}
+          <span style={{ color:'rgba(255,230,163,0.75)', fontStyle:'italic' }}>Arcane Survival</span>.
+        </p>
+      </div>
+
+      {/* ── Runic bottom divider ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:8 }} aria-hidden>
+        <div style={{ width:32, height:1, background:'linear-gradient(to left,rgba(255,220,100,.18),transparent)' }} />
+        <span style={{ fontFamily:'serif', fontSize:9, color:'rgba(255,220,100,.28)', letterSpacing:'0.3em' }}>✦</span>
+        <div style={{ width:32, height:1, background:'linear-gradient(to right,rgba(255,220,100,.18),transparent)' }} />
+      </div>
+    </div>
+  );
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function IntroScreen({ onFinish }) {
   const [phase,   setPhase]   = useState('idle');
@@ -1383,6 +1584,10 @@ export default function IntroScreen({ onFinish }) {
               Enter the Sanctum
             </button>
           </div>
+
+          {/* Device notice — fades with the rest of the UI on warp */}
+          <DeviceNotice />
+
         </div>
       </div>
     </div>

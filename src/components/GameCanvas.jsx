@@ -18223,7 +18223,27 @@ const renderTooltipStats = (item) => {
                     <path d="M12 2 L15.5 8.5 L22 9.5 L17 14.5 L18.2 21 L12 18 L5.8 21 L7 14.5 L2 9.5 L8.5 8.5 Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
                     <circle cx="12" cy="12" r="2" fill="currentColor" opacity="0.8"/>
                   </svg>
-                  HERO STATUS ATTRIBUTES
+                  <span style={{ flex: 1 }}>HERO STATUS ATTRIBUTES</span>
+                  <button
+                    onPointerDown={(e) => { e.stopPropagation(); setIsStatsOpen(false); }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#a78bfa',
+                      cursor: 'pointer',
+                      fontSize: '1.1rem',
+                      lineHeight: 1,
+                      padding: '2px 4px',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: 0.7,
+                      minWidth: '24px',
+                      minHeight: '24px',
+                    }}
+                    title="Close"
+                  >✕</button>
                 </div>
                 <div className="stats-row">
                   <span className="stats-label" style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
