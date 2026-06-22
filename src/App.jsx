@@ -8,6 +8,7 @@ import AdminPortal from './components/AdminPortal';
 import { sbRealtime } from './services/supabase';
 import './index.css';
 import MetaShop from './components/MetaShop';
+import TutorialCanvas from './components/TutorialCanvas';
 
 // 1. I-import ang custom cursor components at styles
 import CustomCursor from './components/CustomCursor'; 
@@ -172,7 +173,7 @@ export default function App() {
 
     if (globalMute) return;
 
-    if (screen === 'playing') {
+    if (screen === 'playing' || screen === 'tutorial') {
       menuBgm.pause();
       gameOverSfx.pause();
       gameOverSfx.onended = null; 
@@ -404,7 +405,7 @@ export default function App() {
       }}
       onClick={() => {
         if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
-          if (screen === 'playing') {
+          if (screen === 'playing' || screen === 'tutorial') {
             if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(()=>{});
             else window.arcaneAudio.gameBgm.play().catch(()=>{});
           }
@@ -445,21 +446,40 @@ export default function App() {
             {isMuted ? '🔇' : '🔊'}
           </button>
 
-          <GameCanvas 
-            screen={screen}
-            setScreen={setScreen}
-            hudRef={hudRef}
-            netRef={netRef}
-            playerName={wizardName}
-            allyName={coop.p2Name}
-            isCoop={coop.isEnabled}
-            onLevelUpOffer={(options) => { 
-              const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
-              const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
-              setLevelUpOptions(uniqueChoices); 
-              setScreen('levelup'); 
-            }}
-          />
+          {screen !== 'tutorial' && (
+            <GameCanvas 
+              screen={screen}
+              setScreen={setScreen}
+              hudRef={hudRef}
+              netRef={netRef}
+              playerName={wizardName}
+              allyName={coop.p2Name}
+              isCoop={coop.isEnabled}
+              onLevelUpOffer={(options) => { 
+                const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+                const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
+                setLevelUpOptions(uniqueChoices); 
+                setScreen('levelup'); 
+              }}
+            />
+          )}
+
+          {/* 🌟 BAGONG TUTORIAL CANVAS NATIN */}
+          {screen === 'tutorial' && (
+            <TutorialCanvas 
+              screen={screen}
+              setScreen={setScreen}
+              hudRef={hudRef}
+              netRef={netRef}
+              playerName={wizardName}
+              onLevelUpOffer={(options) => { 
+                const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+                const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
+                setLevelUpOptions(uniqueChoices); 
+                setScreen('levelup'); 
+              }}
+            />
+          )}
           
           {screen === 'playing' && (
             <>

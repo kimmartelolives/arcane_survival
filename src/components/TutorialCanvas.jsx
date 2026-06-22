@@ -601,13 +601,6 @@ const EQUIPMENT_DB = [
   { id: 'b10', name: "Celestial Ascension", rarity: 'mythic', type: 'boots', stats: { speed: 120, crit: 10, def: 24 }, desc: "Mythic: Phase Walk" }
 ];
 
-// ⚡ PERF: O(1) lookup index for EQUIPMENT_DB, built once at module load.
-// EQUIPMENT_DB.find(b => b.id === item.id) was being called repeatedly inside
-// the inventory tooltip render (up to 224 times per render with a full
-// 16-item inventory: 16 slots × 2 tooltip columns × 7 stats each), each call
-// doing a fresh linear scan. A Map lookup is O(1) regardless of inventory size.
-const EQUIPMENT_DB_BY_ID = new Map(EQUIPMENT_DB.map(item => [item.id, item]));
-
 const focusStyles = `
 #wrap {
     position: fixed;
@@ -2946,20 +2939,6 @@ const focusStyles = `
 }
 .inv-slot:hover .item-tooltip { opacity: 1; }
 
-/* ⚡ PERF: the inventory tooltip is now only mounted into the DOM while its
-   slot is hovered (instead of always existing with CSS opacity hiding it),
-   so the .inv-slot:hover transition above never gets a chance to animate
-   from 0->1 on mount. This keyframe animation reproduces the exact same
-   0.15s ease fade-in, but triggers on mount instead of on a CSS state
-   change, since @keyframes animations always play once the element exists. */
-@keyframes itemTooltipFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.item-tooltip-fade-in {
-  animation: itemTooltipFadeIn 0.15s ease forwards;
-}
-
 /* Delete Button */
 .delete-btn {
   position: absolute;
@@ -3149,6 +3128,32 @@ const focusStyles = `
     right: -2px !important;
   }
 }
+
+/* ————— NEW: TUTORIAL UI HIGHLIGHT (SUPER HALATA) ————— */
+  @keyframes tutorialPulse {
+    0% { 
+      box-shadow: 0 0 0px 0px rgba(56, 189, 248, 0.8); 
+      transform: scale(1); 
+    }
+    50% { 
+      /* Mas malaking glow sa labas at may puting glow sa loob */
+      box-shadow: 0 0 30px 15px rgba(56, 189, 248, 1), inset 0 0 15px rgba(255, 255, 255, 0.8); 
+      transform: scale(1.25); /* Literal na lalaki nang 25% yung button */
+      background-color: rgba(56, 189, 248, 0.4); /* Magkukulay bright blue yung mismong button */
+    }
+    100% { 
+      box-shadow: 0 0 0px 0px rgba(56, 189, 248, 0.8); 
+      transform: scale(1); 
+    }
+  }
+
+  .tutorial-pulse-highlight {
+    animation: tutorialPulse 1s infinite ease-in-out !important; /* Mas mabilis ang tibok (1 second) */
+    border-radius: 50% !important; /* Para siguradong bilog ang glow */
+    border: 2px solid #ffffff !important; /* Puting border para umangat sa dark background */
+    z-index: 99999 !important; /* Piliting pumunta sa pinaka-ibabaw ng screen */
+  }
+
   /* =========================================================================
      📱 ULTRA-COMPACT MOBILE LANDSCAPE FIX (No scroll, perfectly centered)
      ========================================================================= */
@@ -3197,9 +3202,99 @@ const focusStyles = `
       height: 40px !important;
     }
   } 
+/* ————— AAA RPG TUTORIAL STEP TRANSITION ————— */
+  
+  /* 1. Ang pag-Pop at Pag-ilaw ng Modal */
+  @keyframes epicModalPop {
+    0% {
+      transform: scale(1) translateY(0);
+      box-shadow: 0 0 30px rgba(0,0,0,0.5);
+      border-color: rgba(127, 119, 221, 0.35);
+    }
+    15% {
+      transform: scale(1.15) translateY(-5px); /* Tatalon pataas */
+      box-shadow: 0 0 100px rgba(56, 189, 248, 1), inset 0 0 40px rgba(56, 189, 248, 0.8); /* Malakas na Cyan Glow */
+      border-color: #38bdf8;
+      background: rgba(10, 40, 60, 0.95) !important;
+    }
+    35% {
+      transform: scale(1.18) translateY(-5px);
+      box-shadow: 0 0 120px rgba(251, 191, 36, 1), inset 0 0 50px rgba(251, 191, 36, 0.8); /* Mag-iiba kulay to Gold */
+      border-color: #fbbf24;
+    }
+    100% {
+      transform: scale(1) translateY(0);
+      box-shadow: 0 0 30px rgba(0,0,0,0.5);
+      border-color: rgba(127, 119, 221, 0.35);
+      background: rgba(26, 20, 50, 0.45);
+    }
+  }
+
+  /* 2. Teksto na "Lalagapak" mula sa screen */
+  @keyframes epicTextSlam {
+    0% { opacity: 0; transform: scale(3.5) translateY(-20px); filter: blur(10px); color: #ffffff; }
+    20% { opacity: 1; transform: scale(1.2) translateY(0); filter: blur(0px); color: #fbbf24; text-shadow: 0 0 40px #fbbf24, 0 0 20px #ffffff; }
+    100% { opacity: 1; transform: scale(1) translateY(0); color: #EEEDFE; text-shadow: none; }
+  }
+
+  /* 3. Description na mag-i-slide in at mag-fofocus */
+  @keyframes epicDescReveal {
+    0% { opacity: 0; transform: translateY(20px); letter-spacing: 5px; filter: blur(5px); }
+    30% { opacity: 1; transform: translateY(0); letter-spacing: 0.5px; filter: blur(0px); color: #38bdf8; text-shadow: 0 0 15px #38bdf8; }
+    100% { opacity: 1; transform: translateY(0); color: #AFA9EC; text-shadow: none; }
+  }
+
+  /* 4. Ang Shockwave na puputok palabas ng modal */
+  @keyframes ringNova {
+    0% { transform: scale(0.9); opacity: 1; border-width: 8px; }
+    100% { transform: scale(2.5); opacity: 0; border-width: 0px; }
+  }
+
+  /* 5. Ang Full-Screen Flash (Glow sa gilid ng buong laro) */
+  @keyframes screenFlashNova {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* ————— PAG-APPLY NG CLASSES ————— */
+  .step-changing-anim {
+    animation: epicModalPop 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+    position: relative;
+  }
+  
+  /* Shockwave Element */
+  .step-changing-anim::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    border: 8px solid #fbbf24;
+    animation: ringNova 0.8s ease-out forwards;
+    pointer-events: none;
+  }
+
+  /* Full-Screen Edge Flash */
+  .step-changing-anim::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    box-shadow: inset 0 0 150px rgba(56, 189, 248, 0.8), inset 0 0 60px rgba(251, 191, 36, 0.6);
+    pointer-events: none;
+    z-index: -1;
+    animation: screenFlashNova 1.2s ease-out forwards;
+  }
+
+  /* Text Animations */
+  .step-changing-anim h2 {
+    animation: epicTextSlam 1.2s ease-out forwards !important;
+  }
+  .step-changing-anim p {
+    animation: epicDescReveal 1.2s ease-out forwards !important;
+  }
 `;
 
-export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
+export default function TutorialCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
   const canvasRef = useRef(null);
   const workerRef = useRef(null);
   const vignetteRef = useRef(null);
@@ -3217,14 +3312,13 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const xpTextRef = useRef(null);
 
   const dashCdRef = useRef(null);
-
-  const audioCtxRef = useRef(null);
   const statAtkRef = useRef(null);
   const statDefRef = useRef(null);
   const statCritRef = useRef(null);
   const statSpdRef = useRef(null);
   const statCdRef = useRef(null);
   const statLifestealRef = useRef(null);
+  const [isExiting, setIsExiting] = useState(false);
 
   // hasStarted: ginagamit para ipakita/itago ang start overlay at dash button
   // Gumagamit ng visibility/opacity CSS imbes na unmount para walang re-render lag
@@ -3241,6 +3335,203 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [isPreloading, setIsPreloading] = useState(true);
   const isPreloadingRef = useRef(true);
   useEffect(() => { isPreloadingRef.current = isPreloading; }, [isPreloading]);
+
+// --- TUTORIAL LOGIC STATES ---
+  const startPosRef = useRef(null);
+  const [tutorialPhase, setTutorialPhase] = useState(0);
+  const tutorialPhaseRef = useRef(0);
+
+  const narrationAudioRef = useRef(null);
+  const currentVoiceRef = useRef(null);
+
+ // Ilagay ito sa labas ng playNarration (pwede sa itaas lang nito) para isang beses lang mag-create
+  const audioCtxRef = useRef(null);
+
+  const playNarration = (fileName) => {
+    if (typeof window === 'undefined') return;
+    
+    // 🛑 ANTI-SPAM FIX: Kung ito na yung huling pinatugtog, wag nang i-restart!
+    if (currentVoiceRef.current === fileName) return;
+    currentVoiceRef.current = fileName; // I-save ang bagong file na tutunog
+
+    // Kung may nagsasalita pa na IBANG voice line, patigilin muna
+    if (narrationAudioRef.current) {
+      narrationAudioRef.current.pause();
+      narrationAudioRef.current.currentTime = 0;
+    }
+    
+    const audio = new Audio(fileName);
+    audio.crossOrigin = "anonymous"; // Importante ito para di ma-block ng browser ang Audio API
+
+    // 🔊 SETUP NG AMPLIFIER (Web Audio API)
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    const source = audioCtxRef.current.createMediaElementSource(audio);
+    const gainNode = audioCtxRef.current.createGain();
+    
+    // 🔥 DITO MO KOKONTROLIN ANG LAKAS!
+    // 1.0 = Default (100%), 2.0 = Doble lakas (200%), 3.0 = Triple (300%)
+    gainNode.gain.value = 2.5; 
+    
+    source.connect(gainNode);
+    gainNode.connect(audioCtxRef.current.destination);
+    
+    audio.play().catch(e => console.warn("Narration blocked by browser:", e));
+    narrationAudioRef.current = audio;
+  };
+
+  // keep ref in sync with state so keydown/pointerdown closures read the live value
+  useEffect(() => { tutorialPhaseRef.current = tutorialPhase; }, [tutorialPhase]);
+  const [tutorialMessage, setTutorialMessage] = useState({ step: "STEP 1", desc: "Use the WASD keys or the on-screen joystick to move your character around the wizard training grounds." });
+  const [isStepChanging, setIsStepChanging] = useState(false);
+
+useEffect(() => {
+    // I-reset saglit para ma-trigger ulit ang animation kahit magkasunod
+    setIsStepChanging(false); 
+    
+    setTimeout(() => {
+      setIsStepChanging(true);
+      
+    }, 10);
+
+    // 1.2 seconds na ang animation natin ngayon
+    const timer = setTimeout(() => {
+      setIsStepChanging(false);
+    }, 1200); 
+
+    return () => clearTimeout(timer);
+  }, [tutorialMessage]);
+
+  const [showTutorialUpgrade, setShowTutorialUpgrade] = useState(false);
+  const [showTutorialComplete, setShowTutorialComplete] = useState(false);
+  const tutDashUsedRef  = useRef(false); // tracks if Dash was used in Step 4
+  const tutFlareUsedRef = useRef(false); // tracks if Flare Inferno was cast in Step 5
+
+  useEffect(() => {
+    if (screen !== 'tutorial') return;
+
+    // 🔥 IDAGDAG ITO: Play Step 1 narration kapag nag-start sa Phase 0
+    if (tutorialPhase === 0 && !startPosRef.current) {
+      playNarration('/step1.mp3'); // Palitan ng totoong filename mo
+    }
+
+    // Reset flare tracking whenever tutorial restarts
+    tutDashUsedRef.current  = false;
+    tutFlareUsedRef.current = false;
+
+    const interval = setInterval(() => {
+      const eng = engineRef.current;
+      if (!eng || !eng.p) return;
+
+      // ── STEP 1: Movement check ──────────────────────────────────────────────
+      if (tutorialPhase === 0) {
+        if (!startPosRef.current) startPosRef.current = { x: eng.p.x, y: eng.p.y };
+        const dist = Math.hypot(eng.p.x - startPosRef.current.x, eng.p.y - startPosRef.current.y);
+        if (dist > 40) {
+          setTutorialPhase(0.5); // lock so this block won't re-fire
+          setTimeout(() => {
+            setTutorialPhase(1);
+            setTutorialMessage({ step: "STEP 2", desc: "Dodge the incoming magical creatures and survive the arcane danger for 8 seconds!" });
+            playNarration('/step2.mp3'); // Palitan ng totoong filename mo
+            eng.enemies.push({ x: eng.p.x + 350, y: eng.p.y, r: 15, speed: 75, hp: 9999, maxHp: 9999, dmg: 0, xp: 0, color: '#fb923c', glow: '#fb923c', type: 'normal' });
+            eng.enemies.push({ x: eng.p.x - 350, y: eng.p.y, r: 15, speed: 75, hp: 9999, maxHp: 9999, dmg: 0, xp: 0, color: '#fb923c', glow: '#fb923c', type: 'normal' });
+            setTimeout(() => setTutorialPhase(2), 9000);
+          }, 7000);
+        }
+      }
+
+      // ── STEP 3: Level-up card ───────────────────────────────────────────────
+      else if (tutorialPhase === 2) {
+        eng.enemies = [];
+        eng.p.level = 5;
+        eng.gameStarted = false;
+        setTutorialMessage({ step: "STEP 3", desc: "Each time you level up, choose an upgrade from the arcane options that appear upon your screen, as if guided by the ancient laws of magic and fate." });
+         playNarration('/step3.mp3');
+        setTutorialPhase(2.5); // lock — upgrade card will show after short delay
+        setTimeout(() => {
+          setShowTutorialUpgrade(true);
+        }, 11000); // player reads the step message first
+      }
+
+
+      // ── STEP 4: Dash + attack kill ──────────────────────────────────────────
+      // Phase 3 → 3.5 (lock) → spawn enemy + set 3.8 after 1 s
+      else if (tutorialPhase === 3) {
+        eng.gameStarted = true;
+        setTutorialPhase(3.5); // lock immediately so this block runs exactly once
+        setTimeout(() => {
+          const e = engineRef.current;
+          if (!e || !e.p) return;
+          setTutorialMessage({ step: "STEP 4", desc: "Use your DASH ability and auto basic attack to defeat the enemy, blending swift movement and arcane strikes to survive." });
+          playNarration('/step4.mp3');
+          e.enemies = []; // clear any stale enemies first
+          e.enemies.push({ x: e.p.x + 280, y: e.p.y, r: 11, speed: 115, hp: 2000, maxHp: 2000, dmg: 0, xp: 0, color: '#fb923c', glow: '#f97316', boss: false, type: 'fast' });
+          setTutorialPhase(3.8); // now wait for kill
+        }, 9000);
+      }
+      // Phase 3.8 — Dash must be used AND enemy must be dead before advancing
+      else if (tutorialPhase === 3.8) {
+        if (tutDashUsedRef.current && eng.enemies.length === 0) {
+          setTutorialPhase(4);
+        } else if (!tutDashUsedRef.current && eng.enemies.length === 0) {
+          setTutorialMessage({ step: "STEP 4", desc: "Well done, young mage. The path ahead is now open. Invoke your DASH and press onward through the Wizard Training Grounds, where every step is a test of arcane discipline." });
+          playNarration('/step4-1.mp3');
+        } else if (!tutDashUsedRef.current) {
+          setTutorialMessage({ step: "STEP 4", desc: "Use your DASH ability and auto basic attack to defeat the enemy, blending swift movement and arcane strikes to survive." });
+          playNarration('/step4.mp3');
+        }
+      }
+
+      // ── STEP 5: Flare Inferno unlock + boss kill ────────────────────────────
+      else if (tutorialPhase === 4) {
+        setTutorialPhase(4.5); // lock immediately
+
+        // Elevate player level so castElementalSigil level-guard passes
+        if (eng.p.level < 8) eng.p.level = 8;
+        setPlayerLevel(eng.p.level);
+        playerLevelRef.current = eng.p.level;
+
+        // Grant Flare Inferno skill
+        if (!eng.p.skills) eng.p.skills = {};
+        eng.p.skills.flareInferno = { learned: true, enabled: true, cd: 0 };
+        setSkillsState({ ...eng.p.skills });
+
+        // Reset cast tracker
+        tutFlareUsedRef.current = false;
+
+        setTimeout(() => {
+          const e = engineRef.current;
+          if (!e || !e.p) return;
+          setTutorialMessage({ step: "STEP 5", desc: "You have learned Flare Inferno! Press the Spell Button to unleash it upon the Boss." });
+          playNarration('/step5.mp3');
+          e.enemies = [];
+          e.enemies.push({ x: e.p.x + 220, y: e.p.y, r: 50, speed: 20, hp: 6500, maxHp: 6500, dmg: 0, xp: 0, color: '#ef4444', glow: '#dc2626', boss: true, type: 'miniBoss' });
+          setTutorialPhase(4.8); // wait for flare cast + boss death
+        }, 6000);
+      }
+      // Phase 4.8 — Flare Inferno must have been cast AND boss must be dead
+      else if (tutorialPhase === 4.8) {
+        if (tutFlareUsedRef.current && eng.enemies.length === 0) {
+          setTutorialPhase(5);
+          setTutorialMessage({ step: "✦", desc: "Tutorial Complete! Well done, young mage! Your arcane journey begins now." });
+          playNarration('/complete.mp3');
+          setShowTutorialComplete(true);
+        } else if (!tutFlareUsedRef.current && eng.enemies.length === 0) {
+          // Boss died without Flare — respawn it so the player must cast
+          setTutorialMessage({ step: "STEP 5", desc: "Use Flare Inferno! You must cast it to defeat the Boss." });
+          playNarration('/use-flare.mp3');
+          const e = engineRef.current;
+          if (e && e.p) {
+            e.enemies.push({ x: e.p.x + 220, y: e.p.y, r: 50, speed: 20, hp: 1500, maxHp: 1500, dmg: 0, xp: 0, color: '#ef4444', glow: '#dc2626', boss: true, type: 'miniBoss' });
+          }
+        }
+      }
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [screen, tutorialPhase]);
 
   const [isWindowBlurred, setIsWindowBlurred] = useState(false);
   const [p1VotedRestart, setP1VotedRestart] = useState(false);
@@ -3261,13 +3552,6 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const [showInventory, setShowInventory] = useState(false);
 
   const [isInventoryOpen, setIsInventoryOpen] = useState(false);
-  // ⚡ PERF: tracks which inventory slot's tooltip should render. The tooltip
-  // JSX was previously generated for ALL occupied slots every render (CSS
-  // opacity just hid the ones not hovered) — 2 columns × 7 stat rows × style
-  // objects, per slot, even though only one tooltip is ever visible at a
-  // time. Only rendering the hovered slot's tooltip cuts that work down to
-  // at most 1 slot's worth instead of up to 16.
-  const [hoveredInvSlot, setHoveredInvSlot] = useState(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [invTrigger, setInvTrigger] = useState(0);
   const lastInvAction = useRef(0);
@@ -3414,24 +3698,8 @@ useEffect(() => {
     return Object.values(item.stats).reduce((sum, val) => sum + (Number(val) || 0), 0);
   };
 
-  // ⚡ PERF: precompute the highest stat-total per item type across the whole
-  // inventory ONCE per render, instead of letting isItemBiS() re-scan the
-  // entire inventory for every single slot (was O(n²): 16 slots × 16-item
-  // scan = 256 comparisons per render). Verified via 16,354 randomized test
-  // cases to produce identical BiS results to the original approach,
-  // including tie-handling (two items with equal stats are both BiS).
-  const computeMaxStatPerType = (inventory) => {
-    const maxByType = {};
-    for (let i = 0; i < inventory.length; i++) {
-      const it = inventory[i];
-      const s = getStatTotal(it);
-      if (!(it.type in maxByType) || s > maxByType[it.type]) maxByType[it.type] = s;
-    }
-    return maxByType;
-  };
-
   // 2. Logic para malaman kung ang item ay ang "Best in Slot"
-  const isItemBiS = (invItem, playerTarget, maxByType) => {
+  const isItemBiS = (invItem, playerTarget) => {
     if (!playerTarget || !invItem) return false;
     
     const itemStat = getStatTotal(invItem);
@@ -3441,9 +3709,14 @@ useEffect(() => {
     // Kapag parehas lang o mas mababa ang stats sa naka-equip, hindi lalabas ang BiS
     if (itemStat <= equippedStat) return false;
 
-    // ⚡ PERF: BiS kung itemStat ang pinakamataas (o tied) sa lahat ng kaparehong
-    // type sa inventory — pareho ang resulta sa lumang .some() scan, O(1) na lang ito.
-    return itemStat >= maxByType[invItem.type];
+    // I-check kung may iba pa bang item sa inventory na mas malakas pa kaysa dito
+    const hasBetterInInventory = playerTarget.inventory.some(otherItem => {
+      if (otherItem.type !== invItem.type) return false;
+      return getStatTotal(otherItem) > itemStat;
+    });
+
+    // Kung walang mas mataas na item sa inventory, siya ang tunay na BiS!
+    return !hasBetterInInventory;
   };
 
 // Equip logic
@@ -4411,17 +4684,6 @@ useEffect(() => {
   }
 }, [screen]);
 
-  // ⚡ PERF: i-reset ang hovered tooltip slot kapag nagsara ang inventory, para
-  // hindi ito agad lumabas nang stale sa susunod na pagbukas (CSS :hover
-  // would have naturally cleared itself when the element unmounted, but our
-  // React state needs an explicit reset since there's no pointerleave event
-  // fired when the modal disappears out from under the cursor).
-  useEffect(() => {
-    if (!isInventoryOpen) {
-      setHoveredInvSlot(null);
-    }
-  }, [isInventoryOpen]);
-
   useEffect(() => {
     const handleBlur = () => {
       setIsWindowBlurred(true);
@@ -4807,7 +5069,7 @@ useEffect(() => {
       }
     }
 
-    if (screen === 'menu' || screen === 'lobby' || screen === 'playing') {
+   if (screen === 'menu' || screen === 'lobby' || screen === 'tutorial') {
       setP1VotedRestart(false);
       setP2VotedRestart(false);
       setPlayerLevel(1);
@@ -4819,6 +5081,17 @@ useEffect(() => {
       if (exitTimerRef.current) clearInterval(exitTimerRef.current);
       setHostExitedCountdown(null);
 
+      // Reset tutorial state on every entry
+      if (screen === 'tutorial') {
+        setTutorialPhase(0);
+        setTutorialMessage({ step: "STEP 1", desc: "Use the WASD keys or the on-screen joystick to move your character around the wizard training grounds." });
+        setShowTutorialUpgrade(false);
+        setShowTutorialComplete(false);
+        tutDashUsedRef.current  = false;
+        tutFlareUsedRef.current = false;
+        startPosRef.current = null;
+      }
+
       const isCoopActive = Boolean(netRef.current && netRef.current.channel);
       
       eng.score = 0; eng.wave = 1; eng.waveT = 0; eng.waveLen = 30; eng.spawnT = 0; eng.spawnRate = 0.9; eng.boltDmg = 22; eng.screenShake = 0;
@@ -4828,18 +5101,16 @@ useEffect(() => {
       eng.floatingTexts = [];
       eng.pendingSigilCasts = []; // 🔥 FIX: i-clear ang mga "chanting" pa sa restart, para walang spell na pumutok pagkatapos mag-reset
       eng.cachedPoolWave = undefined; eng.cachedScaleWave = undefined; // ⚡ FIX: i-force ang re-compute ng spawn cache sa unang spawn ng bagong match
-      eng.gameStarted = false; 
-      setHasStarted(false);
+     // 🛑 PIPIGILAN NATIN ANG NORMAL WAVES PARA TUTORIAL ENEMIES LANG ANG LALABAS
+      eng.spawnRate = 99999; 
+      eng.waveLen = 99999; 
 
-      // 🔮 Bagong simula ng laro (fresh start o restart pagkatapos ng
-      // gameover) → ipakita ulit ang LoadingScreen bago lumabas ang
-      // "MOVE TO START" prompt. Direktang i-set ang ref dito (hindi lang
-      // ang state) para walang 1-render-delay na puwang kung saan pwedeng
-      // makapasok ang isang movement tick bago ma-sync ang ref sa bagong
-      // state — ito mismo ang dating dahilan kung bakit minsan "nakakalusot"
-      // ang paggalaw sa simula pa lang ng loading screen.
-      isPreloadingRef.current = true;
-      setIsPreloading(true);
+      eng.gameStarted = true; 
+      setHasStarted(true);
+
+      // 🛑 I-BYPASS ANG LOADING SCREEN PARA MAKAGALAW AGAD ANG PLAYER
+      isPreloadingRef.current = false;
+      setIsPreloading(false);
 
       // 🔥 RESET DAMAGE TRACKER FOR NEW RUN
       window.arcaneDamageMetrics = {}; 
@@ -4897,7 +5168,7 @@ useEffect(() => {
       voidCrystals: 0,                        // <-- Added tracker
       hasContinued: false,
       chatBubble: null,
-      familiars: initFamiliarsObjArray,
+      familiars: [],
       dashCd: 0, isDashing: false, dashTimer: 0, dashAngle: 0, // 💨 DINAGDAG PARA SA DASH
       skills: initSkills(), 
       potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
@@ -4967,7 +5238,7 @@ useEffect(() => {
 
     
 
-    window.executeNetworkExitAction = () => {
+   window.executeNetworkExitAction = () => {
       const net = netRef?.current;
       const isCoopActive = Boolean(net && net.channel);
 
@@ -4981,12 +5252,16 @@ useEffect(() => {
         } catch (err) {}
       }
 
+      // 🔥 1. I-TRIGGER ANG BLACK SCREEN ANIMATION
+      setIsExiting(true);
+
+      // 🔥 2. HINTAYIN ANG ANIMATION BAGO MAG-PALIT NG SCREEN (1 Second)
       setTimeout(() => {
         if (workerRef.current) {
           workerRef.current.postMessage('stop');
         }
         setScreen('menu');
-      }, 100);
+      }, 1000); 
     };
 
     window.executeContinueAction = () => {
@@ -5042,21 +5317,100 @@ useEffect(() => {
     const eng = engineRef.current;
 
     // ═══════════════════════════════════════════════════════════════════
-    // VOID / FRIEREN MMORPG MAP — Pre-baked static layer + live particles
+    // ✨ WIZARD TRAINING GROUNDS — Frieren-style Fantasy RPG Map
+    // A peaceful ancient courtyard where young mages master the arcane arts.
+    // Beautiful grass, ancient stone pathways, floating crystals, arcane runes,
+    // spell practice targets, magical towers, and soft magical ambiance.
     // All heavy drawing done ONCE at init → single drawImage() per frame
     // ═══════════════════════════════════════════════════════════════════
 
-    // ── HELPER: seeded pseudo-random (deterministic per-tile) ──────────
+   // ════════════════════════════════════════════════════════════════
+    // VOID RUINS — ancient mage training grounds, Frieren-style
+    // Cold, hazy, half-forgotten temple. Pale stone, faded glyphs,
+    // drifting ash, soft aura light. Nothing here is loud — it's old.
+    // ════════════════════════════════════════════════════════════════
+
+   // ════════════════════════════════════════════════════════════════
+    // THE VOID RUINS — a shattered training ground torn between worlds.
+    // Half the arena is solid bleached stone; the other half is cracked
+    // open onto the void itself — rifts of starlit black where the
+    // barrier wore thin centuries ago. A fallen colossus, a broken gate,
+    // leaning pillars at the angles they fell, not the angles a mason
+    // chose. One consistent light source (cold, upper-left) so every
+    // shadow agrees with every other shadow.
+    // ════════════════════════════════════════════════════════════════
+
     const seededRand = (seed) => {
       let s = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
       return s - Math.floor(s);
     };
+    // second decorrelated stream, so two "random" picks don't echo each other
+    const seededRand2 = (seed) => {
+      let s = Math.sin(seed * 269.5 + 183.3) * 21323.7219;
+      return s - Math.floor(s);
+    };
 
-    // ── 1. FLOOR — multi-variant stone tiles, every tile uniquely seeded ──
-    // (Frieren-style ancient dungeon floor. No single tile is ever repeated
-    //  identically — each cell gets its own hue jitter, crack layout, joint
-    //  shape and stain placement, so the floor reads as worn natural
-    //  flagstone instead of an obviously copy-pasted grid.)
+    // Unified light direction for every cast shadow in this scene —
+    // this single discipline is what makes scattered set-pieces read as
+    // one real place instead of stickers dropped on a background.
+    const LIGHT = { dx: -0.42, dy: 0.30 }; // upper-left, raking low
+
+    const castShadow = (g, w, h, alpha = 0.30) => {
+      g.save();
+      g.fillStyle = `rgba(0,0,0,${alpha})`;
+      g.beginPath();
+      g.ellipse(LIGHT.dx * h * 0.6, h * 0.42, w * 0.55, h * 0.18, 0, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+    };
+
+    // A single carved/drifting glyph — abstract, unreadable, old.
+    const drawGlyphMark = (g, x, y, size, rot, alpha, color) => {
+      g.save();
+      g.translate(x, y);
+      g.rotate(rot);
+      g.strokeStyle = color;
+      g.globalAlpha = alpha;
+      g.lineWidth = Math.max(0.6, size * 0.07);
+      g.lineCap = 'round';
+      const variant = Math.floor(seededRand(x * 3.1 + y * 7.7 + size) * 4);
+      g.beginPath();
+      if (variant === 0) {
+        g.moveTo(0, -size); g.lineTo(0, size);
+        g.moveTo(-size * 0.5, -size * 0.35); g.lineTo(size * 0.5, -size * 0.35);
+        g.moveTo(-size * 0.35, size * 0.3); g.lineTo(size * 0.35, size * 0.3);
+      } else if (variant === 1) {
+        g.arc(0, 0, size * 0.6, Math.PI * 0.15, Math.PI * 1.3);
+        g.moveTo(0, -size * 0.6); g.lineTo(0, -size);
+      } else if (variant === 2) {
+        g.moveTo(-size * 0.5, -size); g.lineTo(size * 0.5, 0); g.lineTo(-size * 0.5, size);
+      } else {
+        g.moveTo(-size * 0.5, -size * 0.5); g.lineTo(size * 0.5, size * 0.5);
+        g.moveTo(size * 0.5, -size * 0.5); g.lineTo(-size * 0.5, size * 0.5);
+        g.moveTo(0, -size * 0.85); g.lineTo(0, -size * 0.5);
+      }
+      g.stroke();
+      g.globalAlpha = 1;
+      g.restore();
+    };
+
+    // A scattering of distant void-stars — used inside rifts and the
+    // colossus's hollow eye to actually sell "this opens onto nothing".
+    const drawStarfield = (g, cx, cy, r, density, seed) => {
+      const n = Math.floor(density * r);
+      for (let i = 0; i < n; i++) {
+        const a = seededRand(seed + i * 3.7) * Math.PI * 2;
+        const rr = Math.sqrt(seededRand2(seed + i * 5.1)) * r;
+        const sx = cx + Math.cos(a) * rr, sy = cy + Math.sin(a) * rr;
+        const sr = seededRand(seed + i * 9.3) * 1.1 + 0.2;
+        const tw = 0.3 + seededRand2(seed + i * 6.6) * 0.6;
+        g.fillStyle = `rgba(225,235,255,${tw})`;
+        g.beginPath(); g.arc(sx, sy, sr, 0, Math.PI * 2); g.fill();
+      }
+    };
+
+    // ── 1. FLOOR — broken causeway over scorched ground, fractured by
+    // long chasm-cracks that don't respect any tile grid ─────────────
     const TILE = 160;
     const cols = Math.ceil(W / TILE) + 1;
     const rows = Math.ceil(H / TILE) + 1;
@@ -5064,31 +5418,94 @@ useEffect(() => {
     fc.width = W; fc.height = H;
     const fx = fc.getContext('2d');
 
-    const drawStoneTile = (g, px, py, s, seed) => {
+    const isPathTile = (col, row) => {
+      const midCol = Math.floor(cols / 2);
+      const midRow = Math.floor(rows / 2);
+      return (col === midCol || row === midRow);
+    };
+
+    // Off-path: scorched void-touched earth — not ash for its own sake,
+    // but ground that has been burned and unmade in patches.
+    const drawVoidGround = (g, px, py, s, seed) => {
       const rnd = (n) => seededRand(seed * 91.7 + n * 13.3);
       g.save();
       g.translate(px, py);
       g.beginPath(); g.rect(0, 0, s, s); g.clip();
 
-      // A. Darker ancient stone base — every tile gets its own hue/brightness
-      // jitter so adjacent tiles never read as identical copies.
-      const jitter = rnd(1) * 10 - 5;
-      const warmShift = rnd(2) * 8 - 4;
-      const base = g.createLinearGradient(0, 0, s, s);
-      base.addColorStop(0,    `rgb(${24+warmShift+jitter},${20+jitter},${16+jitter})`);
-      base.addColorStop(0.5,  `rgb(${17+jitter},${14+jitter},${11+jitter})`);
-      base.addColorStop(1,    `rgb(${10+jitter},${8+jitter},${6+jitter})`);
+      const jitter = rnd(1) * 8 - 4;
+      const base = g.createLinearGradient(LIGHT.dx * s, 0, -LIGHT.dx * s, s);
+      base.addColorStop(0,   `rgb(${44+jitter},${44+jitter},${50+jitter})`);
+      base.addColorStop(0.5, `rgb(${34+jitter},${34+jitter},${41+jitter})`);
+      base.addColorStop(1,   `rgb(${22+jitter},${22+jitter},${28+jitter})`);
       g.fillStyle = base;
       g.fillRect(0, 0, s, s);
 
-      // Subtle worn-center variation
+      // Scorch blotches — irregular, directional smear (something burned here)
+      const scorchCount = 2 + Math.floor(rnd(2) * 3);
+      for (let i = 0; i < scorchCount; i++) {
+        const sx = rnd(i*7+3)*s, sy = rnd(i*7+4)*s, sr = 16 + rnd(i*7+5)*26;
+        const sg = g.createRadialGradient(sx, sy, 0, sx, sy, sr);
+        sg.addColorStop(0, `rgba(2,2,3,${0.30+rnd(i*3)*0.16})`);
+        sg.addColorStop(0.6, `rgba(2,2,3,0.10)`);
+        sg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = sg; g.fillRect(sx-sr, sy-sr, sr*2, sr*2);
+      }
+
+      // Fine debris grit
+      const grit = 14 + Math.floor(rnd(10) * 10);
+      for (let i = 0; i < grit; i++) {
+        const gx = rnd(i*11+20)*s, gy = rnd(i*11+21)*s;
+        const ga = rnd(i*11+22) * 0.06 + 0.02;
+        g.fillStyle = `rgba(${110+rnd(i)*40},${112+rnd(i)*40},${120+rnd(i)*40},${ga})`;
+        g.fillRect(gx, gy, 1 + rnd(i*2)*1.4, 1 + rnd(i*3)*1.4);
+      }
+
+      // Hairline void-cracks seeping faint cold light up through the ground
+      if (rnd(40) > 0.45) {
+        const hx = rnd(41)*s, hy = rnd(42)*s, hr = 10 + rnd(43)*16;
+        g.strokeStyle = 'rgba(3,3,5,0.7)'; g.lineWidth = 1;
+        let a2 = rnd(44)*Math.PI*2, cx2 = hx, cy2 = hy;
+        g.beginPath(); g.moveTo(cx2, cy2);
+        for (let i = 0; i < 3; i++) { a2 += (rnd(45+i)-0.5)*1.2; cx2 += Math.cos(a2)*hr*0.5; cy2 += Math.sin(a2)*hr*0.5; g.lineTo(cx2,cy2); }
+        g.stroke();
+        g.shadowBlur = 6; g.shadowColor = 'rgba(130,200,235,0.5)';
+        g.strokeStyle = 'rgba(140,210,240,0.22)'; g.lineWidth = 0.6;
+        g.stroke();
+        g.shadowBlur = 0;
+      }
+
+      // Rare faded glyph fragment, half buried in the dirt
+      if (rnd(30) > 0.83) {
+        drawGlyphMark(g, rnd(31)*s*0.7+s*0.15, rnd(32)*s*0.7+s*0.15, 7+rnd(33)*4, rnd(34)*Math.PI*2, 0.08+rnd(35)*0.06, 'rgba(150,200,210,1)');
+      }
+
+      g.restore();
+    };
+
+    // On-path: the great causeway — but slabs are uneven, chipped, some
+    // sunk lower than their neighbors, like the ground itself shifted.
+    const drawCausewaySlab = (g, px, py, s, seed) => {
+      const rnd = (n) => seededRand(seed * 91.7 + n * 13.3);
+      g.save();
+      g.translate(px, py);
+      g.beginPath(); g.rect(0, 0, s, s); g.clip();
+
+      // Slight sink/tilt feel via an asymmetric brightness gradient aligned
+      // to the unified light direction
+      const jitter = rnd(1) * 8 - 4;
+      const base = g.createLinearGradient(LIGHT.dx*s + s*0.5, LIGHT.dy*s, -LIGHT.dx*s + s*0.5, s - LIGHT.dy*s);
+      base.addColorStop(0,   `rgb(${196+jitter},${198+jitter},${204+jitter})`);
+      base.addColorStop(0.5, `rgb(${168+jitter},${171+jitter},${178+jitter})`);
+      base.addColorStop(1,   `rgb(${128+jitter},${131+jitter},${140+jitter})`);
+      g.fillStyle = base;
+      g.fillRect(0, 0, s, s);
+
       const stoneVar = g.createRadialGradient(s*0.5, s*0.5, 0, s*0.5, s*0.5, s*0.62);
-      stoneVar.addColorStop(0,   `rgba(60,50,40,${0.16 + rnd(3)*0.10})`);
-      stoneVar.addColorStop(0.55,'rgba(20,16,13,0.14)');
-      stoneVar.addColorStop(1,   'rgba(0,0,0,0.40)');
+      stoneVar.addColorStop(0,   `rgba(30,32,42,${0.08 + rnd(3)*0.06})`);
+      stoneVar.addColorStop(0.55,'rgba(15,17,24,0.10)');
+      stoneVar.addColorStop(1,   'rgba(0,0,0,0.36)');
       g.fillStyle = stoneVar; g.fillRect(0, 0, s, s);
 
-      // Fine stone grain noise — count varies per tile
       const grainN = 16 + Math.floor(rnd(4) * 14);
       for (let gi = 0; gi < grainN; gi++) {
         const gx = rnd(gi*7.3+5) * s, gy = rnd(gi*11.7+6) * s;
@@ -5096,43 +5513,33 @@ useEffect(() => {
         const gr = rnd(gi*5.9+8) * 4.5 + 1.5;
         const grainG = g.createRadialGradient(gx, gy, 0, gx, gy, gr);
         const isLight = rnd(gi*17.3+9) > 0.5;
-        grainG.addColorStop(0, isLight ? `rgba(90,76,60,${ga*2})` : `rgba(4,3,2,${ga*2.2})`);
+        grainG.addColorStop(0, isLight ? `rgba(225,228,236,${ga*1.6})` : `rgba(5,5,8,${ga*2.4})`);
         grainG.addColorStop(1, 'rgba(0,0,0,0)');
         g.fillStyle = grainG; g.fillRect(gx-gr, gy-gr, gr*2, gr*2);
       }
 
-      // B. Irregular flagstone joints — wavy hand-cut lines, not a clean grid.
-      // Drawn faint + jittered so two adjacent tiles never line up into an
-      // obvious repeating rectangle.
-      if (rnd(11) > 0.2) {
-        g.strokeStyle = `rgba(2,2,1,${0.30 + rnd(10)*0.18})`;
-        g.lineWidth = 1.2 + rnd(12)*1.2;
-        g.beginPath();
-        let jx = 0, jy = rnd(13) * s * 0.4;
-        g.moveTo(jx, jy);
-        for (let i = 0; i < 4; i++) { jx += s/4; jy += (rnd(14+i)-0.5)*14; g.lineTo(jx, jy); }
-        g.stroke();
-      }
-      if (rnd(20) > 0.2) {
-        g.strokeStyle = `rgba(2,2,1,${0.28 + rnd(20.5)*0.16})`;
-        g.lineWidth = 1.0 + rnd(21)*1.1;
-        g.beginPath();
-        let jx2 = rnd(22) * s * 0.4, jy2 = 0;
-        g.moveTo(jx2, jy2);
-        for (let i = 0; i < 4; i++) { jy2 += s/4; jx2 += (rnd(23+i)-0.5)*14; g.lineTo(jx2, jy2); }
-        g.stroke();
-      }
-      // Faint warm catch-light on a random edge (keeps a hint of directionality
-      // without forming a uniform lit-border grid)
-      g.strokeStyle = `rgba(80,68,54,${0.06 + rnd(24)*0.07})`;
-      g.lineWidth = 0.7;
+      // Joints
+      g.strokeStyle = `rgba(2,2,4,${0.34 + rnd(10)*0.18})`;
+      g.lineWidth = 1.2 + rnd(12)*1.2;
       g.beginPath();
-      if (rnd(25) > 0.5) { g.moveTo(2, s-2); g.lineTo(2, 2); g.lineTo(s-2, 2); }
-      else { g.moveTo(s-2, 2); g.lineTo(s-2, s-2); g.lineTo(2, s-2); }
+      let jx = 0, jy = rnd(13) * s * 0.4;
+      g.moveTo(jx, jy);
+      for (let i = 0; i < 4; i++) { jx += s/4; jy += (rnd(14+i)-0.5)*14; g.lineTo(jx, jy); }
+      g.stroke();
+      g.strokeStyle = `rgba(2,2,4,${0.30 + rnd(20.5)*0.16})`;
+      g.lineWidth = 1.0 + rnd(21)*1.1;
+      g.beginPath();
+      let jx2 = rnd(22) * s * 0.4, jy2 = 0;
+      g.moveTo(jx2, jy2);
+      for (let i = 0; i < 4; i++) { jy2 += s/4; jx2 += (rnd(23+i)-0.5)*14; g.lineTo(jx2, jy2); }
       g.stroke();
 
-      // C. Cracks — count + shape + glow color randomized per tile, so the
-      // floor never shows the same fracture pattern twice.
+      // Hard directional highlight — one edge only, matching LIGHT
+      g.strokeStyle = `rgba(220,224,232,${0.08 + rnd(24)*0.06})`;
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(2, s-2); g.lineTo(2, 2); g.lineTo(s-2, 2); g.stroke();
+
+      // Cracks with void-glow
       const crackCount = 1 + Math.floor(rnd(30) * 2.2);
       for (let c = 0; c < crackCount; c++) {
         const sx = rnd(31+c*9)*s, sy = rnd(32+c*9)*s;
@@ -5146,56 +5553,34 @@ useEffect(() => {
           pts.push([cx2, cy2]);
         }
         const drawPath = () => { g.beginPath(); pts.forEach(([px2,py2],i)=> i===0?g.moveTo(px2,py2):g.lineTo(px2,py2)); };
-        g.strokeStyle = 'rgba(3,2,1,0.75)'; g.lineWidth = 1.5; drawPath(); g.stroke();
-        // Glow core — brighter than before so cracks actually read as glowing in the dark
+        g.strokeStyle = 'rgba(4,4,6,0.8)'; g.lineWidth = 1.6; drawPath(); g.stroke();
         const isPurple = rnd(36+c) > 0.55;
-        g.shadowBlur = 7;
-        g.shadowColor = isPurple ? 'rgba(150,90,230,0.55)' : 'rgba(215,170,65,0.55)';
+        g.shadowBlur = 9;
+        g.shadowColor = isPurple ? 'rgba(150,170,255,0.6)' : 'rgba(120,235,225,0.6)';
         g.strokeStyle = isPurple
-          ? `rgba(160,110,235,${0.22 + rnd(37+c)*0.16})`
-          : `rgba(210,165,65,${0.24 + rnd(38+c)*0.16})`;
-        g.lineWidth = 0.9; drawPath(); g.stroke();
+          ? `rgba(160,180,255,${0.22 + rnd(37+c)*0.15})`
+          : `rgba(130,235,220,${0.24 + rnd(38+c)*0.15})`;
+        g.lineWidth = 1.0; drawPath(); g.stroke();
         g.shadowBlur = 0;
       }
 
-      // D. Age stains — moisture damage / mineral deposits, randomized count+spot
-      const stainCount = 1 + Math.floor(rnd(40) * 2.2);
-      for (let st = 0; st < stainCount; st++) {
-        const bx = rnd(41+st*7)*s, by = rnd(42+st*7)*s, br = 6 + rnd(43+st)*11;
-        const warm = rnd(44+st) > 0.5;
-        const sg = g.createRadialGradient(bx,by,0,bx,by,br);
-        sg.addColorStop(0, warm ? `rgba(55,36,16,${0.14+rnd(45+st)*0.08})` : `rgba(0,0,0,${0.22+rnd(46+st)*0.12})`);
-        sg.addColorStop(1, 'rgba(0,0,0,0)');
-        g.fillStyle = sg; g.fillRect(bx-br, by-br, br*2, br*2);
+      // Chipped corner — a slab edge actually missing, showing the dark
+      // gap beneath instead of being a flat painted texture
+      if (rnd(55) > 0.78) {
+        const corner = Math.floor(rnd(56)*4);
+        const cx3 = [0,s,s,0][corner], cy3 = [0,0,s,s][corner];
+        const dirx = cx3===0?1:-1, diry = cy3===0?1:-1;
+        g.fillStyle = 'rgba(2,2,4,0.85)';
+        g.beginPath();
+        g.moveTo(cx3, cy3);
+        g.lineTo(cx3 + dirx*18, cy3 + diry*4);
+        g.lineTo(cx3 + dirx*6, cy3 + diry*16);
+        g.closePath(); g.fill();
       }
 
-      // E. Sparse rubble chip — only some tiles get one, never in a fixed spot
-      if (rnd(50) > 0.72) {
-        const rr = 3 + rnd(51)*3.5;
-        const rx = rnd(52)*s, ry = rnd(53)*s, rot = rnd(54)*Math.PI*2;
-        g.save(); g.translate(rx,ry); g.rotate(rot);
-        g.fillStyle = 'rgba(0,0,0,0.32)';
-        g.beginPath(); g.ellipse(0.8,0.8,rr*1.1,rr*0.7,0,0,Math.PI*2); g.fill();
-        g.beginPath();
-        g.moveTo(-rr,-rr*0.3); g.lineTo(-rr*0.2,-rr); g.lineTo(rr*0.8,-rr*0.4);
-        g.lineTo(rr*0.7,rr*0.6); g.lineTo(-rr*0.6,rr*0.5); g.closePath();
-        g.fillStyle = 'rgba(40,32,24,0.8)'; g.fill();
-        g.strokeStyle = 'rgba(90,74,55,0.4)'; g.lineWidth = 0.6; g.stroke();
-        g.restore();
-      }
-
-      // F. Very rare worn rune fragment — echoes the central seal's lost script,
-      // appears on maybe 1 in 8 tiles so it feels discovered, not stamped.
-      if (rnd(60) > 0.87) {
-        const arx = rnd(61)*s*0.6 + s*0.2, ary = rnd(62)*s*0.6 + s*0.2;
-        const a0 = rnd(63)*Math.PI*2;
-        g.strokeStyle = 'rgba(190,150,60,0.18)';
-        g.shadowBlur = 4; g.shadowColor = 'rgba(190,150,60,0.4)';
-        g.lineWidth = 0.8;
-        g.beginPath();
-        g.arc(arx, ary, 13 + rnd(64)*8, a0, a0 + Math.PI*0.85);
-        g.stroke();
-        g.shadowBlur = 0;
+      // Carved glyph fragment
+      if (rnd(60) > 0.8) {
+        drawGlyphMark(g, rnd(61)*s*0.6+s*0.2, rnd(62)*s*0.6+s*0.2, 10+rnd(63)*7, rnd(64)*Math.PI*2, 0.16+rnd(65)*0.10, 'rgba(140,225,220,1)');
       }
 
       g.restore();
@@ -5203,545 +5588,487 @@ useEffect(() => {
 
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        drawStoneTile(fx, c * TILE, r * TILE, TILE, r * cols + c + 1);
+        const seed = r * cols + c + 1;
+        if (isPathTile(c, r)) drawCausewaySlab(fx, c * TILE, r * TILE, TILE, seed);
+        else drawVoidGround(fx, c * TILE, r * TILE, TILE, seed);
       }
     }
+
+    // ── Long chasm-cracks running freely across the whole floor,
+    // ignoring the tile grid entirely — this is what actually sells
+    // "the ground broke," not a repeating per-tile pattern.
+    const chasmSeeds = [
+      { x: W*0.16, y: H*0.20, a: 0.6, len: 9 },
+      { x: W*0.86, y: H*0.78, a: 3.6, len: 8 },
+      { x: W*0.06, y: H*0.62, a: -0.4, len: 7 },
+    ];
+    chasmSeeds.forEach((seedDef, ci) => {
+      let { x: cx, y: cy, a } = seedDef;
+      const pts = [[cx, cy]];
+      for (let i = 0; i < seedDef.len; i++) {
+        a += (seededRand(ci*13+i*3.1) - 0.5) * 0.9;
+        const step = 26 + seededRand2(ci*7+i) * 20;
+        cx += Math.cos(a) * step; cy += Math.sin(a) * step;
+        pts.push([cx, cy]);
+      }
+      fx.save();
+      fx.strokeStyle = 'rgba(2,2,4,0.85)';
+      fx.lineWidth = 4;
+      fx.beginPath(); pts.forEach(([px2,py2],i)=> i===0?fx.moveTo(px2,py2):fx.lineTo(px2,py2)); fx.stroke();
+      fx.lineWidth = 1.6;
+      fx.shadowBlur = 10; fx.shadowColor = 'rgba(140,200,240,0.5)';
+      fx.strokeStyle = 'rgba(150,210,245,0.30)';
+      fx.beginPath(); pts.forEach(([px2,py2],i)=> i===0?fx.moveTo(px2,py2):fx.lineTo(px2,py2)); fx.stroke();
+      fx.shadowBlur = 0;
+      fx.restore();
+    });
 
     eng.floorBaked = fc;
 
 
-    // ── 2. STATIC FULL-SCREEN LAYER — baked ONCE, blitted per frame ────
-    // Contains: large crack clusters, mana veins, central arcane seal
+    // ── 2. STATIC FULL-SCREEN LAYER — baked once ────────────────────
     const sbc = document.createElement('canvas');
     sbc.width = W; sbc.height = H;
     const sbx = sbc.getContext('2d');
 
-    // A. Large crack clusters scattered across arena
-    const bigCracks = [
-      // [startX, startY, angle, length, segments, alpha]
-      [W*0.12, H*0.18, 0.55, 180, 7, 0.18],
-      [W*0.82, H*0.14, -0.3, 140, 6, 0.14],
-      [W*0.25, H*0.72, 0.8,  160, 6, 0.16],
-      [W*0.70, H*0.80, -0.6, 150, 6, 0.15],
-      [W*0.48, H*0.35, 1.1,  120, 5, 0.12],
-      [W*0.90, H*0.55, 0.2,  130, 5, 0.13],
-      [W*0.05, H*0.45, -0.9, 100, 5, 0.11],
-      [W*0.60, H*0.08, 0.4,  110, 4, 0.10],
-    ];
+    // A. Soft causeway-to-ground edge blending
+    const midX = W * 0.5, midY = H * 0.5;
+    const pathW = TILE;
+    [midX - pathW * 0.5, midX + pathW * 0.5].forEach((ex, side) => {
+      const dir = side === 0 ? -1 : 1;
+      const eg = sbx.createLinearGradient(ex, 0, ex + dir * 44, 0);
+      eg.addColorStop(0, 'rgba(10,10,16,0.34)');
+      eg.addColorStop(1, 'rgba(10,10,16,0)');
+      sbx.fillStyle = eg; sbx.fillRect(ex, 0, dir * 44, H);
+    });
+    [midY - pathW * 0.5, midY + pathW * 0.5].forEach((ey, side) => {
+      const dir = side === 0 ? -1 : 1;
+      const eg = sbx.createLinearGradient(0, ey, 0, ey + dir * 44);
+      eg.addColorStop(0, 'rgba(10,10,16,0.32)');
+      eg.addColorStop(1, 'rgba(10,10,16,0)');
+      sbx.fillStyle = eg; sbx.fillRect(0, ey, W, dir * 44);
+    });
 
-    bigCracks.forEach(([sx,sy,ang,len,segs,al]) => {
+    // B. VOID RIFTS — real tears in the world, not decoration. Jagged
+    // black openings edged in cold fire, starlight visible inside, set
+    // asymmetrically off the main cross so the arena doesn't feel mirrored.
+    const rifts = [
+      { x: W*0.22, y: H*0.72, r: 46, rot: 0.4 },
+      { x: W*0.80, y: H*0.20, r: 34, rot: 2.1 },
+      { x: W*0.10, y: H*0.12, r: 24, rot: 1.0 },
+    ];
+    rifts.forEach(({ x, y, r, rot }, ri) => {
       sbx.save();
-      // Physical stone crack shadow (dark, wide)
-      sbx.strokeStyle = `rgba(5,3,2,${al*3.0})`;
-      sbx.lineWidth = 2.2;
-      sbx.beginPath();
-      let cx2=sx, cy2=sy, a2=ang;
-      sbx.moveTo(cx2,cy2);
-      const segLen = len/segs;
-      for(let i=0;i<segs;i++){
-        a2 += (seededRand(sx+i*13.7+sy)*0.9-0.45);
-        cx2 += Math.cos(a2)*segLen*(0.7+seededRand(sy+i*7.3)*0.6);
-        cy2 += Math.sin(a2)*segLen*(0.7+seededRand(sx+i*5.1)*0.6);
-        sbx.lineTo(cx2,cy2);
-        if(i===Math.floor(segs/2)){
-          const ba = a2+(seededRand(sx+i)*1.2-0.6);
-          const blen = segLen*(0.5+seededRand(sy+i*3.3)*0.8);
-          sbx.moveTo(cx2,cy2);
-          sbx.lineTo(cx2+Math.cos(ba)*blen, cy2+Math.sin(ba)*blen);
-          sbx.moveTo(cx2,cy2);
-        }
+      sbx.translate(x, y);
+      sbx.rotate(rot);
+
+      // Outer cold halo bleeding onto the ground around the tear
+      const halo = sbx.createRadialGradient(0, 0, 0, 0, 0, r*2.4);
+      halo.addColorStop(0, 'rgba(120,170,255,0.16)');
+      halo.addColorStop(0.5, 'rgba(90,130,220,0.06)');
+      halo.addColorStop(1, 'rgba(0,0,0,0)');
+      sbx.fillStyle = halo; sbx.fillRect(-r*2.4, -r*2.4, r*4.8, r*4.8);
+
+      // Jagged torn outline
+      const edgePts = [];
+      const edgeN = 9 + Math.floor(seededRand(ri*5.2)*4);
+      for (let i = 0; i < edgeN; i++) {
+        const a = (i / edgeN) * Math.PI * 2;
+        const rr = r * (0.65 + seededRand(ri*9+i*3.3) * 0.5);
+        edgePts.push([Math.cos(a)*rr, Math.sin(a)*rr]);
       }
+      sbx.beginPath();
+      edgePts.forEach(([px2,py2],i)=> i===0?sbx.moveTo(px2,py2):sbx.lineTo(px2,py2));
+      sbx.closePath();
+
+      // Void interior — true black core fading from a cold rim
+      const core = sbx.createRadialGradient(0, 0, 0, 0, 0, r);
+      core.addColorStop(0, 'rgba(2,2,6,0.97)');
+      core.addColorStop(0.7, 'rgba(4,4,10,0.97)');
+      core.addColorStop(1, 'rgba(8,8,16,0.9)');
+      sbx.fillStyle = core; sbx.fill();
+
+      // Crackling rim light
+      sbx.save(); sbx.clip();
+      drawStarfield(sbx, 0, 0, r, 1.1, ri*101 + 7);
+      sbx.restore();
+      sbx.shadowColor = 'rgba(150,200,255,0.8)'; sbx.shadowBlur = 14;
+      sbx.strokeStyle = 'rgba(170,215,255,0.85)';
+      sbx.lineWidth = 1.6;
       sbx.stroke();
-      // Gold-amber magic glow core bleeding through crack
-      sbx.strokeStyle = `rgba(200,155,50,${al*0.90})`;
-      sbx.lineWidth = 0.8;
-      sbx.stroke();
-      // Purple arcane halo on crack (residual enchantment)
-      sbx.strokeStyle = `rgba(150,100,240,${al*0.55})`;
-      sbx.lineWidth = 2.5;
-      sbx.globalAlpha = 0.5;
-      sbx.stroke();
-      sbx.globalAlpha = 1.0;
+      sbx.shadowBlur = 0;
+
+      // A few jagged energy tendrils reaching out from the tear
+      const tendrils = 3 + Math.floor(seededRand(ri*3.3)*3);
+      for (let t = 0; t < tendrils; t++) {
+        const a = seededRand(ri*17+t*4.1)*Math.PI*2;
+        let tx = Math.cos(a)*r*0.9, ty = Math.sin(a)*r*0.9, ta = a;
+        sbx.beginPath(); sbx.moveTo(tx,ty);
+        const segs = 2 + Math.floor(seededRand(ri*23+t)*2);
+        for (let s2=0;s2<segs;s2++){
+          ta += (seededRand(ri*29+t*7+s2)-0.5)*1.0;
+          tx += Math.cos(ta)*(r*0.35); ty += Math.sin(ta)*(r*0.35);
+          sbx.lineTo(tx,ty);
+        }
+        sbx.shadowBlur = 6; sbx.shadowColor = 'rgba(150,200,255,0.6)';
+        sbx.strokeStyle = 'rgba(160,205,255,0.35)'; sbx.lineWidth = 0.9;
+        sbx.stroke(); sbx.shadowBlur = 0;
+      }
       sbx.restore();
     });
 
-    // B. Mana vein network radiating from near-center — gold-purple hybrid
-    const veinOrigins = [
-      [W*0.42, H*0.50], [W*0.58, H*0.48], [W*0.50, H*0.38]
+    // C. THE SHATTERED GATE — the dominant set-piece. A once-grand
+    // archway, broken across the top, standing slightly off-axis behind
+    // the main circle. This carries the "maangas" weight of the scene.
+    sbx.save();
+    sbx.translate(W*0.5, H*0.30);
+    const gateScale = Math.min(W, H) * 0.0021;
+    sbx.scale(gateScale, gateScale);
+    sbx.rotate(-0.02);
+
+    castShadow(sbx, 260, 60, 0.26);
+
+    // Twin pillars, asymmetric wear — left one taller / more intact
+    const pillarDraw = (px3, h, brokenTop, tilt) => {
+      sbx.save();
+      sbx.translate(px3, 0);
+      sbx.rotate(tilt);
+      const pg = sbx.createLinearGradient(LIGHT.dx*40, -h, -LIGHT.dx*40, 0);
+      pg.addColorStop(0, '#3a3c48');
+      pg.addColorStop(0.55, '#222430');
+      pg.addColorStop(1, '#121319');
+      sbx.fillStyle = pg;
+      sbx.strokeStyle = 'rgba(160,175,210,0.4)'; sbx.lineWidth = 2;
+      sbx.shadowColor = 'rgba(130,160,230,0.18)'; sbx.shadowBlur = 16;
+      sbx.beginPath();
+      sbx.moveTo(-22, 0); sbx.lineTo(-26, -h*0.92);
+      if (brokenTop) {
+        sbx.lineTo(-8, -h); sbx.lineTo(6, -h*0.88); sbx.lineTo(20, -h*0.96);
+      } else {
+        sbx.lineTo(-24, -h); sbx.lineTo(24, -h);
+      }
+      sbx.lineTo(26, -h*0.9); sbx.lineTo(22, 0);
+      sbx.closePath(); sbx.fill(); sbx.stroke();
+      sbx.shadowBlur = 0;
+      // Block joints
+      sbx.strokeStyle = 'rgba(5,5,8,0.5)'; sbx.lineWidth = 1.4;
+      for (let j = 1; j < 6; j++) {
+        const jy = -h * (j/6);
+        sbx.beginPath(); sbx.moveTo(-24, jy); sbx.lineTo(24, jy); sbx.stroke();
+      }
+      // A carved glyph column running up the face
+      for (let gi = 0; gi < 3; gi++) {
+        drawGlyphMark(sbx, 0, -h*0.2 - gi*h*0.28, 8, 0, 0.24, 'rgba(150,210,235,1)');
+      }
+      sbx.restore();
+    };
+    pillarDraw(-95, 215, false, -0.012);
+    pillarDraw(95, 178, true, 0.05);
+
+    // The fallen lintel — half still spanning, half collapsed into rubble
+    sbx.save();
+    sbx.translate(-30, -200);
+    sbx.rotate(-0.10);
+    const lg = sbx.createLinearGradient(0, -16, 0, 16);
+    lg.addColorStop(0, '#454754'); lg.addColorStop(1, '#1c1d26');
+    sbx.fillStyle = lg;
+    sbx.strokeStyle = 'rgba(160,175,210,0.4)'; sbx.lineWidth = 2;
+    sbx.shadowColor = 'rgba(130,160,230,0.15)'; sbx.shadowBlur = 12;
+    sbx.beginPath();
+    sbx.moveTo(-115, -16); sbx.lineTo(118, -20); sbx.lineTo(122, 6); sbx.lineTo(-112, 14);
+    sbx.closePath(); sbx.fill(); sbx.stroke();
+    sbx.shadowBlur = 0;
+    drawGlyphMark(sbx, 5, -3, 11, 0.03, 0.3, 'rgba(170,220,245,1)');
+    sbx.restore();
+
+    // Collapsed rubble pile beneath the broken side, with a soft void
+    // glow seeping out from underneath like the gate is still half-open
+    sbx.save();
+    sbx.translate(100, 0);
+    const rubGlow = sbx.createRadialGradient(0,-6,0,0,-6,70);
+    rubGlow.addColorStop(0, 'rgba(140,190,250,0.20)');
+    rubGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    sbx.fillStyle = rubGlow; sbx.fillRect(-70,-76,140,140);
+    for (let i = 0; i < 7; i++) {
+      const rx = (seededRand(i*4.4)-0.5)*90, ry = -seededRand(i*6.6)*22;
+      const rs = 8 + seededRand(i*8.8)*14;
+      sbx.save(); sbx.translate(rx, ry); sbx.rotate(seededRand(i*2.2)*Math.PI);
+      sbx.fillStyle = '#23242e';
+      sbx.strokeStyle = 'rgba(150,165,200,0.3)'; sbx.lineWidth = 1.2;
+      sbx.beginPath();
+      sbx.moveTo(-rs,-rs*0.5); sbx.lineTo(rs*0.3,-rs); sbx.lineTo(rs,-rs*0.1);
+      sbx.lineTo(rs*0.6,rs*0.7); sbx.lineTo(-rs*0.7,rs*0.6); sbx.closePath();
+      sbx.fill(); sbx.stroke();
+      sbx.restore();
+    }
+    sbx.restore();
+    sbx.restore();
+
+    // D. THE GRAND CIRCLE — colder, sharper, with real radiating energy
+    // beams instead of a flat decorative ring. This is meant to look like
+    // it could actually do something.
+    sbx.save();
+    sbx.translate(W*0.52, H*0.55);
+
+    const sealPool = sbx.createRadialGradient(0, 0, 0, 0, 0, 200);
+    sealPool.addColorStop(0, 'rgba(150,185,235,0.10)');
+    sealPool.addColorStop(0.45, 'rgba(110,140,210,0.05)');
+    sealPool.addColorStop(1, 'rgba(0,0,0,0)');
+    sbx.fillStyle = sealPool; sbx.fillRect(-200, -200, 400, 400);
+
+    // Sharp outward energy beams — thin, bright at the base, fading out
+    const beamCount = 10;
+    for (let i = 0; i < beamCount; i++) {
+      const a = (i/beamCount) * Math.PI * 2 + 0.15;
+      const len = 100 + (i % 3) * 22;
+      sbx.save(); sbx.rotate(a);
+      const bg = sbx.createLinearGradient(0, 26, 0, len);
+      bg.addColorStop(0, 'rgba(190,225,255,0.5)');
+      bg.addColorStop(1, 'rgba(190,225,255,0)');
+      sbx.strokeStyle = bg; sbx.lineWidth = 1.4;
+      sbx.shadowColor = 'rgba(180,220,255,0.5)'; sbx.shadowBlur = 6;
+      sbx.beginPath(); sbx.moveTo(0,26); sbx.lineTo(0,len); sbx.stroke();
+      sbx.shadowBlur = 0;
+      sbx.restore();
+    }
+
+    const sealRings = [
+      { r: 118, color: 'rgba(170,190,255,0.28)', width: 1.4, dash: [10, 8] },
+      { r:  94, color: 'rgba(140,225,215,0.26)', width: 1.1, dash: [6, 6] },
+      { r:  70, color: 'rgba(195,210,255,0.36)', width: 2.2, dash: [] },
+      { r:  46, color: 'rgba(150,225,215,0.26)', width: 1.0, dash: [4, 5] },
+      { r:  24, color: 'rgba(225,232,255,0.55)', width: 1.6, dash: [] },
     ];
-    veinOrigins.forEach(([vx,vy]) => {
-      for(let v=0;v<6;v++){
-        const vAng = (v/6)*Math.PI*2 + seededRand(vx+v)*0.5;
-        const vLen = 90 + seededRand(vy+v*7)*110;
-        sbx.save();
-        // Dark crack under the vein
-        sbx.strokeStyle = 'rgba(4,2,1,0.30)';
-        sbx.lineWidth = 1.2;
+    sealRings.forEach(({ r, color, width, dash }) => {
+      sbx.strokeStyle = color; sbx.lineWidth = width;
+      sbx.shadowColor = 'rgba(170,210,255,0.5)'; sbx.shadowBlur = 10;
+      if (dash.length) sbx.setLineDash(dash);
+      sbx.beginPath(); sbx.arc(0, 0, r, 0, Math.PI*2); sbx.stroke();
+      sbx.setLineDash([]);
+    });
+
+    const ringGlyphCount = 18;
+    sbx.shadowColor = 'rgba(170,210,255,0.45)'; sbx.shadowBlur = 5;
+    for (let i = 0; i < ringGlyphCount; i++) {
+      const a = (i / ringGlyphCount) * Math.PI * 2;
+      drawGlyphMark(sbx, Math.cos(a)*81, Math.sin(a)*81, 5.5, a + Math.PI/2, 0.36, 'rgba(195,220,255,1)');
+    }
+    sbx.shadowBlur = 0;
+
+    const cardinalGlyphs = [
+      { x: 0, y: -56, a: 0 }, { x: 56, y: 0, a: Math.PI/2 },
+      { x: 0, y: 56, a: Math.PI }, { x: -56, y: 0, a: -Math.PI/2 },
+    ];
+    sbx.shadowColor = 'rgba(210,230,255,0.55)'; sbx.shadowBlur = 8;
+    cardinalGlyphs.forEach(({ x: gx, y: gy, a: ga }) => drawGlyphMark(sbx, gx, gy, 11, ga, 0.46, 'rgba(220,235,255,1)'));
+    sbx.shadowBlur = 0;
+    // Bright unforgiving core — a real light source, not just an outline
+    sbx.shadowColor = 'rgba(220,240,255,0.9)'; sbx.shadowBlur = 22;
+    sbx.fillStyle = 'rgba(235,245,255,0.85)';
+    sbx.beginPath(); sbx.arc(0,0,5,0,Math.PI*2); sbx.fill();
+    sbx.shadowBlur = 0;
+    sbx.restore();
+
+    // E. JAGGED VOID SPIRES — asymmetric, varied scale, real cast shadows
+    // along the unified light direction. Replaces the old mirrored
+    // crystal-cluster layout with something that looks like it grew here.
+    const spires = [
+      { x: W*0.13, y: H*0.33, size: 30, lean:  0.18 },
+      { x: W*0.90, y: H*0.40, size: 22, lean: -0.10 },
+      { x: W*0.08, y: H*0.80, size: 26, lean:  0.05 },
+      { x: W*0.93, y: H*0.86, size: 34, lean: -0.20 },
+      { x: W*0.45, y: H*0.07, size: 16, lean:  0.10 },
+      { x: W*0.62, y: H*0.92, size: 20, lean: -0.06 },
+    ];
+    spires.forEach(({ x, y, size, lean }, si) => {
+      sbx.save();
+      sbx.translate(x, y);
+      castShadow(sbx, size*2.4, size*1.4, 0.28);
+      sbx.rotate(lean);
+      const glow = 'rgba(150,195,255,0.5)';
+      sbx.shadowColor = glow; sbx.shadowBlur = 24;
+      const clusters = [[0,0,1.0],[-size*0.55,size*0.25,0.6],[size*0.45,size*0.35,0.5]];
+      clusters.forEach(([cx2,cy2,scale], pi) => {
+        const cs = size*scale;
+        sbx.save(); sbx.translate(cx2,cy2);
+        sbx.rotate((seededRand(si*7+pi*3)-0.5)*0.4);
+        const cg = sbx.createLinearGradient(LIGHT.dx*cs, -cs*2, -LIGHT.dx*cs, cs*1.4);
+        cg.addColorStop(0, '#eef4ff');
+        cg.addColorStop(0.45, '#7fb0e6');
+        cg.addColorStop(1, 'rgba(40,60,100,0.5)');
+        sbx.fillStyle = cg;
+        sbx.strokeStyle = 'rgba(255,255,255,0.5)'; sbx.lineWidth = 0.8;
         sbx.beginPath();
-        let vxc=vx, vyc=vy, va=vAng;
-        sbx.moveTo(vxc,vyc);
-        for(let s=0;s<5;s++){
-          va += (seededRand(vx+v*3+s)*0.6-0.3);
-          vxc += Math.cos(va)*(vLen/5);
-          vyc += Math.sin(va)*(vLen/5);
+        sbx.moveTo(0,-cs*2.1); sbx.lineTo(cs*0.5,-cs*0.5); sbx.lineTo(cs*0.3,cs*0.3);
+        sbx.lineTo(cs*0.45,cs*1.1); sbx.lineTo(0,cs*1.4); sbx.lineTo(-cs*0.4,cs*1.0);
+        sbx.lineTo(-cs*0.2,cs*0.15); sbx.lineTo(-cs*0.5,-cs*0.4); sbx.closePath();
+        sbx.fill(); sbx.stroke();
+        sbx.strokeStyle = 'rgba(255,255,255,0.32)'; sbx.lineWidth = 0.5;
+        sbx.beginPath(); sbx.moveTo(0,-cs*2.1); sbx.lineTo(0,cs*1.4); sbx.stroke();
+        sbx.restore();
+      });
+      sbx.shadowBlur = 0;
+      sbx.restore();
+    });
+
+    // F. FALLEN COLOSSUS — a single massive broken statue fragment half
+    // sunk into the ground at the arena's edge: this is the "maangas"
+    // anchor, the proof something enormous trained here once and lost.
+    sbx.save();
+    sbx.translate(W*0.86, H*0.12);
+    sbx.rotate(0.34);
+    const colScale = Math.min(W,H) * 0.0017;
+    sbx.scale(colScale, colScale);
+    castShadow(sbx, 320, 80, 0.3);
+    // Head/face fragment, mostly buried, one hollow eye glowing void-blue
+    const hg = sbx.createLinearGradient(LIGHT.dx*120, -160, -LIGHT.dx*120, 40);
+    hg.addColorStop(0, '#4a4d58'); hg.addColorStop(0.55, '#26272f'); hg.addColorStop(1, '#121319');
+    sbx.fillStyle = hg;
+    sbx.strokeStyle = 'rgba(170,185,220,0.4)'; sbx.lineWidth = 3;
+    sbx.shadowColor = 'rgba(130,160,230,0.18)'; sbx.shadowBlur = 18;
+    sbx.beginPath();
+    sbx.moveTo(-150, 30); sbx.lineTo(-140,-70); sbx.lineTo(-80,-150);
+    sbx.lineTo(10,-170); sbx.lineTo(90,-140); sbx.lineTo(130,-60);
+    sbx.lineTo(110, 20); sbx.lineTo(40, 40); sbx.lineTo(-60, 36);
+    sbx.closePath(); sbx.fill(); sbx.stroke();
+    sbx.shadowBlur = 0;
+    // Crack splitting the face
+    sbx.strokeStyle = 'rgba(4,4,6,0.7)'; sbx.lineWidth = 2;
+    sbx.beginPath(); sbx.moveTo(0,-168); sbx.lineTo(-15,-90); sbx.lineTo(8,-20); sbx.lineTo(-5,40); sbx.stroke();
+    // Hollow eye socket — a small void rift of its own
+    sbx.save(); sbx.translate(-30, -88);
+    const eg2 = sbx.createRadialGradient(0,0,0,0,0,30);
+    eg2.addColorStop(0,'rgba(2,2,6,0.95)'); eg2.addColorStop(1,'rgba(2,2,6,0)');
+    sbx.fillStyle = eg2; sbx.beginPath(); sbx.ellipse(0,0,26,18,0,0,Math.PI*2); sbx.fill();
+    sbx.save(); sbx.beginPath(); sbx.ellipse(0,0,24,16,0,0,Math.PI*2); sbx.clip();
+    drawStarfield(sbx, 0, 0, 24, 1.4, 555);
+    sbx.restore();
+    sbx.shadowColor = 'rgba(160,205,255,0.8)'; sbx.shadowBlur = 14;
+    sbx.strokeStyle = 'rgba(170,210,255,0.7)'; sbx.lineWidth = 1.6;
+    sbx.beginPath(); sbx.ellipse(0,0,24,16,0,0,Math.PI*2); sbx.stroke();
+    sbx.shadowBlur = 0;
+    sbx.restore();
+    // Faint surviving brow-glyph
+    drawGlyphMark(sbx, 35, -120, 14, 0.2, 0.3, 'rgba(170,210,255,1)');
+    sbx.restore();
+
+    // G. RUIN BOUNDARY — broken low walls with real gaps you can see the
+    // void-grey horizon through, rubble drifted against the base
+    sbx.save();
+    sbx.fillStyle = 'rgba(12,13,19,0.62)';
+    sbx.shadowColor = 'rgba(130,155,220,0.18)'; sbx.shadowBlur = 14;
+    const wallSpans = [
+      [0,0,22,H*0.38],[0,H*0.5,22,H*0.5],
+      [W-22,0,22,H*0.3],[W-22,H*0.42,22,H*0.58],
+      [0,0,W*0.42,14],[W*0.56,0,W*0.44,14],
+      [0,H-14,W*0.3,14],[W*0.38,H-14,W*0.62,14],
+    ];
+    wallSpans.forEach(([wx,wy,ww,wh]) => sbx.fillRect(wx,wy,ww,wh));
+    sbx.shadowBlur = 0;
+    sbx.restore();
+
+    // H. SECONDARY VOID-VEINS radiating outward from the rifts themselves
+    // (not from arbitrary points) — visually ties the cracked ground to
+    // the rifts that caused it.
+    rifts.forEach(({x,y,r}, ri) => {
+      for (let v=0; v<5; v++) {
+        const vAng = (v/5)*Math.PI*2 + seededRand(x+v)*0.5;
+        const vLen = 60 + seededRand(y+v*7)*90;
+        sbx.save();
+        sbx.strokeStyle = 'rgba(4,4,8,0.24)'; sbx.lineWidth = 1.1;
+        let vxc=x+Math.cos(vAng)*r, vyc=y+Math.sin(vAng)*r, va=vAng;
+        sbx.beginPath(); sbx.moveTo(vxc,vyc);
+        for (let s=0;s<4;s++) {
+          va += (seededRand(x+v*3+s+ri*11)*0.5-0.25);
+          vxc += Math.cos(va)*(vLen/4); vyc += Math.sin(va)*(vLen/4);
           sbx.lineTo(vxc,vyc);
         }
         sbx.stroke();
-        // Gold-purple magic glow in vein
-        sbx.strokeStyle = v % 2 === 0 ? 'rgba(190,145,45,0.14)' : 'rgba(109,40,217,0.11)';
-        sbx.lineWidth = 0.7;
-        sbx.stroke();
+        sbx.strokeStyle = 'rgba(150,200,250,0.16)'; sbx.lineWidth = 0.6;
+        sbx.shadowColor = 'rgba(160,200,250,0.5)'; sbx.shadowBlur = 5;
+        sbx.stroke(); sbx.shadowBlur = 0;
         sbx.restore();
       }
-    });
-
-    // C. Central arcane seal — an ancient, BROKEN magic circle (Frieren-style
-    // forgotten grimoire mark). Gold-dominant, genuinely glowing, and
-    // deliberately incomplete: gaps in the rings, a crack through the middle,
-    // and a few of its surrounding runes worn away by time.
-    const seal = { x: W*0.5, y: H*0.5 };
-    sbx.save();
-    sbx.translate(seal.x, seal.y);
-
-    // Centuries of grime, soot and scorch stains baked into the stone around
-    // the seal — sells the "forgotten, abused ruin" read before any rings are drawn
-    const GRIME_SPOTS = [
-      [-72,-58,36],[64,-74,28],[88,42,32],[-94,32,30],[12,86,24],[-34,-92,22],[40,2,18]
-    ];
-    GRIME_SPOTS.forEach(([gx,gy,gr], gi) => {
-      const grimeGrad = sbx.createRadialGradient(gx,gy,0,gx,gy,gr);
-      grimeGrad.addColorStop(0, `rgba(8,6,4,${0.32 + seededRand(gi*3.3)*0.16})`);
-      grimeGrad.addColorStop(1, 'rgba(8,6,4,0)');
-      sbx.fillStyle = grimeGrad;
-      sbx.beginPath(); sbx.arc(gx,gy,gr,0,Math.PI*2); sbx.fill();
-    });
-
-    // Helper: stroke a ring but leave random gaps in it — sells the "broken seal" read
-    const brokenRing = (radius, gapCount, color, width, glowColor, glowBlur) => {
-      const gaps = [];
-      for (let i = 0; i < gapCount; i++) {
-        const ga = seededRand(radius*3.1 + i*7.7) * Math.PI * 2;
-        const gw = 0.10 + seededRand(radius*5.3 + i*2.1) * 0.20;
-        gaps.push([ga, ga + gw]);
-      }
-      const inGap = (a) => gaps.some(([g0, g1]) => {
-        let aa = a; while (aa < g0) aa += Math.PI * 2;
-        return aa < g1;
-      });
-      sbx.save();
-      sbx.strokeStyle = color; sbx.lineWidth = width;
-      if (glowColor) { sbx.shadowColor = glowColor; sbx.shadowBlur = glowBlur; }
-      const steps = 160;
-      let drawing = false;
-      sbx.beginPath();
-      for (let i = 0; i <= steps; i++) {
-        const a = (i / steps) * Math.PI * 2;
-        if (inGap(a)) { drawing = false; continue; }
-        const x = Math.cos(a) * radius, y = Math.sin(a) * radius;
-        if (!drawing) { sbx.moveTo(x, y); drawing = true; }
-        else sbx.lineTo(x, y);
-      }
-      sbx.stroke();
-      sbx.restore();
-    };
-
-    // Shattered fragments — broken-off pieces of the containment ring, scattered
-    // just outside it like shards that fell and never got swept away
-    for (let i = 0; i < 6; i++) {
-      const fa = seededRand(i*17.3) * Math.PI * 2;
-      const fr = 100 + seededRand(i*22.1) * 24;
-      const flen = 0.10 + seededRand(i*9.7) * 0.09;
-      sbx.save();
-      sbx.translate(Math.cos(fa)*fr, Math.sin(fa)*fr);
-      sbx.rotate(fa + Math.PI/2 + (seededRand(i*5.5)-0.5)*0.6);
-      sbx.strokeStyle = 'rgba(205,160,65,0.32)';
-      sbx.lineWidth = 1.8;
-      sbx.shadowColor = 'rgba(205,160,65,0.5)'; sbx.shadowBlur = 6;
-      sbx.beginPath();
-      sbx.arc(0, 0, 9 + seededRand(i*7.1)*6, 0, flen * Math.PI * 2);
-      sbx.stroke();
-      sbx.restore();
-    }
-
-    // Outer ring — broken gold containment band, glowing
-    brokenRing(96, 3, 'rgba(225,180,80,0.55)', 2.2, 'rgba(225,180,80,0.9)', 14);
-    brokenRing(96, 3, 'rgba(255,225,150,0.28)', 0.8, null, 0);
-    // Middle ring — thinner, broken at different points than the outer ring
-    brokenRing(68, 2, 'rgba(205,160,65,0.42)', 1.5, 'rgba(205,160,65,0.6)', 9);
-    // Inner ring — mostly intact, the seal's last surviving "core" — cooler purple
-    sbx.save();
-    sbx.strokeStyle = 'rgba(155,110,235,0.32)';
-    sbx.lineWidth = 1.0;
-    sbx.shadowColor = 'rgba(155,110,235,0.6)'; sbx.shadowBlur = 10;
-    sbx.beginPath(); sbx.arc(0, 0, 40, 0, Math.PI*2); sbx.stroke();
-    sbx.restore();
-
-    // Jagged inner ward spikes — an aggressive, claw-like accent ringing the core,
-    // reading as the seal's last line of defense rather than a polite decoration
-    sbx.save();
-    sbx.beginPath();
-    const wardSpikes = 10;
-    for (let i = 0; i < wardSpikes; i++) {
-      const sa = (i / wardSpikes) * Math.PI * 2;
-      const outR = i % 2 === 0 ? 31 : 19;
-      const px = Math.cos(sa) * outR, py = Math.sin(sa) * outR;
-      if (i === 0) sbx.moveTo(px, py); else sbx.lineTo(px, py);
-    }
-    sbx.closePath();
-    sbx.strokeStyle = 'rgba(225,180,80,0.22)';
-    sbx.lineWidth = 0.8;
-    sbx.shadowColor = 'rgba(225,180,80,0.45)'; sbx.shadowBlur = 6;
-    sbx.stroke();
-    sbx.restore();
-
-    // 6-pointed rune star — also weathered unevenly (gold edge brighter than purple edge)
-    [0,1].forEach(t => {
-      sbx.beginPath();
-      for (let i = 0; i < 3; i++) {
-        const sa = (i/3)*Math.PI*2 + t*(Math.PI/3) - Math.PI/2;
-        const sx2 = Math.cos(sa)*68, sy2 = Math.sin(sa)*68;
-        if (i===0) sbx.moveTo(sx2,sy2); else sbx.lineTo(sx2,sy2);
-      }
-      sbx.closePath();
-      sbx.strokeStyle = t === 0 ? 'rgba(225,180,80,0.24)' : 'rgba(150,105,235,0.16)';
-      sbx.lineWidth = 0.8;
-      sbx.stroke();
-    });
-
-    // Ancient runic script ringing the seal — real Elder Futhark glyphs, gold,
-    // glowing — with several missing/faded to read as old and incomplete
-    const SEAL_RUNES = ['ᚠ','ᚢ','ᚦ','ᚨ','ᚱ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛁ','ᛃ','ᛇ','ᛈ','ᛉ','ᛊ','ᛏ','ᛒ','ᛖ','ᛗ','ᛚ','ᛜ','ᛝ','ᛟ'];
-    sbx.font = '13px serif';
-    sbx.textAlign = 'center';
-    sbx.textBaseline = 'middle';
-    const runeRadius = 112;
-    SEAL_RUNES.forEach((rune, i) => {
-      const worn = seededRand(i*9.13) > 0.78; // some glyphs have eroded away entirely
-      if (worn) return;
-      const a = (i / SEAL_RUNES.length) * Math.PI * 2 - Math.PI/2;
-      const rx = Math.cos(a) * runeRadius, ry = Math.sin(a) * runeRadius;
-      const fade = 0.35 + seededRand(i*4.71) * 0.45;
-      sbx.save();
-      sbx.translate(rx, ry);
-      sbx.rotate(a + Math.PI/2);
-      sbx.shadowColor = 'rgba(230,190,90,0.9)';
-      sbx.shadowBlur = 9;
-      sbx.fillStyle = `rgba(230,190,100,${fade})`;
-      sbx.fillText(rune, 0, 0);
-      sbx.restore();
-    });
-
-    // The fracture that broke the seal — a physical crack cutting across it
-    sbx.strokeStyle = 'rgba(5,3,2,0.55)';
-    sbx.lineWidth = 2;
-    sbx.beginPath();
-    sbx.moveTo(-100,-30); sbx.lineTo(-50,-10); sbx.lineTo(-10,-40);
-    sbx.lineTo(30,-5); sbx.lineTo(90,25);
-    sbx.stroke();
-    sbx.strokeStyle = 'rgba(225,180,80,0.28)';
-    sbx.lineWidth = 0.8;
-    sbx.beginPath();
-    sbx.moveTo(-100,-30); sbx.lineTo(-50,-10); sbx.lineTo(-10,-40);
-    sbx.lineTo(30,-5); sbx.lineTo(90,25);
-    sbx.stroke();
-
-    // Secondary splinter crack — a smaller branch off the main break, the kind
-    // of detail that sells real structural failure instead of a single clean line
-    sbx.strokeStyle = 'rgba(5,3,2,0.42)';
-    sbx.lineWidth = 1.3;
-    sbx.beginPath();
-    sbx.moveTo(-10,-40); sbx.lineTo(-26,-64); sbx.lineTo(-16,-86);
-    sbx.stroke();
-    sbx.strokeStyle = 'rgba(150,100,240,0.22)';
-    sbx.lineWidth = 0.6;
-    sbx.stroke();
-
-    // Center ember — the last spark of power still left in the broken seal
-    sbx.shadowColor = 'rgba(225,180,80,0.85)'; sbx.shadowBlur = 13;
-    sbx.fillStyle = 'rgba(230,195,110,0.6)';
-    sbx.beginPath(); sbx.arc(0,0,4,0,Math.PI*2); sbx.fill();
-
-    sbx.restore();
-
-    // D. Scattered small rune glyphs (partial) around the arena
-    const runeSpots = [
-      [W*0.15,H*0.25,18,0.10], [W*0.85,H*0.30,14,0.09],
-      [W*0.20,H*0.78,16,0.08], [W*0.78,H*0.72,15,0.09],
-      [W*0.50,H*0.15,12,0.07], [W*0.50,H*0.88,12,0.07],
-    ];
-    runeSpots.forEach(([rx,ry,rr,ra]) => {
-      sbx.save(); sbx.translate(rx,ry);
-      sbx.strokeStyle = `rgba(109,40,217,${ra})`;
-      sbx.lineWidth = 0.7;
-      // Partial arc
-      sbx.beginPath(); sbx.arc(0,0,rr, Math.PI*0.2, Math.PI*1.4); sbx.stroke();
-      sbx.beginPath(); sbx.arc(0,0,rr*0.6, Math.PI*0.8, Math.PI*2.0); sbx.stroke();
-      // Cross mark
-      sbx.beginPath();
-      sbx.moveTo(-rr*0.4,0); sbx.lineTo(rr*0.4,0);
-      sbx.moveTo(0,-rr*0.4); sbx.lineTo(0,rr*0.4);
-      sbx.stroke();
-      sbx.restore();
-    });
-
-    // E. BROKEN SLAB PATCHES — large sunken/shattered floor sections,
-    // like whole stone slabs that caved in or were blasted apart.
-    // Kept clear of dead-center (player spawn / seal) so they read as
-    // environmental detail, not obstacles in the main fight zone.
-    const slabPatches = [
-      { x: W*0.16, y: H*0.62, w: 110, h: 70, rot: -0.25 },
-      { x: W*0.86, y: H*0.22, w: 95,  h: 60, rot: 0.35 },
-      { x: W*0.10, y: H*0.15, w: 80,  h: 55, rot: 0.15 },
-      { x: W*0.92, y: H*0.78, w: 100, h: 65, rot: -0.4 },
-    ];
-    slabPatches.forEach(({x,y,w,h,rot}) => {
-      sbx.save();
-      sbx.translate(x,y); sbx.rotate(rot);
-      // Sunken depth shadow (broad, soft)
-      const slabShadow = sbx.createRadialGradient(0,0,0,0,0, Math.max(w,h)*0.65);
-      slabShadow.addColorStop(0,'rgba(0,0,0,0.35)');
-      slabShadow.addColorStop(0.7,'rgba(0,0,0,0.16)');
-      slabShadow.addColorStop(1,'rgba(0,0,0,0)');
-      sbx.fillStyle = slabShadow;
-      sbx.fillRect(-w*0.7,-h*0.7,w*1.4,h*1.4);
-
-      // Jagged broken outline (irregular polygon, not a clean rectangle)
-      const jag = (n, rx, ry) => {
-        const pts = [];
-        for (let i=0;i<n;i++){
-          const ang = (i/n)*Math.PI*2;
-          const jr = 0.78 + seededRand(x+y+i*9.1)*0.3;
-          pts.push([Math.cos(ang)*rx*jr, Math.sin(ang)*ry*jr]);
-        }
-        return pts;
-      };
-      const slabPts = jag(9, w*0.5, h*0.5);
-      sbx.beginPath();
-      slabPts.forEach(([px,py],i)=> i===0 ? sbx.moveTo(px,py) : sbx.lineTo(px,py));
-      sbx.closePath();
-      sbx.fillStyle = 'rgba(2,1,8,0.45)';
-      sbx.fill();
-      // Lit broken-edge rim (light catching the fracture lip)
-      sbx.strokeStyle = 'rgba(150,100,220,0.16)';
-      sbx.lineWidth = 1.2;
-      sbx.stroke();
-
-      // A few thin secondary fractures radiating from the slab
-      sbx.strokeStyle = 'rgba(120,60,200,0.13)';
-      sbx.lineWidth = 0.7;
-      for (let i=0;i<3;i++){
-        const fa = seededRand(x+i*4.4)*Math.PI*2;
-        const flen = (w+h)*0.22;
-        sbx.beginPath();
-        sbx.moveTo(Math.cos(fa)*w*0.4, Math.sin(fa)*h*0.4);
-        sbx.lineTo(Math.cos(fa)*(w*0.4+flen), Math.sin(fa)*(h*0.4+flen));
-        sbx.stroke();
-      }
-      sbx.restore();
-    });
-
-    // F. RUBBLE PILES — small clusters of broken stone debris resting in
-    // the open floor, each chip independently shaded for a 3D-ish read.
-    const rubblePiles = [
-      { x: W*0.34, y: H*0.85, n: 6, spread: 26 },
-      { x: W*0.66, y: H*0.12, n: 5, spread: 22 },
-      { x: W*0.06, y: H*0.40, n: 4, spread: 18 },
-      { x: W*0.95, y: H*0.45, n: 5, spread: 20 },
-      { x: W*0.40, y: H*0.06, n: 4, spread: 16 },
-      // ── extra piles for a denser, more lived-in arena floor ──
-      { x: W*0.20, y: H*0.50, n: 5, spread: 20 },
-      { x: W*0.78, y: H*0.62, n: 4, spread: 18 },
-      { x: W*0.55, y: H*0.92, n: 5, spread: 22 },
-      { x: W*0.88, y: H*0.08, n: 4, spread: 16 },
-      { x: W*0.12, y: H*0.92, n: 4, spread: 18 },
-    ];
-    rubblePiles.forEach(({x,y,n,spread}) => {
-      for (let i=0;i<n;i++){
-        const ang = seededRand(x+i*3.3)*Math.PI*2;
-        const dist = seededRand(y+i*5.7)*spread;
-        const cx = x + Math.cos(ang)*dist;
-        const cy = y + Math.sin(ang)*dist*0.6; // squash for floor perspective
-        const cr = 3 + seededRand(x+y+i*7.1)*5;
-        const crot = seededRand(x*2+i)*Math.PI*2;
-
-        sbx.save();
-        sbx.translate(cx,cy); sbx.rotate(crot);
-        // contact shadow
-        sbx.fillStyle = 'rgba(0,0,0,0.35)';
-        sbx.beginPath(); sbx.ellipse(1.2,1.6,cr*1.15,cr*0.72,0,0,Math.PI*2); sbx.fill();
-        // chip body — warm dark stone, irregular hexagon
-        sbx.beginPath();
-        sbx.moveTo(-cr,-cr*0.3);
-        sbx.lineTo(-cr*0.2,-cr);
-        sbx.lineTo(cr*0.8,-cr*0.4);
-        sbx.lineTo(cr*0.9,cr*0.5);
-        sbx.lineTo(0,cr*0.9);
-        sbx.lineTo(-cr*0.8,cr*0.4);
-        sbx.closePath();
-        sbx.fillStyle = 'rgba(50,38,28,0.82)'; // warm dark stone
-        sbx.fill();
-        // Moonlit edge highlight (warm light from top)
-        sbx.strokeStyle = 'rgba(100,82,60,0.40)';
-        sbx.lineWidth = 0.7;
-        sbx.stroke();
-        // Tiny warm highlight catching directional moonlight
-        sbx.fillStyle = 'rgba(130,108,78,0.18)';
-        sbx.beginPath(); sbx.ellipse(-cr*0.3,-cr*0.35,cr*0.38,cr*0.22,0,0,Math.PI*2); sbx.fill();
-        sbx.restore();
-      }
-    });
-
-    // G. SCATTERED GLINTING DEBRIS — sparse loose shards (broken weapon
-    // fragments, rune-glass splinters) catching a faint glow. Independent
-    // of the rubble piles so debris reads as spread across the whole floor,
-    // not just clumped in corners.
-    const glintShards = Array.from({ length: 22 }, (_, i) => ({
-      x: seededRand(i*17.3 + 1) * W,
-      y: seededRand(i*23.9 + 2) * H,
-      len: 5 + seededRand(i*11.1 + 3) * 7,
-      rot: seededRand(i*7.7 + 4) * Math.PI * 2,
-      gold: seededRand(i*5.5 + 5) > 0.5,
-    }));
-    glintShards.forEach(({x,y,len,rot,gold}) => {
-      sbx.save();
-      sbx.translate(x,y); sbx.rotate(rot);
-      // shard silhouette
-      sbx.beginPath();
-      sbx.moveTo(-len*0.5, -1.1);
-      sbx.lineTo(len*0.5, -0.3);
-      sbx.lineTo(len*0.42, 1.0);
-      sbx.lineTo(-len*0.45, 0.6);
-      sbx.closePath();
-      sbx.fillStyle = 'rgba(35,28,20,0.7)';
-      sbx.fill();
-      // thin glowing edge — sells "broken enchanted metal/glass" read
-      sbx.strokeStyle = gold ? 'rgba(225,190,110,0.5)' : 'rgba(160,120,230,0.45)';
-      sbx.shadowColor = gold ? 'rgba(225,190,110,0.7)' : 'rgba(160,120,230,0.65)';
-      sbx.shadowBlur = 3;
-      sbx.lineWidth = 0.6;
-      sbx.beginPath(); sbx.moveTo(-len*0.5,-1.1); sbx.lineTo(len*0.5,-0.3); sbx.stroke();
-      sbx.restore();
-    });
-
-    // H. HAIRLINE SPIDERWEB CRACKS — a finer, denser fracture network layered
-    // over the big cracks so no two regions of the floor share the exact
-    // same break pattern. Radiates from small random impact points instead
-    // of running straight, for a more "shattered glass / aged stone" feel.
-    const webOrigins = Array.from({ length: 7 }, (_, i) => ({
-      x: seededRand(i*31.1 + 9) * W,
-      y: seededRand(i*19.7 + 8) * H,
-      arms: 5 + Math.floor(seededRand(i*13.3 + 6) * 3),
-      reach: 26 + seededRand(i*9.9 + 7) * 30,
-    }));
-    webOrigins.forEach(({x,y,arms,reach}) => {
-      sbx.save();
-      for (let a = 0; a < arms; a++) {
-        const baseAng = (a / arms) * Math.PI * 2 + seededRand(x+a*4.4)*0.6;
-        let cx2 = x, cy2 = y, ang2 = baseAng;
-        const segs = 3;
-        sbx.beginPath(); sbx.moveTo(cx2, cy2);
-        for (let s = 0; s < segs; s++) {
-          ang2 += (seededRand(x+y+a*5+s*2.2) - 0.5) * 0.8;
-          cx2 += Math.cos(ang2) * (reach/segs);
-          cy2 += Math.sin(ang2) * (reach/segs);
-          sbx.lineTo(cx2, cy2);
-        }
-        sbx.strokeStyle = 'rgba(4,2,1,0.30)';
-        sbx.lineWidth = 0.8;
-        sbx.stroke();
-        sbx.strokeStyle = 'rgba(190,150,70,0.10)';
-        sbx.lineWidth = 0.5;
-        sbx.stroke();
-      }
-      sbx.restore();
     });
 
     eng.staticBg = sbc;
 
-    // ── 3. AMBIENT PARTICLES: 4-tier void ecosystem ────────────────────
-
-    // Tier A — small drifting rune sparks (warm gold + purple hybrid)
-    const ambs_sparks = Array.from({ length: 36 }, () => ({
+    // ── 3. AMBIENT PARTICLES — heavier, more dramatic, asymmetric drift
+    const ambs_sparks = Array.from({ length: 30 }, () => ({
       kind: 'spark',
       x: Math.random()*W, y: Math.random()*H,
-      r: Math.random()*1.1+0.3,
-      vx: (Math.random()-0.5)*13,
-      vy: -(Math.random()*20+5),
-      a: Math.random()*0.5+0.2,
+      r: Math.random()*1.3+0.4,
+      vx: (Math.random()-0.5)*9,
+      vy: -(Math.random()*16+4),
+      a: Math.random()*0.45+0.2,
       t: Math.random(),
-      c: ['#c4b5fd','#fbbf24','#e9d5ff','#fcd34d','#a78bfa','#f59e0b','#818cf8'][Math.floor(Math.random()*7)]
+      c: ['#9fe9da','#c9b8f5','#bcd6ff','#e7eaf2','#a7d8e8'][Math.floor(Math.random()*5)]
     }));
 
-    // Tier B — large slow void orbs
     const ambs_orbs = Array.from({ length: 9 }, () => ({
       kind: 'orb',
       x: Math.random()*W, y: Math.random()*H,
-      r: Math.random()*16+9,
-      vx: (Math.random()-0.5)*5,
-      vy: -(Math.random()*5+1.5),
-      a: Math.random()*0.042+0.016,
+      r: Math.random()*18+10,
+      vx: (Math.random()-0.5)*3.6,
+      vy: -(Math.random()*3.6+0.8),
+      a: Math.random()*0.034+0.013,
       t: Math.random()*0.7+0.3,
       phase: Math.random()*Math.PI*2,
-      c: ['#6d28d9','#4c1d95','#7c3aed','#5b21b6'][Math.floor(Math.random()*4)]
+      c: ['#3a4a7a','#5b4f8a','#2f6a78','#3b5a6e'][Math.floor(Math.random()*4)]
     }));
 
-    // Tier C — horizontal mist wisps
-    const ambs_wisps = Array.from({ length: 6 }, () => ({
+    const ambs_wisps = Array.from({ length: 13 }, () => ({
       kind: 'wisp',
-      x: Math.random()*W, y: Math.random()*H,
-      w: Math.random()*140+70,
-      h: Math.random()*7+3,
-      vx: (Math.random()-0.5)*7,
-      vy: (Math.random()-0.5)*3,
-      a: Math.random()*0.038+0.01,
+      x: Math.random()*W, y: H*0.5 + Math.random()*H*0.5,
+      w: Math.random()*220+120,
+      h: Math.random()*10+5,
+      vx: (Math.random()-0.5)*5.5,
+      vy: (Math.random()-0.5)*1.8,
+      a: Math.random()*0.045+0.016,
       t: Math.random()*0.8+0.2,
       phase: Math.random()*Math.PI*2,
     }));
 
-    // Tier D — rune ember cross-sparks (gold + purple mix)
-const ambs_embers = Array.from({ length: 32 }, () => ({ // dati 14, ngayon 32
-  kind: 'ember',
-  x: Math.random() * W,
-  y: Math.random() * H,
-  r: Math.random() * 3.5 + 2.0,        // dati 2.5+1.5, mas malalaki
-  vx: (Math.random() - 0.5) * 4,       // konting hina ng horizontal drift
-  vy: -(Math.random() * 7 + 2),        // mas mabagal paakyat para mas matagal kita
-  a: Math.random() * 0.4 + 0.4,        // dati 0.45+0.15 (~0.15–0.6), ngayon ~0.4–0.8
-  t: Math.random(),
-  rot: Math.random() * Math.PI,
-  c: ['#fbbf24','#a78bfa','#f59e0b','#c4b5fd','#fcd34d','#7c3aed'][Math.floor(Math.random() * 6)],
-}));
+    // Glyph-motes rising mostly out of the rifts, sized more dramatically
+    const ambs_embers = Array.from({ length: 26 }, (_, i) => {
+      const rift = rifts[i % rifts.length];
+      const spread = 70;
+      return {
+        kind: 'ember',
+        x: rift.x + (Math.random()-0.5)*spread,
+        y: rift.y + (Math.random()-0.5)*spread,
+        r: Math.random() * 3.2 + 1.6,
+        vx: (Math.random() - 0.5) * 3,
+        vy: -(Math.random() * 7 + 2),
+        a: Math.random() * 0.4 + 0.32,
+        t: Math.random(),
+        rot: Math.random() * Math.PI,
+        c: ['#9fe9da','#c9b8f5','#bcd6ff','#e7eaf2'][Math.floor(Math.random() * 4)],
+      };
+    });
 
-    // Tier E — fine drifting dust motes (ground-haze, barely visible until
-    // a light source — moonlight shaft or the player's own glow — passes
-    // over them, which is what actually sells "dusty ancient dungeon air")
-const ambs_dust = Array.from({ length: 110 }, () => ({ // dati 55, doble na
-  kind: 'dust',
-  x: Math.random() * W,
-  y: Math.random() * H,
-  r: Math.random() * 1.8 + 0.8,       // dati 1.0+0.4, mas malalaki ng konti
-  vx: (Math.random() - 0.5) * 5,      // mas mabagal, hindi agad nagdi-disperse
-  vy: (Math.random() - 0.5) * 4,
-  a: Math.random() * 0.3 + 0.25,      // dati 0.16+0.04, ngayon ~0.25–0.55
-  phase: Math.random() * Math.PI * 2,
-}));
+    const ambs_dust = Array.from({ length: 140 }, () => ({
+      kind: 'dust',
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.6 + 0.6,
+      vx: (Math.random() - 0.5) * 3.6,
+      vy: (Math.random() - 0.5) * 2.6,
+      a: Math.random() * 0.24 + 0.15,
+      phase: Math.random() * Math.PI * 2,
+    }));
 
-    // Tier F — soft drifting smoke/fog clouds. Kept deliberately sparse and
-    // low-opacity (just enough volume to add depth/atmosphere) — large, slow,
-    // ash-grey blobs that gently roll across the floor without ever reading
-    // as a flat fog layer or hiding the floor detail underneath.
-    const ambs_smoke = Array.from({ length: 16 }, () => ({
-  kind: 'smoke',
-  x: Math.random() * W,
-  y: Math.random() * H,
-  r: Math.random() * 80 + 70,          // mas malaki yung clouds
-  vx: (Math.random() - 0.5) * 5,
-  vy: (Math.random() - 0.5) * 3,
-  a: Math.random() * 0.07 + 0.05,      // mas mataas base opacity
-  phase: Math.random() * Math.PI * 2,
-  driftSeed: Math.random() * 100,
-}));
-
+    const ambs_smoke = Array.from({ length: 20 }, () => ({
+      kind: 'smoke',
+      x: Math.random() * W,
+      y: H*0.4 + Math.random() * H*0.6,
+      r: Math.random() * 130 + 80,
+      vx: (Math.random() - 0.5) * 3.4,
+      vy: (Math.random() - 0.5) * 1.7,
+      a: Math.random() * 0.055 + 0.028,
+      phase: Math.random() * Math.PI * 2,
+      driftSeed: Math.random() * 100,
+    }));
     eng.ambs = [...ambs_sparks, ...ambs_orbs, ...ambs_wisps, ...ambs_embers, ...ambs_dust, ...ambs_smoke];
 
     let lastTime = performance.now();
@@ -5866,7 +6193,7 @@ const ambs_dust = Array.from({ length: 110 }, () => ({ // dati 55, doble na
         }
       }
 
-      if (screenRef.current === 'playing' || screenRef.current === 'levelup') {
+      if (screenRef.current === 'tutorial' || screenRef.current === 'levelup') {
         let mx = 0, my = 0;
 
         if (eng.joystick.active) {
@@ -8992,38 +9319,48 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
 
 
       // ═══════════════════════════════════════════════════════════════
-      // VOID / FRIEREN MMORPG ENVIRONMENT DRAW
-      // Layer order: base → atmosphere → floor → staticBg → particles → vignette
+      // ✨ WIZARD TRAINING GROUNDS ENVIRONMENT DRAW
+      // Layer order: sky → sunlight → floor → staticBg → seal pulse → particles → vignette
       // ═══════════════════════════════════════════════════════════════
 
-      // 1. Ancient stone base — darker warm-black void (not pure black, keeps a hint of warmth)
-      ctx.fillStyle = '#110e0b';
+      // 1. Soft fantasy sky — pale morning blue-green horizon
+      // A peaceful outdoor training yard under a gentle arcane dawn sky
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+      skyGrad.addColorStop(0,   '#c7e8f0'); // soft sky blue at top
+      skyGrad.addColorStop(0.40,'#d4efd8'); // gentle sage-green mid (grassy light)
+      skyGrad.addColorStop(0.75,'#e8f4ea'); // pale mint near horizon
+      skyGrad.addColorStop(1,   '#f0f6f0'); // almost white ground light
+      ctx.fillStyle = skyGrad;
       ctx.fillRect(0, 0, W, H);
 
-      // 2. Atmospheric depth — warm ambient bounce + cool arcane shadow on opposite side
+      // 2. Atmospheric depth — warm golden sunlight from top-left
       const _t = performance.now() * 0.00018;
-      // Warm amber-gold torchlight source — top-center (moonlight direction)
-      const bg1 = ctx.createRadialGradient(W*0.5, H*(-0.15), 0, W*0.5, H*(-0.15), W*0.80);
-      bg1.addColorStop(0,   'rgba(210,175,95,0.16)');  // warm moonlight
-      bg1.addColorStop(0.4, 'rgba(140,110,55,0.07)');
-      bg1.addColorStop(0.75,'rgba(60,44,20,0.03)');
+      // Main soft sunlight cone — warm gold from upper area
+      const bg1 = ctx.createRadialGradient(W*0.35, H*(-0.10), 0, W*0.35, H*(-0.10), W*0.95);
+      bg1.addColorStop(0,   'rgba(255,245,200,0.28)');
+      bg1.addColorStop(0.35,'rgba(240,225,170,0.14)');
+      bg1.addColorStop(0.65,'rgba(200,220,195,0.06)');
       bg1.addColorStop(1,   'rgba(0,0,0,0)');
       ctx.fillStyle = bg1; ctx.fillRect(0, 0, W, H);
 
-      // Cool arcane blue-purple from bottom — mana seeping from floor runes
-      const bg2 = ctx.createRadialGradient(W*0.50, H*1.10, 0, W*0.50, H*1.10, W*0.65);
-      bg2.addColorStop(0,   'rgba(55,18,115,0.20)');
-      bg2.addColorStop(0.5, 'rgba(28,7,65,0.09)');
+      // Soft arcane magical bloom from center — training seal aura
+      const bg2 = ctx.createRadialGradient(W*0.50, H*0.50, 0, W*0.50, H*0.50, W*0.42);
+      bg2.addColorStop(0,   'rgba(80,220,200,0.07)');
+      bg2.addColorStop(0.5, 'rgba(80,180,220,0.04)');
       bg2.addColorStop(1,   'rgba(0,0,0,0)');
       ctx.fillStyle = bg2; ctx.fillRect(0, 0, W, H);
 
-      // Side fills — cool deep shadow corners
-      const bg3 = ctx.createRadialGradient(W*0.72, H*0.60, 0, W*0.72, H*0.60, W*0.45);
-      bg3.addColorStop(0,   'rgba(20,8,40,0.14)');
+      // Cool ambient shade from corners (trees casting shade)
+      const bg3 = ctx.createRadialGradient(W*0.08, H*0.12, 0, W*0.08, H*0.12, W*0.32);
+      bg3.addColorStop(0,   'rgba(30,70,40,0.10)');
       bg3.addColorStop(1,   'rgba(0,0,0,0)');
       ctx.fillStyle = bg3; ctx.fillRect(0, 0, W, H);
+      const bg4 = ctx.createRadialGradient(W*0.92, H*0.88, 0, W*0.92, H*0.88, W*0.30);
+      bg4.addColorStop(0,   'rgba(30,70,40,0.09)');
+      bg4.addColorStop(1,   'rgba(0,0,0,0)');
+      ctx.fillStyle = bg4; ctx.fillRect(0, 0, W, H);
 
-      // 3. Hand-baked stone floor — every tile uniquely seeded, no visible repeat
+      // 3. Hand-baked floor (grass + stone paths)
       if (eng.floorBaked) {
         ctx.drawImage(eng.floorBaked, 0, 0);
       } else if (eng.floorPat) {
@@ -9031,51 +9368,49 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
         ctx.fillRect(0, 0, W, H);
       }
 
-      // 3b. DRAMATIC DIRECTIONAL MOONLIGHT — top-down shaft hitting the arena floor
-      // This is the "torchlight/moonlight nagbibigay direction ng light" pass
-      // Soft wide moonlight cone from top-center
+      // 3b. WARM SUNLIGHT PASS — soft angled sunlight across the training grounds
       {
-        const moonG = ctx.createRadialGradient(W*0.50, -H*0.05, 0, W*0.50, H*0.55, W*0.62);
-        moonG.addColorStop(0,   'rgba(220,205,170,0.16)'); // warm moonlight center
-        moonG.addColorStop(0.30,'rgba(185,165,120,0.09)');
-        moonG.addColorStop(0.60,'rgba(100,85,60,0.04)');
-        moonG.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.fillStyle = moonG; ctx.fillRect(0, 0, W, H);
+        // Wide diffuse sunlight pooling on the yard
+        const sunG = ctx.createRadialGradient(W*0.42, -H*0.05, 0, W*0.42, H*0.60, W*0.70);
+        sunG.addColorStop(0,   'rgba(255,250,220,0.18)');
+        sunG.addColorStop(0.30,'rgba(240,235,195,0.10)');
+        sunG.addColorStop(0.65,'rgba(210,220,180,0.04)');
+        sunG.addColorStop(1,   'rgba(0,0,0,0)');
+        ctx.fillStyle = sunG; ctx.fillRect(0, 0, W, H);
       }
-      // Focused bright shaft — narrow column of direct moonlight
+      // Path stone highlight — stone paths catch light differently than grass
       {
-        const shaftG = ctx.createRadialGradient(W*0.50, 0, 0, W*0.50, H*0.35, W*0.22);
-        shaftG.addColorStop(0,   'rgba(240,225,185,0.13)');
-        shaftG.addColorStop(0.5, 'rgba(190,170,120,0.05)');
-        shaftG.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.fillStyle = shaftG; ctx.fillRect(W*0.20, 0, W*0.60, H*0.65);
+        const pathLight = ctx.createLinearGradient(0, 0, 0, H);
+        pathLight.addColorStop(0,   'rgba(255,250,230,0.12)');
+        pathLight.addColorStop(0.5, 'rgba(255,248,220,0.06)');
+        pathLight.addColorStop(1,   'rgba(200,230,210,0.08)');
+        ctx.fillStyle = pathLight;
+        // Vertical path strip
+        ctx.fillRect(W*0.5 - TILE*0.5, 0, TILE, H);
+        // Horizontal path strip
+        ctx.fillRect(0, H*0.5 - TILE*0.5, W, TILE);
       }
-      // Shadow falloff on bottom — floor gets darker away from the light source
+      // Soft tree shadow dapples on grass (corner areas)
       {
-        const shadowG = ctx.createLinearGradient(0, H*0.50, 0, H);
-        shadowG.addColorStop(0, 'rgba(0,0,0,0)');
-        shadowG.addColorStop(1, 'rgba(0,0,0,0.35)');
-        ctx.fillStyle = shadowG; ctx.fillRect(0, H*0.50, W, H*0.50);
-      }
-      // Side shadow falloff — edges darker (creates depth framing)
-      {
-        const leftShadow = ctx.createLinearGradient(0, 0, W*0.22, 0);
-        leftShadow.addColorStop(0, 'rgba(0,0,0,0.28)');
-        leftShadow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = leftShadow; ctx.fillRect(0, 0, W*0.22, H);
-        const rightShadow = ctx.createLinearGradient(W, 0, W*0.78, 0);
-        rightShadow.addColorStop(0, 'rgba(0,0,0,0.28)');
-        rightShadow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = rightShadow; ctx.fillRect(W*0.78, 0, W*0.22, H);
+        const dapples = [
+          [W*0.12, H*0.22, 55, 0.06], [W*0.88, H*0.20, 50, 0.055],
+          [W*0.10, H*0.80, 52, 0.055],[W*0.90, H*0.78, 48, 0.055],
+          [W*0.26, H*0.14, 35, 0.04], [W*0.74, H*0.14, 32, 0.038],
+        ];
+        dapples.forEach(([dx,dy,dr,da]) => {
+          const dg = ctx.createRadialGradient(dx,dy,0,dx,dy,dr);
+          dg.addColorStop(0,`rgba(20,50,20,${da})`);
+          dg.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.fillStyle = dg; ctx.fillRect(dx-dr,dy-dr,dr*2,dr*2);
+        });
       }
 
-      // 4. Static pre-baked layer (big cracks, veins, seal) — ONE drawImage call
+      // 4. Static pre-baked layer (targets, towers, seal, crystals, flora)
       if (eng.staticBg) {
         ctx.drawImage(eng.staticBg, 0, 0);
 
-        // ⚡ LIVING SEAL OVERLAY — breathing glow + leaking embers drawn fresh
-        // every frame so the ancient broken seal's "last spark" genuinely
-        // pulses instead of sitting frozen in the baked background.
+        // ⚡ LIVING SEAL OVERLAY — the training circle's runes gently pulse,
+        // showing the magic is active and responsive to mage presence.
         {
           const sealX = W * 0.5, sealY = H * 0.5;
           const st = performance.now() * 0.001;
@@ -9084,36 +9419,41 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
 
-          // Breathing core glow bleeding up through the crack
-          const coreGlowR = 50 + breathe * 18;
+          // Breathing teal glow from training seal
+          const coreGlowR = 55 + breathe * 20;
           const coreGrad = ctx.createRadialGradient(sealX, sealY, 0, sealX, sealY, coreGlowR);
-          coreGrad.addColorStop(0, `rgba(255, 214, 120, ${0.18 + breathe * 0.16})`);
-          coreGrad.addColorStop(0.5, `rgba(225, 180, 80, ${0.08 + breathe * 0.08})`);
-          coreGrad.addColorStop(1, 'rgba(225,180,80,0)');
+          coreGrad.addColorStop(0, `rgba(80, 220, 200, ${0.12 + breathe * 0.10})`);
+          coreGrad.addColorStop(0.5, `rgba(60, 180, 220, ${0.05 + breathe * 0.05})`);
+          coreGrad.addColorStop(1, 'rgba(60,180,220,0)');
           ctx.fillStyle = coreGrad;
           ctx.beginPath(); ctx.arc(sealX, sealY, coreGlowR, 0, Math.PI * 2); ctx.fill();
 
           ctx.translate(sealX, sealY);
+          // Slow rotating arc tracing the outer seal ring
+          ctx.rotate(st * 0.08);
+          ctx.strokeStyle = `rgba(80, 220, 200, ${0.14 + breathe * 0.12})`;
+          ctx.lineWidth = 1.2;
+          ctx.shadowColor = 'rgba(80,220,200,0.7)';
+          ctx.shadowBlur = 10;
+          ctx.beginPath(); ctx.arc(0, 0, 110, 0, Math.PI * 1.6); ctx.stroke();
 
-          // Slow rotating arc of residual power tracing the broken outer band
-          ctx.rotate(st * 0.07);
-          ctx.strokeStyle = `rgba(255, 225, 150, ${0.12 + breathe * 0.10})`;
-          ctx.lineWidth = 1;
-          ctx.shadowColor = 'rgba(225,180,80,0.8)';
-          ctx.shadowBlur = 12;
-          ctx.beginPath(); ctx.arc(0, 0, 100, 0, Math.PI * 1.4); ctx.stroke();
+          // Inner counter-rotating ring
+          ctx.rotate(-st * 0.16);
+          ctx.strokeStyle = `rgba(120, 200, 255, ${0.10 + breathe * 0.08})`;
+          ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.arc(0, 0, 65, 0, Math.PI * 1.2); ctx.stroke();
 
-          // Embers leaking from the crack, drifting upward and fading out
-          ctx.fillStyle = 'rgba(255, 205, 120, 0.85)';
-          ctx.shadowBlur = 8;
-          for (let i = 0; i < 7; i++) {
-            const seed = i * 31.7;
-            const cycle = (st * 0.25 + i * 0.37) % 1; // 0..1 loop
-            const ex = Math.sin(seed) * 70;
-            const ey = (Math.cos(seed * 1.3) * 20) - cycle * 60; // drift up
+          // Tiny mana sparks leaking from the seal, rising upward
+          ctx.fillStyle = 'rgba(100, 230, 210, 0.80)';
+          ctx.shadowBlur = 6;
+          for (let i = 0; i < 6; i++) {
+            const seed = i * 29.3;
+            const cycle = (st * 0.20 + i * 0.40) % 1;
+            const ex = Math.sin(seed) * 75;
+            const ey = (Math.cos(seed * 1.2) * 18) - cycle * 50;
             ctx.globalAlpha = (1 - cycle) * (0.5 + breathe * 0.5);
             ctx.beginPath();
-            ctx.arc(ex, ey, 1.4 + Math.sin(seed * 2) * 0.6, 0, Math.PI * 2);
+            ctx.arc(ex, ey, 1.2 + Math.sin(seed * 2) * 0.5, 0, Math.PI * 2);
             ctx.fill();
           }
           ctx.globalAlpha = 1;
@@ -9121,64 +9461,60 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
         }
       }
 
-      // 4b. LIVING GROUND LIGHT — a warm pool of light that travels with the
-      // player(s), brightening the stone, cracks, dust and debris underfoot
-      // as they walk (like a personal torch/aura lighting the floor). Drawn
-      // with 'lighter' blending so it actually lifts the baked floor colors
-      // instead of just painting a flat circle over them.
+      // 4b. LIVING GROUND LIGHT — a soft luminous aura that travels with the
+      // player, brightening the stone and grass beneath them like a mage's
+      // personal arcane glow. Drawn with 'lighter' so it lifts the baked colors.
       {
         const drawGroundLight = (gx, gy, alive, radius, tint) => {
           if (!alive) return;
-          const flick = 0.88 + 0.12 * Math.sin(_t * 5.2 + gx * 0.01);
+          const flick = 0.90 + 0.10 * Math.sin(_t * 5.2 + gx * 0.01);
           ctx.save();
           ctx.globalCompositeOperation = 'lighter';
           const gl = ctx.createRadialGradient(gx, gy, 0, gx, gy, radius * flick);
-          gl.addColorStop(0,    `rgba(${tint},0.30)`);
-          gl.addColorStop(0.35, `rgba(${tint},0.16)`);
-          gl.addColorStop(0.7,  `rgba(${tint},0.06)`);
+          gl.addColorStop(0,    `rgba(${tint},0.22)`);
+          gl.addColorStop(0.35, `rgba(${tint},0.12)`);
+          gl.addColorStop(0.7,  `rgba(${tint},0.04)`);
           gl.addColorStop(1,    'rgba(0,0,0,0)');
           ctx.fillStyle = gl;
           ctx.beginPath(); ctx.arc(gx, gy, radius * flick, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
 
-          // Soft contact shadow pooling directly beneath, so the light reads
-          // as grounded rather than floating
+          // Soft contact shadow beneath
           ctx.save();
-          const sh = ctx.createRadialGradient(gx, gy + radius * 0.08, 0, gx, gy + radius * 0.08, radius * 0.45);
-          sh.addColorStop(0, 'rgba(0,0,0,0.22)');
+          const sh = ctx.createRadialGradient(gx, gy + radius * 0.08, 0, gx, gy + radius * 0.08, radius * 0.40);
+          sh.addColorStop(0, 'rgba(0,0,0,0.14)');
           sh.addColorStop(1, 'rgba(0,0,0,0)');
           ctx.fillStyle = sh;
-          ctx.beginPath(); ctx.ellipse(gx, gy + radius * 0.08, radius * 0.45, radius * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(gx, gy + radius * 0.08, radius * 0.40, radius * 0.18, 0, 0, Math.PI * 2); ctx.fill();
           ctx.restore();
         };
 
-        if (eng.p) drawGroundLight(eng.p.x, eng.p.y, !eng.p.dead, 165, '225,195,140');
-        if (eng.p2) drawGroundLight(eng.p2.x, eng.p2.y, !eng.p2.dead, 165, '195,170,235');
+        if (eng.p) drawGroundLight(eng.p.x, eng.p.y, !eng.p.dead, 155, '200,240,220');
+        if (eng.p2) drawGroundLight(eng.p2.x, eng.p2.y, !eng.p2.dead, 155, '180,200,255');
       }
 
-      // 5. Central seal pulse — the broken seal breathes with its last gold-arcane power
+      // 5. Training seal active pulse — the central rune circle breathes with magical energy
       {
         const pulse = 0.5 + 0.5 * Math.sin(_t * 1.1);
         const cxS = W*0.5, cyS = H*0.5;
-        // Gold outer glow — brighter now so it genuinely reads as "glowing" in the dark
-        const sg = ctx.createRadialGradient(cxS, cyS, 0, cxS, cyS, 140);
-        sg.addColorStop(0,    `rgba(225,180,80,${0.16 + pulse*0.14})`);  // gold center
-        sg.addColorStop(0.30, `rgba(150,105,235,${0.08 + pulse*0.06})`); // purple mid — its last living core
-        sg.addColorStop(0.65, `rgba(90,40,150,${0.03 + pulse*0.03})`);
+        // Soft teal-blue pool of magic around the seal
+        const sg = ctx.createRadialGradient(cxS, cyS, 0, cxS, cyS, 130);
+        sg.addColorStop(0,    `rgba(80,220,200,${0.09 + pulse*0.07})`);
+        sg.addColorStop(0.30, `rgba(80,180,240,${0.04 + pulse*0.04})`);
+        sg.addColorStop(0.65, `rgba(60,140,200,${0.02 + pulse*0.02})`);
         sg.addColorStop(1,    'rgba(0,0,0,0)');
-        ctx.fillStyle = sg; ctx.fillRect(cxS-140, cyS-140, 280, 280);
+        ctx.fillStyle = sg; ctx.fillRect(cxS-130, cyS-130, 260, 260);
 
-        // Faint rotating gold shimmer tracing the broken outer ring — sells the
-        // "still-active, incomplete" magic circle feel
+        // Slowly rotating outer guide ring
         ctx.save();
         ctx.translate(cxS, cyS);
-        ctx.rotate(_t * 0.6);
-        ctx.strokeStyle = `rgba(235,200,110,${0.10 + pulse*0.12})`;
-        ctx.lineWidth = 1.6;
-        ctx.shadowColor = 'rgba(235,200,110,0.8)';
-        ctx.shadowBlur = 16;
-        ctx.setLineDash([14, 36, 6, 20]);
-        ctx.beginPath(); ctx.arc(0, 0, 96, 0, Math.PI*1.5);
+        ctx.rotate(_t * 0.5);
+        ctx.strokeStyle = `rgba(100,230,210,${0.08 + pulse*0.08})`;
+        ctx.lineWidth = 1.4;
+        ctx.shadowColor = 'rgba(80,220,200,0.7)';
+        ctx.shadowBlur = 12;
+        ctx.setLineDash([12, 32, 5, 16]);
+        ctx.beginPath(); ctx.arc(0, 0, 110, 0, Math.PI*1.6);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
@@ -9191,23 +9527,22 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           ctx.globalAlpha = Math.min(1, a.a * a.t * 1.3);
           ctx.fillStyle = a.c;
           ctx.shadowColor = a.c;
-          ctx.shadowBlur = 8;
+          ctx.shadowBlur = 7;
           ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.fill();
 
         } else if (a.kind === 'ember') {
-          // Rune cross-spark — 4 short lines rotated
-          ctx.globalAlpha = Math.min(1, a.a * a.t * 1.3);
+          // Rune cross-spark — 4 short lines rotated (magical training ground sparkle)
+          ctx.globalAlpha = Math.min(1, a.a * a.t * 1.2);
           ctx.strokeStyle = a.c;
           ctx.shadowColor = a.c;
-          ctx.shadowBlur = 9;
+          ctx.shadowBlur = 8;
           ctx.lineWidth = 0.9;
           ctx.translate(a.x, a.y); ctx.rotate(a.rot);
           ctx.beginPath();
           ctx.moveTo(-a.r, 0); ctx.lineTo(a.r, 0);
           ctx.moveTo(0, -a.r); ctx.lineTo(0, a.r);
           ctx.stroke();
-          // Diagonal arms (makes 8-point rune star)
-          ctx.globalAlpha = a.a * a.t * 0.5;
+          ctx.globalAlpha = a.a * a.t * 0.45;
           const d = a.r * 0.65;
           ctx.beginPath();
           ctx.moveTo(-d,-d); ctx.lineTo(d,d);
@@ -9216,9 +9551,9 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
 
         } else if (a.kind === 'orb') {
           const pulse = 0.5 + 0.5 * Math.sin(a.phase);
-          ctx.globalAlpha = Math.min(1, a.a * pulse * 1.25);
+          ctx.globalAlpha = Math.min(1, a.a * pulse * 1.2);
           ctx.shadowColor = a.c;
-          ctx.shadowBlur = 14;
+          ctx.shadowBlur = 12;
           const og = ctx.createRadialGradient(a.x,a.y,0, a.x,a.y,a.r);
           og.addColorStop(0, a.c);
           og.addColorStop(1, 'rgba(0,0,0,0)');
@@ -9226,24 +9561,23 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           ctx.beginPath(); ctx.arc(a.x,a.y,a.r,0,Math.PI*2); ctx.fill();
 
         } else if (a.kind === 'wisp') {
-          const wAlpha = Math.min(1, a.a * (0.55 + 0.45*Math.sin(a.phase)) * 1.2);
+          // Soft mist wisps — morning fog rolling over the grass
+          const wAlpha = Math.min(1, a.a * (0.55 + 0.45*Math.sin(a.phase)) * 1.1);
           ctx.globalAlpha = wAlpha;
-          ctx.shadowColor = 'rgba(124,58,237,0.7)';
-          ctx.shadowBlur = 10;
+          ctx.shadowColor = 'rgba(140,220,200,0.5)';
+          ctx.shadowBlur = 8;
           const wg = ctx.createLinearGradient(a.x-a.w/2, a.y, a.x+a.w/2, a.y);
-          wg.addColorStop(0,   'rgba(109,40,217,0)');
-          wg.addColorStop(0.3, 'rgba(109,40,217,0.55)');
-          wg.addColorStop(0.7, 'rgba(124,58,237,0.55)');
-          wg.addColorStop(1,   'rgba(109,40,217,0)');
+          wg.addColorStop(0,   'rgba(180,240,220,0)');
+          wg.addColorStop(0.3, 'rgba(180,240,220,0.45)');
+          wg.addColorStop(0.7, 'rgba(160,230,210,0.45)');
+          wg.addColorStop(1,   'rgba(180,240,220,0)');
           ctx.fillStyle = wg;
           ctx.beginPath();
           ctx.ellipse(a.x, a.y, a.w/2, a.h/2, 0, 0, Math.PI*2);
           ctx.fill();
 
         } else if (a.kind === 'dust') {
-          // Dust is near-invisible by default — it only really shows up when
-          // caught inside the player's own glow radius, like real motes lit
-          // by a torch passing through them.
+          // Pollen/spore motes — glow gently near players (lit by their magic aura)
           let lightBoost = 0;
           if (eng.p && !eng.p.dead) {
             const dd = Math.hypot(a.x - eng.p.x, a.y - eng.p.y);
@@ -9254,17 +9588,13 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
             lightBoost = Math.max(lightBoost, Math.max(0, 1 - dd2 / 150));
           }
           const shimmer = 0.6 + 0.4 * Math.sin(a.phase * 1.7);
-          ctx.globalAlpha = Math.min(1, (a.a * shimmer) + lightBoost * 0.55);
-          ctx.fillStyle = lightBoost > 0.05 ? 'rgba(235,220,190,0.9)' : 'rgba(180,165,140,0.7)';
-          if (lightBoost > 0.05) { ctx.shadowColor = 'rgba(225,195,130,0.8)'; ctx.shadowBlur = 4 * lightBoost; }
+          ctx.globalAlpha = Math.min(1, (a.a * shimmer) + lightBoost * 0.50);
+          ctx.fillStyle = lightBoost > 0.05 ? 'rgba(200,240,220,0.9)' : 'rgba(170,210,185,0.7)';
+          if (lightBoost > 0.05) { ctx.shadowColor = 'rgba(80,220,180,0.7)'; ctx.shadowBlur = 4 * lightBoost; }
           ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.fill();
 
         } else if (a.kind === 'smoke') {
-          // Soft ash-grey fog clouds — built from 3 overlapping soft blobs so
-          // the silhouette never reads as a perfect circle, then breathing
-          // very slowly in size/opacity so it feels like real drifting smoke
-          // rather than a static png. Kept low-alpha on purpose: just enough
-          // volume to add depth, never enough to fog out the floor.
+          // Soft dreamy morning fog — lighter and greener than dungeon smoke
           const breathe = 0.8 + 0.2 * Math.sin(a.phase);
           ctx.globalAlpha = a.a * breathe;
           const lobes = [
@@ -9274,9 +9604,9 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           ];
           lobes.forEach(([lx,ly,scale]) => {
             const sg = ctx.createRadialGradient(a.x+lx, a.y+ly, 0, a.x+lx, a.y+ly, a.r*scale*breathe);
-            sg.addColorStop(0,   'rgba(150,140,135,0.55)');
-            sg.addColorStop(0.6, 'rgba(95,88,90,0.30)');
-            sg.addColorStop(1,   'rgba(60,55,60,0)');
+            sg.addColorStop(0,   'rgba(200,230,215,0.50)');
+            sg.addColorStop(0.6, 'rgba(160,200,180,0.25)');
+            sg.addColorStop(1,   'rgba(100,160,130,0)');
             ctx.fillStyle = sg;
             ctx.beginPath(); ctx.arc(a.x+lx, a.y+ly, a.r*scale*breathe, 0, Math.PI*2); ctx.fill();
           });
@@ -9284,11 +9614,11 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
         ctx.restore();
       }
 
-      // 7. Edge vignette — deep stone shadow border pulls focus to lit arena center
-      const vig = ctx.createRadialGradient(W/2, H/2, H*0.20, W/2, H/2, W*0.72);
+      // 7. Edge vignette — soft dark frame to focus attention on the training arena
+      const vig = ctx.createRadialGradient(W/2, H/2, H*0.22, W/2, H/2, W*0.72);
       vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(0.65,'rgba(5,3,2,0.42)');  // warm dark brown mid
-      vig.addColorStop(1, 'rgba(2,1,1,0.90)');    // deep warm shadow edge
+      vig.addColorStop(0.60,'rgba(10,25,15,0.28)');
+      vig.addColorStop(1,   'rgba(5,15,10,0.75)');
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
       for (const g of eng.gems) {
         ctx.save();
@@ -13055,12 +13385,9 @@ for (const p of eng.particles) {
               ctx.globalCompositeOperation = 'source-over';
               
               if (!eng.stormClouds) eng.stormClouds = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz (was running at display
-              // refresh rate, up to 2x too fast on 120Hz phones). Drawing
-              // still runs every render frame so the clouds don't flicker on
-              // displays faster than 60Hz (previously the ctx.fill() call was
-              // inside the gate too, so frames where shouldUpdateVfx was
-              // false skipped drawing entirely, causing a visible flicker).
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.stormClouds.length < 20) {
                   eng.stormClouds.push({
@@ -13069,13 +13396,10 @@ for (const p of eng.particles) {
                       yOff: (Math.random()-0.5)*60
                   });
               }
-              for (let i = eng.stormClouds.length - 1; i >= 0; i--) {
-                  const cloud = eng.stormClouds[i];
-                  cloud.ang += cloud.speed; cloud.life -= 0.01;
-                  if (cloud.life <= 0) eng.stormClouds.splice(i, 1);
-              }
-              }
               eng.stormClouds.forEach((cloud, i) => {
+                  cloud.ang += cloud.speed; cloud.life -= 0.01;
+                  if (cloud.life <= 0) { eng.stormClouds.splice(i, 1); return; }
+                  
                   const cx = x + Math.cos(cloud.ang) * cloud.dist;
                   const cy = y + cloud.yOff + Math.sin(time*0.002 + i)*10;
                   
@@ -13087,6 +13411,7 @@ for (const p of eng.particles) {
                   ctx.fillStyle = cloudGrad; 
                   ctx.beginPath(); ctx.arc(cx, cy, cloud.size, 0, Math.PI*2); ctx.fill();
               });
+              }
               
               ctx.globalCompositeOperation = 'lighter'; 
 
@@ -13145,10 +13470,9 @@ for (const p of eng.particles) {
               
               ctx.globalCompositeOperation = 'source-over';
               if (!eng.pinkSmoke) eng.pinkSmoke = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so smoke doesn't flicker on displays
-              // faster than 60Hz (previously ctx.fill() was inside the gate
-              // too, causing visible flicker on fast monitors/phones).
+              // ⚡ PERF: whole blocks gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.pinkSmoke.length < 15 && Math.random() < 0.2) {
                   eng.pinkSmoke.push({
@@ -13156,23 +13480,19 @@ for (const p of eng.particles) {
                       vy: 0.3 + Math.random()*0.7, size: 10 + Math.random()*15, life: 1
                   });
               }
-              for (let i = eng.pinkSmoke.length - 1; i >= 0; i--) {
-                  const s = eng.pinkSmoke[i];
+              eng.pinkSmoke.forEach((s, i) => {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.002 + i)*0.5; s.life -= 0.01; s.size += 0.2;
-                  if (s.life <= 0) eng.pinkSmoke.splice(i, 1);
-              }
-              }
-              eng.pinkSmoke.forEach((s) => {
+                  if (s.life <= 0) { eng.pinkSmoke.splice(i, 1); return; }
                   const smokeGrad = ctx.createRadialGradient(x+s.ox, y+s.oy, 0, x+s.ox, y+s.oy, s.size);
                   smokeGrad.addColorStop(0, `rgba(253, 164, 175, ${s.life * 0.6})`);
                   smokeGrad.addColorStop(1, 'rgba(255, 228, 230, 0)');
                   ctx.fillStyle = smokeGrad; ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
+              }
               
               ctx.globalCompositeOperation = 'lighter'; 
 
               if (!eng.sakuraParticles) eng.sakuraParticles = [];
-              // ⚡ PERF: same flicker fix as above.
               if (shouldUpdateVfx) {
               if (eng.sakuraParticles.length < 20 && Math.random() < 0.1) {
                   eng.sakuraParticles.push({
@@ -13181,21 +13501,17 @@ for (const p of eng.particles) {
                       size: 2 + Math.random() * 3, life: 1
                   });
               }
-              for (let i = eng.sakuraParticles.length - 1; i >= 0; i--) {
-                  const p = eng.sakuraParticles[i];
+              eng.sakuraParticles.forEach((p, i) => {
                   p.y += p.vy; p.rot += p.rs; p.life -= 0.008;
-                  if (p.life <= 0 || p.y > 10) eng.sakuraParticles.splice(i, 1);
-              }
-              }
-              eng.sakuraParticles.forEach((p) => {
+                  if (p.life <= 0 || p.y > 10) { eng.sakuraParticles.splice(i, 1); return; }
                   ctx.save(); ctx.translate(x + p.ox, y + p.y); ctx.rotate(p.rot);
                   ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`; 
                   ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 2, 0, 0, Math.PI * 2); ctx.fill();
                   ctx.restore();
               });
+              }
               
               if (!eng.sakuraHearts) eng.sakuraHearts = [];
-              // ⚡ PERF: same flicker fix as above.
               if (shouldUpdateVfx) {
               if (eng.sakuraHearts.length < 25 && Math.random() < 0.2) {
                   eng.sakuraHearts.push({
@@ -13205,13 +13521,9 @@ for (const p of eng.particles) {
                       rot: Math.random() * Math.PI, rs: (Math.random()-0.5)*0.02 
                   });
               }
-              for (let i = eng.sakuraHearts.length - 1; i >= 0; i--) {
-                  const h = eng.sakuraHearts[i];
-                  h.y -= h.vy; h.life -= 0.005; h.rot += h.rs;
-                  if (h.life <= 0) eng.sakuraHearts.splice(i, 1);
-              }
-              }
               eng.sakuraHearts.forEach((h, i) => {
+                  h.y -= h.vy; h.life -= 0.005; h.rot += h.rs;
+                  if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
                   ctx.save(); ctx.translate(x + h.ox, y + h.y); ctx.rotate(h.rot);
                   const hSize = h.size * (1 + Math.sin(time * 0.005 + i) * 0.2); 
                   const hColor = `rgba(236, 72, 153, ${h.life * 0.9})`; 
@@ -13223,6 +13535,7 @@ for (const p of eng.particles) {
                   // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.fill(); ctx.restore();
               });
+              }
               
               ctx.fillStyle = '#ffffff';
               for(let i=0; i<10; i++) {
@@ -13303,8 +13616,9 @@ for (const p of eng.particles) {
               }
 
               if (!eng.sakuraHearts) eng.sakuraHearts = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so hearts don't flicker on fast displays.
+              // ⚡ PERF: whole blocks gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.sakuraHearts.length < 20 && Math.random() < 0.2) {
                   eng.sakuraHearts.push({
@@ -13312,13 +13626,9 @@ for (const p of eng.particles) {
                       vy: 0.7 + Math.random(), size: 5 + Math.random() * 5, life: 1, rot: Math.random() * Math.PI
                   });
               }
-              for (let i = eng.sakuraHearts.length - 1; i >= 0; i--) {
-                  const h = eng.sakuraHearts[i];
+              eng.sakuraHearts.forEach((h, i) => {
                   h.oy -= h.vy; h.life -= 0.005;
-                  if (h.life <= 0) eng.sakuraHearts.splice(i, 1);
-              }
-              }
-              eng.sakuraHearts.forEach((h) => {
+                  if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
                   ctx.save(); ctx.translate(x + h.ox, y + h.oy);
                   const hSize = h.size;
                   
@@ -13334,25 +13644,19 @@ for (const p of eng.particles) {
                   ctx.fill();
                   ctx.restore();
               });
+              }
 
               if (!eng.sakuraParticles) eng.sakuraParticles = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so particles don't flicker on fast displays.
-              // Note: no life<=0 cleanup here, matching the original behavior
-              // exactly (not introducing cleanup that wasn't there before).
               if (shouldUpdateVfx) {
               if (eng.sakuraParticles.length < 20 && Math.random() < 0.2) {
                   eng.sakuraParticles.push({ ox: (Math.random()-0.5)*70, y: -70, vy: 0.5+Math.random(), size: 3+Math.random()*2, life: 1 });
               }
-              for (let i = 0; i < eng.sakuraParticles.length; i++) {
-                  const p = eng.sakuraParticles[i];
+              eng.sakuraParticles.forEach((p, i) => {
                   p.y += p.vy; p.life -= 0.005;
-              }
-              }
-              eng.sakuraParticles.forEach((p) => {
                   ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`;
                   ctx.beginPath(); ctx.ellipse(x+p.ox, y+p.y, p.size, p.size*1.5, 0, 0, Math.PI*2); ctx.fill();
                });
+              }
 
               const pinkGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3);
               pinkGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)'); 
@@ -13427,8 +13731,9 @@ for (const p of eng.particles) {
               ctx.stroke(); ctx.restore();
               
               if (!eng.igrisSmoke) eng.igrisSmoke = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so smoke doesn't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.igrisSmoke.length < 20 && Math.random() < 0.4) {
                   eng.igrisSmoke.push({
@@ -13437,17 +13742,15 @@ for (const p of eng.particles) {
                       isRed: Math.random() > 0.7
                   });
               }
-              for (let i = eng.igrisSmoke.length - 1; i >= 0; i--) {
-                  const s = eng.igrisSmoke[i];
+              eng.igrisSmoke.forEach((s, i) => {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
-                  if (s.life <= 0) eng.igrisSmoke.splice(i, 1);
-              }
-              }
-              eng.igrisSmoke.forEach((s) => {
+                  if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
+                  
                   ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life*0.6})` : `rgba(10, 10, 10, ${s.life*0.8})`;
                   // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
+              }
               
               ctx.globalCompositeOperation = 'lighter';
               if (Math.random() < 0.25) {
@@ -13549,21 +13852,19 @@ for (const p of eng.particles) {
               ctx.restore();
 
               if (!eng.igrisSmoke) eng.igrisSmoke = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so smoke doesn't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.igrisSmoke.length < 20 && Math.random() < 0.4) eng.igrisSmoke.push({ ox: (Math.random()-0.5)*radius*6, oy: radius + Math.random()*5, vy: 0.5 + Math.random(), size: 6 + Math.random()*8, life: 1, isRed: Math.random() > 0.8 });
-              for (let i = eng.igrisSmoke.length - 1; i >= 0; i--) {
-                  const s = eng.igrisSmoke[i];
+              eng.igrisSmoke.forEach((s, i) => {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
-                  if (s.life <= 0) eng.igrisSmoke.splice(i, 1);
-              }
-              }
-              eng.igrisSmoke.forEach((s) => {
+                  if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
                   ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life * 0.5})` : `rgba(10, 10, 10, ${s.life * 0.8})`;
                   // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
+              }
               
               ctx.globalCompositeOperation = 'lighter';
               const coreGrad = ctx.createRadialGradient(x, y-2, 0, x, y-2, radius*3.5);
@@ -13652,8 +13953,9 @@ for (const p of eng.particles) {
               }
 
               if (!eng.empressParticles) eng.empressParticles = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so particles don't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.empressParticles.length < 35 && Math.random() < 0.4) {
                   const type = Math.random();
@@ -13666,13 +13968,10 @@ for (const p of eng.particles) {
                       type: type
                   });
               }
-              for (let i = eng.empressParticles.length - 1; i >= 0; i--) {
-                  const p = eng.empressParticles[i];
+              eng.empressParticles.forEach((p, i) => {
                   p.oy += p.vy; p.ox += Math.sin(time*0.003 + i)*0.6; p.rot += p.rs; p.life -= 0.006;
-                  if (p.life <= 0) eng.empressParticles.splice(i, 1);
-              }
-              }
-              eng.empressParticles.forEach((p) => {
+                  if (p.life <= 0) { eng.empressParticles.splice(i, 1); return; }
+
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy); ctx.rotate(p.rot);
                   
                   if (p.type > 0.9) {
@@ -13699,6 +13998,7 @@ for (const p of eng.particles) {
                   }
                   ctx.restore();
               });
+              }
               
               const empressGrad = ctx.createRadialGradient(x, y-radius, 0, x, y-radius, radius * 4);
               empressGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)'); 
@@ -13851,8 +14151,9 @@ for (const p of eng.particles) {
               }
 
               if (!eng.infernalSmoke) eng.infernalSmoke = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so smoke doesn't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.infernalSmoke.length < 30 && Math.random() < 0.5) {
                   eng.infernalSmoke.push({
@@ -13861,17 +14162,14 @@ for (const p of eng.particles) {
                       isViolet: Math.random() > 0.5
                   });
               }
-              for (let i = eng.infernalSmoke.length - 1; i >= 0; i--) {
-                  const s = eng.infernalSmoke[i];
+              eng.infernalSmoke.forEach((s, i) => {
                   s.oy -= s.vy; s.ox += Math.sin(time*0.003 + i)*0.6; s.life -= 0.015; s.size -= 0.05;
-                  if (s.life <= 0) eng.infernalSmoke.splice(i, 1);
-              }
-              }
-              eng.infernalSmoke.forEach((s) => {
+                  if (s.life <= 0) { eng.infernalSmoke.splice(i, 1); return; }
                   ctx.fillStyle = s.isViolet ? `rgba(139, 92, 246, ${s.life*0.6})` : `rgba(225, 29, 72, ${s.life*0.6})`;
                   // 🔥 OPTIMIZED: Removed shadowBlur.
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy + floatY, s.size, 0, Math.PI*2); ctx.fill();
               });
+              }
               
               const coreGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius*4.5);
               coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.6)'); 
@@ -13997,8 +14295,9 @@ for (const p of eng.particles) {
               }
 
               if (!eng.leviParticles) eng.leviParticles = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so particles don't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.leviParticles.length < 35 && Math.random() < 0.5) {
                   const isButterfly = Math.random() > 0.8;
@@ -14011,14 +14310,11 @@ for (const p of eng.particles) {
                       isButterfly: isButterfly
                   });
               }
-              for (let i = eng.leviParticles.length - 1; i >= 0; i--) {
-                  const p = eng.leviParticles[i];
+              eng.leviParticles.forEach((p, i) => {
                   p.oy -= p.vy; 
                   p.ox += Math.sin(time*0.003 + i)*0.8; p.rot += 0.05; p.life -= 0.01;
-                  if (p.life <= 0) eng.leviParticles.splice(i, 1);
-              }
-              }
-              eng.leviParticles.forEach((p, i) => {
+                  if (p.life <= 0) { eng.leviParticles.splice(i, 1); return; }
+
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
                   
                   if (p.isButterfly) {
@@ -14035,6 +14331,7 @@ for (const p of eng.particles) {
                   }
                   ctx.restore();
               });
+              }
               
               const gemCount = 4;
               for(let i=0; i<gemCount; i++) {
@@ -14165,8 +14462,9 @@ for (const p of eng.particles) {
 
               ctx.globalCompositeOperation = 'lighter';
               if (!eng.astralParticles) eng.astralParticles = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so particles don't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.astralParticles.length < 35 && Math.random() < 0.5) {
                   const type = Math.random();
@@ -14179,14 +14477,11 @@ for (const p of eng.particles) {
                       life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
                   });
               }
-              for (let i = eng.astralParticles.length - 1; i >= 0; i--) {
-                  const p = eng.astralParticles[i];
+              eng.astralParticles.forEach((p, i) => {
                   p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.5;
                   p.rot += p.rs; p.life -= 0.005;
-                  if (p.life <= 0) eng.astralParticles.splice(i, 1);
-              }
-              }
-              eng.astralParticles.forEach((p) => {
+                  if (p.life <= 0) { eng.astralParticles.splice(i, 1); return; }
+
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
                   
                   if (p.type > 0.9) {
@@ -14208,6 +14503,7 @@ for (const p of eng.particles) {
                   }
                   ctx.restore();
               });
+              }
               
               ctx.save();
               ctx.translate(x, y - radius*3.5 + floatY);
@@ -14372,8 +14668,9 @@ for (const p of eng.particles) {
 
               ctx.globalCompositeOperation = 'lighter';
               if (!eng.eternityParticles) eng.eternityParticles = [];
-              // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
-              // every render frame so particles don't flicker on fast displays.
+              // ⚡ PERF: whole block gated to ~60Hz (was running at display
+              // refresh rate, up to 2x too fast on 120Hz phones). Pure visual
+              // decoration, no gameplay/damage logic involved.
               if (shouldUpdateVfx) {
               if (eng.eternityParticles.length < 45 && Math.random() < 0.6) {
                   const type = Math.random();
@@ -14384,18 +14681,15 @@ for (const p of eng.particles) {
                       life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
                   });
               }
-              for (let i = eng.eternityParticles.length - 1; i >= 0; i--) {
-                  const p = eng.eternityParticles[i];
+              eng.eternityParticles.forEach((p, i) => {
                   if (p.type < 0.2) {
                       p.ox -= Math.sign(p.ox) * 0.5; p.oy -= Math.sign(p.oy) * 0.5; 
                   } else {
                       p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.8; 
                   }
                   p.rot += p.rs; p.life -= 0.004; 
-                  if (p.life <= 0 || Math.abs(p.ox) < 2) eng.eternityParticles.splice(i, 1);
-              }
-              }
-              eng.eternityParticles.forEach((p, i) => {
+                  if (p.life <= 0 || Math.abs(p.ox) < 2) { eng.eternityParticles.splice(i, 1); return; }
+
                   ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
                   
                   if (p.type > 0.8) {
@@ -14420,6 +14714,7 @@ for (const p of eng.particles) {
                   }
                   ctx.restore();
               });
+              }
               
               const eternalGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius * 5);
               eternalGrad.addColorStop(0, 'rgba(255, 255, 255, 1)'); 
@@ -16601,6 +16896,15 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
         window.triggerDash();
       }
 
+      if (e.key === ' ' && screenRef.current === 'tutorial') {
+        e.preventDefault();
+        // Dash only unlocks at Step 4 (phase 3.8+)
+        if (tutorialPhaseRef.current >= 3.8) {
+          tutDashUsedRef.current = true;
+          window.triggerDash();
+        }
+      }
+
 // PAUSE / UNPAUSE HOTKEY (P or ESC)
       if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && (screenRef.current === 'playing' || screenRef.current === 'pause')) {
   const isCoopActive = Boolean(netRef.current && netRef.current.channel);
@@ -16646,152 +16950,152 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//              playerLevelRef.current = target.level;
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 100;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 11185;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 100;      // Max Crit Chance Cap (60%)
+             target.baseDef = 11185;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//              playerLevelRef.current = target.level;
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
         
         // END CHEAT CODES
 
@@ -16799,8 +17103,8 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
         
 
 
-       if (playerLevelRef.current >= 10) {
-        if (e.key === '1') castElementalSigil('flareInferno');
+       if (playerLevelRef.current >= 8) {
+        if (e.key === '1') { if (screenRef.current === 'tutorial') tutFlareUsedRef.current = true; castElementalSigil('flareInferno'); }
         if (e.key === '2') castElementalSigil('tidalWave');
         if (e.key === '3') castElementalSigil('fissureSlam');
         if (e.key === '4') castElementalSigil('lightningSurge');
@@ -16940,9 +17244,7 @@ const handlePointerDown = (e) => {
     if (!item || !item.stats || item.stats[statKey] === undefined) return null;
     
     const curVal = item.stats[statKey];
-    // ⚡ PERF: Map lookup instead of Array.find() — O(1) instead of O(n) scan,
-    // and this runs up to 224 times per inventory render with a full bag.
-    const baseItem = EQUIPMENT_DB_BY_ID.get(item.id);
+    const baseItem = EQUIPMENT_DB.find(b => b.id === item.id);
     const baseVal = baseItem?.stats[statKey] || 0;
     const bonus = curVal - baseVal;
 
@@ -17001,6 +17303,567 @@ const renderTooltipStats = (item) => {
   onContextMenu={(e) => e.preventDefault()}
   style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }} 
 >
+    <style>
+        {tutorialPhase < 3 ? `
+          button[id*="dash"], 
+          #btn-dash, 
+          .dash-btn, 
+          [class*="dash"] { 
+            display: none !important; 
+          }
+        ` : ''}
+      </style>
+{showTutorialUpgrade && (
+        <div style={{ 
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100000, 
+          background: 'rgba(3, 1, 17, 0.85)', backdropFilter: 'blur(3px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          pointerEvents: 'auto' /* 🔥 FIX: Para siguradong pwedeng pindutin */
+        }}
+        onPointerDown={(e) => e.stopPropagation()} /* 🔥 FIX: Harangin ang click para di tumagos sa likod */
+        >
+          <div className="lu-wrapper">
+            <div className="lu-arcane-circle" />
+            <div className="lu-title-row">
+              <span className="lu-rune-flank">ᛟᛗᛚ</span>
+              <div className="lu-title">LEVEL UP — TUTORIAL</div>
+              <span className="lu-rune-flank">ᛚᛗᛟ</span>
+            </div>
+            <div className="lu-subtitle">Choose an Upgrade (Tap the Card)</div>
+            <div className="lu-rune-strip">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ</div>
+
+            <div className="lu-cards-row" style={{ marginTop: '40px' }}>
+              
+              {/* ⚔️ UNANG CARD: ARCANE MIGHT */}
+              <div 
+                className="lu-card" 
+                style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)', cursor: 'pointer', pointerEvents: 'auto' }} 
+                onPointerDown={(e) => {
+                  e.stopPropagation(); // 🔥 FIX: Para ma-detect ang Tap/Click
+                  const eng = engineRef.current;
+                  if (eng && eng.p) {
+                    eng.p.dmg = (eng.p.dmg || 10) + 30; // Damage Boost
+                  }
+                  setShowTutorialUpgrade(false);
+                  setTutorialPhase(3); // Ituloy ang laro!
+                }}
+              >
+                <span className="lu-corner tl" />
+                <span className="lu-corner tr" />
+                <span className="lu-corner bl" />
+                <span className="lu-corner br" />
+                <div className="lu-card-runes">ᛟ ᚱ ᚨ ᚾ ᛟ</div>
+                
+                <div className="lu-icon-frame">
+                  <div className="lu-icon">
+                    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M16 3c2 4-2 6-2 10a4 4 0 008 0c0-1.4-.5-2.3-1-3 .3 2-.8 3.4-2.2 3.4-1.6 0-2.6-1.3-2.6-2.9C16.2 8 18 6.6 16 3z" fill="currentColor" />
+                      <path d="M16 29c5.5 0 10-3.8 10-8.6 0-3.2-1.6-5.4-3.2-7 .7 3.4-1.4 5.9-4.3 5.9-2.9 0-4.8-2.1-4.8-4.9 0-1.7.7-2.9 1.4-3.8-3.9 1.9-6.7 5.6-6.7 9.8 0 4.8 3.9 8.6 7.6 8.6z" fill="currentColor" opacity="0.85" />
+                    </svg>
+                  </div>
+                </div>
+                
+                <div className="lu-card-title" style={{ color: '#ffe6a3' }}>ARCANE MIGHT</div>
+                <div className="lu-card-desc" style={{ color: '#cbd5e1' }}>BOLT DAMAGE +30 POINTS</div>
+                <div className="lu-hotkey">1</div>
+              </div>
+
+              {/* ❤️ PANGALAWANG CARD: VITALITY */}
+              <div 
+                className="lu-card" 
+                style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)', cursor: 'pointer', pointerEvents: 'auto' }} 
+                onPointerDown={(e) => {
+                  e.stopPropagation(); // 🔥 FIX: Para ma-detect ang Tap/Click
+                  const eng = engineRef.current;
+                  if (eng && eng.p) {
+                    eng.p.maxHp += 100; // HP Boost
+                    eng.p.hp = eng.p.maxHp; // Full Heal
+                  }
+                  setShowTutorialUpgrade(false);
+                  setTutorialPhase(3); // Ituloy ang laro!
+                }}
+              >
+                <span className="lu-corner tl" />
+                <span className="lu-corner tr" />
+                <span className="lu-corner bl" />
+                <span className="lu-corner br" />
+                <div className="lu-card-runes">ᛟ ᚱ ᚨ ᚾ ᛟ</div>
+                
+                <div className="lu-icon-frame">
+                  <div className="lu-icon">
+                    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M16 28s-11-6.8-11-15.2C5 8.6 8.1 5 12 5c2 0 3.6 1 4 2.4C16.4 6 18 5 20 5c3.9 0 7 3.6 7 7.8C27 21.2 16 28 16 28z" fill="currentColor" />
+                      <path d="M16 11l1.4 3h3l-2.4 2.1.9 3.1L16 17.4 13.1 19.2l.9-3.1L11.6 14h3z" fill="#1a0b2e" opacity="0.65" />
+                    </svg>
+                  </div>
+                </div>
+                
+                <div className="lu-card-title" style={{ color: '#ffe6a3' }}>VITALITY</div>
+                <div className="lu-card-desc" style={{ color: '#cbd5e1' }}>MAX HP +100 & FULL HEAL</div>
+                <div className="lu-hotkey">2</div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+    {screen === 'tutorial' && !showTutorialComplete && (
+      <>
+        <style>{`
+          @keyframes tut-banner-glow {
+            0%,100% { box-shadow: 0 0 12px rgba(83,74,183,0.25), 0 4px 24px rgba(0,0,0,0.5); }
+            50%     { box-shadow: 0 0 28px rgba(127,119,221,0.45), 0 4px 24px rgba(0,0,0,0.5); }
+          }
+          @keyframes tut-banner-corner {
+            0%,100% { opacity:.4; }
+            50%     { opacity:1; }
+          }
+          @keyframes tut-banner-divider {
+            0%,100% { opacity:.3; }
+            50%     { opacity:.8; }
+          }
+          @keyframes tut-step-label {
+            0%,100% { opacity:.7; letter-spacing:3px; }
+            50%     { opacity:1; letter-spacing:3.5px; }
+          }
+          .tut-banner {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 260px;
+            max-width: 520px;
+            width: max-content;
+            background: rgba(16,11,38,0.88);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 0.5px solid rgba(127,119,221,0.35);
+            border-radius: 10px;
+            padding: 10px 22px 12px;
+            text-align: center;
+            z-index: 99999;
+            pointer-events: none;
+            animation: tut-banner-glow 3s ease-in-out infinite;
+          }
+          .tut-banner-corner {
+            position: absolute; width: 12px; height: 12px;
+            animation: tut-banner-corner 2.5s ease-in-out infinite;
+          }
+          .tut-banner-corner-tl { top:-1px; left:-1px; border-top:1px solid #7F77DD; border-left:1px solid #7F77DD; }
+          .tut-banner-corner-tr { top:-1px; right:-1px; border-top:1px solid #7F77DD; border-right:1px solid #7F77DD; animation-delay:.65s; }
+          .tut-banner-corner-bl { bottom:-1px; left:-1px; border-bottom:1px solid #534AB7; border-left:1px solid #534AB7; animation-delay:1.3s; }
+          .tut-banner-corner-br { bottom:-1px; right:-1px; border-bottom:1px solid #534AB7; border-right:1px solid #534AB7; animation-delay:1.95s; }
+          .tut-banner-step {
+            font-family: 'Cinzel','Georgia',serif;
+            font-size: 9.5px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: #7F77DD;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+            animation: tut-step-label 3s ease-in-out infinite;
+          }
+          .tut-banner-divider {
+            display: flex; align-items: center; gap: 6px;
+            margin: 4px 0 5px;
+            animation: tut-banner-divider 3s ease-in-out infinite;
+          }
+          .tut-banner-divider span { flex:1; height:.5px; background:#534AB7; opacity:.5; }
+          .tut-banner-divider i { font-size:9px; color:#7F77DD; font-family:serif; font-style:normal; }
+          .tut-banner-desc {
+            font-family: 'Cinzel','Georgia',serif;
+            font-size: 11.5px;
+            font-weight: 600;
+            letter-spacing: .5px;
+            color: #EEEDFE;
+            line-height: 1.5;
+          }
+          /* Tutorial help button in top bar */
+          .tut-help-btn {
+            position:absolute; top:10px; right:12px;
+            display:flex; align-items:center; gap:5px;
+            background: rgba(26,20,50,0.55);
+            border:0.5px solid rgba(127,119,221,0.4);
+            border-radius:6px; padding:5px 10px;
+            font-family:'Cinzel','Georgia',serif;
+            font-size:10px; font-weight:600; letter-spacing:1.5px;
+            color:#AFA9EC; cursor:pointer;
+            backdrop-filter:blur(4px);
+            transition: border-color .2s, color .2s;
+            z-index: 1000;
+          }
+          .tut-help-btn:hover { border-color:rgba(175,169,236,0.7); color:#EEEDFE; }
+        `}</style>
+        <div className="tut-banner">
+          <div className="tut-banner-corner tut-banner-corner-tl" />
+          <div className="tut-banner-corner tut-banner-corner-tr" />
+          <div className="tut-banner-corner tut-banner-corner-bl" />
+          <div className="tut-banner-corner tut-banner-corner-br" />
+          <div className="tut-banner-step">{tutorialMessage.step}</div>
+          <div className="tut-banner-divider">
+            <span /><i>✦</i><i>ᛝ</i><i>✦</i><span />
+          </div>
+          <div className="tut-banner-desc">{tutorialMessage.desc}</div>
+        </div>
+      </>
+    )}
+
+      {/* ── TUTORIAL HELP BUTTON (top-right, always visible in tutorial) ── */}
+      {screen === 'tutorial' && !showTutorialComplete && (
+        <button
+          className="tut-help-btn"
+          onPointerDown={(e) => { e.stopPropagation(); setIsHelpOpen(prev => !prev); }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.8"/>
+            <path d="M9.3 9.6 C9.3 7.9 10.6 6.6 12 6.6 C13.5 6.6 14.7 7.7 14.7 9.1 C14.7 11 12 11.2 12 13.6"
+              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <circle cx="12" cy="16.8" r="1.05" fill="currentColor"/>
+          </svg>
+          HELP
+        </button>
+      )}
+
+      {/* ── TUTORIAL HELP MODAL (same help modal, shown in tutorial too) ── */}
+      {screen === 'tutorial' && isHelpOpen && (
+        <div
+          className="help-modal"
+          onPointerDown={e => e.stopPropagation()}
+          onPointerUp={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+          onTouchEnd={e => e.stopPropagation()}
+          onTouchMove={e => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 'bold', color: '#fef08a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ verticalAlign: 'middle' }}>
+                <circle cx="12" cy="12" r="9.2" stroke="#fef08a" strokeWidth="1.8"/>
+                <path d="M9.3 9.6 C9.3 7.9 10.6 6.6 12 6.6 C13.5 6.6 14.7 7.7 14.7 9.1 C14.7 11 12 11.2 12 13.6"
+                  stroke="#fef08a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="16.8" r="1.05" fill="#fef08a"/>
+              </svg>
+              HELP &amp; HOTKEYS
+            </span>
+            <button
+              onPointerDown={(e) => { e.stopPropagation(); setIsHelpOpen(false); }}
+              style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
+            >✕</button>
+          </div>
+          <div className="help-modal-body">
+            <div className="help-section-title">Tutorial Steps</div>
+            <p className="help-text">
+              Follow the blue banner at the top of the screen. Each step unlocks
+              the next — move, survive, choose an upgrade, then dash and attack,
+              then unleash Flare Inferno on the boss.
+            </p>
+            <div className="help-section-title">Movement</div>
+            {isTouchDevice ? (
+              <div className="help-key-row">
+                <span className="help-key-combo">
+                  <span className="help-key help-key-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" opacity="0.55"/>
+                      <circle cx="12" cy="12" r="3.6" fill="currentColor"/>
+                    </svg>
+                  </span>
+                </span>
+                <span className="help-key-desc">Touch &amp; drag left side to move</span>
+              </div>
+            ) : (
+              <div className="help-key-row">
+                <span className="help-key-combo"><span className="help-key">W</span><span className="help-key">A</span><span className="help-key">S</span><span className="help-key">D</span></span>
+                <span className="help-key-desc">Move your hero</span>
+              </div>
+            )}
+            <div className="help-section-title">Dash</div>
+            <div className="help-key-row">
+              <span className="help-key-combo"><span className="help-key help-key-wide">SPACE</span></span>
+              <span className="help-key-desc">Dash — required in Step 4</span>
+            </div>
+            <div className="help-section-title">Spells</div>
+            <div className="help-key-row">
+              <span className="help-key-combo"><span className="help-key">1</span></span>
+              <span className="help-key-desc">Flare Inferno — unlocks in Step 5</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TUTORIAL COMPLETE SCREEN ── */}
+      {screen === 'tutorial' && showTutorialComplete && (
+        <>
+          <style>{`
+            @keyframes tut-bg-drift {
+              0%,100% { background-position: 50% 0%; }
+              50%      { background-position: 50% 100%; }
+            }
+            @keyframes tut-sigil-spin {
+              from { transform: rotate(0deg); }
+              to   { transform: rotate(360deg); }
+            }
+            @keyframes tut-sigil-spin-rev {
+              from { transform: rotate(0deg); }
+              to   { transform: rotate(-360deg); }
+            }
+            @keyframes tut-title-shimmer {
+              0%,100% { opacity:.75; text-shadow: 0 0 18px rgba(199,167,91,0.35); }
+              50%     { opacity:1;   text-shadow: 0 0 32px rgba(199,167,91,0.75), 0 0 8px #fff8; }
+            }
+            @keyframes tut-rune-drift {
+              0%,100% { opacity:.2; transform:translateY(0); }
+              50%     { opacity:.6; transform:translateY(-6px); }
+            }
+            @keyframes tut-divider-pulse {
+              0%,100% { opacity:.35; }
+              50%     { opacity:.9; }
+            }
+            @keyframes tut-btn-glow {
+              0%,100% { box-shadow: 0 0 8px rgba(127,119,221,0.2), inset 0 0 0 rgba(127,119,221,0); }
+              50%     { box-shadow: 0 0 22px rgba(127,119,221,0.55), inset 0 0 10px rgba(127,119,221,0.08); }
+            }
+            @keyframes tut-btn-glow-gold {
+              0%,100% { box-shadow: 0 0 8px rgba(199,167,91,0.2); }
+              50%     { box-shadow: 0 0 22px rgba(199,167,91,0.55); }
+            }
+            @keyframes tut-corner-pulse {
+              0%,100% { opacity:.45; }
+              50%     { opacity:1; }
+            }
+            @keyframes tut-stars-twinkle {
+              0%,100% { opacity:0; }
+              50%     { opacity:1; }
+            }
+            .tut-complete-overlay {
+              position: absolute; inset: 0;
+              background: rgba(6, 3, 22, 0.94);
+              backdrop-filter: blur(6px);
+              -webkit-backdrop-filter: blur(6px);
+              display: flex; align-items: center; justify-content: center;
+              z-index: 200000; pointer-events: auto;
+            }
+            .tut-complete-modal {
+              position: relative;
+              width: 90%; max-width: 360px;
+              background: linear-gradient(170deg, #110b2e 0%, #0a0619 55%, #0d0820 100%);
+              border: 0.5px solid rgba(127,119,221,0.4);
+              border-radius: 12px;
+              padding: 2rem 2rem 1.75rem;
+              text-align: center;
+              box-sizing: border-box;
+              overflow: hidden;
+            }
+            /* subtle inner top glow like move-to-start */
+            .tut-complete-modal::before {
+              content: '';
+              position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+              background: linear-gradient(90deg, transparent, rgba(199,167,91,0.6), transparent);
+            }
+            .tut-complete-modal::after {
+              content: '';
+              position: absolute; bottom: 0; left: 10%; right: 10%; height: 1px;
+              background: linear-gradient(90deg, transparent, rgba(127,119,221,0.4), transparent);
+            }
+            /* hud-corner reuse but gold tint */
+            .tut-corner {
+              position: absolute; width: 18px; height: 18px;
+              animation: tut-corner-pulse 2.5s ease-in-out infinite;
+            }
+            .tut-corner-tl { top:-1px; left:-1px; border-top:1.5px solid #c7a75b; border-left:1.5px solid #c7a75b; }
+            .tut-corner-tr { top:-1px; right:-1px; border-top:1.5px solid #c7a75b; border-right:1.5px solid #c7a75b; animation-delay:.65s; }
+            .tut-corner-bl { bottom:-1px; left:-1px; border-bottom:1.5px solid #534AB7; border-left:1.5px solid #534AB7; animation-delay:1.3s; }
+            .tut-corner-br { bottom:-1px; right:-1px; border-bottom:1.5px solid #534AB7; border-right:1.5px solid #534AB7; animation-delay:1.95s; }
+            .tut-rune-row {
+              display:flex; justify-content:center; gap:10px;
+              font-family:serif; margin-bottom:.9rem;
+            }
+            .tut-rune-row span {
+              font-size:16px; color:#AFA9EC;
+              animation: tut-rune-drift 4s ease-in-out infinite;
+            }
+            .tut-rune-row span:nth-child(1){animation-delay:0s}
+            .tut-rune-row span:nth-child(2){animation-delay:.55s}
+            .tut-rune-row span:nth-child(3){animation-delay:1.1s}
+            .tut-rune-row span:nth-child(4){animation-delay:1.65s}
+            .tut-rune-row span:nth-child(5){animation-delay:2.2s}
+            .tut-sigil-wrap {
+              width:54px; height:54px; margin:0 auto .9rem; position:relative;
+            }
+            .tut-sigil-outer {
+              animation: tut-sigil-spin 18s linear infinite;
+              transform-origin:center;
+            }
+            .tut-sigil-inner {
+              animation: tut-sigil-spin-rev 10s linear infinite;
+              transform-origin:center;
+            }
+            .tut-divider {
+              display:flex; align-items:center; gap:8px; margin:.75rem 0;
+              animation: tut-divider-pulse 3s ease-in-out infinite;
+            }
+            .tut-divider span { flex:1; height:.5px; background:#534AB7; opacity:.55; }
+            .tut-divider i { font-size:10px; color:#7F77DD; font-family:serif; font-style:normal; }
+            .tut-divider-sm { margin:.5rem 0; }
+            .tut-complete-title {
+              font-family:'Cinzel','Georgia',serif;
+              font-size:17px; font-weight:700; letter-spacing:4px;
+              color:#c7a75b; text-transform:uppercase; margin:0;
+              animation: tut-title-shimmer 3s ease-in-out infinite;
+            }
+            .tut-complete-sub {
+              font-family:'Cinzel','Georgia',serif;
+              font-size:11px; font-weight:400; letter-spacing:1px;
+              color:#AFA9EC; line-height:1.8; margin:.15rem 0 0;
+            }
+            .tut-complete-quote {
+              font-family:'Cinzel','Georgia',serif;
+              font-size:10px; color:#7F77DD; font-style:italic;
+              letter-spacing:.5px; line-height:1.7; margin:.5rem 0 0;
+              opacity:.8;
+            }
+            .tut-btn {
+              width:100%; padding:11px 0;
+              border-radius:7px; cursor:pointer;
+              font-family:'Cinzel','Georgia',serif;
+              font-size:11px; font-weight:700; letter-spacing:2.5px;
+              text-transform:uppercase; border:none; outline:none;
+              transition: opacity .15s;
+            }
+            .tut-btn:active { opacity:.75; }
+            .tut-btn-replay {
+              background: rgba(83,74,183,0.18);
+              border:0.5px solid rgba(127,119,221,0.55) !important;
+              color:#EEEDFE;
+              animation: tut-btn-glow 3s ease-in-out infinite;
+            }
+            .tut-btn-menu {
+              background: rgba(199,167,91,0.10);
+              border:0.5px solid rgba(199,167,91,0.45) !important;
+              color:#f0dfa0;
+              animation: tut-btn-glow-gold 3s ease-in-out infinite;
+              animation-delay:.8s;
+            }
+            .tut-rune-footer {
+              display:flex; justify-content:center; align-items:center;
+              gap:8px; margin-top:.6rem; font-family:serif;
+            }
+            .tut-rune-footer span { width:34px; height:.5px; background:#3C3489; opacity:.6; }
+            .tut-rune-footer i { font-size:11px; color:#534AB7; font-style:normal; }
+          `}</style>
+
+          <div className="tut-complete-overlay">
+            <div className="tut-complete-modal">
+              <div className="tut-corner tut-corner-tl" />
+              <div className="tut-corner tut-corner-tr" />
+              <div className="tut-corner tut-corner-bl" />
+              <div className="tut-corner tut-corner-br" />
+
+              {/* Drifting rune row */}
+              <div className="tut-rune-row">
+                <span>ᚠ</span><span>ᚱ</span><span>ᛁ</span><span>ᛖ</span><span>ᚾ</span>
+              </div>
+
+              {/* Layered spinning sigil — same geometry as Move to Start */}
+              <div className="tut-sigil-wrap">
+                <svg viewBox="0 0 54 54" xmlns="http://www.w3.org/2000/svg" width="54" height="54">
+                  {/* Outer slow ring */}
+                  <g className="tut-sigil-outer">
+                    <polygon points="27,2 50,14 50,40 27,52 4,40 4,14" fill="none" stroke="#534AB7" strokeWidth="0.7" opacity="0.6"/>
+                    <circle cx="27" cy="2"  r="1.2" fill="#7F77DD" opacity="0.7"/>
+                    <circle cx="50" cy="14" r="1.2" fill="#7F77DD" opacity="0.7"/>
+                    <circle cx="50" cy="40" r="1.2" fill="#7F77DD" opacity="0.7"/>
+                    <circle cx="27" cy="52" r="1.2" fill="#7F77DD" opacity="0.7"/>
+                    <circle cx="4"  cy="40" r="1.2" fill="#7F77DD" opacity="0.7"/>
+                    <circle cx="4"  cy="14" r="1.2" fill="#7F77DD" opacity="0.7"/>
+                  </g>
+                  {/* Inner faster ring */}
+                  <g className="tut-sigil-inner">
+                    <polygon points="27,10 42,18.5 42,35.5 27,44 12,35.5 12,18.5" fill="none" stroke="#7F77DD" strokeWidth="0.5" opacity="0.45"/>
+                  </g>
+                  {/* Static gold center star */}
+                  <circle cx="27" cy="27" r="5" fill="none" stroke="#c7a75b" strokeWidth="0.8" opacity="0.9"/>
+                  <line x1="27" y1="21" x2="27" y2="33" stroke="#c7a75b" strokeWidth="0.6" opacity="0.6"/>
+                  <line x1="21" y1="27" x2="33" y2="27" stroke="#c7a75b" strokeWidth="0.6" opacity="0.6"/>
+                  <circle cx="27" cy="27" r="1.5" fill="#c7a75b" opacity="0.95"/>
+                </svg>
+              </div>
+
+              {/* Gold divider */}
+              <div className="tut-divider">
+                <span style={{ background:'#6b5a1e', opacity:.5 }}></span>
+                <i style={{ color:'#c7a75b' }}>✦</i>
+                <i style={{ color:'#c7a75b', fontFamily:'serif' }}>ᛝ</i>
+                <i style={{ color:'#c7a75b' }}>✦</i>
+                <span style={{ background:'#6b5a1e', opacity:.5 }}></span>
+              </div>
+
+              {/* Title */}
+              <h2 className="tut-complete-title">Tutorial Complete</h2>
+
+              <div className="tut-divider tut-divider-sm">
+                <span></span><i>ᚾ</i><span></span>
+              </div>
+
+              {/* Flavour text */}
+              <p className="tut-complete-sub">
+                You have mastered the basics of Arcane Realm.
+              </p>
+              <p className="tut-complete-quote">
+                "Even the longest journey begins<br/>with a single step into the unknown."
+              </p>
+
+              {/* Divider before buttons */}
+              <div className="tut-divider" style={{ margin:'1rem 0 .85rem' }}>
+                <span></span><i>✦</i><i>ᛟ</i><i>✦</i><span></span>
+              </div>
+
+              {/* Buttons */}
+          <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                <button
+                  className="tut-btn tut-btn-replay"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('equip'); // 🔥 Sound effect
+                    setShowTutorialComplete(false);
+                    tutDashUsedRef.current  = false;
+                    tutFlareUsedRef.current = false;
+                    startPosRef.current = null;
+                    setTutorialPhase(0);
+                    setTutorialMessage({ step: "STEP 1", desc: "Use the WASD keys or the on-screen joystick to move your character around the wizard training grounds." });
+                    setScreen('tutorial');
+                  }}
+                >
+                  ↺ &nbsp; Replay Tutorial
+                </button>
+                <button
+                  className="tut-btn tut-btn-menu"
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('equip'); // 🔥 Sound effect
+                    
+                    // 🔥 1. I-TRIGGER ANG FADE-OUT ANIMATION
+                    setIsExiting(true);
+                    
+                    // 🔥 2. HINTAYIN ANG 1 SECOND BAGO TULUYAN BUMALIK SA MENU
+                    setTimeout(() => {
+                      setShowTutorialComplete(false);
+                      setScreen('menu');
+                    }, 1000);
+                  }}
+                >
+                  ← &nbsp; Return to Main Menu
+                </button>
+              </div>
+
+              {/* Footer runes */}
+              <div className="tut-rune-footer" style={{ marginTop:'.85rem' }}>
+                <span></span><i>ᛟ</i><i>ᚷ</i><i>ᛖ</i><span></span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       <style>{focusStyles}</style>
 
 <div className="orientation-warning" style={{ padding: 0 }}>
@@ -17209,16 +18072,21 @@ const renderTooltipStats = (item) => {
         )}
 
 {/* 🔮 BDO-STYLE ORBITAL SKILL BUTTONS — Inner ring: Elemental Sigils */}
-        {screen === 'playing' && playerLevel >= 12 && (() => {
+        {(screen === 'playing' && playerLevel >= 12 || (screen === 'tutorial' && tutorialPhase === 4.8)) && (() => {
           // Gamit na ang shared, orientation-aware na isMobileLayout state (tingnan sa taas)
           // sa halip na lokal na "window.innerWidth <= 840" lang.
           
           // PINALAKI ANG RADIUS AT SAKTONG CENTER:
           // Center of mobile Dash is exactly at 80px (50px margin + 30px half-width)
           const sigilRadius = isMobileLayout ? 88 : 145; 
-          const anchorOffset = isMobileLayout ? '80px' : '90px'; 
-          
-          const sigilDefs = [
+          const anchorOffset = isMobileLayout ? '80px' : '90px';
+
+          // In tutorial Step 5, only show Flare Inferno
+          const isTutorialStep5 = screen === 'tutorial' && tutorialPhase === 4.8;
+
+          const sigilDefs = isTutorialStep5
+            ? [{ key: 'flareInferno', cls: 'sigil-fire', icon: 'fire', label: 'Flare', maxCd: 30, fn: () => { tutFlareUsedRef.current = true; castElementalSigil('flareInferno'); } }]
+            : [
             { key: 'flareInferno',   cls: 'sigil-fire',      icon: 'fire',      label: 'Flare',    maxCd: 30, fn: () => castElementalSigil('flareInferno') },
             { key: 'tidalWave',      cls: 'sigil-water',     icon: 'water',     label: 'Wave',     maxCd: 30, fn: () => castElementalSigil('tidalWave') },
             { key: 'fissureSlam',    cls: 'sigil-earth',     icon: 'earth',     label: 'Fissure',  maxCd: 30, fn: () => castElementalSigil('fissureSlam') },
@@ -17231,8 +18099,12 @@ const renderTooltipStats = (item) => {
           // Start: 80° (Medyo pa-kanan sa taas) -> End: 190° (Medyo pababa sa kaliwa)
           const arcStart = isMobileLayout ? 60 : 75;
           const arcEnd = isMobileLayout ? 220 : 205;
-          const step = (arcEnd - arcStart) / (sigilDefs.length - 1);
-          const angles = sigilDefs.map((_, i) => ((arcStart + step * i) * Math.PI) / 180);
+          const step = sigilDefs.length > 1 ? (arcEnd - arcStart) / (sigilDefs.length - 1) : 0;
+          // Single button: place at midpoint of arc (140°)
+          const singleAngle = ((arcStart + arcEnd) / 2 * Math.PI) / 180;
+          const angles = sigilDefs.length > 1
+            ? sigilDefs.map((_, i) => ((arcStart + step * i) * Math.PI) / 180)
+            : [singleAngle];
           
           return (
             <div className="elemental-sigils-container" style={{ right: anchorOffset, bottom: anchorOffset }}>
@@ -17246,12 +18118,12 @@ const renderTooltipStats = (item) => {
                 const S_CIRC = 2 * Math.PI * S_R;
                 
                 return (
-                  <div
+                 <div
                     key={s.key}
-                    className={`sigil-btn ${s.cls}`}
+                    className={`sigil-btn ${s.cls} ${tutorialPhase >= 4 && tutorialPhase < 5 ? 'tutorial-pulse-highlight' : ''}`}
                     style={{ left: `${bx}px`, top: `${-by}px` }}
                     onPointerDown={(e) => { e.stopPropagation(); s.fn(); }}
-                  >
+                >
                     <ArcaneIcon type={s.icon} size={24} />
                     {sCd > 0 && (
                       <>
@@ -17666,14 +18538,14 @@ const renderTooltipStats = (item) => {
         })()}
 
         {/* 💨 THE DASH BUTTON — BDO Sword Center Button */}
-        {screen === 'playing' && (
+        {screen === 'tutorial' && !isPreloading && hasStarted && (
           <div
-            className="dash-btn-container"
+            className={`dash-btn-container ${tutorialPhase >= 3 && tutorialPhase < 4 ? 'tutorial-pulse-highlight' : ''}`}
             style={{
               visibility: hasStarted ? 'visible' : 'hidden',
               pointerEvents: hasStarted ? 'auto' : 'none',
             }}
-            onPointerDown={(e) => { e.stopPropagation(); window.triggerDash(); }}
+            onPointerDown={(e) => { e.stopPropagation(); if (screenRef.current === 'tutorial' && tutorialPhaseRef.current >= 3.8) { tutDashUsedRef.current = true; window.triggerDash(); } else if (screenRef.current !== 'tutorial') { window.triggerDash(); } }}
           >
             <div className="dash-icon">
 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" style={{ color: '#5eead4' }}>
@@ -17825,11 +18697,7 @@ const renderTooltipStats = (item) => {
             </div>
 
             <div className="inv-grid">
-              {(() => {
-                // ⚡ PERF: compute this ONCE for all 16 slots, not once per slot.
-                const localTgtForBiS = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
-                const maxStatByType = computeMaxStatPerType(localTgtForBiS?.inventory || []);
-                return Array.from({ length: 16 }).map((_, i) => {
+              {Array.from({ length: 16 }).map((_, i) => {
                 const localTgt = (isCoop && !netRef.current.isHost) ? engineRef.current.p2 : engineRef.current.p;
                 const item = localTgt?.inventory?.[i];
                 const equippedItem = item ? localTgt?.equipment?.[item.type] : null;
@@ -17843,8 +18711,6 @@ const renderTooltipStats = (item) => {
                       e.stopPropagation(); // 🔥 Ito ang pipigil sa joystick na huminto!
                       if (item) equipItem(item, i); 
                     }}
-                    onPointerEnter={() => { if (item) setHoveredInvSlot(i); }}
-                    onPointerLeave={() => { setHoveredInvSlot(prev => prev === i ? null : prev); }}
                     style={{ position: 'relative' }} 
                   >
                     {item && (
@@ -17897,7 +18763,7 @@ const renderTooltipStats = (item) => {
                         })()}
 
                         {/* 🔥 BiS BADGE UI (Nakalagay sa upper-left para hindi mag-overlap sa delete button) */}
-                        {isItemBiS(item, localTgt, maxStatByType) && (
+                        {isItemBiS(item, localTgt) && (
                           <div style={{
                             position: 'absolute',
                             top: '-6px',
@@ -17919,14 +18785,7 @@ const renderTooltipStats = (item) => {
                         )}
                         
                         {/* 3. DYNAMIC TOOLTIP FOR SIDE-BY-SIDE COMPARISON */}
-                        {/* ⚡ PERF: only render the tooltip JSX for the slot that's
-                            actually hovered, instead of generating all 16 every
-                            render and letting CSS opacity hide 15 of them. Same
-                            visual result (appears on hover, disappears on leave)
-                            since the CSS class/transition is unchanged -- this
-                            only skips building markup nobody can see. */}
-                        {hoveredInvSlot === i && (
-                        <div className="item-tooltip item-tooltip-fade-in" style={{ 
+                        <div className="item-tooltip" style={{ 
                           display: 'flex',
                           flexDirection: 'row',
                           gap: '8px',
@@ -17978,13 +18837,11 @@ const renderTooltipStats = (item) => {
                             </div>
                           )}
                         </div>
-                        )}
                       </>
                     )}
                   </div>
                 );
-                });
-              })()}
+              })}
             </div>
           </div>
         )}
@@ -18327,7 +19184,11 @@ const renderTooltipStats = (item) => {
               opacity: (hasStarted || isPreloading) ? 0 : 1,
             }}
           >
-            <div className="hud-start-modal">
+           <div className={`hud-start-modal ${isStepChanging ? 'step-changing-anim' : ''}`}>
+  <h2>{tutorialMessage.step}</h2>
+  <p>{tutorialMessage.desc}</p>
+
+  
               
               <div className="hud-corner hud-corner-tl"></div>
               <div className="hud-corner hud-corner-tr"></div>
@@ -18536,6 +19397,113 @@ const renderTooltipStats = (item) => {
         )}
 
       </div>
+
+        {/* ====================================================================
+          🌌 EXIT TRANSITION TO MAIN MENU (ARCANE / FRIEREN STYLE)
+          ==================================================================== */}
+      {isExiting && (
+        <div className="arcane-idle-transition" style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999999,
+          pointerEvents: 'all',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden'
+        }}>
+          {/* Ethereal Spell Rings */}
+          <div className="idle-magic-ring outer"></div>
+          <div className="idle-magic-ring inner"></div>
+          <div className="idle-magic-flash"></div>
+
+          {/* Drifting Mana Particles */}
+          <div className="mana-particle p1"></div>
+          <div className="mana-particle p2"></div>
+          <div className="mana-particle p3"></div>
+          <div className="mana-particle p4"></div>
+          <div className="mana-particle p5"></div>
+
+          {/* Nakapaloob na rito yung eksaktong styles galing sa Overlays.jsx */}
+          <style>{`
+            /* 1. Deep Void Gradient Fade */
+            .arcane-idle-transition {
+              background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
+              animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 2. Expanding Ethereal Rings */
+            .idle-magic-ring {
+              position: absolute;
+              border-radius: 50%;
+              opacity: 0;
+            }
+            .idle-magic-ring.outer {
+              width: 80px;
+              height: 80px;
+              border: 2px solid rgba(255, 230, 163, 0.9); /* Pale Gold */
+              box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4); /* Purple Aura */
+              animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+            }
+            .idle-magic-ring.inner {
+              width: 40px;
+              height: 40px;
+              border: 1px dashed rgba(192, 132, 252, 0.8);
+              animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+              animation-delay: 0.05s;
+            }
+
+            /* 3. Central Flash (Like casting a sleep spell) */
+            .idle-magic-flash {
+              position: absolute;
+              width: 4px;
+              height: 4px;
+              background: #fff;
+              border-radius: 50%;
+              box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
+              animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 4. Drifting Mana Particles (Frieren Vibe) */
+            .mana-particle {
+              position: absolute;
+              background: #ffe6a3;
+              border-radius: 50%;
+              box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
+              opacity: 0;
+            }
+            .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
+            .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
+            .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
+            .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
+            .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
+
+            /* ================= ANIMATIONS ================= */
+            @keyframes voidFadeIn {
+              0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
+              100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
+            }
+            @keyframes spellExpand {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
+              100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
+            }
+            @keyframes spellExpandInner {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
+              100% { transform: scale(10) rotate(-180deg); opacity: 0; }
+            }
+            @keyframes starFlash {
+              0% { transform: scale(0); opacity: 1; }
+              40% { transform: scale(2); opacity: 1; }
+              100% { transform: scale(0); opacity: 0; }
+            }
+            @keyframes floatMana {
+              0% { transform: translateY(0) scale(1); opacity: 1; }
+              100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
+            }
+          `}</style>
+        </div>
+      )}
+
     </div>
   );
 }

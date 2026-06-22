@@ -1,784 +1,39 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { sbGet, sbPost, hasSupabase, supabase, sbWatchTable } from '../services/supabase';
+import TutorialLoadingScreen from './TutorialLoadingScreen';
 import { SKINS_DB, LiveSkinPreview } from './MetaShop';
 import Bestiary from './Bestiary';
 
-export default function Overlays({ 
-  screen, 
-  setScreen, 
-  hudData, 
-  roomCode, 
-  p2Status, 
-  isCoop, 
-  initialWizardName,
-  levelUpOptions, 
-  onSelectUpgrade, 
-  onAction 
-}) {
-  const [wizardName, setWizardName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [loadingLb, setLoadingLb] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState('');
-  const [isScoreSubmitted, setIsScoreSubmitted] = useState(false);
-  const [leaderboardTab, setLeaderboardTab] = useState('solo');
-
-  // States para sa Dynamic Supabase Council News Modal Window
-  const [councilNewsOpen, setCouncilNewsOpen] = useState(false);
-  const [councilTab, setCouncilTab] = useState('decrees'); // 'decrees' o 'grimoire'
-  const [newsData, setNewsData] = useState([]);
-  const [loadingNews, setLoadingNews] = useState(false);
-
-  const [voidCrystals, setVoidCrystals] = useState(0);
-  const [gameOverPhase, setGameOverPhase] = useState('continue');  
-
-  const [showDamageRecap, setShowDamageRecap] = useState(false);
-  const [showLoreVideo, setShowLoreVideo] = useState(false);
-  const [showGrimoireModal, setShowGrimoireModal] = useState(false);
-  const [grimoirePage, setGrimoirePage] = useState('cover'); // 'cover' | 'video'
-  const [grimoireVideoPlaying, setGrimoireVideoPlaying] = useState(false);
-  const [isIdleTransitioning, setIsIdleTransitioning] = useState(false);
-  // 🌌 Universal Transition State
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [activeGrimoireTab, setActiveGrimoireTab] = useState('lore');
-  const upgradeLockRef = useRef(false);
-
-  useEffect(() => {
-    if (screen === 'levelup') {
-      upgradeLockRef.current = false;
-    }
-  }, [screen]);
-
-  // 🪄 Helper function para sa Frieren effect
-  const executeWithTransition = (callback) => {
-    setIsTransitioning(true); // I-trigger ang animation
-    setTimeout(() => {
-      callback(); // Patakbuhin ang action (setScreen o onAction) pagkatapos ng 1 second
-      setIsTransitioning(false); // I-reset para mawala ang dark overlay sa bagong screen
-    }, 1000);
-  };
-
-useEffect(() => {
-    if (screen === 'levelup' || screen === 'gameover') {
-      setVoidCrystals(parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10));
-    }
-    if (screen === 'gameover') {
-      // 🔥 CHECK FLAG: Kung naka-continue na siya sa run na ito, diretso sa summary
-      if (hudData?.p?.hasContinued) {
-        setGameOverPhase('summary');
-      } else {
-        setGameOverPhase('continue');
-      }
-    }
-  }, [screen, levelUpOptions]);
-
-  const handleReroll = (e) => {
-    e.stopPropagation();
-    if (upgradeLockRef.current) return; // 🛑 PIGILAN ANG SPAM
-
-    const REROLL_COST = 50; 
-    let currentCrystals = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
-    
-    if (currentCrystals >= REROLL_COST) {
-      upgradeLockRef.current = true; // 🔒 I-LOCK HABANG NAG-REROLL
-
-      currentCrystals -= REROLL_COST;
-      localStorage.setItem('arcane_void_crystals', currentCrystals);
-      setVoidCrystals(currentCrystals);
-      
-      if (window.requestLevelUpReroll) {
-        window.requestLevelUpReroll();
-      }
-
-      // 🔓 I-unlock agad pagkatapos ng maliit na delay para makapili na ulit ng cards
-      setTimeout(() => {
-         upgradeLockRef.current = false;
-      }, 100);
-    }
-  };
-
-  // I-sync ang local field kapag may nakuhang global name prop galing sa App level
-  useEffect(() => {
-    if (initialWizardName) {
-      setWizardName(initialWizardName);
-    }
-  }, [initialWizardName]);
-
-// 🔥 FIX 1: Basahin agad ang huling alam na status mula sa localStorage para iwas visual flash
-  const [coopActiveInDb, setCoopActiveInDb] = useState(() => {
-    const cached = localStorage.getItem('arcane_coop_enabled');
-    return cached === null ? null : cached === 'true';
-  });
-
- // 🕒 180 SECONDS IDLE DETECTION
-  useEffect(() => {
-    let timeoutId;
-
-    const resetIdleTimer = () => {
-      clearTimeout(timeoutId);
-      // Tatakbo lang timer kung nasa 'menu' at hindi pa nagta-transition
-      if (screen === 'menu' && !isTransitioning) {
-        timeoutId = setTimeout(() => {
-          // Gagamitin na natin ang helper function dito!
-          executeWithTransition(() => setScreen('intro'));
-        }, 180000); // 180 SECONDS
-      }
-    };
-
-    const handleUserActivity = () => resetIdleTimer();
-
-    if (screen === 'menu') {
-      window.addEventListener('mousemove', handleUserActivity);
-      window.addEventListener('keydown', handleUserActivity);
-      window.addEventListener('touchstart', handleUserActivity);
-      window.addEventListener('click', handleUserActivity);
-      resetIdleTimer(); 
-    } else {
-      clearTimeout(timeoutId);
-    }
-
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('mousemove', handleUserActivity);
-      window.removeEventListener('keydown', handleUserActivity);
-      window.removeEventListener('touchstart', handleUserActivity);
-      window.removeEventListener('click', handleUserActivity);
-    };
-  }, [screen, isTransitioning, setScreen]);
-
-  useEffect(() => {
-    const fetchCoopStatus = () => {
-      sbGet('/rest/v1/game_settings?id=eq.1')
-        .then(data => {
-          if (data && data.length > 0) {
-            const status = data[0].coop_enabled;
-            setCoopActiveInDb(status);
-            // I-save sa local cache para sa susunod na rapid refresh ng player
-            localStorage.setItem('arcane_coop_enabled', String(status)); 
-          } else {
-            setCoopActiveInDb(false);
-            localStorage.setItem('arcane_coop_enabled', 'false');
-          }
-        })
-        .catch(err => {
-          console.error('Error loading game settings:', err);
-          // Kung walang internet pero may lumang cache, panatilihin muna; kung wala, i-lock sa false
-          if (localStorage.getItem('arcane_coop_enabled') === null) {
-            setCoopActiveInDb(false);
-          }
-        });
-    };
-
-    // INITIAL FETCH
-    fetchCoopStatus();
-
-    // REALTIME CONNECTION
-    const watcher = sbWatchTable('game_settings', () => {
-      fetchCoopStatus(); 
-    });
-
-    return () => watcher.close();
-  }, []);
-
-// 🔊 AWTOMATIKONG CLICK SOUND EFFECT PARA SA LAHAT NG BUTTONS
-  useEffect(() => {
-    // Helper function para mag-play ng audio nang hindi napuputol
-    const playSound = (src, volume = 0.5) => {
-      const audio = new Audio(src);
-      audio.volume = volume;
-      audio.play().catch(() => {});
-    };
-
-    const handleClick = (e) => {
-      // Targetin lahat ng <button> at pati na rin ang custom thumbnails ng Grimoire
-      if (e.target.closest('button') || e.target.closest('.grimoire-video-thumb')) {
-        playSound('/btn-click.mp3', 0.6); 
-      }
-    };
-
-    // 🔥 Idinagdag ang 'true' para saluhin agad ang click signal BAGO pa gumana ang stopPropagation
-    document.addEventListener('click', handleClick, true);
-
-    return () => {
-      document.removeEventListener('click', handleClick, true);
-    };
-  }, []);
-
-useEffect(() => {
-    if (screen === 'leaderboard') {
-      // Create a fetch function that accepts a 'silent' parameter
-      const fetchLeaderboard = (isSilent = false) => {
-        if (!isSilent) setLoadingLb(true);
-        
-        // Added mode filter to the endpoint based on the active tab
-        sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode,skin&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
-          .then(data => { 
-            setLeaderboard(data || []); 
-            if (!isSilent) setLoadingLb(false); 
-          })
-          .catch(() => {
-            if (!isSilent) setLoadingLb(false);
-          });
-      };
-
-      // Initial fetch when screen opens or tab changes
-      fetchLeaderboard(false);
-
-      // Start Realtime connection
-      const watcher = sbWatchTable('leaderboard', () => {
-        // Silently fetch new data when someone else updates their score
-        fetchLeaderboard(true); 
-      });
-
-      // Cleanup websocket connection when leaving or swapping tabs
-      return () => watcher.close();
-    }
-    
-    if (screen !== 'gameover') {
-      setSubmitStatus('');
-      setIsScoreSubmitted(false);
-    }
-  }, [screen, leaderboardTab]); // Added leaderboardTab to dependencies
-
-  useEffect(() => {
-    if (councilNewsOpen) {
-      const fetchNews = (isSilent = false) => {
-        if (!isSilent) setLoadingNews(true);
-        sbGet('/rest/v1/council_news?select=*&order=created_at.desc')
-          .then(data => {
-            setNewsData(data || []);
-            if (!isSilent) setLoadingNews(false);
-          })
-          .catch(() => {
-            if (!isSilent) setLoadingNews(false);
-          });
-      };
-
-      // Initial fetch
-      fetchNews(false);
-
-      // Start Realtime connection
-      const watcher = sbWatchTable('council_news', () => {
-        // Silently refresh if an admin adds a new log
-        fetchNews(true);
-      });
-
-      // Cleanup websocket when closing the modal
-      return () => watcher.close();
-    }
-  }, [councilNewsOpen]);
-
-  useEffect(() => {
-    if (screen !== 'levelup') return;
-    
-    const handleHotkey = (e) => {
-
-      if (upgradeLockRef.current) return;
-
-      if (['1', '2', '3'].includes(e.key)) {
-        const index = parseInt(e.key, 10) - 1;
-        const choices = levelUpOptions || [];
-        if (choices[index]) {
-          upgradeLockRef.current = true;
-          onSelectUpgrade(choices[index]);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleHotkey);
-    return () => window.removeEventListener('keydown', handleHotkey);
-  }, [screen, levelUpOptions, onSelectUpgrade]);
-
-const handleSubmitScore = async () => {
-    const nameToSubmit = wizardName.trim();
-    if (!nameToSubmit) return alert('Enter Arcane Identity first');
-    
-    const newScore = hudData?.score || 0;
-    if (newScore <= 0) {
-      setSubmitStatus('Score must be greater than 0 to be recorded.');
-      return;
-    }
-
-    // 🔥 KUNIN ANG CURRENT SKIN NA SUOT NG PLAYER
-    const currentSkin = localStorage.getItem('arcane_equipped_skin') || 'default';
-
-    setSubmitStatus('Checking ancient records...');
-
-    try {
-      const existingData = await sbGet(`/rest/v1/leaderboard?select=id,score&name=ilike.${encodeURIComponent(nameToSubmit)}`);
-
-      if (existingData && existingData.length > 0) {
-        const existingRecord = existingData[0];
-
-        if (newScore > existingRecord.score) {
-          setSubmitStatus('New personal best! Overwriting old record...');
-          
-          const { error } = await supabase
-            .from('leaderboard')
-            .update({ 
-              score: newScore, 
-              wave: hudData?.wave || 1, 
-              level: hudData?.p?.level || 1,
-              mode: isCoop ? 'coop' : 'solo',
-              skin: currentSkin // 🔥 ISINAMA ANG SKIN ID SA DATABASE
-            })
-            .eq('id', existingRecord.id);
-
-          if (!error) {
-            setSubmitStatus(`✦ New personal best! Overwrote previous score.`);
-            setIsScoreSubmitted(true);
-          }
-        } else {
-          setSubmitStatus(`A higher record already exists.`);
-        }
-      } else {
-        const ok = await sbPost('/rest/v1/leaderboard', {
-          name: nameToSubmit, 
-          score: newScore, 
-          wave: hudData?.wave || 1, 
-          level: hudData?.p?.level || 1, 
-          mode: isCoop ? 'coop' : 'solo',
-          skin: currentSkin // 🔥 ISINAMA ANG SKIN ID SA DATABASE
-        });
-        
-        if (ok) {
-          setSubmitStatus('✦ Name etched into the Tombstone successfully!');
-          setIsScoreSubmitted(true);
-        }
-      }
-    } catch (err) {
-      setSubmitStatus('Failed to access the Tombstone. Try again.');
-    }
-  };
-
 // ============================================================================
-// 🜂 CUSTOM ARCANE UPGRADE ICONS — Pure inline SVG (vector, no emoji/image
-// loading, no animation loop). Lightweight at GPU-friendly, zero impact sa
-// game performance kahit ilang beses na re-render ang level up modal.
+// 🔊 SINGLETON CLICK-SOUND PLAYER
+// Dating: bawat click ay gumagawa ng BAGONG `new Audio()` object (allocation +
+// re-decode ng .mp3 file kada click). Ngayon: iisang reusable <audio> element
+// na lang, currentTime reset lang kada play — mas mabilis, walang GC churn,
+// at hindi na nag-iipon ng dangling Audio instances kahit mag-spam ng clicks
+// sa mobile.
 // ============================================================================
-const IconVortex = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 4C9.373 4 4 9.373 4 16s5.373 12 12 12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-    <path d="M16 8c-4.418 0-8 3.582-8 8s3.582 8 8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
-    <path d="M16 12c-2.21 0-4 1.79-4 4s1.79 4 4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.5" />
-    <circle cx="16" cy="16" r="1.6" fill="currentColor" />
-  </svg>
-);
-
-const IconFlame = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 3c2 4-2 6-2 10a4 4 0 008 0c0-1.4-.5-2.3-1-3 .3 2-.8 3.4-2.2 3.4-1.6 0-2.6-1.3-2.6-2.9C16.2 8 18 6.6 16 3z" fill="currentColor" />
-    <path d="M16 29c5.5 0 10-3.8 10-8.6 0-3.2-1.6-5.4-3.2-7 .7 3.4-1.4 5.9-4.3 5.9-2.9 0-4.8-2.1-4.8-4.9 0-1.7.7-2.9 1.4-3.8-3.9 1.9-6.7 5.6-6.7 9.8 0 4.8 3.9 8.6 7.6 8.6z" fill="currentColor" opacity="0.85" />
-  </svg>
-);
-
-const IconHeart = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 28s-11-6.8-11-15.2C5 8.6 8.1 5 12 5c2 0 3.6 1 4 2.4C16.4 6 18 5 20 5c3.9 0 7 3.6 7 7.8C27 21.2 16 28 16 28z" fill="currentColor" />
-    <path d="M16 11l1.4 3h3l-2.4 2.1.9 3.1L16 17.4 13.1 19.2l.9-3.1L11.6 14h3z" fill="#1a0b2e" opacity="0.65" />
-  </svg>
-);
-
-const IconWand = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="14.4" y="13" width="3.2" height="16" rx="1.4" fill="currentColor" transform="rotate(45 16 21)" />
-    <path d="M16 3l1.2 3.2 3.2 1.2-3.2 1.2L16 11.8l-1.2-3.2-3.2-1.2 3.2-1.2L16 3z" fill="currentColor" />
-    <circle cx="23" cy="9" r="1.1" fill="currentColor" />
-    <circle cx="9" cy="9" r="0.9" fill="currentColor" opacity="0.7" />
-  </svg>
-);
-
-const IconWind = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 11h16a3 3 0 10-2.8-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <path d="M4 16h20a3.2 3.2 0 11-3 4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <path d="M4 21h13a2.4 2.4 0 11-2.2 3.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-  </svg>
-);
-
-const IconDagger = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 3l2.4 9.6h-4.8L16 3z" fill="currentColor" />
-    <rect x="15" y="12.6" width="2" height="10.4" fill="currentColor" />
-    <rect x="11" y="21" width="10" height="2.2" rx="1" fill="currentColor" />
-    <path d="M16 23.2v5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-  </svg>
-);
-
-const IconShield = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 3l10 3.6v8c0 7.4-4.6 12-10 14.4C10.6 26.6 6 22 6 14.6v-8L16 3z" fill="currentColor" opacity="0.92" />
-    <path d="M16 8l5.4 2v5.4c0 4-2.4 6.8-5.4 8.2-3-1.4-5.4-4.2-5.4-8.2V10L16 8z" fill="#1a0b2e" opacity="0.55" />
-  </svg>
-);
-
-const IconBat = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 11c-2-4-7-6-12-5 3 1.4 4.6 3.4 5.2 5.4-2.4 0-4.6 1-6.2 3 3 .2 5 1.4 6.2 2.8-1.6.6-2.8 1.8-3.4 3 2.6 0 5-.8 6.8-2.4.6 1.4 1.8 2.6 3.4 3.2 1.6-.6 2.8-1.8 3.4-3.2 1.8 1.6 4.2 2.4 6.8 2.4-.6-1.2-1.8-2.4-3.4-3 1.2-1.4 3.2-2.6 6.2-2.8-1.6-2-3.8-3-6.2-3 .6-2 2.2-4 5.2-5.4-5 0-10 1-12 5z" fill="currentColor" />
-    <circle cx="14" cy="14.5" r="0.6" fill="#1a0b2e" />
-    <circle cx="18" cy="14.5" r="0.6" fill="#1a0b2e" />
-  </svg>
-);
-
-const IconScroll = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="7" y="6" width="18" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.4" />
-    <path d="M11 11h10M11 15h10M11 19h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    <circle cx="7" cy="9" r="2.2" fill="currentColor" />
-    <circle cx="7" cy="23" r="2.2" fill="currentColor" />
-    <circle cx="25" cy="9" r="2.2" fill="currentColor" />
-    <circle cx="25" cy="23" r="2.2" fill="currentColor" />
-  </svg>
-);
-
-const IconTrophy = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M10 5h12v6.4a6 6 0 01-12 0V5z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeWidth="1.6" />
-    <path d="M10 7.2H6.4a2.6 2.6 0 000 5.2H10M22 7.2h3.6a2.6 2.6 0 010 5.2H22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    <path d="M16 17.4v4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <path d="M10.5 26h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    <path d="M16 21.8c-2.2 0-4 1.2-4.4 4.2h8.8c-.4-3-2.2-4.2-4.4-4.2z" fill="currentColor" />
-  </svg>
-);
-
-const IconWizardHat = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 4l6.6 17.2H9.4L16 4z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    <ellipse cx="16" cy="22.4" rx="9.4" ry="2.2" stroke="currentColor" strokeWidth="1.6" fill="none" />
-    <path d="M16 4c1.4 2.4 1 4-1 5.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-    <circle cx="19.2" cy="11.6" r="1" fill="currentColor" />
-  </svg>
-);
-
-const IconSwordsCrossed = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <line x1="6" y1="6" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M22 22l3.2-1.8-1.2 5-2-3.2z" fill="currentColor" />
-    <line x1="26" y1="6" x2="10" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    <path d="M10 22l-3.2-1.8 1.2 5 2-3.2z" fill="currentColor" />
-  </svg>
-);
-
-
-const IconMegaphone = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M5 13v6h5l10 5V8L10 13H5z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    <path d="M22 11.4a5.6 5.6 0 010 9.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.75" />
-    <path d="M8 19l1.4 5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-  </svg>
-);
-
-const IconSparkleStar = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 3l2 9.5L28 15l-10 2.5L16 27l-2-9.5L4 15l10-2.5L16 3z" fill="currentColor" opacity="0.9" />
-  </svg>
-);
-
+let _clickAudio = null;
+const playClickSound = (volume = 0.6) => {
+  if (typeof window === 'undefined') return;
+  if (!_clickAudio) {
+    _clickAudio = new Audio('/btn-click.mp3');
+  }
+  _clickAudio.volume = volume;
+  _clickAudio.currentTime = 0;
+  _clickAudio.play().catch(() => {});
+};
 // ============================================================================
-// 🜂 CUSTOM IN-GAME UI ICONS — Pure inline SVG (gameover, level-up, damage
-// recap). Kapalit ng dating emoji icons sa loob mismo ng game.
+// 🎨 STATIC CSS BLOCKS — pure CSS text, walang dynamic interpolation mula sa
+// props/state. Dating ito ay naka-embed bilang template literal SA LOOB ng
+// JSX return ng component, kaya ang buong ~700-linyang string (at ang <style>
+// DOM node nito) ay GINAGAWA AT NIRE-INJECT ULIT TUWING mag-re-render ang
+// Overlays — kahit walang nagbabago sa CSS mismo. Ngayon: module-level
+// constant + isang naka-memo na component na nagre-render lang nang ISANG
+// BESES (zero props, kaya hindi na ito kailanman re-renders pagkatapos).
+// Walang pagbabago sa visual output — pareho pa rin ang lahat ng class names,
+// animations, at media queries.
 // ============================================================================
-const IconWarningRune = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 4L29.5 27H2.5L16 4z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    <rect x="14.7" y="12.4" width="2.6" height="8" rx="1.3" fill="currentColor" />
-    <circle cx="16" cy="23.2" r="1.5" fill="currentColor" />
-  </svg>
-);
-
-const IconVoidCrystal = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6 12L16 4l10 8-10 16L6 12z" fill="currentColor" opacity="0.85" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    <path d="M6 12h20M11 12L16 4M21 12L16 4M16 12l-3.5 8M16 12l3.5 8" stroke="#1a0b2e" strokeWidth="1" opacity="0.4" />
-  </svg>
-);
-
-const IconRuneDie = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="5" y="5" width="22" height="22" rx="4" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.8" />
-    <circle cx="11" cy="11" r="1.8" fill="currentColor" />
-    <circle cx="21" cy="11" r="1.8" fill="currentColor" />
-    <circle cx="16" cy="16" r="1.8" fill="currentColor" />
-    <circle cx="11" cy="21" r="1.8" fill="currentColor" />
-    <circle cx="21" cy="21" r="1.8" fill="currentColor" />
-  </svg>
-);
-
-const IconReturnArrow = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22 10H13a7 7 0 100 14h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    <path d="M16 5l-6 5 6 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const IconRecapChart = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="5" y="18" width="5" height="9" fill="currentColor" opacity="0.7" />
-    <rect x="13.5" y="11" width="5" height="16" fill="currentColor" />
-    <rect x="22" y="6" width="5" height="21" fill="currentColor" opacity="0.85" />
-    <path d="M3 27h26" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
-
-const IconSpectateEye = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9-13-9-13-9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    <circle cx="16" cy="16" r="4.2" fill="currentColor" />
-    <circle cx="16" cy="16" r="1.4" fill="#1a0b2e" />
-  </svg>
-);
-
-const IconRestartCycle = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M6 14a10 10 0 0117-6.3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    <path d="M26 18a10 10 0 01-17 6.3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
-    <path d="M23 4v6h-6M9 28v-6h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-const IconSanctumHome = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M4 15L16 5l12 10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    <path d="M7 13v13h18V13" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8" />
-    <rect x="13.5" y="18" width="5" height="8" fill="currentColor" />
-  </svg>
-);
-
-const IconBloodDrop = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 4c5 7 9 12.4 9 17a9 9 0 11-18 0c0-4.6 4-10 9-17z" fill="currentColor" opacity="0.9" />
-    <path d="M12 20a5 5 0 003 4.6" stroke="#1a0b2e" strokeWidth="1.4" strokeLinecap="round" opacity="0.4" fill="none" />
-  </svg>
-);
-
-const IconFairyWings = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M16 14c-2-6-8-9-13-7 2 3 2 8 6 10-3 1-5 4-5 7 5 0 9-2 11-6 1 3 1 5 1 5s0-2 1-5c2 4 6 6 11 6 0-3-2-6-5-7 4-2 4-7 6-10-5-2-11 1-13 7z" fill="currentColor" opacity="0.8" />
-    <circle cx="16" cy="15.5" r="2.2" fill="currentColor" />
-  </svg>
-);
-
-const IconHolyShield = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <ellipse cx="16" cy="6.5" rx="5.5" ry="3" stroke="currentColor" strokeWidth="1.6" opacity="0.85" />
-    <path d="M16 11l9 3.2v6.8c0 5.8-3.8 9.4-9 11.4-5.2-2-9-5.6-9-11.4v-6.8L16 11z" fill="currentColor" opacity="0.85" />
-    <path d="M16 15l4.6 1.6v4.8c0 3.2-2 5.2-4.6 6.4-2.6-1.2-4.6-3.2-4.6-6.4v-4.8L16 15z" fill="#1a0b2e" opacity="0.45" />
-  </svg>
-);
-
-const IconVoidSwirl = () => (
-  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="16" cy="16" r="12" fill="currentColor" opacity="0.12" />
-    <path d="M16 6a10 10 0 11-9.8 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
-    <circle cx="16" cy="16" r="2.4" fill="currentColor" />
-    <circle cx="9" cy="10" r="1" fill="currentColor" opacity="0.7" />
-    <circle cx="24" cy="20" r="1.3" fill="currentColor" opacity="0.6" />
-  </svg>
-);
-
-// Reusable wrapper para sa lahat ng inline icons sa text (consistent sizing/alignment)
-const InlineIcon = ({ children, size = 15, style }) => (
-  <span style={{ width: size, height: size, display: 'inline-flex', verticalAlign: '-2px', marginRight: '6px', flexShrink: 0, ...style }}>
-    {children}
-  </span>
-);
-
-const getUpgradeMeta = (rawString, wave = 1) => {
-    const normalize = String(rawString || '').toLowerCase().trim();
-    
-    // 🔥 DYNAMIC SCALING FORMULAS
-    const dmgBoost = 14 + Math.floor(wave * 1.5); 
-    const hpBoost = 50 + Math.floor(wave * 4.0);  
-    const spdBoost = 10 + Math.floor(wave * 1.2);
-    
-    // 👇 BAGONG FORMULAS PARA SA CRIT AT DEFENSE (+5% base, pataas nang pataas)
-    const critBoost = 5 + Math.floor(wave * 0.2);
-    const defBoost = 4 + Math.floor(wave * 0.2);
-    const lifestealBoost = 5 + Math.floor(wave * 0.2);
-
-    if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
-      return { icon: <IconVortex />, title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s (CAP: 0.15s)' };
-    }
-    if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
-      return { icon: <IconFlame />, title: 'ARCANE MIGHT', desc: `BOLT DAMAGE +${dmgBoost} POINTS` };
-    }
-    if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
-      return { icon: <IconHeart />, title: 'VITALITY', desc: `MAX HP +${hpBoost} & FULL HEAL` };
-    }
-    if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
-      return { icon: <IconWand />, title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 20)' };
-    }
-    if (normalize.includes('swift') || normalize.includes('speed') || normalize.includes('stride')) {
-      return { icon: <IconWind />, title: 'SWIFT STRIDE', desc: `MOVEMENT SPEED +${spdBoost} (CAP: 800)` };
-    }
-    if (normalize.includes('crit') || normalize.includes('fatal') || normalize.includes('strike')) {
-      return { icon: <IconDagger />, title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
-    }
-    if (normalize.includes('def') || normalize.includes('armor') || normalize.includes('plating')) {
-      return { icon: <IconShield />, title: 'IRON PLATING', desc: `ARMOR RATING +${defBoost}` };
-    }
-    if (normalize.includes('vampiric') || normalize.includes('aura') || normalize.includes('life')) {
-      return { icon: <IconBat />, title: 'VAMPIRIC AURA', desc: `HEAL ${lifestealBoost} HP PER ENEMY KILLED` };
-    }
-    return { icon: <IconScroll />, title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
-  };
-
-  if (screen === 'playing') return null;
-
-  const displayedChoices = (levelUpOptions || []).slice(0, 3);
-  const restartVotes = isCoop ? [hudData?.coopVotes?.p1, hudData?.coopVotes?.p2].filter(Boolean).length : 0;
-
-  const activeLogs = newsData.filter(item => 
-    councilTab === 'decrees' ? item.type === 'decree' : item.type === 'grimoire'
-  );
-
-  const formatDamage = (num) => {
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
-    return Math.floor(num).toLocaleString();
-  };
-
-const renderDamageRecap = () => {
-    const metrics = window.arcaneDamageMetrics || {};
-    const damageTaken = window.arcaneDamageTaken || 0;
-    const utility = window.arcaneUtilityMetrics || {};
-    
-    // Kunin ang grand total
-    const totalDamage = Object.values(metrics).reduce((sum, dmg) => sum + dmg, 0);
-
-    if (totalDamage === 0) {
-      return <div style={{ color: '#9ca3af', textAlign: 'center', margin: '20px 0' }}>The Void consumed you before you could strike.</div>;
-    }
-
-    // 🔥 I-GROUP ANG DATA
-    const grouped = {
-      'Basic Attack': [],
-      'Spells & Skills': [],
-      'Familiars': []
-    };
-
-    // 🔥 LISTAHAN NG LAHAT NG FAMILIARS PARA SURE CATCH
-    const familiarNames = [
-      'Ignis Wisp', 'Frost Sprite', 'Zephyr Falcon', 
-      'Stone Golem', 'Spark Fox', 'Umbral Bat'
-    ];
-
-    Object.entries(metrics).forEach(([source, dmg]) => {
-      if (source === 'Basic Attack') {
-        grouped['Basic Attack'].push({ source, dmg });
-      } else if (source.startsWith('Familiar:') || familiarNames.includes(source)) {
-        // Saluhin kung may 'Familiar: ' man sa unahan O KAYA nasa listahan sa taas
-        const cleanName = source.replace('Familiar: ', '');
-        grouped['Familiars'].push({ source: cleanName, dmg });
-      } else {
-        grouped['Spells & Skills'].push({ source, dmg });
-      }
-    });
-
-    // I-sort ang bawat group (Highest damage sa taas)
-    Object.keys(grouped).forEach(k => {
-       grouped[k].sort((a, b) => b.dmg - a.dmg);
-    });
-
-    return (
-      <div style={{ maxHeight: '280px', overflowY: 'auto', paddingRight: '10px', marginTop: '15px' }}>
-        
-        <div style={{ textAlign: 'center', color: '#f87171', fontWeight: '900', marginBottom: '4px', fontSize: '1.2rem', letterSpacing: '2px' }}>
-          TOTAL DAMAGE DEALT: {formatDamage(totalDamage)}
-        </div>
-        <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', marginBottom: '18px', fontSize: '0.8rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <InlineIcon size={14} style={{ color: '#f87171' }}><IconBloodDrop /></InlineIcon>DAMAGE TAKEN: <span style={{ color: '#fca5a5' }}> {formatDamage(damageTaken)}</span>
-        </div>
-
-        {/* 🔥 RENDER BAWAT CATEGORY */}
-        {['Basic Attack', 'Spells & Skills', 'Familiars'].map(category => {
-          if (grouped[category].length === 0) return null; // Wag ipakita kung walang laman
-          
-          // Compute ng total per category
-          const catTotal = grouped[category].reduce((sum, item) => sum + item.dmg, 0);
-          const catPercent = ((catTotal / totalDamage) * 100).toFixed(1);
-
-          return (
-            <div key={category} style={{ marginBottom: '15px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              
-              {/* CATEGORY HEADER */}
-              <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '10px', letterSpacing: '1px', display: 'flex', justifyContent: 'space-between' }}>
-                <span>{category.toUpperCase()}</span>
-                <span style={{ color: '#94a3b8' }}>{formatDamage(catTotal)} ({catPercent}%)</span>
-              </div>
-
-              {/* MGA SKILLS/ITEMS SA LOOB NG CATEGORY */}
-              {grouped[category].map(({ source, dmg }) => {
-                const percent = ((dmg / totalDamage) * 100).toFixed(1);
-                const isFamiliar = category === 'Familiars';
-                const isBasic = category === 'Basic Attack';
-                
-                return (
-                  <div key={source} style={{ marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '4px', fontFamily: 'monospace' }}>
-                      <span>{source}</span>
-                      <span style={{ color: '#fbbf24' }}>{formatDamage(dmg)}</span>
-                    </div>
-                    <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ 
-                        height: '100%', 
-                        width: `${percent}%`, 
-                        background: isBasic ? 'linear-gradient(90deg, #64748b, #94a3b8)' : 
-                                    isFamiliar ? 'linear-gradient(90deg, #ea580c, #facc15)' : 
-                                    source === 'Body Cutter' ? 'linear-gradient(90deg, #b91c1c, #f43f5e)' :
-                                    source === 'Shooting Star' ? 'linear-gradient(90deg, #2563eb, #60a5fa)' :
-                                    source === 'Cube Bash' ? 'linear-gradient(90deg, #059669, #34d399)' :
-                                    source === 'Vacuum Slash' ? 'linear-gradient(90deg, #d97706, #fbbf24)' :
-                                    'linear-gradient(90deg, #7c3aed, #d946ef)',
-                        boxShadow: !isBasic ? `0 0 8px ${isFamiliar ? 'rgba(250, 204, 21, 0.4)' : 'rgba(217, 70, 239, 0.4)'}` : 'none',
-                        borderRadius: '2px'
-                      }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-
-        {/* 🔥 SUPPORT & UTILITY STATS BOX (NAKASINGIT SA PINAKA-ILALIM) */}
-        {(utility['Fairy Heal'] > 0 || utility['Light Shield'] > 0 || utility['Voidling Loot'] > 0) && (
-            <div style={{ marginBottom: '15px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              
-              <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '10px', letterSpacing: '1px' }}>
-                SUPPORT & UTILITY
-              </div>
-              
-              {utility['Fairy Heal'] > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
-                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#4ade80' }}><IconFairyWings /></InlineIcon>Fairy Healing</span>
-                  <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{formatDamage(utility['Fairy Heal'])} HP</span>
-                </div>
-              )}
-              
-              {utility['Light Shield'] > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
-                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#facc15' }}><IconHolyShield /></InlineIcon>Holy Shield Absorbed</span>
-                  <span style={{ color: '#facc15', fontWeight: 'bold' }}>{formatDamage(utility['Light Shield'])} DMG</span>
-                </div>
-              )}
-              
-              {utility['Voidling Loot'] > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
-                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#c084fc' }}><IconVoidSwirl /></InlineIcon>Voidling Vacuumed</span>
-                  <span style={{ color: '#c084fc', fontWeight: 'bold' }}>{utility['Voidling Loot']} Items</span>
-                </div>
-              )}
-            </div>
-        )}
-
-      </div>
-    );
-  };
-  return (
-    <div id="overlays">
-<style>{`
+const MAIN_OVERLAY_STYLES = `
         .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; position: relative; }
 
         /* 🜂 Ambient Arcane Circle — one element, transform-only animation (GPU, zero reflow cost) */
@@ -1473,11 +728,773 @@ const renderDamageRecap = () => {
           animation: arcaneGlow 2.5s infinite ease-in-out !important;
         }
 
-      `}</style>
+`;
+
+const GlobalOverlayStyles = memo(function GlobalOverlayStyles() {
+  return <style>{MAIN_OVERLAY_STYLES}</style>;
+});
+
+// Grimoire modal & idle-transition CSS — same rationale as MAIN_OVERLAY_STYLES
+// above. These two stay conditionally-rendered (the modal/transition they
+// belong to is itself conditional), but the underlying string is now built
+// once at module load instead of being re-allocated on every render while
+// the modal/transition is visible.
+const GRIMOIRE_MODAL_STYLES = `
+            @keyframes grimoire-spin {
+              from { transform: rotate(0deg); }
+              to   { transform: rotate(360deg); }
+            }
+            @keyframes grimoire-glow-pulse {
+              0%, 100% { box-shadow: 0 0 20px rgba(197,160,89,0.25), inset 0 0 20px rgba(0,0,0,0.9); }
+              50%       { box-shadow: 0 0 40px rgba(197,160,89,0.45), inset 0 0 25px rgba(124,58,237,0.1); }
+            }
+
+            .grimoire-book {
+              box-shadow: 0 0 40px rgba(124,58,237,0.35), 0 8px 32px rgba(0,0,0,0.9);
+            }
+
+            .grimoire-page {
+              flex: 1;
+              background: radial-gradient(circle at 50% 20%, #1e1005 0%, #120a03 60%, #0a0601 100%);
+              border: 1.5px solid #c5a059;
+              box-sizing: border-box;
+              position: relative;
+              overflow: visible;
+              animation: grimoire-glow-pulse 6s ease-in-out infinite;
+            }
+            .grimoire-page::before {
+              content: '';
+              position: absolute; inset: 5px;
+              border: 0.5px dashed rgba(197,160,89,0.18);
+              border-radius: 2px; pointer-events: none; z-index: 0;
+            }
+
+            .grimoire-left  { border-radius: 8px 0 0 8px; border-right: none; overflow: hidden; }
+            .grimoire-right {
+              border-radius: 0 8px 8px 0; border-left: none;
+              overflow: visible;
+            }
+
+            .grimoire-left::after, .grimoire-right::after {
+              content: '';
+              position: absolute; inset: 0; pointer-events: none; z-index: 0;
+              background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 22px,
+                rgba(197,160,89,0.03) 22px,
+                rgba(197,160,89,0.03) 23px
+              );
+            }
+
+            .grimoire-page-inner {
+              position: relative;
+              z-index: 5;
+              padding: clamp(12px, 3vw, 22px);
+              height: 100%; box-sizing: border-box;
+              display: flex; flex-direction: column;
+            }
+
+            .grimoire-spine {
+              width: clamp(14px, 3vw, 22px);
+              background: linear-gradient(90deg, #0a0601 0%, #2a1a06 40%, #1a0e03 60%, #0a0601 100%);
+              border-top: 1.5px solid #c5a059;
+              border-bottom: 1.5px solid #c5a059;
+              position: relative; z-index: 2;
+              box-shadow: inset 2px 0 8px rgba(0,0,0,0.8), inset -2px 0 8px rgba(0,0,0,0.8);
+              display: flex; align-items: center; justify-content: center;
+            }
+            .grimoire-spine-inner {
+              width: 100%; height: 100%;
+              display: flex; align-items: center; justify-content: center;
+              border-left:  0.5px solid rgba(197,160,89,0.3);
+              border-right: 0.5px solid rgba(197,160,89,0.3);
+            }
+
+            .grimoire-rune-strip {
+              font-family: serif; font-size: 0.55rem; color: rgba(160,120,74,0.55);
+              letter-spacing: 0.1em; text-align: center; line-height: 1;
+              user-select: none; white-space: nowrap; overflow: hidden;
+            }
+
+            .grimoire-divider {
+              height: 1px;
+              background: linear-gradient(90deg, transparent 0%, #c5a059 30%, #e9c47a 50%, #c5a059 70%, transparent 100%);
+              opacity: 0.5; width: 100%; margin: 4px 0;
+            }
+
+            .grimoire-page-num {
+              text-align: center; font-family: 'Georgia', serif;
+              font-size: 0.6rem; color: rgba(160,120,74,0.5);
+              letter-spacing: 0.3em; margin-top: 4px;
+            }
+
+            .grimoire-video-thumb {
+              width: 100%; aspect-ratio: 16/9; min-height: 100px;
+              border: 1px solid rgba(197,160,89,0.4); border-radius: 4px;
+              display: flex; flex-direction: column; align-items: center; justify-content: center;
+              cursor: pointer; position: relative;
+              overflow: hidden;
+              transition: border-color 0.3s ease, box-shadow 0.3s ease;
+              pointer-events: all;
+              z-index: 10;
+              -webkit-tap-highlight-color: rgba(197,160,89,0.2);
+            }
+            .grimoire-video-thumb:hover {
+              border-color: #e9c47a;
+              box-shadow: 0 0 18px rgba(197,160,89,0.3), inset 0 0 20px rgba(124,58,237,0.15);
+            }
+            .grimoire-video-thumb:active {
+              border-color: #ffe6a3;
+              box-shadow: 0 0 28px rgba(197,160,89,0.5);
+            }
+
+            @media (max-width: 480px) {
+              .grimoire-book   { flex-direction: column !important; }
+              .grimoire-left   { border-radius: 8px 8px 0 0 !important; border-right: 1.5px solid #c5a059 !important; border-bottom: none !important; }
+              .grimoire-right  { border-radius: 0 0 8px 8px !important; border-left:  1.5px solid #c5a059 !important; border-top:    none !important; }
+              .grimoire-spine  { width: 100% !important; height: clamp(12px, 3vw, 18px) !important; flex-direction: row !important; }
+              .grimoire-spine div { writing-mode: horizontal-tb !important; transform: none !important; }
+            }
+
+            /* 🔥 PURE CSS MOBILE RESPONSIVE OVERRIDES (GRIMOIRE) 🔥 */
+            
+            /* 1. PORTRAIT FIX: Native overlay scroll, expand full height, tabs at top */
+            @media (max-width: 768px) and (orientation: portrait) {
+              .grimoire-modal-overlay {
+                align-items: flex-start !important;
+                padding-top: 65px !important; /* Space para hindi makain ang tabs sa taas */
+                padding-bottom: 40px !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+              }
+              .grimoire-book { 
+                flex-direction: column !important; 
+                height: auto !important;
+                max-height: none !important; /* Tanggalin ang height restriction para mag-expand */
+                margin-top: 0 !important;
+                overflow: visible !important; /* 👈 MUST BE VISIBLE FOR TABS TO SHOW! */
+              }
+              .grimoire-page {
+                flex: none !important;
+                min-height: auto !important;
+                height: auto !important;
+              }
+              .grimoire-left { 
+                border-radius: 8px 8px 0 0 !important; 
+                border-right: 1.5px solid #c5a059 !important; 
+                border-bottom: 1px dashed rgba(197,160,89,0.4) !important; 
+              }
+              .grimoire-right { 
+                border-radius: 0 0 8px 8px !important; 
+                border-left: 1.5px solid #c5a059 !important; 
+                border-top: none !important; 
+              }
+              .grimoire-spine { 
+                display: none !important; 
+              }
+              .grimoire-tabs-container {
+                flex-direction: row !important;
+                top: -42px !important;
+                left: 0 !important;
+                width: 100% !important;
+                justify-content: center !important;
+              }
+              .mobile-tab-btn {
+                writing-mode: horizontal-tb !important;
+                transform: none !important;
+                padding: 10px 16px !important;
+                border-radius: 8px 8px 0 0 !important;
+                border-right: 1.5px solid #c5a059 !important;
+                border-bottom: none !important;
+                height: auto !important;
+              }
+              .grimoire-page-inner {
+                height: auto !important;
+                overflow: visible !important; /* Hayaan lang na i-stretch ng content ang container */
+              }
+            }
+
+            /* 2. LANDSCAPE FIX: Prevent cutoff, restrict height, icon tabs */
+            @media (max-width: 932px) and (orientation: landscape) {
+              .grimoire-book {
+                margin-left: 45px !important; 
+                width: calc(100vw - 70px) !important; 
+                min-height: 0 !important;     
+                height: 85vh !important;      /* fallback para sa mga lumang browser na walang svh support */
+                max-height: 85vh !important; 
+                height: 85svh !important;     
+                max-height: 85svh !important; 
+                overflow: visible !important; /* 👈 Ensure tabs don't clip left */
+              }
+              .grimoire-tabs-container {
+                left: -38px !important; 
+              }
+              .mobile-tab-btn {
+                font-size: 0 !important;      
+                padding: 12px 6px !important; 
+                writing-mode: horizontal-tb !important; 
+                transform: none !important; 
+                min-width: 38px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+              }
+              .mobile-tab-btn:nth-child(1)::after {
+                content: '📜'; 
+                font-size: 1.2rem !important;
+              }
+              .mobile-tab-btn:nth-child(2)::after {
+                content: '🦇'; 
+                font-size: 1.2rem !important;
+              }
+            }
+
+            /* 3. UNIVERSAL PAGE CLIPPING FIX */
+            @media (max-width: 932px) {
+              .grimoire-page-inner {
+                overflow-y: auto !important;  
+                padding: 16px !important; 
+              }
+            }
+`;
+const IDLE_TRANSITION_STYLES = `
+            /* 1. Deep Void Gradient Fade */
+            .arcane-idle-transition {
+              background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
+              animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 2. Expanding Ethereal Rings */
+            .idle-magic-ring {
+              position: absolute;
+              border-radius: 50%;
+              opacity: 0;
+            }
+            .idle-magic-ring.outer {
+              width: 80px;
+              height: 80px;
+              border: 2px solid rgba(255, 230, 163, 0.9); /* Pale Gold */
+              box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4); /* Purple Aura */
+              animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+            }
+            .idle-magic-ring.inner {
+              width: 40px;
+              height: 40px;
+              border: 1px dashed rgba(192, 132, 252, 0.8);
+              animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+              animation-delay: 0.05s;
+            }
+
+            /* 3. Central Flash (Like casting a sleep spell) */
+            .idle-magic-flash {
+              position: absolute;
+              width: 4px;
+              height: 4px;
+              background: #fff;
+              border-radius: 50%;
+              box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
+              animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
+
+            /* 4. Drifting Mana Particles (Frieren Vibe) */
+            .mana-particle {
+              position: absolute;
+              background: #ffe6a3;
+              border-radius: 50%;
+              box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
+              opacity: 0;
+            }
+            .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
+            .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
+            .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
+            .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
+            .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
+
+            /* ================= ANIMATIONS ================= */
+            @keyframes voidFadeIn {
+              0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
+              100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
+            }
+            @keyframes spellExpand {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
+              100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
+            }
+            @keyframes spellExpandInner {
+              0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
+              100% { transform: scale(10) rotate(-180deg); opacity: 0; }
+            }
+            @keyframes starFlash {
+              0% { transform: scale(0); opacity: 1; }
+              40% { transform: scale(2); opacity: 1; }
+              100% { transform: scale(0); opacity: 0; }
+            }
+            @keyframes floatMana {
+              0% { transform: translateY(0) scale(1); opacity: 1; }
+              100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
+            }
+`;
 
 
-      {/* MAIN MENU SCREEN */}
-      {screen === 'menu' && (
+// ============================================================================
+// 🜂 MODULE-LEVEL ICONS, ICON WRAPPER & UPGRADE METADATA
+// PERF: dating ito ay nakadeklara SA LOOB ng Overlays() function body, kaya
+// bawat isa sa ~30 icon components (at InlineIcon, getUpgradeMeta) ay
+// nag-iimbento ng bagong function/closure reference TUWING mag-re-render ang
+// component — kahit hindi naman ito nagbabago at walang dependency sa props
+// o state. Inilipat dito sa module scope: ginagawa lang ito NANG ISANG BESES
+// sa buong buhay ng app, hindi kada render. Walang pagbabago sa visual output
+// o behavior — purong relocation lang para mabawasan ang allocation/GC churn.
+// ============================================================================
+// ============================================================================
+// 🜂 CUSTOM ARCANE UPGRADE ICONS — Pure inline SVG (vector, no emoji/image
+// loading, no animation loop). Lightweight at GPU-friendly, zero impact sa
+// game performance kahit ilang beses na re-render ang level up modal.
+// ============================================================================
+const IconVortex = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4C9.373 4 4 9.373 4 16s5.373 12 12 12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M16 8c-4.418 0-8 3.582-8 8s3.582 8 8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
+    <path d="M16 12c-2.21 0-4 1.79-4 4s1.79 4 4 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" opacity="0.5" />
+    <circle cx="16" cy="16" r="1.6" fill="currentColor" />
+  </svg>
+);
+
+const IconFlame = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3c2 4-2 6-2 10a4 4 0 008 0c0-1.4-.5-2.3-1-3 .3 2-.8 3.4-2.2 3.4-1.6 0-2.6-1.3-2.6-2.9C16.2 8 18 6.6 16 3z" fill="currentColor" />
+    <path d="M16 29c5.5 0 10-3.8 10-8.6 0-3.2-1.6-5.4-3.2-7 .7 3.4-1.4 5.9-4.3 5.9-2.9 0-4.8-2.1-4.8-4.9 0-1.7.7-2.9 1.4-3.8-3.9 1.9-6.7 5.6-6.7 9.8 0 4.8 3.9 8.6 7.6 8.6z" fill="currentColor" opacity="0.85" />
+  </svg>
+);
+
+const IconHeart = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 28s-11-6.8-11-15.2C5 8.6 8.1 5 12 5c2 0 3.6 1 4 2.4C16.4 6 18 5 20 5c3.9 0 7 3.6 7 7.8C27 21.2 16 28 16 28z" fill="currentColor" />
+    <path d="M16 11l1.4 3h3l-2.4 2.1.9 3.1L16 17.4 13.1 19.2l.9-3.1L11.6 14h3z" fill="#1a0b2e" opacity="0.65" />
+  </svg>
+);
+
+const IconWand = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="14.4" y="13" width="3.2" height="16" rx="1.4" fill="currentColor" transform="rotate(45 16 21)" />
+    <path d="M16 3l1.2 3.2 3.2 1.2-3.2 1.2L16 11.8l-1.2-3.2-3.2-1.2 3.2-1.2L16 3z" fill="currentColor" />
+    <circle cx="23" cy="9" r="1.1" fill="currentColor" />
+    <circle cx="9" cy="9" r="0.9" fill="currentColor" opacity="0.7" />
+  </svg>
+);
+
+const IconWind = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 11h16a3 3 0 10-2.8-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M4 16h20a3.2 3.2 0 11-3 4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M4 21h13a2.4 2.4 0 11-2.2 3.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+  </svg>
+);
+
+const IconDagger = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3l2.4 9.6h-4.8L16 3z" fill="currentColor" />
+    <rect x="15" y="12.6" width="2" height="10.4" fill="currentColor" />
+    <rect x="11" y="21" width="10" height="2.2" rx="1" fill="currentColor" />
+    <path d="M16 23.2v5.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+  </svg>
+);
+
+const IconShield = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3l10 3.6v8c0 7.4-4.6 12-10 14.4C10.6 26.6 6 22 6 14.6v-8L16 3z" fill="currentColor" opacity="0.92" />
+    <path d="M16 8l5.4 2v5.4c0 4-2.4 6.8-5.4 8.2-3-1.4-5.4-4.2-5.4-8.2V10L16 8z" fill="#1a0b2e" opacity="0.55" />
+  </svg>
+);
+
+const IconBat = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 11c-2-4-7-6-12-5 3 1.4 4.6 3.4 5.2 5.4-2.4 0-4.6 1-6.2 3 3 .2 5 1.4 6.2 2.8-1.6.6-2.8 1.8-3.4 3 2.6 0 5-.8 6.8-2.4.6 1.4 1.8 2.6 3.4 3.2 1.6-.6 2.8-1.8 3.4-3.2 1.8 1.6 4.2 2.4 6.8 2.4-.6-1.2-1.8-2.4-3.4-3 1.2-1.4 3.2-2.6 6.2-2.8-1.6-2-3.8-3-6.2-3 .6-2 2.2-4 5.2-5.4-5 0-10 1-12 5z" fill="currentColor" />
+    <circle cx="14" cy="14.5" r="0.6" fill="#1a0b2e" />
+    <circle cx="18" cy="14.5" r="0.6" fill="#1a0b2e" />
+  </svg>
+);
+
+const IconScroll = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="7" y="6" width="18" height="20" rx="2" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M11 11h10M11 15h10M11 19h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="7" cy="9" r="2.2" fill="currentColor" />
+    <circle cx="7" cy="23" r="2.2" fill="currentColor" />
+    <circle cx="25" cy="9" r="2.2" fill="currentColor" />
+    <circle cx="25" cy="23" r="2.2" fill="currentColor" />
+  </svg>
+);
+
+const IconTrophy = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M10 5h12v6.4a6 6 0 01-12 0V5z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M10 7.2H6.4a2.6 2.6 0 000 5.2H10M22 7.2h3.6a2.6 2.6 0 010 5.2H22" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    <path d="M16 17.4v4.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M10.5 26h11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <path d="M16 21.8c-2.2 0-4 1.2-4.4 4.2h8.8c-.4-3-2.2-4.2-4.4-4.2z" fill="currentColor" />
+  </svg>
+);
+
+const IconWizardHat = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4l6.6 17.2H9.4L16 4z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <ellipse cx="16" cy="22.4" rx="9.4" ry="2.2" stroke="currentColor" strokeWidth="1.6" fill="none" />
+    <path d="M16 4c1.4 2.4 1 4-1 5.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+    <circle cx="19.2" cy="11.6" r="1" fill="currentColor" />
+  </svg>
+);
+
+const IconSwordsCrossed = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <line x1="6" y1="6" x2="22" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M22 22l3.2-1.8-1.2 5-2-3.2z" fill="currentColor" />
+    <line x1="26" y1="6" x2="10" y2="22" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    <path d="M10 22l-3.2-1.8 1.2 5 2-3.2z" fill="currentColor" />
+  </svg>
+);
+
+
+const IconMegaphone = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 13v6h5l10 5V8L10 13H5z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M22 11.4a5.6 5.6 0 010 9.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity="0.75" />
+    <path d="M8 19l1.4 5.4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+
+const IconSparkleStar = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 3l2 9.5L28 15l-10 2.5L16 27l-2-9.5L4 15l10-2.5L16 3z" fill="currentColor" opacity="0.9" />
+  </svg>
+);
+
+// ============================================================================
+// 🜂 CUSTOM IN-GAME UI ICONS — Pure inline SVG (gameover, level-up, damage
+// recap). Kapalit ng dating emoji icons sa loob mismo ng game.
+// ============================================================================
+const IconWarningRune = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4L29.5 27H2.5L16 4z" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <rect x="14.7" y="12.4" width="2.6" height="8" rx="1.3" fill="currentColor" />
+    <circle cx="16" cy="23.2" r="1.5" fill="currentColor" />
+  </svg>
+);
+
+const IconVoidCrystal = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 12L16 4l10 8-10 16L6 12z" fill="currentColor" opacity="0.85" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+    <path d="M6 12h20M11 12L16 4M21 12L16 4M16 12l-3.5 8M16 12l3.5 8" stroke="#1a0b2e" strokeWidth="1" opacity="0.4" />
+  </svg>
+);
+
+const IconRuneDie = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="5" y="5" width="22" height="22" rx="4" fill="currentColor" opacity="0.15" stroke="currentColor" strokeWidth="1.8" />
+    <circle cx="11" cy="11" r="1.8" fill="currentColor" />
+    <circle cx="21" cy="11" r="1.8" fill="currentColor" />
+    <circle cx="16" cy="16" r="1.8" fill="currentColor" />
+    <circle cx="11" cy="21" r="1.8" fill="currentColor" />
+    <circle cx="21" cy="21" r="1.8" fill="currentColor" />
+  </svg>
+);
+
+const IconReturnArrow = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22 10H13a7 7 0 100 14h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M16 5l-6 5 6 5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconRecapChart = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="5" y="18" width="5" height="9" fill="currentColor" opacity="0.7" />
+    <rect x="13.5" y="11" width="5" height="16" fill="currentColor" />
+    <rect x="22" y="6" width="5" height="21" fill="currentColor" opacity="0.85" />
+    <path d="M3 27h26" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+);
+
+const IconSpectateEye = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 16s5-9 13-9 13 9 13 9-5 9-13 9-13-9-13-9z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <circle cx="16" cy="16" r="4.2" fill="currentColor" />
+    <circle cx="16" cy="16" r="1.4" fill="#1a0b2e" />
+  </svg>
+);
+
+const IconRestartCycle = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M6 14a10 10 0 0117-6.3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M26 18a10 10 0 01-17 6.3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <path d="M23 4v6h-6M9 28v-6h6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+const IconSanctumHome = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M4 15L16 5l12 10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7 13v13h18V13" fill="currentColor" opacity="0.18" stroke="currentColor" strokeWidth="1.8" />
+    <rect x="13.5" y="18" width="5" height="8" fill="currentColor" />
+  </svg>
+);
+
+const IconBloodDrop = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 4c5 7 9 12.4 9 17a9 9 0 11-18 0c0-4.6 4-10 9-17z" fill="currentColor" opacity="0.9" />
+    <path d="M12 20a5 5 0 003 4.6" stroke="#1a0b2e" strokeWidth="1.4" strokeLinecap="round" opacity="0.4" fill="none" />
+  </svg>
+);
+
+const IconFairyWings = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 14c-2-6-8-9-13-7 2 3 2 8 6 10-3 1-5 4-5 7 5 0 9-2 11-6 1 3 1 5 1 5s0-2 1-5c2 4 6 6 11 6 0-3-2-6-5-7 4-2 4-7 6-10-5-2-11 1-13 7z" fill="currentColor" opacity="0.8" />
+    <circle cx="16" cy="15.5" r="2.2" fill="currentColor" />
+  </svg>
+);
+
+const IconHolyShield = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="16" cy="6.5" rx="5.5" ry="3" stroke="currentColor" strokeWidth="1.6" opacity="0.85" />
+    <path d="M16 11l9 3.2v6.8c0 5.8-3.8 9.4-9 11.4-5.2-2-9-5.6-9-11.4v-6.8L16 11z" fill="currentColor" opacity="0.85" />
+    <path d="M16 15l4.6 1.6v4.8c0 3.2-2 5.2-4.6 6.4-2.6-1.2-4.6-3.2-4.6-6.4v-4.8L16 15z" fill="#1a0b2e" opacity="0.45" />
+  </svg>
+);
+
+const IconVoidSwirl = () => (
+  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="12" fill="currentColor" opacity="0.12" />
+    <path d="M16 6a10 10 0 11-9.8 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" opacity="0.8" />
+    <circle cx="16" cy="16" r="2.4" fill="currentColor" />
+    <circle cx="9" cy="10" r="1" fill="currentColor" opacity="0.7" />
+    <circle cx="24" cy="20" r="1.3" fill="currentColor" opacity="0.6" />
+  </svg>
+);
+
+// Reusable wrapper para sa lahat ng inline icons sa text (consistent sizing/alignment)
+const InlineIcon = ({ children, size = 15, style }) => (
+  <span style={{ width: size, height: size, display: 'inline-flex', verticalAlign: '-2px', marginRight: '6px', flexShrink: 0, ...style }}>
+    {children}
+  </span>
+);
+
+const getUpgradeMeta = (rawString, wave = 1) => {
+    const normalize = String(rawString || '').toLowerCase().trim();
+    
+    // 🔥 DYNAMIC SCALING FORMULAS
+    const dmgBoost = 14 + Math.floor(wave * 1.5); 
+    const hpBoost = 50 + Math.floor(wave * 4.0);  
+    const spdBoost = 10 + Math.floor(wave * 1.2);
+    
+    // 👇 BAGONG FORMULAS PARA SA CRIT AT DEFENSE (+5% base, pataas nang pataas)
+    const critBoost = 5 + Math.floor(wave * 0.2);
+    const defBoost = 4 + Math.floor(wave * 0.2);
+    const lifestealBoost = 5 + Math.floor(wave * 0.2);
+
+    if (normalize.includes('rate') || normalize.includes('rapid') || normalize.includes('fire')) {
+      return { icon: <IconVortex />, title: 'RAPID FIRE', desc: 'ATTACK COOLDOWN RATE -0.1s (CAP: 0.15s)' };
+    }
+    if (normalize.includes('damage') || normalize.includes('might') || normalize.includes('increase')) {
+      return { icon: <IconFlame />, title: 'ARCANE MIGHT', desc: `BOLT DAMAGE +${dmgBoost} POINTS` };
+    }
+    if (normalize.includes('hp') || normalize.includes('vitality') || normalize.includes('max')) {
+      return { icon: <IconHeart />, title: 'VITALITY', desc: `MAX HP +${hpBoost} & FULL HEAL` };
+    }
+    if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
+      return { icon: <IconWand />, title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 20)' };
+    }
+    if (normalize.includes('swift') || normalize.includes('speed') || normalize.includes('stride')) {
+      return { icon: <IconWind />, title: 'SWIFT STRIDE', desc: `MOVEMENT SPEED +${spdBoost} (CAP: 800)` };
+    }
+    if (normalize.includes('crit') || normalize.includes('fatal') || normalize.includes('strike')) {
+      return { icon: <IconDagger />, title: 'FATAL STRIKE', desc: `CRIT CHANCE +${critBoost}% (CAP: 60%)` };
+    }
+    if (normalize.includes('def') || normalize.includes('armor') || normalize.includes('plating')) {
+      return { icon: <IconShield />, title: 'IRON PLATING', desc: `ARMOR RATING +${defBoost}` };
+    }
+    if (normalize.includes('vampiric') || normalize.includes('aura') || normalize.includes('life')) {
+      return { icon: <IconBat />, title: 'VAMPIRIC AURA', desc: `HEAL ${lifestealBoost} HP PER ENEMY KILLED` };
+    }
+    return { icon: <IconScroll />, title: String(rawString).toUpperCase(), desc: 'ARCANE COVENANT BLESSING' };
+  };
+
+
+// ============================================================================
+// 🔥 DAMAGE RECAP HELPERS — pure functions (read window.* globals lang, walang
+// dependency sa component state/props). Inilipat sa module scope mula sa loob
+// ng component para hindi na ito ginagawang bagong function reference kada
+// render — tinawag lang ito kapag kailangan (showDamageRecap === true).
+// ============================================================================
+const formatDamage = (num) => {
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+  return Math.floor(num).toLocaleString();
+};
+
+const renderDamageRecap = () => {
+    const metrics = window.arcaneDamageMetrics || {};
+    const damageTaken = window.arcaneDamageTaken || 0;
+    const utility = window.arcaneUtilityMetrics || {};
+    
+    // Kunin ang grand total
+    const totalDamage = Object.values(metrics).reduce((sum, dmg) => sum + dmg, 0);
+
+    if (totalDamage === 0) {
+      return <div style={{ color: '#9ca3af', textAlign: 'center', margin: '20px 0' }}>The Void consumed you before you could strike.</div>;
+    }
+
+    // 🔥 I-GROUP ANG DATA
+    const grouped = {
+      'Basic Attack': [],
+      'Spells & Skills': [],
+      'Familiars': []
+    };
+
+    // 🔥 LISTAHAN NG LAHAT NG FAMILIARS PARA SURE CATCH
+    const familiarNames = [
+      'Ignis Wisp', 'Frost Sprite', 'Zephyr Falcon', 
+      'Stone Golem', 'Spark Fox', 'Umbral Bat'
+    ];
+
+    Object.entries(metrics).forEach(([source, dmg]) => {
+      if (source === 'Basic Attack') {
+        grouped['Basic Attack'].push({ source, dmg });
+      } else if (source.startsWith('Familiar:') || familiarNames.includes(source)) {
+        // Saluhin kung may 'Familiar: ' man sa unahan O KAYA nasa listahan sa taas
+        const cleanName = source.replace('Familiar: ', '');
+        grouped['Familiars'].push({ source: cleanName, dmg });
+      } else {
+        grouped['Spells & Skills'].push({ source, dmg });
+      }
+    });
+
+    // I-sort ang bawat group (Highest damage sa taas)
+    Object.keys(grouped).forEach(k => {
+       grouped[k].sort((a, b) => b.dmg - a.dmg);
+    });
+
+    return (
+      <div style={{ maxHeight: '280px', overflowY: 'auto', paddingRight: '10px', marginTop: '15px' }}>
+        
+        <div style={{ textAlign: 'center', color: '#f87171', fontWeight: '900', marginBottom: '4px', fontSize: '1.2rem', letterSpacing: '2px' }}>
+          TOTAL DAMAGE DEALT: {formatDamage(totalDamage)}
+        </div>
+        <div style={{ textAlign: 'center', color: '#94a3b8', fontWeight: 'bold', marginBottom: '18px', fontSize: '0.8rem', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <InlineIcon size={14} style={{ color: '#f87171' }}><IconBloodDrop /></InlineIcon>DAMAGE TAKEN: <span style={{ color: '#fca5a5' }}> {formatDamage(damageTaken)}</span>
+        </div>
+
+        {/* 🔥 RENDER BAWAT CATEGORY */}
+        {['Basic Attack', 'Spells & Skills', 'Familiars'].map(category => {
+          if (grouped[category].length === 0) return null; // Wag ipakita kung walang laman
+          
+          // Compute ng total per category
+          const catTotal = grouped[category].reduce((sum, item) => sum + item.dmg, 0);
+          const catPercent = ((catTotal / totalDamage) * 100).toFixed(1);
+
+          return (
+            <div key={category} style={{ marginBottom: '15px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              
+              {/* CATEGORY HEADER */}
+              <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '10px', letterSpacing: '1px', display: 'flex', justifyContent: 'space-between' }}>
+                <span>{category.toUpperCase()}</span>
+                <span style={{ color: '#94a3b8' }}>{formatDamage(catTotal)} ({catPercent}%)</span>
+              </div>
+
+              {/* MGA SKILLS/ITEMS SA LOOB NG CATEGORY */}
+              {grouped[category].map(({ source, dmg }) => {
+                const percent = ((dmg / totalDamage) * 100).toFixed(1);
+                const isFamiliar = category === 'Familiars';
+                const isBasic = category === 'Basic Attack';
+                
+                return (
+                  <div key={source} style={{ marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '4px', fontFamily: 'monospace' }}>
+                      <span>{source}</span>
+                      <span style={{ color: '#fbbf24' }}>{formatDamage(dmg)}</span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ 
+                        height: '100%', 
+                        width: `${percent}%`, 
+                        background: isBasic ? 'linear-gradient(90deg, #64748b, #94a3b8)' : 
+                                    isFamiliar ? 'linear-gradient(90deg, #ea580c, #facc15)' : 
+                                    source === 'Body Cutter' ? 'linear-gradient(90deg, #b91c1c, #f43f5e)' :
+                                    source === 'Shooting Star' ? 'linear-gradient(90deg, #2563eb, #60a5fa)' :
+                                    source === 'Cube Bash' ? 'linear-gradient(90deg, #059669, #34d399)' :
+                                    source === 'Vacuum Slash' ? 'linear-gradient(90deg, #d97706, #fbbf24)' :
+                                    'linear-gradient(90deg, #7c3aed, #d946ef)',
+                        boxShadow: !isBasic ? `0 0 8px ${isFamiliar ? 'rgba(250, 204, 21, 0.4)' : 'rgba(217, 70, 239, 0.4)'}` : 'none',
+                        borderRadius: '2px'
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* 🔥 SUPPORT & UTILITY STATS BOX (NAKASINGIT SA PINAKA-ILALIM) */}
+        {(utility['Fairy Heal'] > 0 || utility['Light Shield'] > 0 || utility['Voidling Loot'] > 0) && (
+            <div style={{ marginBottom: '15px', background: 'rgba(255,255,255,0.02)', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+              
+              <div style={{ color: '#cbd5e1', fontSize: '0.8rem', fontWeight: 'bold', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '10px', letterSpacing: '1px' }}>
+                SUPPORT & UTILITY
+              </div>
+              
+              {utility['Fairy Heal'] > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
+                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#4ade80' }}><IconFairyWings /></InlineIcon>Fairy Healing</span>
+                  <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{formatDamage(utility['Fairy Heal'])} HP</span>
+                </div>
+              )}
+              
+              {utility['Light Shield'] > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
+                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#facc15' }}><IconHolyShield /></InlineIcon>Holy Shield Absorbed</span>
+                  <span style={{ color: '#facc15', fontWeight: 'bold' }}>{formatDamage(utility['Light Shield'])} DMG</span>
+                </div>
+              )}
+              
+              {utility['Voidling Loot'] > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#e2e8f0', marginBottom: '6px', fontFamily: 'monospace' }}>
+                  <span style={{ display: 'flex', alignItems: 'center' }}><InlineIcon size={14} style={{ color: '#c084fc' }}><IconVoidSwirl /></InlineIcon>Voidling Vacuumed</span>
+                  <span style={{ color: '#c084fc', fontWeight: 'bold' }}>{utility['Voidling Loot']} Items</span>
+                </div>
+              )}
+            </div>
+        )}
+
+      </div>
+    );
+  };
+
+
+// ============================================================================
+// 🏰 MENU SCREEN — naka-hiwalay na memo() component. Ito ang default/idle
+// screen kaya pinaka-madalas itong nakikita ng player. Dating, kahit mag-type
+// lang ng isang letra sa wizardName field, nire-render ulit ang BUONG 2900+
+// linyang Overlays tree (leaderboard, grimoire modal, lahat ng conditional
+// blocks) kahit hindi sila visible. Ngayon: naka-memo() ito, kaya sa tuwing
+// magbabago ang state na 'di kasama sa props nito (hal. newsData, leaderboard
+// rows), hindi na ito kasama sa re-render. Tumatanggap lang ito ng eksaktong
+// mga values/setters na ginagamit ng menu — lahat ng setters ay stable na
+// React references kaya hindi ito nagre-re-render nang walang dahilan.
+// ============================================================================
+const MenuScreen = memo(function MenuScreen({
+  wizardName,
+  setWizardName,
+  coopActiveInDb,
+  executeWithTransition,
+  setScreen,
+  onAction,
+  setCouncilTab,
+  setCouncilNewsOpen,
+  setGrimoireVideoPlaying,
+  setShowGrimoireModal,
+}) {
+  return (
         <div className="overlay active">
           <div className="panel wizard-panel">
             <div className="panel-corner pc-tl" />
@@ -1614,6 +1631,21 @@ const renderDamageRecap = () => {
                 <span className="btn-label" style={{ color: '#64748b' }}>Co-op Gates Sealed by Council</span>
               </button>
             )}
+            {/* TRAINING / HOW TO PLAY BUTTON */}
+          <button 
+              className="btn wizard-btn" 
+              style={{ borderColor: '#38bdf8' }} 
+              onClick={() => executeWithTransition(() => setScreen('loading-tutorial'))}
+            >
+              <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2 L22 7 L12 12 L2 7 Z" stroke="currentColor" strokeWidth="1.6" fill="rgba(56, 189, 248, 0.1)"/>
+                  <path d="M2 17 L12 22 L22 17" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                  <path d="M2 12 L12 17 L22 12" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+                </svg>
+              </span>
+              <span className="btn-label" style={{ color: '#38bdf8' }}>Training / How to Play</span>
+            </button>
             <button className="btn wizard-btn" onClick={() => executeWithTransition(() => setScreen('leaderboard'))}>
               <span className="btn-icon" style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -1763,7 +1795,7 @@ const renderDamageRecap = () => {
                 position: 'relative',
                 overflow: 'hidden',
               }}
-              onClick={() => executeWithTransition(() => { setGrimoirePage('cover'); setGrimoireVideoPlaying(false); setShowGrimoireModal(true); })}
+              onClick={() => executeWithTransition(() => { setGrimoireVideoPlaying(false); setShowGrimoireModal(true); })}
             >
               <span style={{ display: 'inline-flex', verticalAlign: 'middle', marginRight: '4px' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -1831,311 +1863,36 @@ const renderDamageRecap = () => {
 
           </div>
         </div>
-      )}
+  );
+});
 
-      {/* DYNAMIC ARCANE COUNCIL SCROLL OVERLAY WINDOW */}
-      {councilNewsOpen && (
-        <div className="council-news-overlay">
-          <div className="council-news-box" onClick={e => e.stopPropagation()}>
-            <div className="panel-corner pc-tl" />
-            <div className="panel-corner pc-tr" />
-            <div className="panel-corner pc-bl" />
-            <div className="panel-corner pc-br" />
-
-            <div className="section-title" style={{ color: '#ffe6a3', fontSize: '1.25rem', fontFamily: 'Georgia, serif', marginBottom: '14px', textShadow: '0 0 10px rgba(197,160,89,0.5)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ width: '22px', height: '22px', display: 'inline-flex' }}>
-                <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M16 4l13 6.6H3L16 4z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-                  <line x1="7" y1="10.6" x2="7" y2="23" stroke="currentColor" strokeWidth="1.6" />
-                  <line x1="13" y1="10.6" x2="13" y2="23" stroke="currentColor" strokeWidth="1.6" />
-                  <line x1="19" y1="10.6" x2="19" y2="23" stroke="currentColor" strokeWidth="1.6" />
-                  <line x1="25" y1="10.6" x2="25" y2="23" stroke="currentColor" strokeWidth="1.6" />
-                  <line x1="3" y1="25.4" x2="29" y2="25.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </span> COUNCIL SANCTUM CHRONICLES
-            </div>
-            
-            <div className="council-tab-headers">
-              <button className={`council-tab-btn ${councilTab === 'decrees' ? 'active' : ''}`} onClick={() => setCouncilTab('decrees')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconMegaphone /></span> Council Decrees
-              </button>
-              <button className={`council-tab-btn ${councilTab === 'grimoire' ? 'active' : ''}`} onClick={() => setCouncilTab('grimoire')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconScroll /></span> Grimoire Changes
-              </button>
-            </div>
-            
-            <div className="council-scroll-logs">
-              {loadingNews ? (
-                <div style={{ color: '#a78bfa', textAlign: 'center', marginTop: '40px', fontFamily: 'monospace' }}>Chanting divination spell to pull archives...</div>
-              ) : activeLogs.length === 0 ? (
-                <div style={{ color: 'rgba(167,139,250,0.5)', textAlign: 'center', marginTop: '40px', fontFamily: 'monospace' }}>No records written on the scrolls yet.</div>
-              ) : (
-                activeLogs.map((item) => (
-                  <div className="council-log-item" key={item.id}>
-                    <div className="council-log-header" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '13px', height: '13px', display: 'inline-flex' }}><IconSparkleStar /></span> {item.type === 'decree' ? 'DECREE' : 'GRIMOIRE LOG'} • {new Date(item.created_at).toLocaleDateString()}
-                    </div>
-                    <div className="council-log-title">{item.title?.toUpperCase()}</div>
-                    <div className="council-log-desc">{item.description}</div>
-                  </div>
-                ))
-              )}
-            </div>
-            
-           <button className="btn wizard-btn danger-theme" style={{ marginTop: '14px', width: '100%', margin: '14px 0 0 0' }} onClick={() => executeWithTransition(() => setCouncilNewsOpen(false))}>
-               ✕ Dismiss Scroll
-          </button>
-          </div>
-        </div>
-      )}
-
-      {/* CO-OP CONFIGURATION MENU */}
-      {screen === 'coop-menu' && (
-        <div className="overlay active">
-          <div className="panel wizard-panel">
-            <div className="panel-corner pc-tl" />
-            <div className="panel-corner pc-tr" />
-            <div className="panel-corner pc-bl" />
-            <div className="panel-corner pc-br" />
-
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⚔️ CO-OP COVENANT</div>
-            <div className="divider mystic-divider" />
-
-            <div className="field-group" style={{ width: '100%' }}>
-              <label className="field-label wizard-field-label">Arcane Identity</label>
-              <input 
-                className="field-input wizard-field-input" 
-                type="text" 
-                value={wizardName} 
-                onChange={e => setWizardName(e.target.value)} 
-                onKeyDown={e => e.key === 'Enter' && onAction('host-game', { name: wizardName })}
-                placeholder="e.g. Archmage Martel" 
-                maxLength={16} 
-                style={{ textAlign: 'center', marginBottom: '12px' }}
-              />
-            </div>
-            <button className="btn wizard-btn gold-theme" onClick={() => executeWithTransition(() => onAction('host-game', { name: wizardName }))}>HOST SANCTUM</button>
-            
-            <div style={{ margin: '12px 0', fontSize: '.7rem', color: '#c4b5fd', fontFamily: 'monospace', letterSpacing: '2px', textAlign: 'center' }}>— OR —</div>
-            
-            <div className="field-group" style={{ width: '100%' }}>
-              <label className="field-label wizard-field-label">Sanctum Code</label>
-              <input 
-                className="field-input wizard-field-input" 
-                type="text" 
-                value={joinCode} 
-                onChange={e => setJoinCode(e.target.value.toUpperCase())} 
-                onKeyDown={e => e.key === 'Enter' && onAction('join-game', { name: wizardName, code: joinCode })}
-                placeholder="6-SIGILS CODE" 
-                maxLength={6} 
-                style={{ textAlign: 'center', letterSpacing: '.2em', marginBottom: '12px' }} 
-              />
-            </div>
-            <button className="btn wizard-btn" onClick={() => executeWithTransition(() => onAction('join-game', { name: wizardName, code: joinCode }))}>Step Into Sanctum</button>
-            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
-          </div>
-        </div>
-      )}
-
-      {/* MULTIPLAYER LOBBY SCREEN */}
-      {screen === 'lobby' && (
-        <div className="overlay active">
-          <div className="panel wizard-panel">
-            <div className="panel-corner pc-tl" />
-            <div className="panel-corner pc-tr" />
-            <div className="panel-corner pc-bl" />
-            <div className="panel-corner pc-br" />
-
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🌐 Waiting for Player 2</div>
-            <div className="divider mystic-divider" />
-            <div className="room-code-display" style={{ textShadow: '0 0 15px rgba(167,139,250,0.6)', color: '#ffffff', letterSpacing: '4px', fontSize: '2rem', fontWeight: 'bold', margin: '10px 0', textAlign: 'center' }}>{roomCode}</div>
-            <div style={{ fontSize: '.8rem', color: '#c4b5fd', fontStyle: 'italic', marginBottom: '20px', textAlign: 'center' }}>{p2Status || 'Waiting for an ally to connect...'}</div>
-            <button className="btn wizard-btn danger-theme" onClick={() => onAction('cancel-lobby')}>✕ Cancel</button>
-          </div>
-        </div>
-      )}
-{/* HALL OF LEGENDS LEADERBOARD */}
-      {screen === 'leaderboard' && (
-        <div className="overlay active">
-          <div className="panel wizard-panel" style={{ width: '760px', height: '680px', maxWidth: '95vw', maxHeight: '95vh', boxSizing: 'border-box' }}>
-            <div className="panel-corner pc-tl" />
-            <div className="panel-corner pc-tr" />
-            <div className="panel-corner pc-bl" />
-            <div className="panel-corner pc-br" />
-
-            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{ width: '22px', height: '22px', display: 'inline-flex' }}><IconTrophy /></span> COUNCIL OF THE FALLEN
-            </div>
-            <div className="lb-description">
-              When the final spell fades and the last wave falls,{' '}
-              <b style={{ color: '#fef08a', textShadow: '0 0 12px rgba(254, 240, 138, 0.9)' }}>
-                only twenty souls shall remain worthy
-              </b>. 
-              The Council of the Fallen welcomes these Arcane legends, granting them eternal glory beyond the mortal realm.
-            </div>
-            
-            <div className="divider mystic-divider" style={{ margin: '14px 0', flexShrink: 0 }} />
-            
-            {/* TABS CONTAINER */}
-            <div className="council-tab-headers" style={{ marginBottom: '16px', flexShrink: 0 }}>
-              <button 
-                className={`council-tab-btn ${leaderboardTab === 'solo' ? 'active' : ''}`} 
-                onClick={() => setLeaderboardTab('solo')}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconWizardHat /></span> Solo Records
-              </button>
-              <button 
-                className={`council-tab-btn ${leaderboardTab === 'coop' ? 'active' : ''}`} 
-                onClick={() => setLeaderboardTab('coop')}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-              >
-                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconSwordsCrossed /></span> Co-op Records
-              </button>
-            </div>
-
-            {/* SCROLL AREA - Malaki na, sagad pababa, at may margin sa ilalim */}
-            <div className="lb-scroll-area">
-              {loadingLb ? <div className="lb-loading" style={{ padding: '40px', color: '#a78bfa', fontFamily: 'Georgia', textAlign: 'center' }}>Summoning records from ancient scroll…</div> : (
-              <table className="witch-table">
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'center', width: '60px' }}>#</th>
-                      <th style={{ textAlign: 'center', width: '70px' }}>Avatar</th>
-                      <th style={{ textAlign: 'center' }}>Wizard</th>
-                      <th style={{ textAlign: 'center', width: '90px' }}>Level</th>
-                      <th style={{ textAlign: 'center', width: '90px' }}>Wave</th>
-                      <th style={{ textAlign: 'right', width: '130px' }}>Score</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {leaderboard.length === 0 ? (
-                      <tr><td colSpan="6" style={{ textAlign: 'center', color: 'rgba(167,139,250,0.5)', padding: '30px' }}>No records yet. Be the first legend!</td></tr>
-                    ) : (
-                      leaderboard.map((row, idx) => {
-                        // 🔥 KUNIN ANG EXACT SKIN OBJECT MULA SA METASHOP DATABASE
-                        const playerSkin = SKINS_DB.find(s => s.id === (row.skin || 'default')) || SKINS_DB[0];
-
-                        return (
-                          <tr key={idx} className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
-                            <td style={{ fontWeight: 'bold', textAlign: 'center' }}>
-                              {idx === 0 ? (
-                                <span style={{ width: '20px', height: '20px', display: 'inline-flex', color: '#ffd700' }}>👑</span>
-                              ) : idx === 1 ? (
-                                <span style={{ width: '18px', height: '18px', display: 'inline-flex', color: '#c0c0c0' }}>🥈</span>
-                              ) : idx === 2 ? (
-                                <span style={{ width: '18px', height: '18px', display: 'inline-flex', color: '#cd7f32' }}>🥉</span>
-                              ) : (
-                                `#${idx + 1}`
-                              )}
-                            </td>
-                            
-                            {/* 🔥 ANG LIVE CANVAS RENDERER MULA SA METASHOP */}
-                            <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '4px' }}>
-                              <div style={{ 
-                                width: '50px', height: '50px', margin: '0 auto', 
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                overflow: 'visible'
-                              }}>
-                                {/* Scale pababa (70% ng orig size) para fit na fit sa table row */}
-                                <div style={{ transform: 'scale(0.7)', transformOrigin: 'center', display: 'flex' }}>
-                                  <LiveSkinPreview skin={playerSkin} />
-                                </div>
-                              </div>
-                            </td>
-
-                            <td style={{ fontWeight: 600, textAlign: 'center' }}>{row.name || 'Anonymous'}</td>
-                            <td style={{ textAlign: 'center' }}>{row.level || 1}</td>
-                            <td style={{ textAlign: 'center' }}>{row.wave || 1}</td>
-                            <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            
-            {/* LEAVE BUTTON - Swak na sa pinakailalim nang may saktong awang sa kahon */}
-            <button className="btn wizard-btn danger-theme lb-bottom-btn" onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
-          </div>
-        </div>
-      )}
-
-      {/* LEVEL UP MODAL PANEL LAYER */}
-      {screen === 'levelup' && (
-        <div className="overlay active" style={{ background: 'rgba(3, 1, 17, 0.55)', backdropFilter: 'blur(3px)' }}>
-          <div className="lu-wrapper">
-            <div className="lu-arcane-circle" />
-            <div className="lu-title-row">
-              <span className="lu-rune-flank">ᛟᛗᛚ</span>
-              <div className="lu-title">LEVEL UP — WAVE {hudData?.wave || 1}</div>
-              <span className="lu-rune-flank">ᛚᛗᛟ</span>
-            </div>
-            <div className="lu-subtitle">Choose an Upgrade (Press 1, 2, 3 or Click)</div>
-            <div className="lu-rune-strip">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ</div>
-            <div className="lu-warning" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><InlineIcon size={15} style={{ color: '#fbbf24' }}><IconWarningRune /></InlineIcon>Game continues – enemies are still moving!</div>
-
-            <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <div style={{ color: '#d946ef', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 8px rgba(217, 70, 239, 0.6)', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
-                <InlineIcon size={15} style={{ color: '#d946ef' }}><IconVoidCrystal /></InlineIcon>Void Crystals: {voidCrystals.toLocaleString()}
-              </div>
-              <button 
-                className="btn wizard-btn lu-reroll-btn" 
-                onClick={handleReroll}
-                disabled={voidCrystals < 50}
-                style={{ 
-                  fontSize: '0.75rem',
-                  opacity: voidCrystals < 50 ? 0.5 : 1,
-                  cursor: voidCrystals < 50 ? 'not-allowed' : 'pointer',
-                }}
-              >
-                <span className="lu-reroll-gem">◆</span>
-                <span className="lu-reroll-icon" style={{ display: 'inline-flex', width: '13px', height: '13px', verticalAlign: '-2px' }}><IconRuneDie /></span> Reroll Options (Cost: 50)
-                <span className="lu-reroll-gem">◆</span>
-              </button>
-            </div>
-            
-              <div className="lu-cards-row">
-              {displayedChoices.map((opt, i) => {
-                const card = getUpgradeMeta(opt, hudData?.wave || 1);
-                return (
-                  <div 
-                    key={i} 
-                    className="lu-card" 
-                    style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)' }} 
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      
-                      // 🛑 PIGILAN ANG DOUBLE-CLICK LAG DITO
-                      if (upgradeLockRef.current) return; 
-                      upgradeLockRef.current = true; // 🔒 I-LOCK AGAD
-                      
-                      onSelectUpgrade(opt);
-                    }}
-                  >
-                    <span className="lu-corner tl" />
-                    <span className="lu-corner tr" />
-                    <span className="lu-corner bl" />
-                    <span className="lu-corner br" />
-                    <div className="lu-card-runes">ᛟ ᚱ ᚨ ᚾ ᛟ</div>
-                    <div className="lu-icon-frame">
-                      <div className="lu-icon">{card.icon}</div>
-                    </div>
-                    <div className="lu-card-title" style={{ color: '#ffe6a3' }}>{card.title}</div>
-                    <div className="lu-card-desc" style={{ color: '#cbd5e1' }}>{card.desc}</div>
-                    <div className="lu-hotkey">{i + 1}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
- {/* GAME OVER SUMMARY SCREEN */}
-      {screen === 'gameover' && (
+// ============================================================================
+// 💀 GAME OVER SCREEN — naka-hiwalay na memo() component. Dito nangyayari ang
+// score submission (may text input + async fetch), kaya bago ito ma-memo,
+// bawat keystroke sa wizardName field o pag-toggle ng damage recap ay
+// nag-re-render din ng buong Overlays tree. renderDamageRecap at hasSupabase
+// ay hindi kasama sa props dahil module-scope/imported na sila.
+// ============================================================================
+const GameOverScreen = memo(function GameOverScreen({
+  gameOverPhase,
+  setGameOverPhase,
+  voidCrystals,
+  setVoidCrystals,
+  showDamageRecap,
+  setShowDamageRecap,
+  hudData,
+  isCoop,
+  restartVotes,
+  wizardName,
+  setWizardName,
+  isScoreSubmitted,
+  handleSubmitScore,
+  submitStatus,
+  setScreen,
+  executeWithTransition,
+  onAction,
+}) {
+  return (
         <div className="overlay active">
           <div className="panel wizard-panel">
             <div className="panel-corner pc-tl" />
@@ -2268,10 +2025,390 @@ const renderDamageRecap = () => {
             )}
           </div>
         </div>
-      )}
+  );
+});
 
-{/* MATCH PAUSE OVERLAY */}
-      {screen === 'pause' && (
+// ============================================================================
+// ⬆️ LEVEL UP SCREEN — naka-hiwalay na memo() component. Ito ay nag-i-interrupt
+// ng gameplay (ang laro ay tumatakbo pa rin sa likod), kaya importanteng
+// mabilis at hiwalay ito sa ibang re-renders. upgradeLockRef ay pinapasa nang
+// direkta (hindi bagong ref) dahil ginagamit din ito ng hotkey listener sa
+// parent component — kailangan parehong ref object.
+// ============================================================================
+const LevelUpScreen = memo(function LevelUpScreen({
+  hudData,
+  voidCrystals,
+  handleReroll,
+  displayedChoices,
+  upgradeLockRef,
+  onSelectUpgrade,
+}) {
+  return (
+        <div className="overlay active" style={{ background: 'rgba(3, 1, 17, 0.55)', backdropFilter: 'blur(3px)' }}>
+          <div className="lu-wrapper">
+            <div className="lu-arcane-circle" />
+            <div className="lu-title-row">
+              <span className="lu-rune-flank">ᛟᛗᛚ</span>
+              <div className="lu-title">LEVEL UP — WAVE {hudData?.wave || 1}</div>
+              <span className="lu-rune-flank">ᛚᛗᛟ</span>
+            </div>
+            <div className="lu-subtitle">Choose an Upgrade (Press 1, 2, 3 or Click)</div>
+            <div className="lu-rune-strip">ᚠ ᚢ ᚦ ᚨ ᚱ ᚲ ᚷ ᚹ ᚺ ᚾ ᛁ ᛃ ᛇ ᛈ ᛉ ᛊ ᛏ ᛒ ᛖ ᛗ ᛚ ᛟ</div>
+            <div className="lu-warning" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><InlineIcon size={15} style={{ color: '#fbbf24' }}><IconWarningRune /></InlineIcon>Game continues – enemies are still moving!</div>
+
+            <div style={{ marginBottom: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              <div style={{ color: '#d946ef', fontFamily: 'monospace', fontWeight: 'bold', textShadow: '0 0 8px rgba(217, 70, 239, 0.6)', fontSize: '0.9rem', display: 'flex', alignItems: 'center' }}>
+                <InlineIcon size={15} style={{ color: '#d946ef' }}><IconVoidCrystal /></InlineIcon>Void Crystals: {voidCrystals.toLocaleString()}
+              </div>
+              <button 
+                className="btn wizard-btn lu-reroll-btn" 
+                onClick={handleReroll}
+                disabled={voidCrystals < 50}
+                style={{ 
+                  fontSize: '0.75rem',
+                  opacity: voidCrystals < 50 ? 0.5 : 1,
+                  cursor: voidCrystals < 50 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                <span className="lu-reroll-gem">◆</span>
+                <span className="lu-reroll-icon" style={{ display: 'inline-flex', width: '13px', height: '13px', verticalAlign: '-2px' }}><IconRuneDie /></span> Reroll Options (Cost: 50)
+                <span className="lu-reroll-gem">◆</span>
+              </button>
+            </div>
+            
+              <div className="lu-cards-row">
+              {displayedChoices.map((opt, i) => {
+                const card = getUpgradeMeta(opt, hudData?.wave || 1);
+                return (
+                  <div 
+                    key={i} 
+                    className="lu-card" 
+                    style={{ border: '1px solid #c5a059', background: 'linear-gradient(180deg, #1b0c30 0%, #080312 100%)' }} 
+                    onPointerDown={(e) => {
+                      e.stopPropagation();
+                      
+                      // 🛑 PIGILAN ANG DOUBLE-CLICK LAG DITO
+                      if (upgradeLockRef.current) return; 
+                      upgradeLockRef.current = true; // 🔒 I-LOCK AGAD
+                      
+                      onSelectUpgrade(opt);
+                    }}
+                  >
+                    <span className="lu-corner tl" />
+                    <span className="lu-corner tr" />
+                    <span className="lu-corner bl" />
+                    <span className="lu-corner br" />
+                    <div className="lu-card-runes">ᛟ ᚱ ᚨ ᚾ ᛟ</div>
+                    <div className="lu-icon-frame">
+                      <div className="lu-icon">{card.icon}</div>
+                    </div>
+                    <div className="lu-card-title" style={{ color: '#ffe6a3' }}>{card.title}</div>
+                    <div className="lu-card-desc" style={{ color: '#cbd5e1' }}>{card.desc}</div>
+                    <div className="lu-hotkey">{i + 1}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+  );
+});
+
+// ============================================================================
+// 🏆 LEADERBOARD SCREEN — naka-hiwalay na memo() component. Pinaka-mabigat
+// ang render dito (hanggang 20 rows, bawat isa may LiveSkinPreview canvas),
+// kaya importanteng hindi ito ma-re-render dahil sa unrelated state changes
+// (hal. typing sa ibang screen, o pag-toggle ng damage recap).
+// ============================================================================
+// ============================================================================
+// 🏆 LEADERBOARD ROW — hiwalay na memo() component per row. Bawat row ay may
+// LiveSkinPreview (canvas-based animated renderer), kaya importanteng
+// i-isolate ang bawat isa — kung magbabago lang ang isang property sa parent
+// (hal. loadingLb flag), hindi na kailangang i-re-render lahat ng hanggang
+// 20 canvas previews nang sabay-sabay.
+// ============================================================================
+const LeaderboardRow = memo(function LeaderboardRow({ row, idx }) {
+  const playerSkin = SKINS_DB.find(s => s.id === (row.skin || 'default')) || SKINS_DB[0];
+
+  return (
+    <tr className={idx === 0 ? 'gold-leader' : idx === 1 ? 'silver-leader' : idx === 2 ? 'bronze-leader' : ''}>
+      <td style={{ fontWeight: 'bold', textAlign: 'center' }}>
+        {idx === 0 ? (
+          <span style={{ width: '20px', height: '20px', display: 'inline-flex', color: '#ffd700' }}>👑</span>
+        ) : idx === 1 ? (
+          <span style={{ width: '18px', height: '18px', display: 'inline-flex', color: '#c0c0c0' }}>🥈</span>
+        ) : idx === 2 ? (
+          <span style={{ width: '18px', height: '18px', display: 'inline-flex', color: '#cd7f32' }}>🥉</span>
+        ) : (
+          `#${idx + 1}`
+        )}
+      </td>
+      
+      {/* 🔥 ANG LIVE CANVAS RENDERER MULA SA METASHOP */}
+      <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '4px' }}>
+        <div style={{ 
+          width: '50px', height: '50px', margin: '0 auto', 
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'visible'
+        }}>
+          {/* Scale pababa (70% ng orig size) para fit na fit sa table row */}
+          <div style={{ transform: 'scale(0.7)', transformOrigin: 'center', display: 'flex' }}>
+            <LiveSkinPreview skin={playerSkin} />
+          </div>
+        </div>
+      </td>
+
+      <td style={{ fontWeight: 600, textAlign: 'center' }}>{row.name || 'Anonymous'}</td>
+      <td style={{ textAlign: 'center' }}>{row.level || 1}</td>
+      <td style={{ textAlign: 'center' }}>{row.wave || 1}</td>
+      <td style={{ fontWeight: 'bold', textAlign: 'right' }}>{(row.score || 0).toLocaleString()}</td>
+    </tr>
+  );
+});
+
+const LeaderboardScreen = memo(function LeaderboardScreen({
+  leaderboardTab,
+  setLeaderboardTab,
+  loadingLb,
+  leaderboard,
+  executeWithTransition,
+  setScreen,
+}) {
+  return (
+        <div className="overlay active">
+          <div className="panel wizard-panel" style={{ width: '760px', height: '680px', maxWidth: '95vw', maxHeight: '95vh', boxSizing: 'border-box' }}>
+            <div className="panel-corner pc-tl" />
+            <div className="panel-corner pc-tr" />
+            <div className="panel-corner pc-bl" />
+            <div className="panel-corner pc-br" />
+
+            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{ width: '22px', height: '22px', display: 'inline-flex' }}><IconTrophy /></span> COUNCIL OF THE FALLEN
+            </div>
+            <div className="lb-description">
+              When the final spell fades and the last wave falls,{' '}
+              <b style={{ color: '#fef08a', textShadow: '0 0 12px rgba(254, 240, 138, 0.9)' }}>
+                only twenty souls shall remain worthy
+              </b>. 
+              The Council of the Fallen welcomes these Arcane legends, granting them eternal glory beyond the mortal realm.
+            </div>
+            
+            <div className="divider mystic-divider" style={{ margin: '14px 0', flexShrink: 0 }} />
+            
+            {/* TABS CONTAINER */}
+            <div className="council-tab-headers" style={{ marginBottom: '16px', flexShrink: 0 }}>
+              <button 
+                className={`council-tab-btn ${leaderboardTab === 'solo' ? 'active' : ''}`} 
+                onClick={() => setLeaderboardTab('solo')}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconWizardHat /></span> Solo Records
+              </button>
+              <button 
+                className={`council-tab-btn ${leaderboardTab === 'coop' ? 'active' : ''}`} 
+                onClick={() => setLeaderboardTab('coop')}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+              >
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconSwordsCrossed /></span> Co-op Records
+              </button>
+            </div>
+
+            {/* SCROLL AREA - Malaki na, sagad pababa, at may margin sa ilalim */}
+            <div className="lb-scroll-area">
+              {loadingLb ? <div className="lb-loading" style={{ padding: '40px', color: '#a78bfa', fontFamily: 'Georgia', textAlign: 'center' }}>Summoning records from ancient scroll…</div> : (
+              <table className="witch-table">
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'center', width: '60px' }}>#</th>
+                      <th style={{ textAlign: 'center', width: '70px' }}>Avatar</th>
+                      <th style={{ textAlign: 'center' }}>Wizard</th>
+                      <th style={{ textAlign: 'center', width: '90px' }}>Level</th>
+                      <th style={{ textAlign: 'center', width: '90px' }}>Wave</th>
+                      <th style={{ textAlign: 'right', width: '130px' }}>Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboard.length === 0 ? (
+                      <tr><td colSpan="6" style={{ textAlign: 'center', color: 'rgba(167,139,250,0.5)', padding: '30px' }}>No records yet. Be the first legend!</td></tr>
+                    ) : (
+                      leaderboard.map((row, idx) => (
+                        <LeaderboardRow key={idx} row={row} idx={idx} />
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            {/* LEAVE BUTTON - Swak na sa pinakailalim nang may saktong awang sa kahon */}
+            <button className="btn wizard-btn danger-theme lb-bottom-btn" onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
+          </div>
+        </div>
+  );
+});
+
+// ============================================================================
+// 📜 COUNCIL NEWS MODAL — naka-hiwalay na memo() component.
+// ============================================================================
+const CouncilNewsScreen = memo(function CouncilNewsScreen({
+  councilTab,
+  setCouncilTab,
+  loadingNews,
+  activeLogs,
+  executeWithTransition,
+  setCouncilNewsOpen,
+}) {
+  return (
+        <div className="council-news-overlay">
+          <div className="council-news-box" onClick={e => e.stopPropagation()}>
+            <div className="panel-corner pc-tl" />
+            <div className="panel-corner pc-tr" />
+            <div className="panel-corner pc-bl" />
+            <div className="panel-corner pc-br" />
+
+            <div className="section-title" style={{ color: '#ffe6a3', fontSize: '1.25rem', fontFamily: 'Georgia, serif', marginBottom: '14px', textShadow: '0 0 10px rgba(197,160,89,0.5)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <span style={{ width: '22px', height: '22px', display: 'inline-flex' }}>
+                <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 4l13 6.6H3L16 4z" fill="currentColor" opacity="0.16" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+                  <line x1="7" y1="10.6" x2="7" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="13" y1="10.6" x2="13" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="19" y1="10.6" x2="19" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="25" y1="10.6" x2="25" y2="23" stroke="currentColor" strokeWidth="1.6" />
+                  <line x1="3" y1="25.4" x2="29" y2="25.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </span> COUNCIL SANCTUM CHRONICLES
+            </div>
+            
+            <div className="council-tab-headers">
+              <button className={`council-tab-btn ${councilTab === 'decrees' ? 'active' : ''}`} onClick={() => setCouncilTab('decrees')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconMegaphone /></span> Council Decrees
+              </button>
+              <button className={`council-tab-btn ${councilTab === 'grimoire' ? 'active' : ''}`} onClick={() => setCouncilTab('grimoire')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <span style={{ width: '16px', height: '16px', display: 'inline-flex' }}><IconScroll /></span> Grimoire Changes
+              </button>
+            </div>
+            
+            <div className="council-scroll-logs">
+              {loadingNews ? (
+                <div style={{ color: '#a78bfa', textAlign: 'center', marginTop: '40px', fontFamily: 'monospace' }}>Chanting divination spell to pull archives...</div>
+              ) : activeLogs.length === 0 ? (
+                <div style={{ color: 'rgba(167,139,250,0.5)', textAlign: 'center', marginTop: '40px', fontFamily: 'monospace' }}>No records written on the scrolls yet.</div>
+              ) : (
+                activeLogs.map((item) => (
+                  <div className="council-log-item" key={item.id}>
+                    <div className="council-log-header" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '13px', height: '13px', display: 'inline-flex' }}><IconSparkleStar /></span> {item.type === 'decree' ? 'DECREE' : 'GRIMOIRE LOG'} • {new Date(item.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="council-log-title">{item.title?.toUpperCase()}</div>
+                    <div className="council-log-desc">{item.description}</div>
+                  </div>
+                ))
+              )}
+            </div>
+            
+           <button className="btn wizard-btn danger-theme" style={{ marginTop: '14px', width: '100%', margin: '14px 0 0 0' }} onClick={() => executeWithTransition(() => setCouncilNewsOpen(false))}>
+               ✕ Dismiss Scroll
+          </button>
+          </div>
+        </div>
+  );
+});
+
+// ============================================================================
+// ⚔️ CO-OP CONFIGURATION MENU — naka-hiwalay na memo() component.
+// ============================================================================
+const CoopMenuScreen = memo(function CoopMenuScreen({
+  wizardName,
+  setWizardName,
+  joinCode,
+  setJoinCode,
+  executeWithTransition,
+  onAction,
+  setScreen,
+}) {
+  return (
+        <div className="overlay active">
+          <div className="panel wizard-panel">
+            <div className="panel-corner pc-tl" />
+            <div className="panel-corner pc-tr" />
+            <div className="panel-corner pc-bl" />
+            <div className="panel-corner pc-br" />
+
+            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>⚔️ CO-OP COVENANT</div>
+            <div className="divider mystic-divider" />
+
+            <div className="field-group" style={{ width: '100%' }}>
+              <label className="field-label wizard-field-label">Arcane Identity</label>
+              <input 
+                className="field-input wizard-field-input" 
+                type="text" 
+                value={wizardName} 
+                onChange={e => setWizardName(e.target.value)} 
+                onKeyDown={e => e.key === 'Enter' && onAction('host-game', { name: wizardName })}
+                placeholder="e.g. Archmage Martel" 
+                maxLength={16} 
+                style={{ textAlign: 'center', marginBottom: '12px' }}
+              />
+            </div>
+            <button className="btn wizard-btn gold-theme" onClick={() => executeWithTransition(() => onAction('host-game', { name: wizardName }))}>HOST SANCTUM</button>
+            
+            <div style={{ margin: '12px 0', fontSize: '.7rem', color: '#c4b5fd', fontFamily: 'monospace', letterSpacing: '2px', textAlign: 'center' }}>— OR —</div>
+            
+            <div className="field-group" style={{ width: '100%' }}>
+              <label className="field-label wizard-field-label">Sanctum Code</label>
+              <input 
+                className="field-input wizard-field-input" 
+                type="text" 
+                value={joinCode} 
+                onChange={e => setJoinCode(e.target.value.toUpperCase())} 
+                onKeyDown={e => e.key === 'Enter' && onAction('join-game', { name: wizardName, code: joinCode })}
+                placeholder="6-SIGILS CODE" 
+                maxLength={6} 
+                style={{ textAlign: 'center', letterSpacing: '.2em', marginBottom: '12px' }} 
+              />
+            </div>
+            <button className="btn wizard-btn" onClick={() => executeWithTransition(() => onAction('join-game', { name: wizardName, code: joinCode }))}>Step Into Sanctum</button>
+            <button className="btn wizard-btn danger-theme" style={{ marginTop: '10px' }} onClick={() => executeWithTransition(() => setScreen('menu'))}>← Leave Sanctum</button>
+          </div>
+        </div>
+  );
+});
+
+// ============================================================================
+// 🌐 MULTIPLAYER LOBBY SCREEN — naka-hiwalay na memo() component.
+// ============================================================================
+const LobbyScreen = memo(function LobbyScreen({
+  roomCode,
+  p2Status,
+  onAction,
+}) {
+  return (
+        <div className="overlay active">
+          <div className="panel wizard-panel">
+            <div className="panel-corner pc-tl" />
+            <div className="panel-corner pc-tr" />
+            <div className="panel-corner pc-bl" />
+            <div className="panel-corner pc-br" />
+
+            <div className="section-title" style={{ fontFamily: 'Georgia, serif', color: '#ffe6a3' }}>🌐 Waiting for Player 2</div>
+            <div className="divider mystic-divider" />
+            <div className="room-code-display" style={{ textShadow: '0 0 15px rgba(167,139,250,0.6)', color: '#ffffff', letterSpacing: '4px', fontSize: '2rem', fontWeight: 'bold', margin: '10px 0', textAlign: 'center' }}>{roomCode}</div>
+            <div style={{ fontSize: '.8rem', color: '#c4b5fd', fontStyle: 'italic', marginBottom: '20px', textAlign: 'center' }}>{p2Status || 'Waiting for an ally to connect...'}</div>
+            <button className="btn wizard-btn danger-theme" onClick={() => onAction('cancel-lobby')}>✕ Cancel</button>
+          </div>
+        </div>
+  );
+});
+
+// ============================================================================
+// ⏸️ MATCH PAUSE OVERLAY — naka-hiwalay na memo() component.
+// ============================================================================
+const PauseScreen = memo(function PauseScreen({
+  setScreen,
+  onAction,
+  executeWithTransition,
+}) {
+  return (
         <div id="pause-overlay" className="overlay active">
           
           {/* TANGGALIN: style={{ width: '320px' }} */}
@@ -2318,6 +2455,478 @@ const renderDamageRecap = () => {
             </button>
           </div>
         </div>
+  );
+});
+
+export default function Overlays({ 
+  screen, 
+  setScreen, 
+  hudData, 
+  roomCode, 
+  p2Status, 
+  isCoop, 
+  initialWizardName,
+  levelUpOptions, 
+  onSelectUpgrade, 
+  onAction 
+}) {
+  const [wizardName, setWizardName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [loadingLb, setLoadingLb] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState('');
+  const [isScoreSubmitted, setIsScoreSubmitted] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState('solo');
+
+  // States para sa Dynamic Supabase Council News Modal Window
+  const [councilNewsOpen, setCouncilNewsOpen] = useState(false);
+  const [councilTab, setCouncilTab] = useState('decrees'); // 'decrees' o 'grimoire'
+  const [newsData, setNewsData] = useState([]);
+  const [loadingNews, setLoadingNews] = useState(false);
+
+  const [voidCrystals, setVoidCrystals] = useState(0);
+  const [gameOverPhase, setGameOverPhase] = useState('continue');  
+
+  const [showDamageRecap, setShowDamageRecap] = useState(false);
+  const [showGrimoireModal, setShowGrimoireModal] = useState(false);
+  const [grimoireVideoPlaying, setGrimoireVideoPlaying] = useState(false);
+  // 🌌 Universal Transition State
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [activeGrimoireTab, setActiveGrimoireTab] = useState('lore');
+  const upgradeLockRef = useRef(false);
+
+  useEffect(() => {
+    if (screen === 'levelup') {
+      upgradeLockRef.current = false;
+    }
+  }, [screen]);
+
+  // 🪄 Helper function para sa Frieren effect
+  // PERF: naka-useCallback na ito kasi pinapasa ito (at ginagamit sa loob ng
+  // onClick handlers) sa daan-daang buttons sa buong component — stable
+  // function identity na ngayon imbes na bagong closure kada render.
+  const executeWithTransition = useCallback((callback) => {
+    setIsTransitioning(true); // I-trigger ang animation
+    setTimeout(() => {
+      callback(); // Patakbuhin ang action (setScreen o onAction) pagkatapos ng 1 second
+      setIsTransitioning(false); // I-reset para mawala ang dark overlay sa bagong screen
+    }, 1000);
+  }, []);
+
+useEffect(() => {
+    if (screen === 'levelup' || screen === 'gameover') {
+      setVoidCrystals(parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10));
+    }
+    if (screen === 'gameover') {
+      // 🔥 CHECK FLAG: Kung naka-continue na siya sa run na ito, diretso sa summary
+      if (hudData?.p?.hasContinued) {
+        setGameOverPhase('summary');
+      } else {
+        setGameOverPhase('continue');
+      }
+    }
+  }, [screen, levelUpOptions]);
+
+  // PERF: useCallback dahil ito ay pino-pass bilang onClick sa reroll button
+  // — ginagawa lang itong bagong function reference kapag talagang kailangan.
+  const handleReroll = useCallback((e) => {
+    e.stopPropagation();
+    if (upgradeLockRef.current) return; // 🛑 PIGILAN ANG SPAM
+
+    const REROLL_COST = 50; 
+    let currentCrystals = parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10);
+    
+    if (currentCrystals >= REROLL_COST) {
+      upgradeLockRef.current = true; // 🔒 I-LOCK HABANG NAG-REROLL
+
+      currentCrystals -= REROLL_COST;
+      localStorage.setItem('arcane_void_crystals', currentCrystals);
+      setVoidCrystals(currentCrystals);
+      
+      if (window.requestLevelUpReroll) {
+        window.requestLevelUpReroll();
+      }
+
+      // 🔓 I-unlock agad pagkatapos ng maliit na delay para makapili na ulit ng cards
+      setTimeout(() => {
+         upgradeLockRef.current = false;
+      }, 100);
+    }
+  }, []);
+
+  // I-sync ang local field kapag may nakuhang global name prop galing sa App level
+  useEffect(() => {
+    if (initialWizardName) {
+      setWizardName(initialWizardName);
+    }
+  }, [initialWizardName]);
+
+// 🔥 FIX 1: Basahin agad ang huling alam na status mula sa localStorage para iwas visual flash
+  const [coopActiveInDb, setCoopActiveInDb] = useState(() => {
+    const cached = localStorage.getItem('arcane_coop_enabled');
+    return cached === null ? null : cached === 'true';
+  });
+
+ // 🕒 180 SECONDS IDLE DETECTION
+  useEffect(() => {
+    let timeoutId;
+
+    const resetIdleTimer = () => {
+      clearTimeout(timeoutId);
+      // Tatakbo lang timer kung nasa 'menu' at hindi pa nagta-transition
+      if (screen === 'menu' && !isTransitioning) {
+        timeoutId = setTimeout(() => {
+          // Gagamitin na natin ang helper function dito!
+          executeWithTransition(() => setScreen('intro'));
+        }, 180000); // 180 SECONDS
+      }
+    };
+
+    const handleUserActivity = () => resetIdleTimer();
+
+    if (screen === 'menu') {
+      window.addEventListener('mousemove', handleUserActivity);
+      window.addEventListener('keydown', handleUserActivity);
+      window.addEventListener('touchstart', handleUserActivity);
+      window.addEventListener('click', handleUserActivity);
+      resetIdleTimer(); 
+    } else {
+      clearTimeout(timeoutId);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+    };
+  }, [screen, isTransitioning, setScreen]);
+
+  useEffect(() => {
+    const fetchCoopStatus = () => {
+      sbGet('/rest/v1/game_settings?id=eq.1')
+        .then(data => {
+          if (data && data.length > 0) {
+            const status = data[0].coop_enabled;
+            setCoopActiveInDb(status);
+            // I-save sa local cache para sa susunod na rapid refresh ng player
+            localStorage.setItem('arcane_coop_enabled', String(status)); 
+          } else {
+            setCoopActiveInDb(false);
+            localStorage.setItem('arcane_coop_enabled', 'false');
+          }
+        })
+        .catch(err => {
+          console.error('Error loading game settings:', err);
+          // Kung walang internet pero may lumang cache, panatilihin muna; kung wala, i-lock sa false
+          if (localStorage.getItem('arcane_coop_enabled') === null) {
+            setCoopActiveInDb(false);
+          }
+        });
+    };
+
+    // INITIAL FETCH
+    fetchCoopStatus();
+
+    // REALTIME CONNECTION
+    const watcher = sbWatchTable('game_settings', () => {
+      fetchCoopStatus(); 
+    });
+
+    return () => watcher.close();
+  }, []);
+
+// 🔊 AWTOMATIKONG CLICK SOUND EFFECT PARA SA LAHAT NG BUTTONS
+  useEffect(() => {
+    const handleClick = (e) => {
+      // Targetin lahat ng <button> at pati na rin ang custom thumbnails ng Grimoire
+      if (e.target.closest('button') || e.target.closest('.grimoire-video-thumb')) {
+        // PERF: gamit na ang reusable singleton <audio> (module scope) imbes
+        // na gumawa ng bagong Audio object bawat click — iniiwasan ang
+        // paulit-ulit na allocation/decode, lalo na sa rapid taps sa mobile.
+        playClickSound(0.6);
+      }
+    };
+
+    // 🔥 Idinagdag ang 'true' para saluhin agad ang click signal BAGO pa gumana ang stopPropagation
+    document.addEventListener('click', handleClick, true);
+
+    return () => {
+      document.removeEventListener('click', handleClick, true);
+    };
+  }, []);
+
+useEffect(() => {
+    if (screen === 'leaderboard') {
+      // Create a fetch function that accepts a 'silent' parameter
+      const fetchLeaderboard = (isSilent = false) => {
+        if (!isSilent) setLoadingLb(true);
+        
+        // Added mode filter to the endpoint based on the active tab
+        sbGet(`/rest/v1/leaderboard?select=name,score,wave,level,mode,skin&mode=eq.${leaderboardTab}&order=score.desc&limit=20`)
+          .then(data => { 
+            setLeaderboard(data || []); 
+            if (!isSilent) setLoadingLb(false); 
+          })
+          .catch(() => {
+            if (!isSilent) setLoadingLb(false);
+          });
+      };
+
+      // Initial fetch when screen opens or tab changes
+      fetchLeaderboard(false);
+
+      // Start Realtime connection
+      const watcher = sbWatchTable('leaderboard', () => {
+        // Silently fetch new data when someone else updates their score
+        fetchLeaderboard(true); 
+      });
+
+      // Cleanup websocket connection when leaving or swapping tabs
+      return () => watcher.close();
+    }
+    
+    if (screen !== 'gameover') {
+      setSubmitStatus('');
+      setIsScoreSubmitted(false);
+    }
+  }, [screen, leaderboardTab]); // Added leaderboardTab to dependencies
+
+  useEffect(() => {
+    if (councilNewsOpen) {
+      const fetchNews = (isSilent = false) => {
+        if (!isSilent) setLoadingNews(true);
+        sbGet('/rest/v1/council_news?select=*&order=created_at.desc')
+          .then(data => {
+            setNewsData(data || []);
+            if (!isSilent) setLoadingNews(false);
+          })
+          .catch(() => {
+            if (!isSilent) setLoadingNews(false);
+          });
+      };
+
+      // Initial fetch
+      fetchNews(false);
+
+      // Start Realtime connection
+      const watcher = sbWatchTable('council_news', () => {
+        // Silently refresh if an admin adds a new log
+        fetchNews(true);
+      });
+
+      // Cleanup websocket when closing the modal
+      return () => watcher.close();
+    }
+  }, [councilNewsOpen]);
+
+  useEffect(() => {
+    if (screen !== 'levelup') return;
+    
+    const handleHotkey = (e) => {
+
+      if (upgradeLockRef.current) return;
+
+      if (['1', '2', '3'].includes(e.key)) {
+        const index = parseInt(e.key, 10) - 1;
+        const choices = levelUpOptions || [];
+        if (choices[index]) {
+          upgradeLockRef.current = true;
+          onSelectUpgrade(choices[index]);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleHotkey);
+    return () => window.removeEventListener('keydown', handleHotkey);
+  }, [screen, levelUpOptions, onSelectUpgrade]);
+
+// PERF: useCallback na may tamang dependencies — stable reference maliban
+// kung talagang nagbago ang wizardName/hudData/isCoop na ginagamit sa loob.
+const handleSubmitScore = useCallback(async () => {
+    const nameToSubmit = wizardName.trim();
+    if (!nameToSubmit) return alert('Enter Arcane Identity first');
+    
+    const newScore = hudData?.score || 0;
+    if (newScore <= 0) {
+      setSubmitStatus('Score must be greater than 0 to be recorded.');
+      return;
+    }
+
+    // 🔥 KUNIN ANG CURRENT SKIN NA SUOT NG PLAYER
+    const currentSkin = localStorage.getItem('arcane_equipped_skin') || 'default';
+
+    setSubmitStatus('Checking ancient records...');
+
+    try {
+      const existingData = await sbGet(`/rest/v1/leaderboard?select=id,score&name=ilike.${encodeURIComponent(nameToSubmit)}`);
+
+      if (existingData && existingData.length > 0) {
+        const existingRecord = existingData[0];
+
+        if (newScore > existingRecord.score) {
+          setSubmitStatus('New personal best! Overwriting old record...');
+          
+          const { error } = await supabase
+            .from('leaderboard')
+            .update({ 
+              score: newScore, 
+              wave: hudData?.wave || 1, 
+              level: hudData?.p?.level || 1,
+              mode: isCoop ? 'coop' : 'solo',
+              skin: currentSkin // 🔥 ISINAMA ANG SKIN ID SA DATABASE
+            })
+            .eq('id', existingRecord.id);
+
+          if (!error) {
+            setSubmitStatus(`✦ New personal best! Overwrote previous score.`);
+            setIsScoreSubmitted(true);
+          }
+        } else {
+          setSubmitStatus(`A higher record already exists.`);
+        }
+      } else {
+        const ok = await sbPost('/rest/v1/leaderboard', {
+          name: nameToSubmit, 
+          score: newScore, 
+          wave: hudData?.wave || 1, 
+          level: hudData?.p?.level || 1, 
+          mode: isCoop ? 'coop' : 'solo',
+          skin: currentSkin // 🔥 ISINAMA ANG SKIN ID SA DATABASE
+        });
+        
+        if (ok) {
+          setSubmitStatus('✦ Name etched into the Tombstone successfully!');
+          setIsScoreSubmitted(true);
+        }
+      }
+    } catch (err) {
+      setSubmitStatus('Failed to access the Tombstone. Try again.');
+    }
+  }, [wizardName, hudData, isCoop]);
+
+  if (screen === 'playing') return null;
+
+  const displayedChoices = (levelUpOptions || []).slice(0, 3);
+  const restartVotes = isCoop ? [hudData?.coopVotes?.p1, hudData?.coopVotes?.p2].filter(Boolean).length : 0;
+
+  const activeLogs = newsData.filter(item => 
+    councilTab === 'decrees' ? item.type === 'decree' : item.type === 'grimoire'
+  );
+  return (
+    <div id="overlays">
+      <GlobalOverlayStyles />
+
+
+      {/* MAIN MENU SCREEN */}
+      {screen === 'menu' && (
+        <MenuScreen
+          wizardName={wizardName}
+          setWizardName={setWizardName}
+          coopActiveInDb={coopActiveInDb}
+          executeWithTransition={executeWithTransition}
+          setScreen={setScreen}
+          onAction={onAction}
+          setCouncilTab={setCouncilTab}
+          setCouncilNewsOpen={setCouncilNewsOpen}
+          setGrimoireVideoPlaying={setGrimoireVideoPlaying}
+          setShowGrimoireModal={setShowGrimoireModal}
+        />
+      )}
+
+      {/* ⏳ TUTORIAL LOADING SCREEN (Mula sa hiwalay na file) */}
+      {screen === 'loading-tutorial' && (
+        <TutorialLoadingScreen setScreen={setScreen} duration={7000}  />
+      )}
+
+      {/* DYNAMIC ARCANE COUNCIL SCROLL OVERLAY WINDOW */}
+      {councilNewsOpen && (
+        <CouncilNewsScreen
+          councilTab={councilTab}
+          setCouncilTab={setCouncilTab}
+          loadingNews={loadingNews}
+          activeLogs={activeLogs}
+          executeWithTransition={executeWithTransition}
+          setCouncilNewsOpen={setCouncilNewsOpen}
+        />
+      )}
+
+      {/* CO-OP CONFIGURATION MENU */}
+      {screen === 'coop-menu' && (
+        <CoopMenuScreen
+          wizardName={wizardName}
+          setWizardName={setWizardName}
+          joinCode={joinCode}
+          setJoinCode={setJoinCode}
+          executeWithTransition={executeWithTransition}
+          onAction={onAction}
+          setScreen={setScreen}
+        />
+      )}
+
+      {/* MULTIPLAYER LOBBY SCREEN */}
+      {screen === 'lobby' && (
+        <LobbyScreen
+          roomCode={roomCode}
+          p2Status={p2Status}
+          onAction={onAction}
+        />
+      )}
+{/* HALL OF LEGENDS LEADERBOARD */}
+      {screen === 'leaderboard' && (
+        <LeaderboardScreen
+          leaderboardTab={leaderboardTab}
+          setLeaderboardTab={setLeaderboardTab}
+          loadingLb={loadingLb}
+          leaderboard={leaderboard}
+          executeWithTransition={executeWithTransition}
+          setScreen={setScreen}
+        />
+      )}
+
+      {/* LEVEL UP MODAL PANEL LAYER */}
+      {screen === 'levelup' && (
+        <LevelUpScreen
+          hudData={hudData}
+          voidCrystals={voidCrystals}
+          handleReroll={handleReroll}
+          displayedChoices={displayedChoices}
+          upgradeLockRef={upgradeLockRef}
+          onSelectUpgrade={onSelectUpgrade}
+        />
+      )}
+
+      {/* GAME OVER SUMMARY SCREEN */}
+      {screen === 'gameover' && (
+        <GameOverScreen
+          gameOverPhase={gameOverPhase}
+          setGameOverPhase={setGameOverPhase}
+          voidCrystals={voidCrystals}
+          setVoidCrystals={setVoidCrystals}
+          showDamageRecap={showDamageRecap}
+          setShowDamageRecap={setShowDamageRecap}
+          hudData={hudData}
+          isCoop={isCoop}
+          restartVotes={restartVotes}
+          wizardName={wizardName}
+          setWizardName={setWizardName}
+          isScoreSubmitted={isScoreSubmitted}
+          handleSubmitScore={handleSubmitScore}
+          submitStatus={submitStatus}
+          setScreen={setScreen}
+          executeWithTransition={executeWithTransition}
+          onAction={onAction}
+        />
+      )}
+
+{/* MATCH PAUSE OVERLAY */}
+      {screen === 'pause' && (
+        <PauseScreen
+          setScreen={setScreen}
+          onAction={onAction}
+          executeWithTransition={executeWithTransition}
+        />
       )}
 
 {/* ====================================================================
@@ -2578,225 +3187,7 @@ const renderDamageRecap = () => {
           </div>
 
           {/* ── GRIMOIRE STYLES ── */}
-          <style>{`
-            @keyframes grimoire-spin {
-              from { transform: rotate(0deg); }
-              to   { transform: rotate(360deg); }
-            }
-            @keyframes grimoire-glow-pulse {
-              0%, 100% { box-shadow: 0 0 20px rgba(197,160,89,0.25), inset 0 0 20px rgba(0,0,0,0.9); }
-              50%       { box-shadow: 0 0 40px rgba(197,160,89,0.45), inset 0 0 25px rgba(124,58,237,0.1); }
-            }
-
-            .grimoire-book {
-              box-shadow: 0 0 40px rgba(124,58,237,0.35), 0 8px 32px rgba(0,0,0,0.9);
-            }
-
-            .grimoire-page {
-              flex: 1;
-              background: radial-gradient(circle at 50% 20%, #1e1005 0%, #120a03 60%, #0a0601 100%);
-              border: 1.5px solid #c5a059;
-              box-sizing: border-box;
-              position: relative;
-              overflow: visible;
-              animation: grimoire-glow-pulse 6s ease-in-out infinite;
-            }
-            .grimoire-page::before {
-              content: '';
-              position: absolute; inset: 5px;
-              border: 0.5px dashed rgba(197,160,89,0.18);
-              border-radius: 2px; pointer-events: none; z-index: 0;
-            }
-
-            .grimoire-left  { border-radius: 8px 0 0 8px; border-right: none; overflow: hidden; }
-            .grimoire-right {
-              border-radius: 0 8px 8px 0; border-left: none;
-              overflow: visible;
-            }
-
-            .grimoire-left::after, .grimoire-right::after {
-              content: '';
-              position: absolute; inset: 0; pointer-events: none; z-index: 0;
-              background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 22px,
-                rgba(197,160,89,0.03) 22px,
-                rgba(197,160,89,0.03) 23px
-              );
-            }
-
-            .grimoire-page-inner {
-              position: relative;
-              z-index: 5;
-              padding: clamp(12px, 3vw, 22px);
-              height: 100%; box-sizing: border-box;
-              display: flex; flex-direction: column;
-            }
-
-            .grimoire-spine {
-              width: clamp(14px, 3vw, 22px);
-              background: linear-gradient(90deg, #0a0601 0%, #2a1a06 40%, #1a0e03 60%, #0a0601 100%);
-              border-top: 1.5px solid #c5a059;
-              border-bottom: 1.5px solid #c5a059;
-              position: relative; z-index: 2;
-              box-shadow: inset 2px 0 8px rgba(0,0,0,0.8), inset -2px 0 8px rgba(0,0,0,0.8);
-              display: flex; align-items: center; justify-content: center;
-            }
-            .grimoire-spine-inner {
-              width: 100%; height: 100%;
-              display: flex; align-items: center; justify-content: center;
-              border-left:  0.5px solid rgba(197,160,89,0.3);
-              border-right: 0.5px solid rgba(197,160,89,0.3);
-            }
-
-            .grimoire-rune-strip {
-              font-family: serif; font-size: 0.55rem; color: rgba(160,120,74,0.55);
-              letter-spacing: 0.1em; text-align: center; line-height: 1;
-              user-select: none; white-space: nowrap; overflow: hidden;
-            }
-
-            .grimoire-divider {
-              height: 1px;
-              background: linear-gradient(90deg, transparent 0%, #c5a059 30%, #e9c47a 50%, #c5a059 70%, transparent 100%);
-              opacity: 0.5; width: 100%; margin: 4px 0;
-            }
-
-            .grimoire-page-num {
-              text-align: center; font-family: 'Georgia', serif;
-              font-size: 0.6rem; color: rgba(160,120,74,0.5);
-              letter-spacing: 0.3em; margin-top: 4px;
-            }
-
-            .grimoire-video-thumb {
-              width: 100%; aspect-ratio: 16/9; min-height: 100px;
-              border: 1px solid rgba(197,160,89,0.4); border-radius: 4px;
-              display: flex; flex-direction: column; align-items: center; justify-content: center;
-              cursor: pointer; position: relative;
-              overflow: hidden;
-              transition: border-color 0.3s ease, box-shadow 0.3s ease;
-              pointer-events: all;
-              z-index: 10;
-              -webkit-tap-highlight-color: rgba(197,160,89,0.2);
-            }
-            .grimoire-video-thumb:hover {
-              border-color: #e9c47a;
-              box-shadow: 0 0 18px rgba(197,160,89,0.3), inset 0 0 20px rgba(124,58,237,0.15);
-            }
-            .grimoire-video-thumb:active {
-              border-color: #ffe6a3;
-              box-shadow: 0 0 28px rgba(197,160,89,0.5);
-            }
-
-            @media (max-width: 480px) {
-              .grimoire-book   { flex-direction: column !important; }
-              .grimoire-left   { border-radius: 8px 8px 0 0 !important; border-right: 1.5px solid #c5a059 !important; border-bottom: none !important; }
-              .grimoire-right  { border-radius: 0 0 8px 8px !important; border-left:  1.5px solid #c5a059 !important; border-top:    none !important; }
-              .grimoire-spine  { width: 100% !important; height: clamp(12px, 3vw, 18px) !important; flex-direction: row !important; }
-              .grimoire-spine div { writing-mode: horizontal-tb !important; transform: none !important; }
-            }
-
-            /* 🔥 PURE CSS MOBILE RESPONSIVE OVERRIDES (GRIMOIRE) 🔥 */
-            
-            /* 1. PORTRAIT FIX: Native overlay scroll, expand full height, tabs at top */
-            @media (max-width: 768px) and (orientation: portrait) {
-              .grimoire-modal-overlay {
-                align-items: flex-start !important;
-                padding-top: 65px !important; /* Space para hindi makain ang tabs sa taas */
-                padding-bottom: 40px !important;
-                overflow-y: auto !important;
-                overflow-x: hidden !important;
-              }
-              .grimoire-book { 
-                flex-direction: column !important; 
-                height: auto !important;
-                max-height: none !important; /* Tanggalin ang height restriction para mag-expand */
-                margin-top: 0 !important;
-                overflow: visible !important; /* 👈 MUST BE VISIBLE FOR TABS TO SHOW! */
-              }
-              .grimoire-page {
-                flex: none !important;
-                min-height: auto !important;
-                height: auto !important;
-              }
-              .grimoire-left { 
-                border-radius: 8px 8px 0 0 !important; 
-                border-right: 1.5px solid #c5a059 !important; 
-                border-bottom: 1px dashed rgba(197,160,89,0.4) !important; 
-              }
-              .grimoire-right { 
-                border-radius: 0 0 8px 8px !important; 
-                border-left: 1.5px solid #c5a059 !important; 
-                border-top: none !important; 
-              }
-              .grimoire-spine { 
-                display: none !important; 
-              }
-              .grimoire-tabs-container {
-                flex-direction: row !important;
-                top: -42px !important;
-                left: 0 !important;
-                width: 100% !important;
-                justify-content: center !important;
-              }
-              .mobile-tab-btn {
-                writing-mode: horizontal-tb !important;
-                transform: none !important;
-                padding: 10px 16px !important;
-                border-radius: 8px 8px 0 0 !important;
-                border-right: 1.5px solid #c5a059 !important;
-                border-bottom: none !important;
-                height: auto !important;
-              }
-              .grimoire-page-inner {
-                height: auto !important;
-                overflow: visible !important; /* Hayaan lang na i-stretch ng content ang container */
-              }
-            }
-
-            /* 2. LANDSCAPE FIX: Prevent cutoff, restrict height, icon tabs */
-            @media (max-width: 932px) and (orientation: landscape) {
-              .grimoire-book {
-                margin-left: 45px !important; 
-                width: calc(100vw - 70px) !important; 
-                min-height: 0 !important;     
-                height: 85vh !important;      /* fallback para sa mga lumang browser na walang svh support */
-                max-height: 85vh !important; 
-                height: 85svh !important;     
-                max-height: 85svh !important; 
-                overflow: visible !important; /* 👈 Ensure tabs don't clip left */
-              }
-              .grimoire-tabs-container {
-                left: -38px !important; 
-              }
-              .mobile-tab-btn {
-                font-size: 0 !important;      
-                padding: 12px 6px !important; 
-                writing-mode: horizontal-tb !important; 
-                transform: none !important; 
-                min-width: 38px !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-              }
-              .mobile-tab-btn:nth-child(1)::after {
-                content: '📜'; 
-                font-size: 1.2rem !important;
-              }
-              .mobile-tab-btn:nth-child(2)::after {
-                content: '🦇'; 
-                font-size: 1.2rem !important;
-              }
-            }
-
-            /* 3. UNIVERSAL PAGE CLIPPING FIX */
-            @media (max-width: 932px) {
-              .grimoire-page-inner {
-                overflow-y: auto !important;  
-                padding: 16px !important; 
-              }
-            }
-          `}</style>
+          <style>{GRIMOIRE_MODAL_STYLES}</style>
         </div>
       )}
 
@@ -2826,82 +3217,7 @@ const renderDamageRecap = () => {
           <div className="mana-particle p4"></div>
           <div className="mana-particle p5"></div>
 
-          <style>{`
-            /* 1. Deep Void Gradient Fade */
-            .arcane-idle-transition {
-              background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
-              animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            }
-
-            /* 2. Expanding Ethereal Rings */
-            .idle-magic-ring {
-              position: absolute;
-              border-radius: 50%;
-              opacity: 0;
-            }
-            .idle-magic-ring.outer {
-              width: 80px;
-              height: 80px;
-              border: 2px solid rgba(255, 230, 163, 0.9); /* Pale Gold */
-              box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4); /* Purple Aura */
-              animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-            }
-            .idle-magic-ring.inner {
-              width: 40px;
-              height: 40px;
-              border: 1px dashed rgba(192, 132, 252, 0.8);
-              animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-              animation-delay: 0.05s;
-            }
-
-            /* 3. Central Flash (Like casting a sleep spell) */
-            .idle-magic-flash {
-              position: absolute;
-              width: 4px;
-              height: 4px;
-              background: #fff;
-              border-radius: 50%;
-              box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
-              animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            }
-
-            /* 4. Drifting Mana Particles (Frieren Vibe) */
-            .mana-particle {
-              position: absolute;
-              background: #ffe6a3;
-              border-radius: 50%;
-              box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
-              opacity: 0;
-            }
-            .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
-            .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
-            .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
-            .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
-            .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
-
-            /* ================= ANIMATIONS ================= */
-            @keyframes voidFadeIn {
-              0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
-              100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
-            }
-            @keyframes spellExpand {
-              0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
-              100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
-            }
-            @keyframes spellExpandInner {
-              0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
-              100% { transform: scale(10) rotate(-180deg); opacity: 0; }
-            }
-            @keyframes starFlash {
-              0% { transform: scale(0); opacity: 1; }
-              40% { transform: scale(2); opacity: 1; }
-              100% { transform: scale(0); opacity: 0; }
-            }
-            @keyframes floatMana {
-              0% { transform: translateY(0) scale(1); opacity: 1; }
-              100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
-            }
-          `}</style>
+          <style>{IDLE_TRANSITION_STYLES}</style>
         </div>
       )}
     

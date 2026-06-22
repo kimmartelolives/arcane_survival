@@ -30,7 +30,15 @@ const newParticles = Array.from({ length: 3 }).map(() => ({
   type: 'glitter-particle'
 }));
 
-      setParticles((prev) => [...prev.slice(-50), ...newParticles]);
+      setParticles((prev) => {
+        const combined = [...prev, ...newParticles];
+        const seen = new Set();
+        return combined.filter(p => {
+          if (seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        }).slice(-50);
+      });
     };
 
     const handleMouseOver = (e) => {
@@ -58,7 +66,7 @@ const newParticles = Array.from({ length: 3 }).map(() => ({
       const sparksColors = ['#ffd700', '#ffffff', '#fff5a5']; 
       
       const loopSparks = Array.from({ length: 3 }).map(() => ({
-        id: Math.random() + Date.now(),
+        id: crypto.randomUUID(),
         x: position.x + (Math.random() * 24 - 12), 
         y: position.y + (Math.random() * 24 - 12),
         size: Math.random() * 7 + 4, 
@@ -67,7 +75,15 @@ const newParticles = Array.from({ length: 3 }).map(() => ({
         type: 'clickable-spark' 
       }));
 
-      setParticles((prev) => [...prev.slice(-60), ...loopSparks]);
+      setParticles((prev) => {
+        const combined = [...prev, ...loopSparks];
+        const seen = new Set();
+        return combined.filter(p => {
+          if (seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        }).slice(-60);
+      });
     }, 80); 
 
     return () => clearInterval(sparkLoop);
