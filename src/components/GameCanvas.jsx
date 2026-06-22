@@ -989,95 +989,336 @@ const focusStyles = `
       0 0 16px rgba(139, 92, 246, 0.32),
       inset 0 0 12px rgba(2, 1, 12, 0.55);
   }
+  /* ═══════════════════════════════════════════════════════════════
+     ── GAME HUD BOTTOM — Premium Frieren-Inspired Fantasy RPG UI ──
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* ── Layout container ── */
   .game-hud-bottom {
     position: absolute;
-    /* ✅ Bottom offset proporsyonal na rin sa --ui-scale, para hindi
-       "lumulutang" papalayo sa screen edge sa malalaking screen o
-       sumisingit masyado sa maliliit. */
+    /* ✅ Bottom offset proporsyonal sa --ui-scale */
     bottom: calc(12px * var(--ui-scale, 1));
     left: 50%;
-    /* ✅ UNIFIED SCALE: isang transform na lang dito ang nagdidikta ng laki
-       ng buong grupo (level badge + HP bar + XP bar). Dating magkahiwalay
-       na fixed px/rem ang bawat anak na element, kaya iba ang lumalabas na
-       proportion depende sa physical screen — ngayon, parehong-pareho na
-       sila dahil parehong --ui-scale lang ang ginagamit, kasing source ng
-       canvas scale mismo. */
+    /* ✅ UNIFIED SCALE: single transform controls the whole group */
     transform: translateX(-50%) scale(var(--ui-scale, 1));
     transform-origin: bottom center;
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    gap: 10px;
+    gap: 8px;
     font-family: monospace;
     pointer-events: none;
     z-index: 10;
   }
+
   /* Bars stay stacked (HP on top, XP below) inside their own column */
   .hud-bars-stack {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 6px;
+    align-items: stretch;
+    gap: 4px;
+    justify-content: center;
   }
-  /* ── Lv. badge — sits to the LEFT of the HP/XP bars, stretched to match
-     their combined height (HP bar + gap + XP bar) for a clean, even look ── */
+
+  /* Arcane separator between HP and XP bars */
+  .hud-bars-divider {
+    height: 1px;
+    margin: 0 2px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(139, 92, 246, 0.18) 15%,
+      rgba(167, 139, 250, 0.35) 40%,
+      rgba(251, 191, 36, 0.22) 50%,
+      rgba(167, 139, 250, 0.35) 60%,
+      rgba(139, 92, 246, 0.18) 85%,
+      transparent 100%
+    );
+  }
+
+  /* ── Level Badge — Ancient Arcane Seal ── */
   .hud-level-badge {
     box-sizing: border-box;
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 1px;
-    padding: 0 10px;
-    background: rgba(4, 2, 18, 0.88);
-    border: 1px solid rgba(100, 70, 200, 0.28);
-    border-top-color: rgba(139, 92, 246, 0.45);
-    border-bottom-color: rgba(60, 30, 120, 0.5);
-    clip-path: polygon(0% 0%, calc(100% - 4px) 0%, 100% 4px, 100% 100%, 4px 100%, 0% calc(100% - 4px));
+    /* stretch to same height as hud-bars-stack automatically */
+    align-self: stretch;
+    padding: 0 12px;
+    background:
+      linear-gradient(170deg,
+        rgba(10, 5, 32, 0.97) 0%,
+        rgba(4, 2, 18, 0.99) 60%,
+        rgba(8, 4, 26, 0.97) 100%);
+    border: 1px solid rgba(251, 191, 36, 0.28);
+    border-top-color: rgba(251, 191, 36, 0.55);
+    border-bottom-color: rgba(161, 118, 8, 0.35);
+    /* Elegant octagonal clip — arcane seal shape */
+    clip-path: polygon(
+      10px 0%,
+      calc(100% - 10px) 0%,
+      100% 10px,
+      100% calc(100% - 10px),
+      calc(100% - 10px) 100%,
+      10px 100%,
+      0% calc(100% - 10px),
+      0% 10px
+    );
     box-shadow:
-      inset 0 1px 0 rgba(139, 92, 246, 0.1),
-      inset 0 0 12px rgba(2, 1, 10, 0.7);
+      0 0 20px rgba(251, 191, 36, 0.10),
+      0 0 8px  rgba(251, 191, 36, 0.06),
+      inset 0 1px 0 rgba(251, 191, 36, 0.18),
+      inset 0 -1px 0 rgba(120, 80, 5, 0.3),
+      inset 0 0 18px rgba(2, 1, 10, 0.85);
     white-space: nowrap;
-  }
-  .hud-level-label {
-    font-size: 0.55rem;
-    color: rgba(167, 139, 250, 0.85);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-family: 'Cinzel', 'Georgia', serif;
-    line-height: 1;
-  }
-  .hud-level-value {
-    font-size: 0.85rem;
-    color: #fbbf24;
-    font-weight: 800;
-    font-family: 'Cinzel', 'Georgia', serif;
-    text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
-    line-height: 1;
-  }
-  /* ── HP / XP Bars — BDO Center Style ── */
-  .hud-bar-container {
-    width: 250px;
-    background: rgba(4, 2, 18, 0.88);
-    border: 1px solid rgba(100, 70, 200, 0.28);
-    border-top-color: rgba(139, 92, 246, 0.45);
-    border-bottom-color: rgba(60, 30, 120, 0.5);
-    /* Subtle angular clip on right corner — arcane seal mark */
-    clip-path: polygon(0% 0%, calc(100% - 5px) 0%, 100% 5px, 100% 100%, 5px 100%, 0% calc(100% - 5px));
-    position: relative;
-    height: 20px;
-    overflow: hidden;
-    box-shadow:
-      inset 0 1px 0 rgba(139, 92, 246, 0.1),
-      inset 0 0 12px rgba(2, 1, 10, 0.7);
-  }
-  .hud-bar-fill {
-    height: 100%;
-    width: 100%;
-    transition: width 0.12s linear;
+    background:
+      linear-gradient(170deg,
+        rgba(10, 5, 32, 0.97) 0%,
+        rgba(4, 2, 18, 0.99) 60%,
+        rgba(8, 4, 26, 0.97) 100%);
   }
 
+  /* Gold diamond gem at top and bottom corners */
+  .hud-level-badge::before,
+  .hud-level-badge::after {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    background: radial-gradient(circle, #fde68a 0%, #fbbf24 50%, #d97706 100%);
+    box-shadow: 0 0 8px rgba(251, 191, 36, 1), 0 0 14px rgba(251, 191, 36, 0.6);
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    animation: hud-gem-twinkle 2s ease-in-out infinite;
+  }
+  .hud-level-badge::before { top: -3px;    left: 50%; transform: translateX(-50%); }
+  .hud-level-badge::after  { bottom: -3px; left: 50%; transform: translateX(-50%); animation-delay: 1s; }
+
+  /* "LEVEL" label — ancient runic engraving */
+  .hud-level-label {
+    font-size: 0.40rem;
+    color: rgba(251, 191, 36, 0.65);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-family: 'Cinzel', 'Georgia', serif;
+    line-height: 1;
+  }
+
+  /* Big level number — enchanted gold inscription */
+  .hud-level-value {
+    font-size: 1.05rem;
+    color: #fde68a;
+    font-weight: 900;
+    font-family: 'Cinzel', 'Georgia', serif;
+    text-shadow:
+      0 0 8px rgba(251, 191, 36, 0.60),
+      0 0 18px rgba(251, 191, 36, 0.22),
+      0 1px 0  rgba(0, 0, 0, 0.9);
+    line-height: 1;
+  }
+
+  /* Arcane rune row below the number */
+  .hud-level-rune {
+    font-size: 0.38rem;
+    color: rgba(167, 139, 250, 0.5);
+    font-family: serif;
+    line-height: 1;
+    letter-spacing: 3px;
+    margin-top: 0;
+    animation: hud-rune-drift 5s ease-in-out infinite;
+  }
+
+  /* ── HP / XP Bar Wrappers — ornament + bar in a row ── */
+  .hud-bar-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* Left crystal ornament icon */
+  .hud-bar-ornament {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+  }
+
+  /* HP ornament — crimson heart pulse */
+  .hud-bar-wrap-hp .hud-bar-ornament svg {
+    filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.9)) drop-shadow(0 0 8px rgba(185, 28, 28, 0.5));
+    animation: hud-hp-ornament 2.8s ease-in-out infinite;
+  }
+
+  /* XP ornament — azure star slow spin */
+  .hud-bar-wrap-xp .hud-bar-ornament svg {
+    filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.9)) drop-shadow(0 0 8px rgba(37, 99, 235, 0.5));
+    animation: hud-xp-ornament 5s linear infinite;
+  }
+
+  /* ── HP / XP Bars — Enchanted Crystal Energy Bars ── */
+  .hud-bar-container {
+    width: 235px;
+    height: 18px;
+    position: relative;
+    /* Subtle panel-line texture + deep void base */
+    background:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px, transparent 23px,
+        rgba(0, 0, 0, 0.12) 23px, rgba(0, 0, 0, 0.12) 24px
+      ),
+      linear-gradient(180deg,
+        rgba(5, 2, 18, 0.97) 0%,
+        rgba(3, 1, 14, 0.99) 100%);
+    border: 1px solid rgba(100, 70, 200, 0.28);
+    border-top-color: rgba(139, 92, 246, 0.45);
+    border-bottom-color: rgba(50, 24, 105, 0.55);
+    /* Sharp arcane notch on top-right only */
+    clip-path: polygon(
+      0% 0%,
+      calc(100% - 6px) 0%,
+      100% 6px,
+      100% 100%,
+      0% 100%
+    );
+    overflow: hidden;
+    box-shadow:
+      inset 0 1px 0 rgba(139, 92, 246, 0.11),
+      inset 0 -1px 0 rgba(25, 8, 70, 0.60),
+      inset 2px 0 8px rgba(2, 1, 10, 0.60),
+      0 0 8px rgba(50, 24, 105, 0.12);
+  }
+
+  /* HP bar — crimson vitality */
+  .hud-bar-hp {
+    height: 18px;
+    border-top-color: rgba(185, 28, 28, 0.55);
+    border-left-color: rgba(185, 28, 28, 0.28);
+    border-bottom-color: rgba(90, 10, 10, 0.70);
+    box-shadow:
+      inset 0 1px 0 rgba(239, 68, 68, 0.18),
+      inset 0 -1px 0 rgba(90, 12, 12, 0.65),
+      inset 2px 0 8px rgba(2, 1, 10, 0.65),
+      0 0 10px rgba(185, 28, 28, 0.22),
+      0 0 2px rgba(239, 68, 68, 0.35),
+      0 2px 6px rgba(0, 0, 0, 0.40);
+  }
+
+  /* XP bar — azure mana, same height as HP */
+  .hud-bar-xp {
+    height: 18px;
+    border-top-color: rgba(37, 99, 235, 0.50);
+    border-left-color: rgba(37, 99, 235, 0.25);
+    border-bottom-color: rgba(12, 35, 100, 0.70);
+    box-shadow:
+      inset 0 1px 0 rgba(59, 130, 246, 0.14),
+      inset 0 -1px 0 rgba(12, 35, 100, 0.65),
+      inset 2px 0 8px rgba(2, 1, 10, 0.65),
+      0 0 10px rgba(29, 78, 216, 0.22),
+      0 0 2px rgba(59, 130, 246, 0.35),
+      0 2px 6px rgba(0, 0, 0, 0.40);
+  }
+
+  /* Fill — shimmer sweep via pseudo-elements */
+  .hud-bar-fill {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    transition: width 0.15s ease-out;
+  }
+
+  /* Bevel highlight — crystal top edge */
+  .hud-bar-fill::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.32) 15%,
+      rgba(255, 255, 255, 0.45) 50%,
+      rgba(255, 255, 255, 0.25) 85%,
+      transparent 100%);
+    pointer-events: none;
+  }
+
+  /* Shimmer sweep — arcane energy pulse through fill */
+  .hud-bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -85%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.08) 25%,
+      rgba(255, 255, 255, 0.26) 50%,
+      rgba(255, 255, 255, 0.08) 75%,
+      transparent 100%
+    );
+    animation: hud-bar-sweep 4.2s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  /* Tick marks — arcane division notches */
+  .hud-bar-ticks {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  .hud-bar-ticks::before,
+  .hud-bar-ticks::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    height: 60%;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.06);
+  }
+  .hud-bar-ticks::before { left: 25%; }
+  .hud-bar-ticks::after  { left: 75%; }
+
+  /* Center tick at 50% — slightly taller */
+  .hud-bar-tick-mid {
+    position: absolute;
+    top: 14%;
+    left: 50%;
+    height: 72%;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: 0 0 3px rgba(255, 255, 255, 0.10);
+  }
+
+  /* Right-edge rune glyph */
+  .hud-bar-end-rune {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.38rem;
+    color: rgba(167, 139, 250, 0.28);
+    font-family: serif;
+    pointer-events: none;
+    line-height: 1;
+    letter-spacing: 1px;
+  }
+
+  /* Bar label text — arcane inscription */
   .hud-bar-text {
     position: absolute;
     top: 0;
@@ -1085,15 +1326,74 @@ const focusStyles = `
     width: 100%;
     height: 100%;
     text-align: center;
-    font-size: 0.68rem;
-    line-height: 18px;
-    color: rgba(226, 217, 243, 0.92);
+    font-size: 0.60rem;
+    color: rgba(230, 222, 248, 0.95);
     font-weight: bold;
     font-family: 'Cinzel', 'Georgia', serif;
-    letter-spacing: 0.4px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    letter-spacing: 0.6px;
+    text-shadow:
+      0 1px 5px rgba(0, 0, 0, 0.99),
+      0 0 8px  rgba(0, 0, 0, 0.85);
     white-space: nowrap;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Per-bar line-height overrides */
+  .hud-bar-hp .hud-bar-text { line-height: 18px; font-size: 0.61rem; }
+  .hud-bar-xp .hud-bar-text { line-height: 18px; font-size: 0.58rem; letter-spacing: 0.5px; color: rgba(147, 197, 253, 0.95); }
+
+  /* ── HUD Keyframe Animations ── */
+
+  /* Level badge — slow diagonal shimmer scan instead of pulse */
+  @keyframes hud-badge-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+
+  /* Corner gem diamond — gentle float instead of scale pulse */
+  @keyframes hud-gem-twinkle {
+    0%   { opacity: 0.6;  transform: translateX(-50%) translateY(0px); }
+    50%  { opacity: 1;    transform: translateX(-50%) translateY(-1.5px); }
+    100% { opacity: 0.6;  transform: translateX(-50%) translateY(0px); }
+  }
+
+  /* Gold number — very subtle flicker like candlelight, not a big pulse */
+  @keyframes hud-gold-flicker {
+    0%,  100% { opacity: 1;    text-shadow: 0 0 8px rgba(251,191,36,0.55), 0 0 18px rgba(251,191,36,0.20), 0 1px 0 rgba(0,0,0,0.9); }
+    18%        { opacity: 0.92; text-shadow: 0 0 6px rgba(251,191,36,0.40), 0 0 12px rgba(251,191,36,0.14), 0 1px 0 rgba(0,0,0,0.9); }
+    45%        { opacity: 1;    text-shadow: 0 0 10px rgba(251,191,36,0.70), 0 0 22px rgba(251,191,36,0.28), 0 1px 0 rgba(0,0,0,0.9); }
+    72%        { opacity: 0.95; text-shadow: 0 0 7px rgba(251,191,36,0.50), 0 0 15px rgba(251,191,36,0.18), 0 1px 0 rgba(0,0,0,0.9); }
+  }
+
+  /* Rune row — slow drift opacity, no letter-spacing change */
+  @keyframes hud-rune-drift {
+    0%,  100% { opacity: 0.40; }
+    50%        { opacity: 0.65; }
+  }
+
+  /* HP / XP bar — static glow, no pulsing box-shadow change */
+
+  /* Bar shimmer sweep — magical energy flow */
+  @keyframes hud-bar-sweep {
+    0%   { left: -85%; opacity: 0; }
+    10%  { opacity: 1; }
+    88%  { opacity: 1; }
+    100% { left: 130%; opacity: 0; }
+  }
+
+  /* HP heart ornament — slow float bob, no scale throb */
+  @keyframes hud-hp-ornament {
+    0%,  100% { transform: translateY(0px);    filter: drop-shadow(0 0 3px rgba(239,68,68,0.75)) drop-shadow(0 0 6px rgba(185,28,28,0.45)); }
+    50%        { transform: translateY(-1.5px); filter: drop-shadow(0 0 5px rgba(239,68,68,0.95)) drop-shadow(0 0 9px rgba(220,38,38,0.55)); }
+  }
+
+  /* XP star ornament — continuous slow spin */
+  @keyframes hud-xp-ornament {
+    0%   { transform: rotate(0deg);   filter: drop-shadow(0 0 3px rgba(96,165,250,0.75)) drop-shadow(0 0 6px rgba(37,99,235,0.45)); }
+    50%  { transform: rotate(180deg); filter: drop-shadow(0 0 5px rgba(96,165,250,0.95)) drop-shadow(0 0 9px rgba(59,130,246,0.55)); }
+    100% { transform: rotate(360deg); filter: drop-shadow(0 0 3px rgba(96,165,250,0.75)) drop-shadow(0 0 6px rgba(37,99,235,0.45)); }
   }
 
   /* ── Stats Toggle Button — Arcane Codex Tab ── */
@@ -1704,13 +2004,10 @@ const focusStyles = `
     white-space: nowrap;
   }
   .bdo-ult-key {
-    position: absolute;
-    top: 5px; left: 5px;
-    font-size: 0.56rem;
-    color: rgba(255,255,255,0.45);
-    font-family: monospace;
-    font-weight: bold;
-    line-height: 1;
+    top: 3px;
+    left: 3px;
+    font-size: 0.52rem;
+    padding: 1px 3px;
   }
   .bdo-ult-cd {
     position: absolute;
@@ -1739,7 +2036,7 @@ const focusStyles = `
       border-width: 1.5px !important;
     }
     .bdo-ult-label { font-size: 0.38rem !important; margin-top: 1px !important; }
-    .bdo-ult-key { font-size: 0.4rem !important; top: 2px !important; left: 2px !important; }
+    .bdo-ult-key { display: none; }
     .bdo-ult-cd { font-size: 0.8rem !important; }
 }
 
@@ -1793,6 +2090,47 @@ const focusStyles = `
   .sigil-btn:active { transform: translate(-50%, -50%) scale(0.92); }
   /* Rune-corner dots */
   .sigil-btn::after { display: none; }
+
+  /* ── Hotkey badges — desktop only ── */
+  .sigil-hotkey,
+  .dash-hotkey,
+  .bdo-ult-key {
+    position: absolute;
+    font-family: monospace;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.70);
+    letter-spacing: 0;
+  }
+
+  .sigil-hotkey {
+    top: 2px;
+    right: 2px;
+    font-size: 0.48rem;
+    padding: 1px 3px;
+  }
+
+  .dash-hotkey {
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.42rem;
+    padding: 1px 4px;
+    white-space: nowrap;
+    color: rgba(94, 234, 212, 0.75);
+    border-color: rgba(94, 234, 212, 0.25);
+  }
+
+  @media (max-width: 840px), (max-width: 932px) and (orientation: landscape) {
+    .sigil-hotkey,
+    .dash-hotkey {
+      display: none;
+    }
+  }
 
   /* Element-specific sigil colors — ancient seal palette */
   .sigil-fire {
@@ -16646,152 +16984,152 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//              playerLevelRef.current = target.level;
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 20;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 20;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 100;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 11185;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 100;      // Max Crit Chance Cap (60%)
+             target.baseDef = 11185;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//              playerLevelRef.current = target.level;
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
         
         // END CHEAT CODES
 
@@ -17219,12 +17557,12 @@ const renderTooltipStats = (item) => {
           const anchorOffset = isMobileLayout ? '80px' : '90px'; 
           
           const sigilDefs = [
-            { key: 'flareInferno',   cls: 'sigil-fire',      icon: 'fire',      label: 'Flare',    maxCd: 30, fn: () => castElementalSigil('flareInferno') },
-            { key: 'tidalWave',      cls: 'sigil-water',     icon: 'water',     label: 'Wave',     maxCd: 30, fn: () => castElementalSigil('tidalWave') },
-            { key: 'fissureSlam',    cls: 'sigil-earth',     icon: 'earth',     label: 'Fissure',  maxCd: 30, fn: () => castElementalSigil('fissureSlam') },
-            { key: 'lightningSurge', cls: 'sigil-lightning', icon: 'lightning', label: 'Storm',    maxCd: 30, fn: () => castElementalSigil('lightningSurge') },
-            { key: 'iceStorm',       cls: 'sigil-ice',       icon: 'ice',       label: 'Ice',      maxCd: 30, fn: () => castElementalSigil('iceStorm') },
-            { key: 'natureRecovery', cls: 'sigil-nature',    icon: 'nature',    label: 'Heal',     maxCd: 45, fn: () => castHealingSigil() },
+            { key: 'flareInferno',   cls: 'sigil-fire',      icon: 'fire',      label: 'Flare',    maxCd: 30, hotkey: '1', fn: () => castElementalSigil('flareInferno') },
+            { key: 'tidalWave',      cls: 'sigil-water',     icon: 'water',     label: 'Wave',     maxCd: 30, hotkey: '2', fn: () => castElementalSigil('tidalWave') },
+            { key: 'fissureSlam',    cls: 'sigil-earth',     icon: 'earth',     label: 'Fissure',  maxCd: 30, hotkey: '3', fn: () => castElementalSigil('fissureSlam') },
+            { key: 'lightningSurge', cls: 'sigil-lightning', icon: 'lightning', label: 'Storm',    maxCd: 30, hotkey: '4', fn: () => castElementalSigil('lightningSurge') },
+            { key: 'iceStorm',       cls: 'sigil-ice',       icon: 'ice',       label: 'Ice',      maxCd: 30, hotkey: '5', fn: () => castElementalSigil('iceStorm') },
+            { key: 'natureRecovery', cls: 'sigil-nature',    icon: 'nature',    label: 'Heal',     maxCd: 45, hotkey: '6', fn: () => castHealingSigil() },
           ];
           
           // PINALUWAG NA ARC PARA HINDI DIKIT-DIKIT ANG 6 SIGILS:
@@ -17252,6 +17590,7 @@ const renderTooltipStats = (item) => {
                     style={{ left: `${bx}px`, top: `${-by}px` }}
                     onPointerDown={(e) => { e.stopPropagation(); s.fn(); }}
                   >
+                    <span className="sigil-hotkey">{s.hotkey}</span>
                     <ArcaneIcon type={s.icon} size={24} />
                     {sCd > 0 && (
                       <>
@@ -17427,19 +17766,78 @@ const renderTooltipStats = (item) => {
 
         {(screen === 'playing' || screen === 'levelup' || screen === 'pause') && (
           <div className="game-hud-bottom">
+
+            {/* ══ Level Badge — Ancient Arcane Seal ══ */}
             <div className="hud-level-badge">
-              <span className="hud-level-label">Lv.</span>
+              {/* Tiny arcane sigil above the label */}
+              <svg width="14" height="5" viewBox="0 0 18 7" xmlns="http://www.w3.org/2000/svg" style={{ marginBottom: '0px', opacity: 0.55 }}>
+                <line x1="0" y1="3.5" x2="6" y2="3.5" stroke="#fbbf24" strokeWidth="0.6" opacity="0.7"/>
+                <polygon points="9,0.5 11,3.5 9,6.5 7,3.5" fill="none" stroke="#fbbf24" strokeWidth="0.7" opacity="0.85"/>
+                <line x1="12" y1="3.5" x2="18" y2="3.5" stroke="#fbbf24" strokeWidth="0.6" opacity="0.7"/>
+              </svg>
+              <span className="hud-level-label">Level</span>
               <span className="hud-level-value">{playerLevel}</span>
+              <span className="hud-level-rune">ᛟ ᚷ ᛖ</span>
             </div>
+
+            {/* ══ HP & XP Crystal Bars ══ */}
             <div className="hud-bars-stack">
-              <div className="hud-bar-container">
-                <div ref={hpFillRef} className="hud-bar-fill" style={{ background: '#ef4444', width: '100%' }}></div>
-                <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
+
+              {/* HP Bar — Crimson Vitality Crystal */}
+              <div className="hud-bar-wrap hud-bar-wrap-hp">
+                {/* Heart crystal ornament */}
+                <div className="hud-bar-ornament">
+                  <svg width="13" height="12" viewBox="0 0 13 12" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6.5 10.5 C6.5 10.5 1 6.8 1 3.5 C1 1.8 2.3 0.5 4 0.5 C5.1 0.5 6 1.1 6.5 2 C7 1.1 7.9 0.5 9 0.5 C10.7 0.5 12 1.8 12 3.5 C12 6.8 6.5 10.5 6.5 10.5Z"
+                      fill="#ef4444" fillOpacity="0.85" stroke="#fca5a5" strokeWidth="0.5"/>
+                  </svg>
+                </div>
+                <div className="hud-bar-container hud-bar-hp">
+                  <div
+                    ref={hpFillRef}
+                    className="hud-bar-fill"
+                    style={{
+                      background: 'linear-gradient(90deg, #7f1d1d 0%, #991b1b 25%, #b91c1c 50%, #dc2626 78%, #ef4444 92%, #fca5a5 100%)',
+                      width: '100%'
+                    }}
+                  ></div>
+                  <div className="hud-bar-ticks">
+                    <div className="hud-bar-tick-mid"></div>
+                  </div>
+                  <div className="hud-bar-end-rune">ᛟ</div>
+                  <div ref={hpTextRef} className="hud-bar-text">HP 100/100</div>
+                </div>
               </div>
-              <div className="hud-bar-container">
-                <div ref={xpFillRef} className="hud-bar-fill" style={{ background: '#3b82f6', width: '0%' }}></div>
-                <div ref={xpTextRef} className="hud-bar-text">XP 0/80</div>
+
+              {/* Arcane divider between HP and XP */}
+              <div className="hud-bars-divider"></div>
+
+              {/* XP Bar — Azure Arcane Mana Crystal */}
+              <div className="hud-bar-wrap hud-bar-wrap-xp">
+                {/* 4-pointed star crystal ornament */}
+                <div className="hud-bar-ornament">
+                  <svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="6,0.5 7.2,4.8 11.5,6 7.2,7.2 6,11.5 4.8,7.2 0.5,6 4.8,4.8"
+                      fill="#60a5fa" fillOpacity="0.85" stroke="#93c5fd" strokeWidth="0.5"/>
+                  </svg>
+                </div>
+                <div className="hud-bar-container hud-bar-xp">
+                  <div
+                    ref={xpFillRef}
+                    className="hud-bar-fill"
+                    style={{
+                      background: 'linear-gradient(90deg, #1e3a8a 0%, #1d4ed8 30%, #2563eb 60%, #3b82f6 85%, #93c5fd 100%)',
+                      width: '0%'
+                    }}
+                  ></div>
+                  <div className="hud-bar-ticks">
+                    <div className="hud-bar-tick-mid"></div>
+                  </div>
+                  <div className="hud-bar-end-rune">ᚹ</div>
+                  <div ref={xpTextRef} className="hud-bar-text">XP 0/80</div>
+                </div>
               </div>
+
             </div>
           </div>
         )}
@@ -17526,19 +17924,19 @@ const renderTooltipStats = (item) => {
 
           const ultDefs = [
             {
-              key: 'arcaneCollapse', cls: 'bdo-ult-collapse', label: 'Collapse', keyBind: '5',
+              key: 'arcaneCollapse', cls: 'bdo-ult-collapse', label: 'Collapse', keyBind: 'Q',
               color: '#a78bfa', rgb: '167,139,250', fn: castArcaneCollapseUltimate,
               icon: <ArcaneIcon type="arcaneCollapse" size={isMobileLayout ? 26 : 34} style={{ color: '#a78bfa' }} />,
               cdKey: 'arcaneCollapse', maxCd: 50, readyFx: 'aura'
             },
             {
-              key: 'arcaneInstinct', cls: 'bdo-ult-instinct', label: 'Instinct', keyBind: '6',
+              key: 'arcaneInstinct', cls: 'bdo-ult-instinct', label: 'Instinct', keyBind: 'E',
               color: '#f472b6', rgb: '244,114,182', fn: castArcaneInstinctUltimate,
               icon: <ArcaneIcon type="arcaneInstinct" size={isMobileLayout ? 26 : 34} style={{ color: '#f472b6' }} />,
               cdKey: 'arcaneInstinct', maxCd: 55, readyFx: 'ember'
             },
             {
-              key: 'arcaneResurrect', cls: 'bdo-ult-resurrect', label: 'Resurrect', keyBind: '7',
+              key: 'arcaneResurrect', cls: 'bdo-ult-resurrect', label: 'Resurrect', keyBind: 'R',
               color: '#34d399', rgb: '52,211,153', fn: castArcaneResurrectionUltimate,
               icon: <ArcaneIcon type="arcaneResurrect" size={isMobileLayout ? 26 : 34} style={{ color: '#34d399' }} />,
               cdKey: 'arcaneResurrection', maxCd: 300, readyFx: 'fire'
@@ -17699,6 +18097,7 @@ const renderTooltipStats = (item) => {
 </svg>
             </div>
             <div className="dash-label">DASH</div>
+            <span className="dash-hotkey">SPACE</span>
             <div ref={dashCdRef} className="dash-cd-overlay"></div>
           </div>
         )}
