@@ -25,6 +25,7 @@ class SoundManager {
       delete: [],
       dash: [],
       choir: [],
+      btnClick: [],
     };
     this.unlocked = false;
 
@@ -44,7 +45,8 @@ class SoundManager {
       unequip: '/unequip.mp3',
       delete: '/delete.mp3',
       dash: '/dash.wav',
-      choir: '/choir.mp3'
+      choir: '/choir.mp3',
+      btnClick: '/btn-click.mp3'
     };
 
     if (typeof window !== 'undefined') {
@@ -3380,6 +3382,33 @@ export default function TutorialCanvas({ screen, setScreen, hudRef, netRef, onLe
     
     audio.play().catch(e => console.warn("Narration blocked by browser:", e));
     narrationAudioRef.current = audio;
+  };
+
+  // ── Stop every audio that could be playing when exiting to menu ──────────
+  const stopAllAudio = () => {
+    // 1. Narration voice line
+    if (narrationAudioRef.current) {
+      narrationAudioRef.current.pause();
+      narrationAudioRef.current.currentTime = 0;
+      narrationAudioRef.current = null;
+    }
+    currentVoiceRef.current = null; // reset anti-spam guard
+
+    // 2. All BGM tracks (gameBgm, bossBgm, postBossBgm, menuBgm)
+    if (window.arcaneAudio) {
+      if (window.arcaneAudio.stopAllBgm) window.arcaneAudio.stopAllBgm();
+      ['gameBgm','bossBgm','postBossBgm','menuBgm'].forEach(key => {
+        const track = window.arcaneAudio[key];
+        if (track && !track.paused) { track.pause(); track.currentTime = 0; }
+      });
+    }
+
+    // 3. SoundManager pool — pause any SFX still playing
+    if (window.ArcaneSoundManager) {
+      Object.values(window.ArcaneSoundManager.pools).forEach(pool => {
+        pool.forEach(a => { if (!a.paused) { a.pause(); a.currentTime = 0; } });
+      });
+    }
   };
 
   // keep ref in sync with state so keydown/pointerdown closures read the live value
@@ -17727,9 +17756,13 @@ const renderTooltipStats = (item) => {
             color: #EEEDFE;
             line-height: 1.5;
           }
-          /* Tutorial help button in top bar */
-          .tut-help-btn {
+          /* Top-right button group */
+          .tut-top-right-group {
             position:absolute; top:10px; right:12px;
+            display:flex; align-items:center; gap:6px;
+            z-index: 1000;
+          }
+          .tut-help-btn {
             display:flex; align-items:center; gap:5px;
             background: rgba(26,20,50,0.55);
             border:0.5px solid rgba(127,119,221,0.4);
@@ -17739,9 +17772,20 @@ const renderTooltipStats = (item) => {
             color:#AFA9EC; cursor:pointer;
             backdrop-filter:blur(4px);
             transition: border-color .2s, color .2s;
-            z-index: 1000;
           }
           .tut-help-btn:hover { border-color:rgba(175,169,236,0.7); color:#EEEDFE; }
+          .tut-skip-btn {
+            display:flex; align-items:center; gap:5px;
+            background: rgba(26,20,50,0.55);
+            border:0.5px solid rgba(220,80,80,0.4);
+            border-radius:6px; padding:5px 10px;
+            font-family:'Cinzel','Georgia',serif;
+            font-size:10px; font-weight:600; letter-spacing:1.5px;
+            color:#f0a0a0; cursor:pointer;
+            backdrop-filter:blur(4px);
+            transition: border-color .2s, color .2s;
+          }
+          .tut-skip-btn:hover { border-color:rgba(220,100,100,0.7); color:#ffd0d0; }
         `}</style>
         <div className="tut-banner">
           <div className="tut-banner-corner tut-banner-corner-tl" />
@@ -17757,20 +17801,43 @@ const renderTooltipStats = (item) => {
       </>
     )}
 
-      {/* ── TUTORIAL HELP BUTTON (top-right, always visible in tutorial) ── */}
+      {/* ── TOP-RIGHT BUTTON GROUP: SKIP TRAINING + HELP ── */}
       {screen === 'tutorial' && !showTutorialComplete && (
-        <button
-          className="tut-help-btn"
-          onPointerDown={(e) => { e.stopPropagation(); setIsHelpOpen(prev => !prev); }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.8"/>
-            <path d="M9.3 9.6 C9.3 7.9 10.6 6.6 12 6.6 C13.5 6.6 14.7 7.7 14.7 9.1 C14.7 11 12 11.2 12 13.6"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            <circle cx="12" cy="16.8" r="1.05" fill="currentColor"/>
-          </svg>
-          HELP
-        </button>
+        <div className="tut-top-right-group">
+          {!showTutorialIntro && (
+            <button
+              className="tut-skip-btn"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                stopAllAudio();
+                try { const s = new Audio('/btn-click.mp3'); s.volume = 1.0; s.play().catch(()=>{}); } catch(_) {}
+                setIsExiting(true);
+                setTimeout(() => { setScreen('menu'); }, 1000);
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                <path d="M19 12H5M5 12L11 6M5 12L11 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              SKIP TRAINING
+            </button>
+          )}
+          <button
+            className="tut-help-btn"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              try { const s = new Audio('/btn-click.mp3'); s.volume = 1.0; s.play().catch(()=>{}); } catch(_) {}
+              setIsHelpOpen(prev => !prev);
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="9.2" stroke="currentColor" strokeWidth="1.8"/>
+              <path d="M9.3 9.6 C9.3 7.9 10.6 6.6 12 6.6 C13.5 6.6 14.7 7.7 14.7 9.1 C14.7 11 12 11.2 12 13.6"
+                stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="16.8" r="1.05" fill="currentColor"/>
+            </svg>
+            HELP
+          </button>
+        </div>
       )}
 
       {/* ── TUTORIAL HELP MODAL (same help modal, shown in tutorial too) ── */}
@@ -18131,7 +18198,8 @@ const renderTooltipStats = (item) => {
                   className="tut-btn tut-btn-go-menu"
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('equip');
+                    stopAllAudio();
+                    try { const s = new Audio('/btn-click.mp3'); s.volume = 1.0; s.play().catch(()=>{}); } catch(_) {}
                     setShowTutorialIntro(false);
                     setIsExiting(true);
                     setTimeout(() => { setScreen('menu'); }, 1000);
@@ -18412,7 +18480,8 @@ const renderTooltipStats = (item) => {
                   className="tut-btn tut-btn-menu"
                   onPointerDown={(e) => {
                     e.stopPropagation();
-                    if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('equip'); // 🔥 Sound effect
+                    stopAllAudio();
+                    try { const s = new Audio('/btn-click.mp3'); s.volume = 1.0; s.play().catch(()=>{}); } catch(_) {}
                     
                     // 🔥 1. I-TRIGGER ANG FADE-OUT ANIMATION
                     setIsExiting(true);
