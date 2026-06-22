@@ -18159,25 +18159,63 @@ const renderTooltipStats = (item) => {
                         <span style={{ fontSize: '1.5rem' }}>
                           {slot === 'wand' ? (
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                              <line x1="3" y1="21" x2="15" y2="9" stroke="#c4b5fd" strokeWidth="2.2" strokeLinecap="round"/>
-                              <path d="M15 9 L17 4 L19 9 L14 7 L19 7 L14 9 Z" fill="#e879f9" opacity="0.9"/>
-                              <circle cx="15" cy="9" r="1.5" fill="#f0abfc"/>
-                              <line x1="18" y1="3" x2="18" y2="6" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
-                              <line x1="20" y1="5" x2="17" y2="5" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
-                            </svg>
+                            {/* glow halo */}
+                            <circle cx="15" cy="9" r="5" fill="#f0abfc" opacity="0.15"/>
+                            {/* rune rings on shaft */}
+                            <circle cx="7" cy="17" r="2" fill="none" stroke="#c4b5fd" strokeWidth="0.8" opacity="0.5"/>
+                            <circle cx="7" cy="17" r="0.8" fill="#e879f9" opacity="0.6"/>
+                            <circle cx="11" cy="13" r="2" fill="none" stroke="#c4b5fd" strokeWidth="0.8" opacity="0.5"/>
+                            <circle cx="11" cy="13" r="0.8" fill="#e879f9" opacity="0.6"/>
+                            {/* shaft — deep purple base + violet overlay */}
+                            <line x1="3" y1="21" x2="15" y2="9" stroke="#7c3aed" strokeWidth="3.5" strokeLinecap="round"/>
+                            <line x1="3" y1="21" x2="15" y2="9" stroke="#c4b5fd" strokeWidth="2.2" strokeLinecap="round"/>
+                            {/* star tip */}
+                            <path d="M15 9 L17 4 L19 9 L14 7 L19 7 L14 9 Z" fill="#e879f9" opacity="0.9"/>
+                            <circle cx="15" cy="9" r="2" fill="#f0abfc"/>
+                            <circle cx="15" cy="9" r="1" fill="white" opacity="0.8"/>
+                            {/* sparkle cross */}
+                            <line x1="18" y1="3" x2="18" y2="6" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.9"/>
+                            <line x1="20" y1="5" x2="17" y2="5" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.9"/>
+                            {/* mini sparkle */}
+                            <line x1="20" y1="3" x2="20" y2="5" stroke="#fef08a" strokeWidth="0.8" strokeLinecap="round" opacity="0.6"/>
+                            <line x1="19" y1="4" x2="21" y2="4" stroke="#fef08a" strokeWidth="0.8" strokeLinecap="round" opacity="0.6"/>
+                          </svg>
                           ) : slot === 'robe' ? (
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                              <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinejoin="round"/>
-                              <path d="M8 3 Q12 6 16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round"/>
-                              <path d="M9 3 L7 8 M15 3 L17 8" stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7"/>
-                              <circle cx="12" cy="8" r="1.2" fill="#e879f9" opacity="0.9"/>
-                            </svg>
+                            {/* robe body fill */}
+                            <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" fill="#4c1d95" opacity="0.7"/>
+                            {/* robe outline */}
+                            <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinejoin="round"/>
+                            {/* collar arc */}
+                            <path d="M8 3 Q12 6 16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round"/>
+                            {/* sleeve creases */}
+                            <path d="M9 3 L7 8 M15 3 L17 8" stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
+                            {/* center seam */}
+                            <line x1="12" y1="6" x2="12" y2="19" stroke="#6d28d9" strokeWidth="0.8" opacity="0.5"/>
+                            {/* star pattern */}
+                            <path d="M8.5 13 L9 11.5 L9.5 13 L11 13 L9.8 14 L10.2 15.5 L9 14.5 L7.8 15.5 L8.2 14 L7 13 Z" fill="#7c3aed" opacity="0.7"/>
+                            {/* gem brooch */}
+                            <circle cx="12" cy="8" r="1.8" fill="#e879f9"/>
+                            <circle cx="12" cy="8" r="1" fill="#f9a8d4" opacity="0.8"/>
+                            <circle cx="11.5" cy="7.5" r="0.4" fill="white" opacity="0.8"/>
+                            {/* hem trim dashes */}
+                            <line x1="5.5" y1="20" x2="18.5" y2="20" stroke="#a78bfa" strokeWidth="1" strokeDasharray="2 2" opacity="0.7"/>
+                          </svg>
                           ) : (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                              <path d="M4 17 Q4 21 8 21 L18 21 Q21 21 21 18 L21 16 L9 16 L9 9 L5 9 Q4 9 4 12 Z" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round"/>
-                              <path d="M9 9 L9 16" stroke="#60a5fa" strokeWidth="1.5"/>
-                              <line x1="9" y1="19" x2="17" y2="19" stroke="#93c5fd" strokeWidth="1.2" opacity="0.7"/>
-                              <path d="M5 9 Q6 6 9 6 L9 9" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              {/* left boot (back) */}
+                              <path d="M 7 3 C 8 3.8 10 3.8 11 3 L 11 11 C 11 14 12.5 15 14.5 16 C 16.5 17 16.5 20 14.5 20 L 10.5 20 L 10.5 19.2 L 8.5 19.2 L 8.5 20 L 6.5 20 C 5.5 20 5.5 18 6 16 C 6.5 11 6.5 7 7 3 Z" fill="#1d4ed8" opacity="0.85" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round" />
+                              <path d="M 5.5 18.5 Q 10.5 18.8 15.2 18.8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 7.2 4.5 Q 9 5.3 10.8 4.5" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 14 17.5 Q 15.5 18.5 14 19.5" stroke="#93c5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+                              <polygon points="9,5.5 9.3,6.5 10.5,6.5 9.5,7.2 9.8,8.2 9,7.5 8.2,8.2 8.5,7.2 7.5,6.5 8.7,6.5" fill="#fef08a" opacity="0.9" />
+
+                              {/* right boot (front) */}
+                              <path d="M 12 5 C 13 5.8 15 5.8 16 5 L 16 13 C 16 16 17.5 17 19.5 18 C 21.5 19 21.5 22 19.5 22 L 15.5 22 L 15.5 21.2 L 13.5 21.2 L 13.5 22 L 11.5 22 C 10.5 22 10.5 20 11 18 C 11.5 13 11.5 9 12 5 Z" fill="#2563eb" opacity="0.85" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round" />
+                              <path d="M 10.5 20.5 Q 15.5 20.8 20.2 20.8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 12.2 6.5 Q 14 7.3 15.8 6.5" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 19 19.5 Q 20.5 20.5 19 21.5" stroke="#93c5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+                              <polygon points="14,7.5 14.3,8.5 15.5,8.5 14.5,9.2 14.8,10.2 14,9.5 13.2,10.2 13.5,9.2 12.5,8.5 13.7,8.5" fill="#fef08a" opacity="0.9" />
                             </svg>
                           )}
                         </span>
@@ -18262,25 +18300,63 @@ const renderTooltipStats = (item) => {
                         <span style={{ fontSize: '1.5rem' }}>
                           {item.type === 'wand' ? (
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                              <line x1="3" y1="21" x2="15" y2="9" stroke="#c4b5fd" strokeWidth="2.2" strokeLinecap="round"/>
-                              <path d="M15 9 L17 4 L19 9 L14 7 L19 7 L14 9 Z" fill="#e879f9" opacity="0.9"/>
-                              <circle cx="15" cy="9" r="1.5" fill="#f0abfc"/>
-                              <line x1="18" y1="3" x2="18" y2="6" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
-                              <line x1="20" y1="5" x2="17" y2="5" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
-                            </svg>
+                            {/* glow halo */}
+                            <circle cx="15" cy="9" r="5" fill="#f0abfc" opacity="0.15"/>
+                            {/* rune rings on shaft */}
+                            <circle cx="7" cy="17" r="2" fill="none" stroke="#c4b5fd" strokeWidth="0.8" opacity="0.5"/>
+                            <circle cx="7" cy="17" r="0.8" fill="#e879f9" opacity="0.6"/>
+                            <circle cx="11" cy="13" r="2" fill="none" stroke="#c4b5fd" strokeWidth="0.8" opacity="0.5"/>
+                            <circle cx="11" cy="13" r="0.8" fill="#e879f9" opacity="0.6"/>
+                            {/* shaft — deep purple base + violet overlay */}
+                            <line x1="3" y1="21" x2="15" y2="9" stroke="#7c3aed" strokeWidth="3.5" strokeLinecap="round"/>
+                            <line x1="3" y1="21" x2="15" y2="9" stroke="#c4b5fd" strokeWidth="2.2" strokeLinecap="round"/>
+                            {/* star tip */}
+                            <path d="M15 9 L17 4 L19 9 L14 7 L19 7 L14 9 Z" fill="#e879f9" opacity="0.9"/>
+                            <circle cx="15" cy="9" r="2" fill="#f0abfc"/>
+                            <circle cx="15" cy="9" r="1" fill="white" opacity="0.8"/>
+                            {/* sparkle cross */}
+                            <line x1="18" y1="3" x2="18" y2="6" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.9"/>
+                            <line x1="20" y1="5" x2="17" y2="5" stroke="#fef08a" strokeWidth="1.2" strokeLinecap="round" opacity="0.9"/>
+                            {/* mini sparkle */}
+                            <line x1="20" y1="3" x2="20" y2="5" stroke="#fef08a" strokeWidth="0.8" strokeLinecap="round" opacity="0.6"/>
+                            <line x1="19" y1="4" x2="21" y2="4" stroke="#fef08a" strokeWidth="0.8" strokeLinecap="round" opacity="0.6"/>
+                          </svg>
                           ) : item.type === 'robe' ? (
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                              <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinejoin="round"/>
-                              <path d="M8 3 Q12 6 16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round"/>
-                              <path d="M9 3 L7 8 M15 3 L17 8" stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7"/>
-                              <circle cx="12" cy="8" r="1.2" fill="#e879f9" opacity="0.9"/>
-                            </svg>
+                            {/* robe body fill */}
+                            <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" fill="#4c1d95" opacity="0.7"/>
+                            {/* robe outline */}
+                            <path d="M8 3 L4 7 L5 21 L12 19 L19 21 L20 7 L16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinejoin="round"/>
+                            {/* collar arc */}
+                            <path d="M8 3 Q12 6 16 3" stroke="#a78bfa" strokeWidth="1.8" strokeLinecap="round"/>
+                            {/* sleeve creases */}
+                            <path d="M9 3 L7 8 M15 3 L17 8" stroke="#c4b5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.8"/>
+                            {/* center seam */}
+                            <line x1="12" y1="6" x2="12" y2="19" stroke="#6d28d9" strokeWidth="0.8" opacity="0.5"/>
+                            {/* star pattern */}
+                            <path d="M8.5 13 L9 11.5 L9.5 13 L11 13 L9.8 14 L10.2 15.5 L9 14.5 L7.8 15.5 L8.2 14 L7 13 Z" fill="#7c3aed" opacity="0.7"/>
+                            {/* gem brooch */}
+                            <circle cx="12" cy="8" r="1.8" fill="#e879f9"/>
+                            <circle cx="12" cy="8" r="1" fill="#f9a8d4" opacity="0.8"/>
+                            <circle cx="11.5" cy="7.5" r="0.4" fill="white" opacity="0.8"/>
+                            {/* hem trim dashes */}
+                            <line x1="5.5" y1="20" x2="18.5" y2="20" stroke="#a78bfa" strokeWidth="1" strokeDasharray="2 2" opacity="0.7"/>
+                          </svg>
                           ) : (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                              <path d="M4 17 Q4 21 8 21 L18 21 Q21 21 21 18 L21 16 L9 16 L9 9 L5 9 Q4 9 4 12 Z" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round"/>
-                              <path d="M9 9 L9 16" stroke="#60a5fa" strokeWidth="1.5"/>
-                              <line x1="9" y1="19" x2="17" y2="19" stroke="#93c5fd" strokeWidth="1.2" opacity="0.7"/>
-                              <path d="M5 9 Q6 6 9 6 L9 9" stroke="#60a5fa" strokeWidth="1.5" strokeLinecap="round"/>
+                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              {/* left boot (back) */}
+                              <path d="M 7 3 C 8 3.8 10 3.8 11 3 L 11 11 C 11 14 12.5 15 14.5 16 C 16.5 17 16.5 20 14.5 20 L 10.5 20 L 10.5 19.2 L 8.5 19.2 L 8.5 20 L 6.5 20 C 5.5 20 5.5 18 6 16 C 6.5 11 6.5 7 7 3 Z" fill="#1d4ed8" opacity="0.85" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round" />
+                              <path d="M 5.5 18.5 Q 10.5 18.8 15.2 18.8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 7.2 4.5 Q 9 5.3 10.8 4.5" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 14 17.5 Q 15.5 18.5 14 19.5" stroke="#93c5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+                              <polygon points="9,5.5 9.3,6.5 10.5,6.5 9.5,7.2 9.8,8.2 9,7.5 8.2,8.2 8.5,7.2 7.5,6.5 8.7,6.5" fill="#fef08a" opacity="0.9" />
+
+                              {/* right boot (front) */}
+                              <path d="M 12 5 C 13 5.8 15 5.8 16 5 L 16 13 C 16 16 17.5 17 19.5 18 C 21.5 19 21.5 22 19.5 22 L 15.5 22 L 15.5 21.2 L 13.5 21.2 L 13.5 22 L 11.5 22 C 10.5 22 10.5 20 11 18 C 11.5 13 11.5 9 12 5 Z" fill="#2563eb" opacity="0.85" stroke="#60a5fa" strokeWidth="1.7" strokeLinejoin="round" />
+                              <path d="M 10.5 20.5 Q 15.5 20.8 20.2 20.8" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 12.2 6.5 Q 14 7.3 15.8 6.5" stroke="#60a5fa" strokeWidth="1.2" strokeLinecap="round" />
+                              <path d="M 19 19.5 Q 20.5 20.5 19 21.5" stroke="#93c5fd" strokeWidth="1.2" strokeLinecap="round" opacity="0.7" />
+                              <polygon points="14,7.5 14.3,8.5 15.5,8.5 14.5,9.2 14.8,10.2 14,9.5 13.2,10.2 13.5,9.2 12.5,8.5 13.7,8.5" fill="#fef08a" opacity="0.9" />
                             </svg>
                           )}
                         </span>
