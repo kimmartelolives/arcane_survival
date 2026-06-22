@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 
 // ============================================================
 // CUSTOM ICON SET (Pinalitan ang mga emoji ng sariling SVG icons)
@@ -138,6 +138,37 @@ export const FAMILIARS_DB = [
   }
 ];
 
+// ============================================================
+// PARTICLE POOL HELPER
+// ------------------------------------------------------------
+// Every skin effect below keeps a small pool of short-lived particles
+// (smoke, sparkles, embers, etc.) in `eng.<name>`. The update step for
+// each particle needs to (a) advance it, (b) draw it, and (c) remove it
+// once its `life` runs out.
+//
+// Iterating with `array.forEach` while calling `array.splice(i, 1)` from
+// inside the callback shifts every later element down by one index, but
+// forEach has already committed to visiting the *next* index — so the
+// element that just slid into the current slot gets skipped that frame.
+// Net effect: particles intermittently skip an update/draw, and the dead
+// ones aren't always actually removed promptly, so pools quietly run
+// fuller than their intended cap. Walking backward avoids the issue
+// entirely (a splice only ever shifts already-visited indices), and
+// swapping in the last element instead of shifting the whole tail makes
+// removal O(1) instead of O(n).
+//
+// `updateFn(particle, index)` should mutate the particle in place and
+// return `true` once it should be discarded.
+const updateParticles = (pool, updateFn) => {
+    for (let i = pool.length - 1; i >= 0; i--) {
+        if (updateFn(pool[i], i)) {
+            const last = pool.length - 1;
+            if (i !== last) pool[i] = pool[last];
+            pool.pop();
+        }
+    }
+};
+
 const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
     if (!skinId || skinId === 'default') return;
     
@@ -196,15 +227,16 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
 
         if (!eng.demonEyes) eng.demonEyes = [];
         if (Math.random() < 0.1 && eng.demonEyes.length < 5) eng.demonEyes.push({ox: (Math.random()-0.5)*100, oy: (Math.random()-0.5)*80 - 20, life: 1, blink: 0});
-        eng.demonEyes.forEach((eye, i) => {
+        updateParticles(eng.demonEyes, (eye) => {
             eye.life -= 0.02; eye.blink += 0.2;
-            if (eye.life <= 0) { eng.demonEyes.splice(i, 1); return; }
+            if (eye.life <= 0) return true;
             ctx.save(); ctx.translate(x + eye.ox, y + eye.oy);
             const eyeOpen = Math.abs(Math.sin(eye.blink)) * 6; 
             ctx.shadowBlur = 15; ctx.shadowColor = '#ff0000';
             ctx.fillStyle = `rgba(180, 0, 0, ${eye.life})`; ctx.beginPath(); ctx.ellipse(0, 0, 10, eyeOpen, 0, 0, Math.PI*2); ctx.fill();
             ctx.fillStyle = `rgba(0, 0, 0, ${eye.life})`; ctx.beginPath(); ctx.ellipse(0, 0, 2, eyeOpen*0.8, 0, 0, Math.PI*2); ctx.fill();
             ctx.restore();
+            return false;
         });
 
         ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
@@ -231,9 +263,9 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 isFire: Math.random() > 0.6 
             });
         }
-        eng.pyroSmoke.forEach((s, i) => {
+        updateParticles(eng.pyroSmoke, (s, i) => {
             s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i); s.life -= 0.015; s.size += 0.2;
-            if (s.life <= 0) { eng.pyroSmoke.splice(i, 1); return; }
+            if (s.life <= 0) return true;
             
             ctx.beginPath(); ctx.arc(x + s.ox, y + s.oy, s.size, 0, Math.PI*2);
             if (s.isFire) {
@@ -244,6 +276,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 ctx.shadowBlur = 10; ctx.shadowColor = '#000000';
             }
             ctx.fill();
+            return false;
         });
 
         ctx.globalCompositeOperation = 'lighter'; 
@@ -271,9 +304,9 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 yOff: (Math.random()-0.5)*60
             });
         }
-        eng.stormClouds.forEach((cloud, i) => {
+        updateParticles(eng.stormClouds, (cloud, i) => {
             cloud.ang += cloud.speed; cloud.life -= 0.01;
-            if (cloud.life <= 0) { eng.stormClouds.splice(i, 1); return; }
+            if (cloud.life <= 0) return true;
             
             const cx = x + Math.cos(cloud.ang) * cloud.dist;
             const cy = y + cloud.yOff + Math.sin(time*0.002 + i)*10;
@@ -285,6 +318,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
             
             ctx.fillStyle = cloudGrad; ctx.shadowBlur = 0;
             ctx.beginPath(); ctx.arc(cx, cy, cloud.size, 0, Math.PI*2); ctx.fill();
+            return false;
         });
 
         ctx.globalCompositeOperation = 'lighter'; 
@@ -345,15 +379,16 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 vy: 0.3 + Math.random()*0.7, size: 10 + Math.random()*15, life: 1
             });
         }
-        eng.pinkSmoke.forEach((s, i) => {
+        updateParticles(eng.pinkSmoke, (s, i) => {
             s.oy -= s.vy; s.ox += Math.sin(time*0.002 + i)*0.5; s.life -= 0.01; s.size += 0.2;
-            if (s.life <= 0) { eng.pinkSmoke.splice(i, 1); return; }
+            if (s.life <= 0) return true;
             
             const smokeGrad = ctx.createRadialGradient(x+s.ox, y+s.oy, 0, x+s.ox, y+s.oy, s.size);
             smokeGrad.addColorStop(0, `rgba(253, 164, 175, ${s.life * 0.6})`); 
             smokeGrad.addColorStop(1, 'rgba(255, 228, 230, 0)');
             
             ctx.fillStyle = smokeGrad; ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
+            return false;
         });
 
         ctx.globalCompositeOperation = 'lighter'; 
@@ -365,14 +400,15 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 size: 2 + Math.random() * 3, life: 1
             });
         }
-        eng.sakuraParticles.forEach((p, i) => {
+        updateParticles(eng.sakuraParticles, (p) => {
             p.y += p.vy; p.rot += p.rs; p.life -= 0.008;
-            if (p.life <= 0 || p.y > 10) { eng.sakuraParticles.splice(i, 1); return; }
+            if (p.life <= 0 || p.y > 10) return true;
 
             ctx.save(); ctx.translate(x + p.ox, y + p.y); ctx.rotate(p.rot);
             ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`; 
             ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 2, 0, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
+            return false;
         });
 
         if (!eng.sakuraHearts) eng.sakuraHearts = [];
@@ -384,9 +420,9 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 rot: Math.random() * Math.PI, rs: (Math.random()-0.5)*0.02 
             });
         }
-        eng.sakuraHearts.forEach((h, i) => {
+        updateParticles(eng.sakuraHearts, (h, i) => {
             h.y -= h.vy; h.life -= 0.005; h.rot += h.rs;
-            if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
+            if (h.life <= 0) return true;
 
             ctx.save(); ctx.translate(x + h.ox, y + h.y); ctx.rotate(h.rot);
             const hSize = h.size * (1 + Math.sin(time * 0.005 + i) * 0.2); 
@@ -397,6 +433,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
             ctx.bezierCurveTo(hSize * 1.0, -hSize * 0.3, hSize * 0.5, -hSize * 0.8, 0, -hSize * 0.3);
             ctx.fillStyle = hColor; ctx.shadowBlur = 15; ctx.shadowColor = '#ec4899';
             ctx.fill(); ctx.restore();
+            return false;
         });
 
         ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 10; ctx.shadowColor = '#fdf2f8';
@@ -483,9 +520,9 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 vy: 0.7 + Math.random(), size: 5 + Math.random() * 5, life: 1, rot: Math.random() * Math.PI
             });
         }
-        eng.sakuraHearts.forEach((h, i) => {
+        updateParticles(eng.sakuraHearts, (h) => {
             h.oy -= h.vy; h.life -= 0.005;
-            if (h.life <= 0) { eng.sakuraHearts.splice(i, 1); return; }
+            if (h.life <= 0) return true;
             ctx.save(); ctx.translate(x + h.ox, y + h.oy);
             const hSize = h.size;
             
@@ -498,16 +535,19 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
             ctx.fillStyle = `rgba(255, 255, 255, ${h.life * 0.8})`;
             ctx.beginPath(); ctx.ellipse(-hSize*0.3, -hSize*0.3, hSize*0.2, hSize*0.3, Math.PI/4, 0, Math.PI*2); ctx.fill();
             ctx.restore();
+            return false;
         });
 
         if (!eng.sakuraParticles) eng.sakuraParticles = [];
         if (eng.sakuraParticles.length < 20 && Math.random() < 0.2) {
             eng.sakuraParticles.push({ ox: (Math.random()-0.5)*70, y: -70, vy: 0.5+Math.random(), size: 3+Math.random()*2, life: 1 });
         }
-        eng.sakuraParticles.forEach((p, i) => {
+        updateParticles(eng.sakuraParticles, (p) => {
             p.y += p.vy; p.life -= 0.005;
+            if (p.life <= 0) return true;
             ctx.fillStyle = `rgba(251, 207, 232, ${p.life})`;
             ctx.beginPath(); ctx.ellipse(x+p.ox, y+p.y, p.size, p.size*1.5, 0, 0, Math.PI*2); ctx.fill();
+            return false;
         });
 
         const pinkGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 3);
@@ -623,10 +663,10 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
             });
         }
-        eng.astralParticles.forEach((p, i) => {
+        updateParticles(eng.astralParticles, (p, i) => {
             p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.5;
             p.rot += p.rs; p.life -= 0.005;
-            if (p.life <= 0) { eng.astralParticles.splice(i, 1); return; }
+            if (p.life <= 0) return true;
 
             ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
             
@@ -649,6 +689,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
             }
             ctx.restore();
+            return false;
         });
 
         ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
@@ -738,13 +779,14 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 isRed: Math.random() > 0.7
             });
         }
-        eng.igrisSmoke.forEach((s, i) => {
+        updateParticles(eng.igrisSmoke, (s, i) => {
             s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
-            if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
+            if (s.life <= 0) return true;
             
             ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life*0.6})` : `rgba(10, 10, 10, ${s.life*0.8})`;
             ctx.shadowBlur = s.isRed ? 15 : 0; ctx.shadowColor = '#dc2626';
             ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
+            return false;
         });
 
         ctx.globalCompositeOperation = 'lighter';
@@ -831,12 +873,13 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
 
         if (!eng.igrisSmoke) eng.igrisSmoke = [];
         if (eng.igrisSmoke.length < 20 && Math.random() < 0.4) eng.igrisSmoke.push({ ox: (Math.random()-0.5)*radius*6, oy: radius + Math.random()*5, vy: 0.5 + Math.random(), size: 6 + Math.random()*8, life: 1, isRed: Math.random() > 0.8 });
-        eng.igrisSmoke.forEach((s, i) => {
+        updateParticles(eng.igrisSmoke, (s, i) => {
             s.oy -= s.vy; s.ox += Math.sin(time*0.005 + i)*0.5; s.life -= 0.015; s.size -= 0.05;
-            if (s.life <= 0) { eng.igrisSmoke.splice(i, 1); return; }
+            if (s.life <= 0) return true;
             ctx.fillStyle = s.isRed ? `rgba(220, 38, 38, ${s.life * 0.5})` : `rgba(10, 10, 10, ${s.life * 0.8})`;
             ctx.shadowBlur = s.isRed ? 15 : 0; ctx.shadowColor = '#dc2626';
             ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
+            return false;
         });
 
         ctx.globalCompositeOperation = 'lighter';
@@ -927,9 +970,9 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 type: type
             });
         }
-        eng.empressParticles.forEach((p, i) => {
+        updateParticles(eng.empressParticles, (p, i) => {
             p.oy += p.vy; p.ox += Math.sin(time*0.003 + i)*0.6; p.rot += p.rs; p.life -= 0.006;
-            if (p.life <= 0) { eng.empressParticles.splice(i, 1); return; }
+            if (p.life <= 0) return true;
 
             ctx.save(); ctx.translate(x + p.ox, y + p.oy); ctx.rotate(p.rot);
             
@@ -956,6 +999,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 ctx.beginPath(); ctx.arc(0, 0, 1+Math.random(), 0, Math.PI*2); ctx.fill();
             }
             ctx.restore();
+            return false;
         });
 
         const empressGrad = ctx.createRadialGradient(x, y-radius, 0, x, y-radius, radius * 4);
@@ -1098,12 +1142,13 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 isViolet: Math.random() > 0.5
             });
         }
-        eng.infernalSmoke.forEach((s, i) => {
+        updateParticles(eng.infernalSmoke, (s, i) => {
             s.oy -= s.vy; s.ox += Math.sin(time*0.003 + i)*0.6; s.life -= 0.015; s.size -= 0.05;
-            if (s.life <= 0) { eng.infernalSmoke.splice(i, 1); return; }
+            if (s.life <= 0) return true;
             ctx.fillStyle = s.isViolet ? `rgba(139, 92, 246, ${s.life*0.6})` : `rgba(225, 29, 72, ${s.life*0.6})`;
             ctx.shadowBlur = 15; ctx.shadowColor = s.isViolet ? '#7c3aed' : '#be123c';
             ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy + floatY, s.size, 0, Math.PI*2); ctx.fill();
+            return false;
         });
 
         const coreGrad = ctx.createRadialGradient(x, y - radius + floatY, 0, x, y - radius + floatY, radius*4.5);
@@ -1226,10 +1271,10 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 isButterfly: isButterfly
             });
         }
-        eng.leviParticles.forEach((p, i) => {
+        updateParticles(eng.leviParticles, (p, i) => {
             p.oy -= p.vy; 
             p.ox += Math.sin(time*0.003 + i)*0.8; p.rot += 0.05; p.life -= 0.01;
-            if (p.life <= 0) { eng.leviParticles.splice(i, 1); return; }
+            if (p.life <= 0) return true;
 
             ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
             
@@ -1245,6 +1290,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 ctx.beginPath(); ctx.arc(0, 0, p.size, 0, Math.PI*2); ctx.fill();
             }
             ctx.restore();
+            return false;
         });
 
         const gemCount = 4;
@@ -1407,14 +1453,14 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 life: 1, rot: Math.random()*Math.PI*2, rs: (Math.random()-0.5)*0.05, type: type
             });
         }
-        eng.eternityParticles.forEach((p, i) => {
+        updateParticles(eng.eternityParticles, (p, i) => {
             if (p.type < 0.2) {
                 p.ox -= Math.sign(p.ox) * 0.5; p.oy -= Math.sign(p.oy) * 0.5; 
             } else {
                 p.oy += p.vy; p.ox += p.vx + Math.sin(time*0.002 + i)*0.8; 
             }
             p.rot += p.rs; p.life -= 0.004; 
-            if (p.life <= 0 || Math.abs(p.ox) < 2) { eng.eternityParticles.splice(i, 1); return; }
+            if (p.life <= 0 || Math.abs(p.ox) < 2) return true;
 
             ctx.save(); ctx.translate(x + p.ox, y + p.oy + floatY); ctx.rotate(p.rot);
             
@@ -1437,6 +1483,7 @@ const drawAdvancedSkinAura = (ctx, x, y, radius, skinId, time, eng) => {
                 ctx.beginPath(); ctx.arc(0, 0, p.size*0.8, 0, Math.PI*2); ctx.fill();
             }
             ctx.restore();
+            return false;
         });
 
         ctx.save(); ctx.translate(x, y - radius*3.5 + floatY);
@@ -1549,14 +1596,36 @@ export const LiveSkinPreview = ({ skin }) => {
 // NAKALABAS DITO ANG LIVE FAMILIAR PREVIEW (Para hindi mag-error)
 export function LiveFamiliarPreview({ id, level }) {
   const canvasRef = useRef(null);
+  const isVisibleRef = useRef(false);
+
+  // Same lazy-render strategy as LiveSkinPreview: only animate while the
+  // card is actually on screen. With up to 9 of these mounted at once on
+  // the Familiars tab, this is what keeps mobile FPS stable.
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisibleRef.current = entry.isIntersecting;
+      },
+      { rootMargin: '100px' }
+    );
+    if (canvasRef.current) observer.observe(canvasRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
+    let lastTime = 0;
 
-    const render = () => {
+    const render = (timestamp) => {
+      animationFrameId = requestAnimationFrame(render);
+
+      if (!isVisibleRef.current) return;
+      if (timestamp - lastTime < 40) return; // cap at ~25fps, identical motion math (t = performance.now())
+      lastTime = timestamp;
+
       const t = performance.now();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
@@ -2597,14 +2666,40 @@ else if (f.id === 'light') {
 }
 
       ctx.restore();
-      animationFrameId = requestAnimationFrame(render);
     };
-    render();
+    animationFrameId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrameId);
   }, [id, level]);
 
   return <canvas ref={canvasRef} width={90} height={90} style={{ background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', flexShrink: 0 }} />;
 }
+
+// Extracted as a module-level constant so it isn't re-created on every
+// MetaShop render — the string is identical every time.
+const METASHOP_STYLES = `
+  .metashop-overlay { animation: fadeIn 0.25s ease-out forwards; }
+  .metashop-panel { animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  
+  .shop-scroll-area::-webkit-scrollbar { width: 8px; }
+  .shop-scroll-area::-webkit-scrollbar-track { background: rgba(11, 8, 38, 0.4); border-radius: 10px; }
+  .shop-scroll-area::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.5); border-radius: 10px; }
+  .shop-scroll-area::-webkit-scrollbar-thumb:hover { background: rgba(167, 139, 250, 0.9); }
+
+  .shop-card { display: flex; justify-content: space-between; align-items: center; background: rgba(11, 8, 38, 0.6); padding: 16px; border-radius: 8px; transition: all 0.2s ease; }
+  .shop-card:hover { transform: translateY(-2px); background: rgba(20, 15, 60, 0.8); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); }
+
+  .shop-btn { transition: all 0.2s ease; min-width: 120px; }
+  .shop-btn:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.2); }
+  .shop-btn:active:not(:disabled) { transform: scale(0.95); }
+
+  @media (max-width: 600px) {
+    .shop-card { flex-direction: column; align-items: stretch; gap: 12px; }
+    .shop-card-info { display: flex; flex-direction: row; align-items: center; gap: 12px; }
+    .shop-btn { width: 100%; padding: 12px !important; font-size: 1rem !important; }
+  }
+`;
 
 // ITO ANG MAIN METASHOP COMPONENT
 export default function MetaShop({ screen, setScreen }) {
@@ -2623,13 +2718,13 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Helper function para sa Frieren effect
-  const executeWithTransition = (callback) => {
-    setIsTransitioning(true); // I-trigger ang animation
+  const executeWithTransition = useCallback((callback) => {
+    setIsTransitioning(true);
     setTimeout(() => {
-      callback(); // Patakbuhin ang action pagkatapos ng 1 second
-      setIsTransitioning(false); // I-reset
+      callback();
+      setIsTransitioning(false);
     }, 1000);
-  };
+  }, []);
 
 
   // ANTI-INSPECT AT ANTI-RIGHT CLICK SECURITY
@@ -2679,7 +2774,28 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
     }
   }, [screen]);
 
-  const buyUpgrade = (upgradeId) => {
+  // Pre-compute upgrade costs once per upgrades-state change instead of
+  // recomputing Math.pow(...) inside every render for every card.
+  const upgradeCosts = useMemo(() => {
+    const out = {};
+    UPGRADES_DB.forEach(item => {
+      const level = upgrades[item.id] || 0;
+      out[item.id] = Math.floor(item.baseCost * Math.pow(item.costMult, level));
+    });
+    return out;
+  }, [upgrades]);
+
+  // Pre-compute familiar upgrade costs for the same reason.
+  const familiarUpgradeCosts = useMemo(() => {
+    const out = {};
+    FAMILIARS_DB.forEach(fam => {
+      const level = familiarLevels[fam.id] || 1;
+      out[fam.id] = Math.floor(fam.upgBase * Math.pow(fam.upgMult, level * 1.15));
+    });
+    return out;
+  }, [familiarLevels]);
+
+  const buyUpgrade = useCallback((upgradeId) => {
     const itemInfo = UPGRADES_DB.find(u => u.id === upgradeId);
     const currentLevel = upgrades[upgradeId] || 0;
     if (currentLevel >= itemInfo.maxLevel) return;
@@ -2694,9 +2810,9 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
       localStorage.setItem('arcane_void_crystals', newCrystals);
       localStorage.setItem('arcane_upgrades', JSON.stringify(newUpgrades));
     }
-  };
+  }, [crystals, upgrades]);
 
-  const buyOrEquipSkin = (skin) => {
+  const buyOrEquipSkin = useCallback((skin) => {
     const isUnlocked = unlockedSkins.includes(skin.id);
 
     if (isUnlocked) {
@@ -2714,18 +2830,16 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
       localStorage.setItem('arcane_unlocked_skins', JSON.stringify(newUnlocked));
       localStorage.setItem('arcane_equipped_skin', skin.id);
     }
-  };
+  }, [crystals, unlockedSkins]);
 
-const buyOrEquipFamiliar = (fam) => {
+  const buyOrEquipFamiliar = useCallback((fam) => {
     const isUnlocked = unlockedFamiliars.includes(fam.id);
     let newEquipped = [...equippedFamiliars];
 
     if (isUnlocked) {
       if (newEquipped.includes(fam.id)) {
-        // ITO ANG SIKRETO: Dito dapat matatanggal ang familiar
         newEquipped = newEquipped.filter(id => id !== fam.id);
       } else {
-        // Equip logic
         if (newEquipped.length >= 3) {
           alert("Sanctum Limit: You can only equip up to 3 Familiars!");
           return;
@@ -2733,7 +2847,6 @@ const buyOrEquipFamiliar = (fam) => {
         newEquipped.push(fam.id);
       }
     } else if (crystals >= fam.baseCost) {
-      // Buy logic (pareho pa rin)
       const newCrystals = crystals - fam.baseCost;
       const newUnlocked = [...unlockedFamiliars, fam.id];
       const newLevels = { ...familiarLevels, [fam.id]: 1 };
@@ -2748,16 +2861,14 @@ const buyOrEquipFamiliar = (fam) => {
       localStorage.setItem('arcane_familiar_levels', JSON.stringify(newLevels));
     }
 
-    // SAVE ANG BAGONG ARRAY SA LOCAL STORAGE
     setEquippedFamiliars(newEquipped);
     localStorage.setItem('arcane_equipped_familiars', JSON.stringify(newEquipped));
-  };
+  }, [crystals, unlockedFamiliars, equippedFamiliars, familiarLevels]);
 
-const upgradeFamiliar = (fam) => {
+  const upgradeFamiliar = useCallback((fam) => {
     const currentLevel = familiarLevels[fam.id] || 1;
     if (currentLevel >= fam.maxLevel) return;
 
-    // Exponential cost calculation: Base * (Multiplier ^ Level)
     const cost = Math.floor(fam.upgBase * Math.pow(fam.upgMult, currentLevel));
     
     if (crystals >= cost) {
@@ -2769,38 +2880,13 @@ const upgradeFamiliar = (fam) => {
       localStorage.setItem('arcane_void_crystals', newCrystals);
       localStorage.setItem('arcane_familiar_levels', JSON.stringify(newLevels));
     }
-  };
+  }, [crystals, familiarLevels]);
 
   if (screen !== 'metashop') return null;
 
   return (
     <>
-      <style>
-        {`
-          .metashop-overlay { animation: fadeIn 0.25s ease-out forwards; }
-          .metashop-panel { animation: popIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-          @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-          @keyframes popIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-          
-          .shop-scroll-area::-webkit-scrollbar { width: 8px; }
-          .shop-scroll-area::-webkit-scrollbar-track { background: rgba(11, 8, 38, 0.4); border-radius: 10px; }
-          .shop-scroll-area::-webkit-scrollbar-thumb { background: rgba(167, 139, 250, 0.5); border-radius: 10px; }
-          .shop-scroll-area::-webkit-scrollbar-thumb:hover { background: rgba(167, 139, 250, 0.9); }
-
-          .shop-card { display: flex; justify-content: space-between; align-items: center; background: rgba(11, 8, 38, 0.6); padding: 16px; border-radius: 8px; transition: all 0.2s ease; }
-          .shop-card:hover { transform: translateY(-2px); background: rgba(20, 15, 60, 0.8); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3); }
-
-          .shop-btn { transition: all 0.2s ease; min-width: 120px; }
-          .shop-btn:hover:not(:disabled) { transform: scale(1.05); filter: brightness(1.2); }
-          .shop-btn:active:not(:disabled) { transform: scale(0.95); }
-
-          @media (max-width: 600px) {
-            .shop-card { flex-direction: column; align-items: stretch; gap: 12px; }
-            .shop-card-info { display: flex; flex-direction: row; align-items: center; gap: 12px; }
-            .shop-btn { width: 100%; padding: 12px !important; font-size: 1rem !important; }
-          }
-        `}
-      </style>
+      <style>{METASHOP_STYLES}</style>
 
       <div className="overlay active metashop-overlay" style={{ zIndex: 200, position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(3, 1, 17, 0.9)' }}>
         <div className="panel wizard-panel metashop-panel" style={{ width: '650px', maxWidth: '95vw', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
@@ -2856,7 +2942,7 @@ const upgradeFamiliar = (fam) => {
                 {UPGRADES_DB.map(item => {
                   const level = upgrades[item.id] || 0;
                   const isMax = level >= item.maxLevel;
-                  const cost = Math.floor(item.baseCost * Math.pow(item.costMult, level));
+                  const cost = upgradeCosts[item.id];
                   const canAfford = crystals >= cost;
 
                   return (
@@ -3011,7 +3097,7 @@ const upgradeFamiliar = (fam) => {
                   const level = familiarLevels[fam.id] || 1;
                   const isMax = level >= fam.maxLevel;
 
-                    const upgCost = Math.floor(fam.upgBase * Math.pow(fam.upgMult, level * 1.15));
+                    const upgCost = familiarUpgradeCosts[fam.id];
                   const canAffordUnlock = crystals >= fam.baseCost;
                   const canAffordUpg = crystals >= upgCost;
 

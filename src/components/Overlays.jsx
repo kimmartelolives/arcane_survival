@@ -214,7 +214,7 @@ const MAIN_OVERLAY_STYLES = `
            ========================================================================== */
         .wizard-panel {
           background: radial-gradient(circle at 50% 30%, #1e0b3d 0%, #080312 85%, #030107 100%) !important;
-          border: 2px solid #c5a059 !important; /* Brass/Gold Ancient Trim */
+          border: 2px solid #c5a059 !important;
           box-shadow: 
             0 0 50px rgba(109, 40, 217, 0.35), 
             inset 0 0 30px rgba(0, 0, 0, 0.9),
@@ -223,16 +223,32 @@ const MAIN_OVERLAY_STYLES = `
           overflow: hidden;
           border-radius: 12px !important;
           padding: 42px 32px !important;
-          animation: occultAmbient 8s infinite ease-in-out;
+
+          /* GPU-only pulse: a pseudo-element fades in/out instead of
+             animating box-shadow (which repaints the whole panel every frame).
+             Same visual result — purple glow breathes — zero repaint cost. */
           
-          /* 🔥 Pwersahing maging Flexbox para gumana ang dynamic panel stretching */
           display: flex !important;
           flex-direction: column !important;
         }
+        /* Pseudo-element carries the animated glow so only opacity changes.
+           inset: 0 keeps it inside overflow:hidden on the panel. The outer
+           box-shadow already provides the static ambient glow; this layer
+           adds the breathing purple highlight on top of it. */
+        .wizard-panel::after {
+          content: '';
+          position: absolute; inset: 0;
+          border-radius: 10px;
+          box-shadow: inset 0 0 40px rgba(124, 58, 237, 0.18);
+          opacity: 0;
+          animation: occultAmbient 8s infinite ease-in-out;
+          pointer-events: none;
+          z-index: 0;
+        }
         @keyframes occultAmbient {
-          0% { box-shadow: 0 0 40px rgba(109, 40, 217, 0.25), inset 0 0 30px rgba(0,0,0,0.9); border-color: #c5a059; }
-          50% { box-shadow: 0 0 60px rgba(167, 139, 250, 0.45), inset 0 0 40px rgba(124, 58, 237, 0.15); border-color: #e9c47a; }
-          100% { box-shadow: 0 0 40px rgba(109, 40, 217, 0.25), inset 0 0 30px rgba(0,0,0,0.9); border-color: #c5a059; }
+          0%   { opacity: 0; }
+          50%  { opacity: 1; }
+          100% { opacity: 0; }
         }
         
         /* Ancient Filigree Corner Brackets */
@@ -279,7 +295,7 @@ const MAIN_OVERLAY_STYLES = `
           color: #f8fafc !important; font-family: 'Georgia', serif !important; font-size: 1rem !important;
           padding: 12px 16px !important; border-radius: 4px !important;
           box-shadow: inset 0 3px 8px rgba(0,0,0,0.9), 0 0 8px rgba(124, 58, 237, 0.05) !important;
-          transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important; letter-spacing: 0.03em; width: 100%; box-sizing: border-box;
+          transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease !important; letter-spacing: 0.03em; width: 100%; box-sizing: border-box;
         }
         .wizard-field-input:focus {
           border-color: #ffe6a3 !important; box-shadow: 0 0 20px rgba(225, 180, 89, 0.35), inset 0 2px 6px rgba(0,0,0,0.9) !important;
@@ -292,7 +308,7 @@ const MAIN_OVERLAY_STYLES = `
           border: 1px solid rgba(147, 51, 234, 0.6) !important; color: #e2e8f0 !important;
           font-family: 'Georgia', serif !important; font-size: 0.88rem !important; font-weight: bold !important;
           letter-spacing: 0.12em; text-transform: uppercase; padding: 13px 22px !important; border-radius: 4px !important;
-          transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1) !important;
+          transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease, color 0.2s ease !important;
           box-shadow: 0 6px 16px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04) !important;
           display: flex; align-items: center; justify-content: center; gap: 14px; cursor: pointer; overflow: hidden; width: 100%; box-sizing: border-box; margin-bottom: 10px;
         }
@@ -300,7 +316,7 @@ const MAIN_OVERLAY_STYLES = `
           content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
           background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent); transform: skewX(-25deg); pointer-events: none;
         }
-        .wizard-btn:hover::before { left: 150%; transition: all 0.6s ease-in-out; }
+        .wizard-btn:hover::before { left: 150%; transition: left 0.6s ease-in-out; }
         .wizard-btn:hover {
           background: linear-gradient(180deg, #2a104d 0%, #130626 100%) !important; border-color: #a78bfa !important;
           box-shadow: 0 0 22px rgba(139, 92, 246, 0.45), 0 6px 16px rgba(0,0,0,0.65) !important; transform: translateY(-2px); color: #ffffff !important;
@@ -1033,6 +1049,14 @@ const IDLE_TRANSITION_STYLES = `
               0% { transform: translateY(0) scale(1); opacity: 1; }
               100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
             }
+
+            @keyframes voidFadeOut {
+              0%   { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
+              100% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
+            }
+            .arcane-idle-transition.fading-out {
+              animation: voidFadeOut 350ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            }
 `;
 
 
@@ -1502,7 +1526,6 @@ const MenuScreen = memo(function MenuScreen({
             <div className="panel-corner pc-bl" />
             <div className="panel-corner pc-br" />
             
-            <div className="panel-shine" />
             <div className="menu-title"><span className="arc">ARCANE</span><br/><span className="sur">SURVIVAL</span></div>
             <div className="menu-sub">The Last Covenant</div>
             <div className="divider mystic-divider" />
@@ -1600,7 +1623,7 @@ const MenuScreen = memo(function MenuScreen({
                   textShadow:
                     '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
                   /* ✨ subtle depth */
-                  backdropFilter: 'blur(2px)',
+
                 }}
               >
                 BETA
@@ -1682,7 +1705,7 @@ const MenuScreen = memo(function MenuScreen({
                   textShadow:
                     '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
                   /* ✨ subtle depth */
-                  backdropFilter: 'blur(2px)',
+
                 }}
               >
                 RANKS
@@ -1726,7 +1749,7 @@ const MenuScreen = memo(function MenuScreen({
                   textShadow:
                     '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
                   /* ✨ subtle depth */
-                  backdropFilter: 'blur(2px)',
+
                 }}
               >
                 SHOP
@@ -1775,7 +1798,7 @@ const MenuScreen = memo(function MenuScreen({
                     textShadow:
                       '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
                     /* ✨ subtle depth */
-                    backdropFilter: 'blur(2px)',
+  
                   }}
                 >
                   NEWS
@@ -1831,7 +1854,7 @@ const MenuScreen = memo(function MenuScreen({
                   textShadow:
                     '0 0 6px rgba(255, 220, 140, 0.9), 0 0 12px rgba(255, 180, 80, 0.4)',
                   /* ✨ subtle depth */
-                  backdropFilter: 'blur(2px)',
+
                 }}
               >
                 LORE
@@ -2492,6 +2515,7 @@ export default function Overlays({
   const [grimoireVideoPlaying, setGrimoireVideoPlaying] = useState(false);
   // 🌌 Universal Transition State
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isTransitionFadingOut, setIsTransitionFadingOut] = useState(false);
   const [activeGrimoireTab, setActiveGrimoireTab] = useState('lore');
   const upgradeLockRef = useRef(false);
 
@@ -2502,14 +2526,33 @@ export default function Overlays({
   }, [screen]);
 
   // 🪄 Helper function para sa Frieren effect
-  // PERF: naka-useCallback na ito kasi pinapasa ito (at ginagamit sa loob ng
-  // onClick handlers) sa daan-daang buttons sa buong component — stable
-  // function identity na ngayon imbes na bagong closure kada render.
+  // FIX: Ang dating implementation ay nag-fa-fade-IN (1s), then agad na
+  // inalis ang overlay SABAY NG setScreen() — kaya may 1-2 frame na "glimpse"
+  // ng background habang nag-mo-mount pa ang bagong screen.
+  //
+  // Bagong daloy:
+  //   0ms       → overlay nag-fade-IN (fully opaque sa 1s)
+  //   1s        → setScreen() — ang bagong screen ay nag-mo-mount HABANG
+  //               nakatakip pa rin ang opaque overlay
+  //   1s+1 tick → isTransitionFadingOut = true — overlay nagsisimulang mag-fade-OUT
+  //   1s+350ms  → overlay fully transparent, i-unmount na
+  //
+  // Ang bagong screen ay fully painted na bago pa mawala ang overlay —
+  // zero glimpse ng background.
   const executeWithTransition = useCallback((callback) => {
-    setIsTransitioning(true); // I-trigger ang animation
+    setIsTransitioning(true);
+    setIsTransitionFadingOut(false);
     setTimeout(() => {
-      callback(); // Patakbuhin ang action (setScreen o onAction) pagkatapos ng 1 second
-      setIsTransitioning(false); // I-reset para mawala ang dark overlay sa bagong screen
+      callback();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setIsTransitionFadingOut(true);
+          setTimeout(() => {
+            setIsTransitioning(false);
+            setIsTransitionFadingOut(false);
+          }, 350);
+        });
+      });
     }, 1000);
   }, []);
 
@@ -3195,7 +3238,7 @@ const handleSubmitScore = useCallback(async () => {
           🌌 IDLE TRANSITION TO INTROSCREEN (ARCANE / FRIEREN STYLE)
           ==================================================================== */}
       {isTransitioning && (
-        <div className="arcane-idle-transition" style={{
+        <div className={`arcane-idle-transition${isTransitionFadingOut ? ' fading-out' : ''}`} style={{
           position: 'fixed',
           inset: 0,
           zIndex: 9999999,

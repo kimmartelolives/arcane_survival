@@ -48,12 +48,15 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
+// Inilabas sa labas ng component — hindi na nire-recreate sa bawat render
+const CORE_COLORS = ['#7F77DD', '#a78bfa', '#fbbf24', '#f59e0b'];
+
 const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, duration = 2500 }) {
-  const [progress, setProgress] = useState(0);
+  // Progress at corePhase pinagsama sa isang state object — isang re-render lang bawat 40ms tick
+  const [{ progress, corePhase }, setProgressState] = React.useState({ progress: 0, corePhase: 0 });
   const [lineIndex, setLineIndex] = useState(0);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * TIPS_SOLO.length));
   const [incantIndex, setIncantIndex] = useState(0);
-  const [corePhase, setCorePhase] = useState(0);
   const completedRef = useRef(false);
 
   const ringRunesOuter  = useRef(pick(24)).current;
@@ -115,8 +118,7 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
     }))
   ).current;
 
-  const lines = SOLO_LINES;
-  const tips  = TIPS_SOLO;
+  // Tutorial ay laging solo — direktang gamitin ang constants, hindi kailangan ng local variable
 
   useEffect(() => {
     const start = performance.now();
@@ -124,8 +126,8 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
 
     const progressTimer = setInterval(() => {
       const pct = Math.min(100, ((performance.now() - start) / duration) * 100);
-      setProgress(pct);
-      setCorePhase(Math.floor(pct / 25));
+      // Isang setState call lang — dati dalawa (setProgress + setCorePhase) = dalawang re-render bawat 40ms
+      setProgressState({ progress: pct, corePhase: Math.floor(pct / 25) });
       if (pct >= 100 && !completedRef.current) {
         completedRef.current = true;
         clearInterval(progressTimer);
@@ -134,12 +136,12 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
     }, 40);
 
     const lineTimer = setInterval(
-      () => setLineIndex((i) => (i + 1) % lines.length),
-      Math.max(700, Math.floor(duration / lines.length))
+      () => setLineIndex((i) => (i + 1) % SOLO_LINES.length),
+      Math.max(700, Math.floor(duration / SOLO_LINES.length))
     );
 
     const tipTimer = setInterval(
-      () => setTipIndex((i) => (i + 1) % tips.length),
+      () => setTipIndex((i) => (i + 1) % TIPS_SOLO.length),
       2800
     );
 
@@ -157,8 +159,7 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duration, setScreen]);
 
-  const coreColors = ['#7F77DD','#a78bfa','#fbbf24','#f59e0b'];
-  const coreColor  = coreColors[corePhase] || '#7F77DD';
+  const coreColor = CORE_COLORS[corePhase] || '#7F77DD';
 
   return (
     <div className="ls-root">
@@ -1132,7 +1133,7 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
 
           {/* ── LOADING LINE ── */}
           <div className="ls-subtitle-wrap">
-            <p className="ls-subtitle" key={lineIndex}>{lines[lineIndex]}…</p>
+            <p className="ls-subtitle" key={lineIndex}>{SOLO_LINES[lineIndex]}…</p>
           </div>
 
           {/* ── PROGRESS BAR ── */}
@@ -1150,7 +1151,7 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
               {Array.from({length:11},(_,i) => <span key={i}>┆</span>)}
             </div>
             <div className="ls-bar-track">
-              <div className="ls-bar-fill" style={{width: progress+'%'}} />
+              <div className="ls-bar-fill" style={{width: `${progress}%`}} />
             </div>
             <div className="ls-bar-meta">
               <span className="ls-spinner">✦</span>
@@ -1172,7 +1173,7 @@ const TutorialLoadingScreen = memo(function TutorialLoadingScreen({ setScreen, d
             </span>
             <div className="ls-tip-line ls-tip-line-r" />
           </div>
-          <p className="ls-tip-text" key={tipIndex}>{tips[tipIndex]}</p>
+          <p className="ls-tip-text" key={tipIndex}>{TIPS_SOLO[tipIndex]}</p>
         </div>
 
       </div>

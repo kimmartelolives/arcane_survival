@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 
+// Trimmed to the weights actually used (400/600 Cinzel, 700 Cinzel Decorative)
+// instead of pulling 5 unused font weights on every load.
 const FONT_HREF =
-  'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Cinzel+Decorative:wght@400;700&display=swap';
+  'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Cinzel+Decorative:wght@700&display=swap';
 
 function useCinzelFont() {
   useEffect(() => {
@@ -10,6 +12,60 @@ function useCinzelFont() {
     link.rel = 'stylesheet'; link.href = FONT_HREF;
     document.head.appendChild(link);
   }, []);
+}
+
+// ─── Performance helpers ─────────────────────────────────────────────────────
+// Detects narrow viewports + the user's reduced-motion preference so we can
+// scale particle counts / drop the heaviest effects instead of always
+// rendering the "everything on" version (the main source of the lag).
+function usePerfProfile() {
+  const [profile, setProfile] = useState(() => {
+    if (typeof window === 'undefined') return { isSmall: false, reduceMotion: false };
+    return {
+      isSmall: window.innerWidth <= 760,
+      reduceMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    };
+  });
+
+  useEffect(() => {
+    const sizeQuery = window.matchMedia('(max-width: 760px)');
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => setProfile({ isSmall: sizeQuery.matches, reduceMotion: motionQuery.matches });
+    sizeQuery.addEventListener('change', update);
+    motionQuery.addEventListener('change', update);
+    update();
+    return () => {
+      sizeQuery.removeEventListener('change', update);
+      motionQuery.removeEventListener('change', update);
+    };
+  }, []);
+
+  return profile;
+}
+
+// Pauses every running CSS animation while the tab/app isn't visible
+// (alt-tab, app switch, locked phone) so the browser isn't burning CPU/GPU
+// on hundreds of invisible keyframe loops.
+function useAutoPauseWhenHidden() {
+  useEffect(() => {
+    const onVis = () => {
+      document.body.classList.toggle('sc-tab-hidden', document.hidden);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+}
+
+// Mounts ambient/decorative layers one tick after first paint so the
+// lock + button are interactive immediately instead of the whole scene
+// (300+ nodes) having to paint before anything is visible/clickable.
+function useDeferredMount() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return ready;
 }
 
 // ─── Keyframes ───────────────────────────────────────────────────────────────
@@ -155,6 +211,27 @@ const KEYFRAMES = `
 @media (max-height: 400px) and (orientation: landscape) {
   .responsive-scale-wrapper { transform: scale(0.4); }
 }
+
+/* ── Performance: containment + paused/reduced states ── */
+/* Isolates each ambient overlay so the browser doesn't need to re-check
+   layout/paint outside its box on every animation frame. */
+.sc-ambient-layer {
+  contain: layout style paint;
+}
+
+/* When the tab/app is backgrounded, freeze every animation in the scene
+   instead of letting hundreds of infinite keyframe loops keep running. */
+body.sc-tab-hidden [style*="animation"] {
+  animation-play-state: paused !important;
+}
+
+/* Respect the OS-level reduced-motion preference: keep the entrance
+   transition functional but drop the purely ambient/idle animations. */
+@media (prefers-reduced-motion: reduce) {
+  .sc-ambient-layer [style*="animation"] {
+    animation: none !important;
+  }
+}
 `;
 
 function useInjectKeyframes() {
@@ -198,9 +275,9 @@ const ELEMENTAL_PATHS = {
 };
 
 // ─── Stars ───────────────────────────────────────────────────────────────────
-function Stars({ phase }) {
+function Stars({ phase, count = 140 }) {
   const isWarping = phase === 'warping' || phase === 'white';
-  const stars = useRef(Array.from({ length: 140 }, () => ({
+  const stars = useRef(Array.from({ length: count }, () => ({
     size: Math.random() * 2.4 + .35,
     top:  Math.random() * 100,
     left: Math.random() * 100,
@@ -210,7 +287,7 @@ function Stars({ phase }) {
   }))).current;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+    <div className="sc-ambient-layer" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
       {stars.map((s, i) => (
         <div key={i} style={{
           position: 'absolute', width: s.size, height: s.size,
@@ -236,8 +313,9 @@ const FLOAT_POS = [
   {l:'93%',b:'55%'},{l:'28%',b:'60%'},{l:'72%',b:'40%'},{l:'55%',b:'78%'},
   {l:'44%',b:'96%'},{l:'3%',b:'85%'},{l:'96%',b:'20%'},{l:'90%',b:'72%'},
 ];
-function FloatingRunes() {
-  const runes = useRef(FLOAT_POS.map((p, i) => ({
+function FloatingRunes({ count = FLOAT_POS.length }) {
+  const positions = count >= FLOAT_POS.length ? FLOAT_POS : FLOAT_POS.slice(0, count);
+  const runes = useRef(positions.map((p, i) => ({
     ...p,
     ch:  ALL_GLYPHS[Math.floor(Math.random() * ALL_GLYPHS.length)],
     sz:  Math.floor(Math.random() * 10 + 9),
@@ -247,7 +325,7 @@ function FloatingRunes() {
     useSym: i > 14,
   }))).current;
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+    <div className="sc-ambient-layer" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
       {runes.map((r, i) => (
         <div key={i} style={{
           position: 'absolute', left: r.l, bottom: r.b,
@@ -270,7 +348,7 @@ function CornerElementalSigils() {
     { bottom: '3%', right: '2%',   rot: 144, path: ELEMENTAL_PATHS.air,    col: 'rgba(192,132,252,.2)',  sz: 46 },
   ];
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+    <div className="sc-ambient-layer" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
       {corners.map((c, i) => (
         <div key={i} style={{
           position: 'absolute',
@@ -289,8 +367,8 @@ function CornerElementalSigils() {
 }
 
 // ─── Drifting elemental sigils ───────────────────────────────────────────────
-function DriftingElementalSigils() {
-  const items = useRef(Array.from({ length: 14 }, (_, i) => {
+function DriftingElementalSigils({ count = 14 }) {
+  const items = useRef(Array.from({ length: count }, (_, i) => {
     const keys = Object.keys(ELEMENTAL_PATHS);
     const key  = keys[i % keys.length];
     const sx   = (Math.random() * 80 + 10).toFixed(1);
@@ -315,7 +393,7 @@ function DriftingElementalSigils() {
   })).current;
 
   return (
-    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
+    <div className="sc-ambient-layer" style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} aria-hidden>
       {items.map((it, i) => (
         <div key={i} style={{
           position: 'absolute', left: it.x, top: it.y,
@@ -340,7 +418,7 @@ function AncientInscriptionBand({ phase }) {
   const text = [...ANCIENT_PHRASES, ...ANCIENT_PHRASES].join('  ·  ');
 
   return (
-    <div style={{
+    <div className="sc-ambient-layer" style={{
       position: 'absolute', bottom: 28, left: 0, right: 0,
       overflow: 'hidden', pointerEvents: 'none',
       opacity: isGone ? 0 : 1,
@@ -366,16 +444,17 @@ function AncientInscriptionBand({ phase }) {
   );
 }
 
-// ─── Enochian side panels ────────────────────────────────────────────────────
+// ─── Enochian side panels (desktop only — see .hide-on-mobile) ──────────────
 function EnochianPanels({ phase }) {
   const isGone = phase === 'warping' || phase === 'white';
   const leftChars  = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛊᛏᛒᛖᛗᛚᛜᛞᛟ'.split('');
   const rightChars = '✦⬡◈⊕⊗✧⋆⍟⎊⎋⌘⍜✦⬡◈⊕⊗✧⋆⍟⎊⎋⌘⍜'.split('');
+  const PANEL_COUNT = 9; // was 14 per side — fewer simultaneous glow loops
 
   return (
     <>
       {/* Left panel */}
-      <div className="hide-on-mobile" style={{
+      <div className="hide-on-mobile sc-ambient-layer" style={{
         position: 'absolute', left: 18, top: '50%',
         transform: 'translateY(-50%)',
         display: 'flex', flexDirection: 'column', gap: 11,
@@ -383,7 +462,7 @@ function EnochianPanels({ phase }) {
         opacity: isGone ? 0 : 1,
         transition: 'opacity .5s ease',
       }} aria-hidden>
-        {leftChars.slice(0, 14).map((ch, i) => (
+        {leftChars.slice(0, PANEL_COUNT).map((ch, i) => (
           <span key={i} style={{
             fontFamily: 'serif', fontSize: 11,
             color: i % 3 === 0 ? 'rgba(255,220,100,.38)' : 'rgba(192,132,252,.28)',
@@ -394,7 +473,7 @@ function EnochianPanels({ phase }) {
         ))}
       </div>
       {/* Right panel */}
-      <div className="hide-on-mobile" style={{
+      <div className="hide-on-mobile sc-ambient-layer" style={{
         position: 'absolute', right: 18, top: '50%',
         transform: 'translateY(-50%)',
         display: 'flex', flexDirection: 'column', gap: 11,
@@ -402,7 +481,7 @@ function EnochianPanels({ phase }) {
         opacity: isGone ? 0 : 1,
         transition: 'opacity .5s ease',
       }} aria-hidden>
-        {rightChars.slice(0, 14).map((ch, i) => (
+        {rightChars.slice(0, PANEL_COUNT).map((ch, i) => (
           <span key={i} style={{
             fontFamily: 'serif', fontSize: 11,
             color: i % 2 === 0 ? 'rgba(192,132,252,.3)' : 'rgba(255,220,100,.24)',
@@ -427,7 +506,7 @@ function BackgroundPentagram({ phase }) {
   const d = order.map((pi, i) => `${i===0?'M':'L'}${pts[pi][0]},${pts[pi][1]}`).join(' ') + ' Z';
 
   return (
-    <div style={{
+    <div className="sc-ambient-layer" style={{
       position: 'absolute', top: '50%', left: '50%',
       pointerEvents: 'none',
       opacity: isGone ? 0 : 1,
@@ -508,9 +587,13 @@ function LockIcon({ phase }) {
 
 // ─── Rune burst (unlock flash) ───────────────────────────────────────────────
 function RuneBurstOverlay({ active }) {
-  const items = useMemo(() => Array.from({ length: 36 }, (_, i) => ({
+  const RUNE_COUNT = 18;   // was 36
+  const SIGIL_COUNT = 8;   // was 14
+  const STREAK_COUNT = 12; // was 22 — fewer simultaneous nodes during the flash spike
+
+  const items = useMemo(() => Array.from({ length: RUNE_COUNT }, (_, i) => ({
     ch:    ALL_GLYPHS[Math.floor(Math.random() * ALL_GLYPHS.length)],
-    angle: (360 / 36) * i + (Math.random() * 10 - 5),
+    angle: (360 / RUNE_COUNT) * i + (Math.random() * 10 - 5),
     dist:  110 + Math.random() * 110,
     size:  Math.floor(Math.random() * 14 + 12),
     delay: (Math.random() * .2).toFixed(2),
@@ -527,7 +610,7 @@ function RuneBurstOverlay({ active }) {
     'M0,-22 L6,-6 L22,-6 L9,6 L14,22 L0,12 L-14,22 L-9,6 L-22,-6 L-6,-6 Z',
     'M0,-20 A20,20 0 1,1 -.001,-20 Z M-20,0 L20,0 M0,-20 L0,20',
   ];
-  const sigils = useMemo(() => Array.from({ length: 14 }, (_, i) => ({
+  const sigils = useMemo(() => Array.from({ length: SIGIL_COUNT }, (_, i) => ({
     path:  sigilDefs[i % sigilDefs.length],
     angle: i * 25.7 + Math.random() * 12 - 6,
     rot:   Math.random() * 360,
@@ -537,8 +620,8 @@ function RuneBurstOverlay({ active }) {
     dur:   (.65 + Math.random() * .3).toFixed(2),
   })), []);
 
-  const streaks = useMemo(() => Array.from({ length: 22 }, (_, i) => ({
-    angle: i * (360/22),
+  const streaks = useMemo(() => Array.from({ length: STREAK_COUNT }, (_, i) => ({
+    angle: i * (360/STREAK_COUNT),
     len:   55 + Math.random() * 95,
     delay: (Math.random() * .15).toFixed(2),
     color: i % 3 === 0 ? 'rgba(255,230,163,.9)' : i % 3 === 1 ? 'rgba(192,132,252,.8)' : 'rgba(100,200,255,.75)',
@@ -642,6 +725,7 @@ function Portal({ phase }) {
     borderStyle: 'solid',
     borderWidth: isUnlocked ? 2 : 1.5,
     borderColor: colors,
+    willChange: 'transform',
     animation: `${rev ? 'sc-spinrev' : 'sc-spin'} ${(base * spd).toFixed(1)}s linear infinite`,
     boxShadow: isWarping
       ? '0 0 22px rgba(168,85,247,.75), 0 0 46px rgba(168,85,247,.38)'
@@ -717,9 +801,10 @@ function Portal({ phase }) {
           })}
         </g>
 
-        <g style={{ animation:'sc-spin 55s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?.9:.3, transition:'opacity .55s ease' }}>
+        <g style={{ animation:'sc-spin 55s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?.9:.3, transition:'opacity .55s ease' }}
+           filter="url(#mc-glow-elem)">
           {elementalRingItems.map((el, i) => (
-            <g key={i} transform={`translate(${el.x},${el.y})`} filter="url(#mc-glow-elem)">
+            <g key={i} transform={`translate(${el.x},${el.y})`}>
               <path
                 d={el.path}
                 fill="none"
@@ -739,12 +824,13 @@ function Portal({ phase }) {
               fill={isUnlocked ? (i % 4 === 0 ? 'rgba(255,230,163,.95)' : 'rgba(192,132,252,.9)') : 'rgba(192,132,252,.42)'}
               fontFamily="serif"
               transform={`rotate(${r.rot},${r.x},${r.y})`}
-              style={{ animation: isUnlocked ? `sc-rune-glow ${1.2+i*.08}s ease-in-out ${i*.05}s infinite alternate` : 'none' }}
+              style={{ animation: (isUnlocked && i % 2 === 0) ? `sc-rune-glow ${1.2+i*.08}s ease-in-out ${i*.05}s infinite alternate` : 'none' }}
             >{r.ch}</text>
           ))}
         </g>
 
-        <g style={{ animation:'sc-spinrev 90s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?.85:.28, transition:'opacity .6s ease' }}>
+        <g style={{ animation:'sc-spinrev 90s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?.85:.28, transition:'opacity .6s ease' }}
+           filter="url(#mc-glow)">
           {Array.from({ length: 12 }, (_, i) => {
             const a1 = (i * 30) * Math.PI / 180;
             const a2 = ((i * 30) + 15) * Math.PI / 180;
@@ -753,7 +839,6 @@ function Portal({ phase }) {
               x1={PC + r1 * Math.cos(a1 - Math.PI/2)} y1={PC + r1 * Math.sin(a1 - Math.PI/2)}
               x2={PC + r1 * Math.cos(a2 + Math.PI*2/12 - Math.PI/2)} y2={PC + r1 * Math.sin(a2 + Math.PI*2/12 - Math.PI/2)}
               stroke={i % 2 === 0 ? 'rgba(255,230,163,.68)' : 'rgba(192,132,252,.58)'} strokeWidth="1"
-              filter="url(#mc-glow)"
             />;
           })}
         </g>
@@ -792,34 +877,34 @@ function Portal({ phase }) {
               fill={isUnlocked ? (i%3===0 ? 'rgba(255,230,163,1)' : 'rgba(192,132,252,.95)') : 'rgba(192,132,252,.38)'}
               fontFamily="serif"
               transform={`rotate(${r.rot},${r.x},${r.y})`}
-              style={{ animation: isUnlocked ? `sc-rune-glow ${1.5+i*.1}s ease-in-out ${i*.07}s infinite alternate` : 'none' }}
+              style={{ animation: (isUnlocked && i % 2 === 0) ? `sc-rune-glow ${1.5+i*.1}s ease-in-out ${i*.07}s infinite alternate` : 'none' }}
             >{r.ch}</text>
           ))}
         </g>
 
-        <polygon
-          points={Array.from({ length: 3 }, (_, i) => {
-            const a = (i * 120 - 90) * Math.PI / 180;
-            return `${PC + 78 * Math.cos(a)},${PC + 78 * Math.sin(a)}`;
-          }).join(' ')}
-          fill="rgba(168,85,247,.05)"
-          stroke={isUnlocked ? 'rgba(255,230,163,.72)' : 'rgba(192,132,252,.28)'}
-          strokeWidth={isUnlocked ? 1.8 : 1}
-          style={{ animation:'sc-spinrev 80s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?1:.48, transition:'opacity .55s ease, stroke .55s ease' }}
-          filter="url(#mc-glow)"
-        />
+        <g filter="url(#mc-glow)">
+          <polygon
+            points={Array.from({ length: 3 }, (_, i) => {
+              const a = (i * 120 - 90) * Math.PI / 180;
+              return `${PC + 78 * Math.cos(a)},${PC + 78 * Math.sin(a)}`;
+            }).join(' ')}
+            fill="rgba(168,85,247,.05)"
+            stroke={isUnlocked ? 'rgba(255,230,163,.72)' : 'rgba(192,132,252,.28)'}
+            strokeWidth={isUnlocked ? 1.8 : 1}
+            style={{ animation:'sc-spinrev 80s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?1:.48, transition:'opacity .55s ease, stroke .55s ease' }}
+          />
 
-        <polygon
-          points={Array.from({ length: 3 }, (_, i) => {
-            const a = (i * 120 + 90) * Math.PI / 180;
-            return `${PC + 78 * Math.cos(a)},${PC + 78 * Math.sin(a)}`;
-          }).join(' ')}
-          fill="rgba(168,85,247,.05)"
-          stroke={isUnlocked ? 'rgba(192,132,252,.72)' : 'rgba(192,132,252,.22)'}
-          strokeWidth={isUnlocked ? 1.8 : 1}
-          style={{ animation:'sc-spin 80s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?1:.38, transition:'opacity .55s ease, stroke .55s ease' }}
-          filter="url(#mc-glow)"
-        />
+          <polygon
+            points={Array.from({ length: 3 }, (_, i) => {
+              const a = (i * 120 + 90) * Math.PI / 180;
+              return `${PC + 78 * Math.cos(a)},${PC + 78 * Math.sin(a)}`;
+            }).join(' ')}
+            fill="rgba(168,85,247,.05)"
+            stroke={isUnlocked ? 'rgba(192,132,252,.72)' : 'rgba(192,132,252,.22)'}
+            strokeWidth={isUnlocked ? 1.8 : 1}
+            style={{ animation:'sc-spin 80s linear infinite', transformOrigin:`${PC}px ${PC}px`, opacity: isWarping?0:isUnlocked?1:.38, transition:'opacity .55s ease, stroke .55s ease' }}
+          />
+        </g>
 
         {isUnlocked && (() => {
           const ppts = Array.from({ length: 5 }, (_, i) => {
@@ -853,37 +938,39 @@ function Portal({ phase }) {
           filter="url(#mc-glow)"
         />
 
-        {Array.from({ length: 8 }, (_, i) => {
-          const a = i * 45 * Math.PI / 180;
-          const x = PC + 130 * Math.cos(a - Math.PI/2);
-          const y = PC + 130 * Math.sin(a - Math.PI/2);
-          return (
-            <g key={i} transform={`translate(${x},${y})`}
-              style={{ opacity: isWarping?0:isUnlocked?1:.22, transition:'opacity .55s ease' }}>
-              <circle r="5"
-                fill={isUnlocked ? (i%2===0 ? 'rgba(255,230,163,.9)' : 'rgba(192,132,252,.9)') : 'rgba(192,132,252,.28)'}
-                filter={isUnlocked ? 'url(#mc-glow)' : undefined}
-              />
-              {isUnlocked && <circle r="8" fill="none" stroke={i%2===0?'rgba(255,230,163,.38)':'rgba(192,132,252,.38)'} strokeWidth="1" />}
-            </g>
-          );
-        })}
+        <g filter={isUnlocked ? 'url(#mc-glow)' : undefined}>
+          {Array.from({ length: 8 }, (_, i) => {
+            const a = i * 45 * Math.PI / 180;
+            const x = PC + 130 * Math.cos(a - Math.PI/2);
+            const y = PC + 130 * Math.sin(a - Math.PI/2);
+            return (
+              <g key={i} transform={`translate(${x},${y})`}
+                style={{ opacity: isWarping?0:isUnlocked?1:.22, transition:'opacity .55s ease' }}>
+                <circle r="5"
+                  fill={isUnlocked ? (i%2===0 ? 'rgba(255,230,163,.9)' : 'rgba(192,132,252,.9)') : 'rgba(192,132,252,.28)'}
+                />
+                {isUnlocked && <circle r="8" fill="none" stroke={i%2===0?'rgba(255,230,163,.38)':'rgba(192,132,252,.38)'} strokeWidth="1" />}
+              </g>
+            );
+          })}
+        </g>
 
-        {Array.from({ length: 6 }, (_, i) => {
-          const a = i * 60 * Math.PI / 180;
-          const x = PC + 100 * Math.cos(a - Math.PI/2);
-          const y = PC + 100 * Math.sin(a - Math.PI/2);
-          const sym = ['◈','⬡','✦','◈','⊕','✧'][i];
-          return (
-            <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
-              fontSize={isUnlocked ? 14 : 10}
-              fill={isUnlocked ? 'rgba(255,230,163,.95)' : 'rgba(192,132,252,.28)'}
-              fontFamily="serif"
-              style={{ opacity: isWarping?0:isUnlocked?1:.28, transition:'opacity .55s ease, fill .55s ease', animation: isUnlocked?`sc-rune-glow 2.2s ease-in-out ${i*.22}s infinite alternate`:'none' }}
-              filter={isUnlocked ? 'url(#mc-glow)' : undefined}
-            >{sym}</text>
-          );
-        })}
+        <g filter={isUnlocked ? 'url(#mc-glow)' : undefined}>
+          {Array.from({ length: 6 }, (_, i) => {
+            const a = i * 60 * Math.PI / 180;
+            const x = PC + 100 * Math.cos(a - Math.PI/2);
+            const y = PC + 100 * Math.sin(a - Math.PI/2);
+            const sym = ['◈','⬡','✦','◈','⊕','✧'][i];
+            return (
+              <text key={i} x={x} y={y} textAnchor="middle" dominantBaseline="middle"
+                fontSize={isUnlocked ? 14 : 10}
+                fill={isUnlocked ? 'rgba(255,230,163,.95)' : 'rgba(192,132,252,.28)'}
+                fontFamily="serif"
+                style={{ opacity: isWarping?0:isUnlocked?1:.28, transition:'opacity .55s ease, fill .55s ease', animation: isUnlocked?`sc-rune-glow 2.2s ease-in-out ${i*.22}s infinite alternate`:'none' }}
+              >{sym}</text>
+            );
+          })}
+        </g>
 
         {isUnlocked && (
           <g style={{ opacity: isWarping?0:1, transition:'opacity .55s ease' }}>
@@ -1009,10 +1096,26 @@ function VortexOverlay({ phase }) {
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 export default function IntroScreen({ onFinish }) {
   const [phase,   setPhase]   = useState('idle');
+  const phaseRef              = useRef('idle');   // kept in sync below for use inside stale closures
   const [hovered, setHovered] = useState(false);
 
-  const unlockSfxRef = useRef(typeof Audio !== "undefined" ? new Audio('/rune-unlock.mp3') : null);
-  const warpSfxRef = useRef(typeof Audio !== "undefined" ? new Audio('/warp-portal.wav') : null);
+  // NOTE: `useRef(new Audio(...))` re-evaluates `new Audio(...)` on every
+  // single render (React only *uses* the first one, but still constructs
+  // and discards the rest) — including every hover in/out on the button.
+  // That was silently allocating + loading two media elements per render.
+  // Lazy-init refs below build each Audio object exactly once.
+  const unlockSfxRef = useRef(null);
+  const warpSfxRef = useRef(null);
+  if (unlockSfxRef.current === null && typeof Audio !== "undefined") {
+    unlockSfxRef.current = new Audio('/rune-unlock.mp3');
+  }
+  if (warpSfxRef.current === null && typeof Audio !== "undefined") {
+    warpSfxRef.current = new Audio('/warp-portal.wav');
+  }
+
+  const { isSmall, reduceMotion } = usePerfProfile();
+  const showAmbient = useDeferredMount(); // ambient layers stream in one tick after first paint
+  useAutoPauseWhenHidden();
 
   // ─── ANTI-INSPECT / SECURITY LOCK ──────────────────────────────────────────
   useEffect(() => {
@@ -1021,6 +1124,11 @@ export default function IntroScreen({ onFinish }) {
     };
 
     const handleKeyDown = (e) => {
+      // ── Enter hotkey → Enter the Sanctum ───────────────────────────────────
+      if (e.key === 'Enter' && phaseRef.current === 'idle') {
+        e.preventDefault();
+        handleEnter();
+      }
       // F12
       if (e.key === 'F12') {
         e.preventDefault();
@@ -1093,6 +1201,9 @@ export default function IntroScreen({ onFinish }) {
   useCinzelFont();
   useInjectKeyframes();
 
+  // Sync phaseRef so the keydown listener always reads the latest value
+  phaseRef.current = phase;
+
   const handleEnter = () => {
     if (phase !== 'idle') return;
 
@@ -1146,13 +1257,16 @@ export default function IntroScreen({ onFinish }) {
       transition: isWhite ? 'background .38s ease-in' : 'none',
     }} role="main" aria-label="Sanctum entrance">
 
-      <Stars phase={phase} />
-      <FloatingRunes />
-      <DriftingElementalSigils />
-      <CornerElementalSigils />
-      <BackgroundPentagram phase={phase} />
-      <EnochianPanels phase={phase} />
-      <AncientInscriptionBand phase={phase} />
+      {/* Ambient decoration: deferred one tick so the lock + button paint
+          first, and scaled down on small screens / prefers-reduced-motion
+          instead of always rendering the full desktop particle count. */}
+      {showAmbient && !reduceMotion && <Stars phase={phase} count={isSmall ? 55 : 110} />}
+      {showAmbient && !reduceMotion && <FloatingRunes count={isSmall ? 8 : 16} />}
+      {showAmbient && !reduceMotion && <DriftingElementalSigils count={isSmall ? 5 : 9} />}
+      {showAmbient && <CornerElementalSigils />}
+      {showAmbient && !reduceMotion && <BackgroundPentagram phase={phase} />}
+      {showAmbient && <EnochianPanels phase={phase} />}
+      {showAmbient && <AncientInscriptionBand phase={phase} />}
 
       {/* Vignettes */}
       <div style={{ position:'absolute', bottom:0, left:0, right:0, height:150, background:'linear-gradient(to top,rgba(8,1,20,.4) 0%,rgba(8,1,20,.12) 55%,transparent 100%)', pointerEvents:'none' }} aria-hidden />

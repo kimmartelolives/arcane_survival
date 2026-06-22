@@ -66,12 +66,15 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
+// Inilabas sa labas ng component — hindi na nire-recreate sa bawat render
+const CORE_COLORS = ['#7F77DD', '#a78bfa', '#fbbf24', '#f59e0b'];
+
 export default function LoadingScreen({ duration = 6000, isCoop = false, onComplete }) {
-  const [progress, setProgress] = useState(0);
+  // Progress at corePhase pinagsama sa isang state object para isang re-render lang bawat tick
+  const [{ progress, corePhase }, setProgressState] = React.useState({ progress: 0, corePhase: 0 });
   const [lineIndex, setLineIndex] = useState(0);
   const [tipIndex, setTipIndex] = useState(() => Math.floor(Math.random() * 6));
   const [incantIndex, setIncantIndex] = useState(0);
-  const [corePhase, setCorePhase] = useState(0);
   const completedRef = useRef(false);
 
   const ringRunesOuter  = useRef(pick(24)).current;
@@ -142,8 +145,8 @@ export default function LoadingScreen({ duration = 6000, isCoop = false, onCompl
 
     const progressTimer = setInterval(() => {
       const pct = Math.min(100, ((performance.now() - start) / duration) * 100);
-      setProgress(pct);
-      setCorePhase(Math.floor(pct / 25));
+      // Isang setState call lang — dati dalawa (setProgress + setCorePhase) = dalawang re-render bawat 40ms
+      setProgressState({ progress: pct, corePhase: Math.floor(pct / 25) });
       if (pct >= 100 && !completedRef.current) {
         completedRef.current = true;
         clearInterval(progressTimer);
@@ -175,8 +178,7 @@ export default function LoadingScreen({ duration = 6000, isCoop = false, onCompl
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duration, isCoop]);
 
-  const coreColors = ['#7F77DD','#a78bfa','#fbbf24','#f59e0b'];
-  const coreColor  = coreColors[corePhase] || '#7F77DD';
+  const coreColor  = CORE_COLORS[corePhase] || '#7F77DD';
 
   return (
     <div className="ls-root">
@@ -1168,7 +1170,7 @@ export default function LoadingScreen({ duration = 6000, isCoop = false, onCompl
               {Array.from({length:11},(_,i) => <span key={i}>┆</span>)}
             </div>
             <div className="ls-bar-track">
-              <div className="ls-bar-fill" style={{width: progress+'%'}} />
+              <div className="ls-bar-fill" style={{width: `${progress}%`}} />
             </div>
             <div className="ls-bar-meta">
               <span className="ls-spinner">✦</span>

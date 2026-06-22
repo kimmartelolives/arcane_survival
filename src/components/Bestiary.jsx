@@ -44,8 +44,10 @@ const MonsterPreview = ({ monster }) => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let animationId;
+    // desynchronized: true lets the browser skip extra compositor sync for
+    // this canvas where supported — a small but free win for a 60fps loop.
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+    let animationId = null;
 
     const render = () => {
       const now = performance.now();
@@ -1487,8 +1489,25 @@ const MonsterPreview = ({ monster }) => {
       animationId = requestAnimationFrame(render);
     };
 
+    // Don't burn CPU/GPU redrawing a canvas nobody can see — pause the loop
+    // while the tab/app is backgrounded and pick back up when it returns.
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (animationId !== null) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+      } else if (animationId === null) {
+        render();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     render();
-    return () => cancelAnimationFrame(animationId);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (animationId !== null) cancelAnimationFrame(animationId);
+    };
   }, [monster]);
 
   // CIRCULAR PREVIEW WITH ANCIENT SEAL BORDER
@@ -1530,8 +1549,10 @@ export default function Bestiary() {
 
     setIsTransitioning(true);
     
-    // Generate fewer, larger runes to prevent lag
-    setDecodingRunes(generateDecodingRunes(60)); 
+    // Fewer runes — this list renders once on the left page AND once on the
+    // right page, so 60 here meant 120 animated nodes mounting at once on
+    // every page turn. 28 keeps the "decoding" effect readable for a lot less.
+    setDecodingRunes(generateDecodingRunes(50)); 
 
     // Wait until the fade reaches its peak (300ms)
     setTimeout(() => {
@@ -1600,7 +1621,7 @@ export default function Bestiary() {
           animation-name: decodeRuneAnim;
           animation-timing-function: linear; /* Smoother rendering */
           animation-fill-mode: forwards;
-          will-change: transform, opacity, color; /* GPU Hinting */
+          will-change: transform, opacity; /* GPU Hinting */
         }
 
         /* OPTIMIZED "HACKING / DECODING" ANIMATION KEYFRAMES (Removed Blur) */
@@ -1625,6 +1646,11 @@ export default function Bestiary() {
         }
         .rune-flash.active {
           opacity: 1;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .rune-char { animation: none !important; opacity: 0 !important; }
+          .rune-flash.active { transition: none !important; opacity: 0 !important; }
         }
           /* 🔥 MOBILE FIX FOR PREVIEW & STATS */
         @media (max-width: 480px) {

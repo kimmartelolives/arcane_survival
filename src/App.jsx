@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import GameCanvas from './components/GameCanvas';
 import Overlays from './components/Overlays';
 import IntroScreen from './components/IntroScreen';
@@ -84,13 +84,13 @@ export default function App() {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // 🪄 Helper function para sa Frieren effect
-  const executeWithTransition = (callback) => {
+  const executeWithTransition = useCallback((callback) => {
     setIsTransitioning(true); // I-trigger ang animation
     setTimeout(() => {
       callback(); // Patakbuhin ang action (tulad ng pag-exit) pagkatapos ng 1 second
       setIsTransitioning(false); // I-reset
     }, 1000);
-  };
+  }, []);
 
   const hudRef = useRef({ score: 0, wave: 1, waveT: 0, waveLen: 30, p: null, p2: null });
   
@@ -100,7 +100,7 @@ export default function App() {
     onCanvasMsg: null 
   });
 
-  const toggleGlobalMute = (e) => {
+  const toggleGlobalMute = useCallback((e) => {
     e.stopPropagation();
     const nextMute = !isMuted;
     setIsMuted(nextMute);
@@ -142,7 +142,7 @@ export default function App() {
         else window.arcaneAudio.menuBgm.play().catch(()=>{});
       }
     }
-  };
+  }, [isMuted, screen]);
 
   useEffect(() => {
     /*
@@ -153,10 +153,10 @@ export default function App() {
     */
   }, [screen]);
 
-  const handleIntroFinish = () => {
+  const handleIntroFinish = useCallback(() => {
     sessionStorage.setItem('arcane_intro_played', 'true');
     setScreen('menu');
-  };
+  }, []);
 
   useEffect(() => {
     if (!window.arcaneAudio) return;
@@ -236,7 +236,21 @@ export default function App() {
   useEffect(() => {
     const timer = setInterval(() => {
       if (screen === 'playing' || screen === 'gameover') {
-        setHud({ ...hudRef.current });
+        const next = hudRef.current;
+        setHud(prev => {
+          // Only update state kung may nagbago para maiwasan ang unnecessary re-renders
+          if (
+            prev.score !== next.score ||
+            prev.wave !== next.wave ||
+            prev.waveT !== next.waveT ||
+            prev.waveLen !== next.waveLen ||
+            prev.p !== next.p ||
+            prev.p2 !== next.p2
+          ) {
+            return { ...next };
+          }
+          return prev;
+        });
       }
     }, 600);
     return () => clearInterval(timer);
@@ -250,9 +264,10 @@ export default function App() {
     }
   }, [screen]);
 
-  const showToast = (msg, err = false) => setToast({ message: msg, isError: err });
+  const handleToastClose = useCallback(() => setToast({ message: '', isError: false }), []);
+  const showToast = useCallback((msg, err = false) => setToast({ message: msg, isError: err }), []);
 
-  const handleSelectUpgrade = (choice) => {
+  const handleSelectUpgrade = useCallback((choice) => {
     if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
       window.arcaneAudio.selectUpgradeSfx.currentTime = 0;
       window.arcaneAudio.selectUpgradeSfx.play().catch(() => {});
@@ -264,9 +279,9 @@ export default function App() {
       window.runUpgrade(choice);
     }
     setScreen('playing');
-  };
+  }, []);
 
-  const routeNetworkMessage = (event, payload) => {
+  const routeNetworkMessage = useCallback((event, payload) => {
     if (event === 'guest_joined') {
       setCoop(prev => ({ ...prev, p2Name: payload.name, status: `✦ ${payload.name} joined! Starting...` }));
       setTimeout(() => {
@@ -310,9 +325,26 @@ export default function App() {
     if (netRef.current.channel && netRef.current.channel.onChatMsg) {
       netRef.current.channel.onChatMsg(event, payload);
     }
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleAction = (action, data) => {
+  // 🔊 Cached click sound — ini-initialize sa useEffect para hindi tumatakbo sa render phase
+  const clickSoundRef = useRef(null);
+  useEffect(() => {
+    if (!clickSoundRef.current) {
+      clickSoundRef.current = new Audio('/btn-click.mp3');
+      clickSoundRef.current.volume = 0.6;
+    }
+    return () => {
+      // I-cleanup ang audio object kapag nag-unmount ang component
+      if (clickSoundRef.current) {
+        clickSoundRef.current.pause();
+        clickSoundRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleAction = useCallback((action, data) => {
     if (action === 'start-solo') {
       if (netRef.current.channel) netRef.current.channel.close();
       netRef.current.channel = null;
@@ -386,10 +418,30 @@ export default function App() {
     else if (action === 'cancel-lobby') {
       setScreen('menu');
     }
-  };
+  }, [routeNetworkMessage, showToast]);
 
-  const currentHash = window.location.hash;
-  if (currentHash === '#/scribe-portal') {
+  const handleLevelUpOffer = useCallback((options) => {
+    const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
+    const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
+    setLevelUpOptions(uniqueChoices);
+    setScreen('levelup');
+  }, []);
+
+  const handleRootClick = useCallback(() => {
+    if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
+      if (screen === 'playing' || screen === 'tutorial') {
+        if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(()=>{});
+        else window.arcaneAudio.gameBgm.play().catch(()=>{});
+      }
+      else if (screen === 'levelup' || screen === 'intro') return;
+      else window.arcaneAudio.menuBgm.play().catch(()=>{});
+    }
+  }, [screen]);
+
+  // I-read ang hash once lang — hindi kailangang basahin ulit sa bawat render
+  const isAdminPortal = window.location.hash === '#/scribe-portal';
+
+  if (isAdminPortal) {
     return <AdminPortal />;
   }
 
@@ -403,16 +455,7 @@ export default function App() {
         overflow: 'hidden', 
         cursor: 'none' // 🌟 BINAGO: Ginawang permanenteng 'none' para laging tago ang default mouse
       }}
-      onClick={() => {
-        if (window.arcaneAudio && !window.arcaneAudio.isMuted) {
-          if (screen === 'playing' || screen === 'tutorial') {
-            if (window.arcaneAudio.isBossActive) window.arcaneAudio.bossBgm.play().catch(()=>{});
-            else window.arcaneAudio.gameBgm.play().catch(()=>{});
-          }
-          else if (screen === 'levelup' || screen === 'intro') return;
-          else window.arcaneAudio.menuBgm.play().catch(()=>{});
-        }
-      }}
+      onClick={handleRootClick}
     >
       {/* 🌟 BINAGO: Inilagay sa pinakataas para render agad kahit anong screen ang active! */}
       <CustomCursor />
@@ -439,8 +482,7 @@ export default function App() {
               userSelect: 'none',
               WebkitTapHighlightColor: 'transparent'
             }}
-            onMouseOver={(e) => e.currentTarget.style.opacity = '1'}
-            onMouseOut={(e) => e.currentTarget.style.opacity = '0.35'}
+            className="mute-btn-hover"
             onPointerDown={(e) => e.stopPropagation()}
           >
             {isMuted ? '🔇' : '🔊'}
@@ -455,12 +497,7 @@ export default function App() {
               playerName={wizardName}
               allyName={coop.p2Name}
               isCoop={coop.isEnabled}
-              onLevelUpOffer={(options) => { 
-                const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
-                const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
-                setLevelUpOptions(uniqueChoices); 
-                setScreen('levelup'); 
-              }}
+              onLevelUpOffer={handleLevelUpOffer}
             />
           )}
 
@@ -472,12 +509,7 @@ export default function App() {
               hudRef={hudRef}
               netRef={netRef}
               playerName={wizardName}
-              onLevelUpOffer={(options) => { 
-                const pool = options && options.length > 0 ? options : ['Vitality', 'Arcane Might', 'Rapid Fire', 'Gain Multi-Shot'];
-                const uniqueChoices = [...pool].sort(() => 0.5 - Math.random()).slice(0, 3);
-                setLevelUpOptions(uniqueChoices); 
-                setScreen('levelup'); 
-              }}
+              onLevelUpOffer={handleLevelUpOffer}
             />
           )}
           
@@ -488,10 +520,11 @@ export default function App() {
                 onClick={(e) => {
                   e.stopPropagation(); // Pigilan ang event bubbling
                   
-                  // 🔊 BULLETPROOF SOUND TRIGGER
-                  const clickSound = new Audio('/btn-click.mp3');
-                  clickSound.volume = 0.6;
-                  clickSound.play().catch(()=>{});
+                  // 🔊 BULLETPROOF SOUND TRIGGER (cached, no memory leak)
+                  if (clickSoundRef.current) {
+                    clickSoundRef.current.currentTime = 0;
+                    clickSoundRef.current.play().catch(()=>{});
+                  }
 
                   // 🪄 PATAKBUHIN ANG TRANSITION BAGO MAG-EXIT
                   executeWithTransition(() => {
@@ -525,12 +558,92 @@ export default function App() {
 
           <MetaShop screen={screen} setScreen={setScreen} />
           <PartyChat enabled={coop.isEnabled} channel={netRef.current.channel} localName={wizardName} />
-          <Toast message={toast.message} isError={toast.isError} onClose={() => setToast({ message: '', isError: false })} />
+          <Toast message={toast.message} isError={toast.isError} onClose={handleToastClose} />
         </>
       )}
       {/* ====================================================================
           🌌 UNIVERSAL TRANSITION (ARCANE / FRIEREN STYLE) - APP.JSX
           ==================================================================== */}
+      {/* Styles hoisted out of conditional render para hindi mag-inject/remove sa bawat transition */}
+      <style>{`
+        .mute-btn-hover:hover { opacity: 1 !important; }
+
+        /* 1. Deep Void Gradient Fade */
+        .arcane-idle-transition {
+          background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
+          animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        /* 2. Expanding Ethereal Rings */
+        .idle-magic-ring {
+          position: absolute;
+          border-radius: 50%;
+          opacity: 0;
+        }
+        .idle-magic-ring.outer {
+          width: 80px;
+          height: 80px;
+          border: 2px solid rgba(255, 230, 163, 0.9);
+          box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4);
+          animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+        }
+        .idle-magic-ring.inner {
+          width: 40px;
+          height: 40px;
+          border: 1px dashed rgba(192, 132, 252, 0.8);
+          animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+          animation-delay: 0.05s;
+        }
+
+        /* 3. Central Flash */
+        .idle-magic-flash {
+          position: absolute;
+          width: 4px;
+          height: 4px;
+          background: #fff;
+          border-radius: 50%;
+          box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
+          animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        /* 4. Drifting Mana Particles */
+        .mana-particle {
+          position: absolute;
+          background: #ffe6a3;
+          border-radius: 50%;
+          box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
+          opacity: 0;
+        }
+        .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
+        .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
+        .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
+        .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
+        .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
+
+        /* ================= ANIMATIONS ================= */
+        @keyframes voidFadeIn {
+          0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
+          100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
+        }
+        @keyframes spellExpand {
+          0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
+          100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
+        }
+        @keyframes spellExpandInner {
+          0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
+          100% { transform: scale(10) rotate(-180deg); opacity: 0; }
+        }
+        @keyframes starFlash {
+          0% { transform: scale(0); opacity: 1; }
+          40% { transform: scale(2); opacity: 1; }
+          100% { transform: scale(0); opacity: 0; }
+        }
+        @keyframes floatMana {
+          0% { transform: translateY(0) scale(1); opacity: 1; }
+          100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
+        }
+      `}</style>
+
       {isTransitioning && (
         <div className="arcane-idle-transition" style={{
           position: 'fixed',
@@ -553,83 +666,6 @@ export default function App() {
           <div className="mana-particle p3"></div>
           <div className="mana-particle p4"></div>
           <div className="mana-particle p5"></div>
-
-          <style>{`
-            /* 1. Deep Void Gradient Fade */
-            .arcane-idle-transition {
-              background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%);
-              animation: voidFadeIn 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            }
-
-            /* 2. Expanding Ethereal Rings */
-            .idle-magic-ring {
-              position: absolute;
-              border-radius: 50%;
-              opacity: 0;
-            }
-            .idle-magic-ring.outer {
-              width: 80px;
-              height: 80px;
-              border: 2px solid rgba(255, 230, 163, 0.9);
-              box-shadow: 0 0 25px rgba(168, 85, 247, 0.6), inset 0 0 15px rgba(168, 85, 247, 0.4);
-              animation: spellExpand 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-            }
-            .idle-magic-ring.inner {
-              width: 40px;
-              height: 40px;
-              border: 1px dashed rgba(192, 132, 252, 0.8);
-              animation: spellExpandInner 1s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
-              animation-delay: 0.05s;
-            }
-
-            /* 3. Central Flash */
-            .idle-magic-flash {
-              position: absolute;
-              width: 4px;
-              height: 4px;
-              background: #fff;
-              border-radius: 50%;
-              box-shadow: 0 0 40px 20px rgba(255, 230, 163, 0.8);
-              animation: starFlash 1s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            }
-
-            /* 4. Drifting Mana Particles */
-            .mana-particle {
-              position: absolute;
-              background: #ffe6a3;
-              border-radius: 50%;
-              box-shadow: 0 0 8px #ffe6a3, 0 0 15px #a855f7;
-              opacity: 0;
-            }
-            .p1 { width: 4px; height: 4px; top: 55%; left: 45%; animation: floatMana 0.8s ease-out 0.1s forwards; }
-            .p2 { width: 6px; height: 6px; top: 60%; left: 52%; animation: floatMana 0.9s ease-out 0.15s forwards; }
-            .p3 { width: 3px; height: 3px; top: 48%; left: 55%; animation: floatMana 0.7s ease-out 0.05s forwards; }
-            .p4 { width: 5px; height: 5px; top: 65%; left: 48%; animation: floatMana 0.85s ease-out 0.2s forwards; }
-            .p5 { width: 4px; height: 4px; top: 50%; left: 42%; animation: floatMana 0.75s ease-out 0.1s forwards; }
-
-            /* ================= ANIMATIONS ================= */
-            @keyframes voidFadeIn {
-              0% { opacity: 0; background: radial-gradient(circle at center, rgba(26, 11, 46, 0) 0%, rgba(3, 1, 7, 0) 100%); }
-              100% { opacity: 1; background: radial-gradient(circle at center, rgba(26, 11, 46, 1) 0%, rgba(3, 1, 7, 1) 100%); }
-            }
-            @keyframes spellExpand {
-              0% { transform: scale(0.5) rotate(0deg); opacity: 1; border-width: 4px; }
-              100% { transform: scale(15) rotate(180deg); opacity: 0; border-width: 0.5px; }
-            }
-            @keyframes spellExpandInner {
-              0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
-              100% { transform: scale(10) rotate(-180deg); opacity: 0; }
-            }
-            @keyframes starFlash {
-              0% { transform: scale(0); opacity: 1; }
-              40% { transform: scale(2); opacity: 1; }
-              100% { transform: scale(0); opacity: 0; }
-            }
-            @keyframes floatMana {
-              0% { transform: translateY(0) scale(1); opacity: 1; }
-              100% { transform: translateY(-80px) scale(0.2); opacity: 0; }
-            }
-          `}</style>
         </div>
       )}
     </div>
