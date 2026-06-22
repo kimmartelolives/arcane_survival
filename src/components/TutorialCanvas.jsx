@@ -18032,9 +18032,10 @@ const renderTooltipStats = (item) => {
               text-align: center;
               box-sizing: border-box;
               overflow: hidden;
-              max-height: calc(100vh - 32px);
-              overflow-y: auto;
+              scrollbar-width: none;
+              -ms-overflow-style: none;
             }
+            .tut-complete-modal::-webkit-scrollbar { display: none; }
             .tut-complete-modal::before {
               content: '';
               position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
@@ -18161,7 +18162,8 @@ const renderTooltipStats = (item) => {
               }
               .tut-complete-modal {
                 padding: 1rem 1rem 0.9rem !important;
-                max-height: calc(100vh - 24px) !important;
+                max-height: calc(100dvh - 24px) !important;
+                overflow-y: auto !important;
               }
               .tut-sigil-wrap {
                 width: 36px !important;
@@ -18209,7 +18211,8 @@ const renderTooltipStats = (item) => {
               .tut-complete-modal {
                 max-width: 420px !important;
                 padding: 0.6rem 1rem 0.6rem !important;
-                max-height: calc(100vh - 12px) !important;
+                max-height: calc(100dvh - 12px) !important;
+                overflow-y: auto !important;
               }
               .tut-sigil-wrap {
                 width: 28px !important;
@@ -18448,9 +18451,10 @@ const renderTooltipStats = (item) => {
               text-align: center;
               box-sizing: border-box;
               overflow: hidden;
-              max-height: calc(100vh - 32px);
-              overflow-y: auto;
+              scrollbar-width: none;
+              -ms-overflow-style: none;
             }
+            .tut-complete-modal::-webkit-scrollbar { display: none; }
             /* subtle inner top glow like move-to-start */
             .tut-complete-modal::before {
               content: '';
@@ -18555,7 +18559,8 @@ const renderTooltipStats = (item) => {
               }
               .tut-complete-modal {
                 padding: 1rem 1rem 0.9rem !important;
-                max-height: calc(100vh - 24px) !important;
+                max-height: calc(100dvh - 24px) !important;
+                overflow-y: auto !important;
               }
               .tut-sigil-wrap {
                 width: 36px !important;
@@ -18597,7 +18602,8 @@ const renderTooltipStats = (item) => {
               .tut-complete-modal {
                 max-width: 420px !important;
                 padding: 0.6rem 1rem 0.6rem !important;
-                max-height: calc(100vh - 12px) !important;
+                max-height: calc(100dvh - 12px) !important;
+                overflow-y: auto !important;
               }
               .tut-sigil-wrap {
                 width: 28px !important;
