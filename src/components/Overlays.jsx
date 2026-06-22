@@ -1325,7 +1325,7 @@ const getUpgradeMeta = (rawString, wave = 1) => {
       return { icon: <IconHeart />, title: 'VITALITY', desc: `MAX HP +${hpBoost} & FULL HEAL` };
     }
     if (normalize.includes('multi') || normalize.includes('shot') || normalize.includes('gain') || normalize.includes('-')) {
-      return { icon: <IconWand />, title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 20)' };
+      return { icon: <IconWand />, title: 'SPLIT BOLT', desc: 'FIRE AN ADDITIONAL PROJECTILE (CAP: 10)' };
     }
     if (normalize.includes('swift') || normalize.includes('speed') || normalize.includes('stride')) {
       return { icon: <IconWind />, title: 'SWIFT STRIDE', desc: `MOVEMENT SPEED +${spdBoost} (CAP: 800)` };
