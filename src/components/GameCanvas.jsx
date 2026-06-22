@@ -8452,7 +8452,7 @@ if (eng.tornados) {
                 if (targetPlayer.potBuffs?.xpBoost > 0) distributedXp = Math.ceil(distributedXp * 1.5); 
 
 
-              if (isCoopActive && targetPlayer === eng.p2) {
+             if (isCoopActive && targetPlayer === eng.p2) {
                   eng.p2.xp += distributedXp;
                   while (eng.p2.xp >= eng.p2.xpNext) {
                     eng.p2.xp -= eng.p2.xpNext;
@@ -8460,6 +8460,29 @@ if (eng.tornados) {
                     eng.p2.xpNext = Math.ceil(eng.p2.xpNext * 1.18) + 150; 
                     eng.p2.level++;
                     eng.p2.pendingLevelUps = (eng.p2.pendingLevelUps || 0) + 1;
+
+                    // 🔥 AUTO UNLOCK DEFENSIVE & OFFENSIVE SPELLS
+                    if (eng.p2.skills) {
+                      if (eng.p2.level >= 5) {
+                        ['berserk', 'haste', 'fortify', 'shield'].forEach(s => {
+                          if (eng.p2.skills[s] && !eng.p2.skills[s].learned) { 
+                            eng.p2.skills[s].learned = true; 
+                            eng.p2.skills[s].enabled = true; 
+                            eng.p2.skills[s].cd = 0;
+                            eng.p2.skills[s].duration = 0;
+                          }
+                        });
+                      }
+                      if (eng.p2.level >= 10) {
+                        ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'].forEach(s => {
+                          if (eng.p2.skills[s] && !eng.p2.skills[s].learned) { 
+                            eng.p2.skills[s].learned = true; 
+                            eng.p2.skills[s].enabled = true; 
+                            eng.p2.skills[s].cd = 0;
+                          }
+                        });
+                      }
+                    }
                   }
                 } else if (eng.p) {
                   eng.p.xp += distributedXp;
@@ -8469,6 +8492,29 @@ if (eng.tornados) {
                     eng.p.xpNext = Math.ceil(eng.p.xpNext * 1.18) + 150; 
                     eng.p.level++;
                     eng.p.pendingLevelUps = (eng.p.pendingLevelUps || 0) + 1;
+
+                    // 🔥 AUTO UNLOCK DEFENSIVE & OFFENSIVE SPELLS
+                    if (eng.p.skills) {
+                      if (eng.p.level >= 5) {
+                        ['berserk', 'haste', 'fortify', 'shield'].forEach(s => {
+                          if (eng.p.skills[s] && !eng.p.skills[s].learned) { 
+                            eng.p.skills[s].learned = true; 
+                            eng.p.skills[s].enabled = true; 
+                            eng.p.skills[s].cd = 0;
+                            eng.p.skills[s].duration = 0;
+                          }
+                        });
+                      }
+                      if (eng.p.level >= 10) {
+                        ['bodyCutter', 'shootingStar', 'cubeBash', 'vacuumSlash'].forEach(s => {
+                          if (eng.p.skills[s] && !eng.p.skills[s].learned) { 
+                            eng.p.skills[s].learned = true; 
+                            eng.p.skills[s].enabled = true; 
+                            eng.p.skills[s].cd = 0;
+                          }
+                        });
+                      }
+                    }
                   }
                 }
                 if (g.isPulled) window.recordArcaneUtility('Voidling Loot', 1)
@@ -8992,6 +9038,10 @@ if (isHost || !isCoopActive) {
       ctx.fillText(txt, x, boxY + boxHeight / 2 + 1);
       ctx.restore();
     };
+
+    const MAGIC_RUNES = ['ᚠ','ᚢ','ᚦ','ᚨ','ᚱ','ᚲ','ᚷ','ᚹ','ᚺ','ᚾ','ᛁ','ᛃ']; // Eksaktong 12 runes na
+const TWO_PI = Math.PI * 2;
+const QUARTER_PI = Math.PI / 4;
 
 
     const renderLoop = () => {
@@ -11599,55 +11649,378 @@ if (skin === 'shadow') {
     ctx.restore();
   }
 
-      if (eng.slashes) {
-        for (const sl of eng.slashes) {
+if (eng.slashes && eng.slashes.length > 0) {
+        const time = performance.now();
+        
+        for (let i = 0; i < eng.slashes.length; i++) {
+          const sl = eng.slashes[i];
           ctx.save();
           ctx.translate(sl.x, sl.y);
           ctx.rotate(sl.angle);
-          ctx.strokeStyle = sl.p2 ? 'rgba(251, 146, 60, 0.85)' : 'rgba(168, 85, 247, 0.85)';
-          ctx.lineWidth = 4;
-          ctx.shadowBlur = 14;
-          ctx.shadowColor = sl.p2 ? '#fb923c' : '#a855f7';
+
+          const isP2 = sl.p2;
+          
+          // 🧛‍♂️ CINEMATIC DARK FANTASY COLOR GRADING
+          const colorWhite = '#ffffff';
+          const colorCore  = isP2 ? 'rgba(254, 202, 202, 0.9)' : 'rgba(233, 213, 255, 0.9)'; // White-hot pinkish/purplish
+          const colorAura  = isP2 ? 'rgba(220, 38, 38, 0.5)'   : 'rgba(147, 51, 234, 0.5)';  // Deep Red / Violet
+          const colorVoid  = isP2 ? 'rgba(40, 5, 5, 0.9)'      : 'rgba(20, 5, 35, 0.9)';     // Pitch black red/purple
+
+          // 🔥 MICRO-TREMOR EFFECT (Nag-vibrate sa sobrang lakas ng enerhiya)
+          const tremor = 1 + Math.sin(time * 0.08 + i * 10) * 0.02;
+          ctx.scale(tremor, tremor);
+
+          // ==========================================
+          // 1. THE VOID TEAR (Napupunit na space sa likod)
+          // ==========================================
+          ctx.globalCompositeOperation = 'source-over'; // Normal blending for pure darkness
           ctx.beginPath();
-          ctx.arc(0, 0, 26, -Math.PI / 2, Math.PI / 2);
+          ctx.moveTo(10, -26);
+          // Jagged edges sa likuran (Space distortion)
+          ctx.lineTo(-5, -15);
+          ctx.lineTo(-12, -5);
+          ctx.lineTo(-8, 5);
+          ctx.lineTo(-15, 15);
+          ctx.lineTo(10, 26);
+          // Smooth inner curve
+          ctx.bezierCurveTo(-10, 10, -10, -10, 10, -26);
+          
+          const voidGrad = ctx.createLinearGradient(10, 0, -15, 0);
+          voidGrad.addColorStop(0, colorAura);
+          voidGrad.addColorStop(0.5, colorVoid);
+          voidGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          ctx.fillStyle = voidGrad;
+          ctx.fill();
+
+          // ==========================================
+          // 2. VOLUMETRIC PLASMA GLOW (Multi-layered motion blur)
+          // ==========================================
+          ctx.globalCompositeOperation = 'lighter'; // The secret to realistic fire/energy
+          
+          // Tatlong layers ng aura na palaki nang palaki pero palabo nang palabo
+          for(let layer = 1; layer <= 3; layer++) {
+            ctx.beginPath();
+            let spread = layer * 4;
+            ctx.moveTo(0, -25 - spread);
+            // Ang unahan ay sweeping curve
+            ctx.quadraticCurveTo(35 + spread * 1.5, 0, 0, 25 + spread);
+            // Ang likuran ay matulis
+            ctx.quadraticCurveTo(15, 0, 0, -25 - spread);
+            ctx.fillStyle = isP2 ? `rgba(220, 38, 38, ${0.2 / layer})` : `rgba(147, 51, 234, ${0.2 / layer})`;
+            ctx.fill();
+          }
+
+          // ==========================================
+          // 3. SEARING BLADE BODY (Ang mismong talim)
+          // ==========================================
+          ctx.beginPath();
+          ctx.moveTo(4, -24);
+          ctx.bezierCurveTo(30, -10, 30, 10, 4, 24);
+          ctx.quadraticCurveTo(16, 0, 4, -24);
+          
+          // Glowing gradient mula gitna papuntang likod
+          const bladeGrad = ctx.createLinearGradient(25, 0, 0, 0);
+          bladeGrad.addColorStop(0, colorCore);
+          bladeGrad.addColorStop(1, colorAura);
+          ctx.fillStyle = bladeGrad;
+          ctx.fill();
+
+          // ==========================================
+          // 4. THE ABSOLUTE EDGE (Super-hot white cutting line)
+          // ==========================================
+          ctx.beginPath();
+          ctx.moveTo(6, -20);
+          ctx.quadraticCurveTo(32, 0, 6, 20);
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = colorWhite;
           ctx.stroke();
+
+          // Air Shear (Hangin na nahihiwa sa unahan ng blade)
+          ctx.beginPath();
+          ctx.moveTo(15, -15);
+          ctx.quadraticCurveTo(38, 0, 15, 15);
+          ctx.lineWidth = 0.5;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.stroke();
+
+          // ==========================================
+          // 5. FRICTION SPARKS (Tumatalsik na plasma patalikod)
+          // ==========================================
+          // Zero-lag procedural sparks using Math
+          for (let s = 0; s < 5; s++) {
+            // Iba-ibang bilis at posisyon bawat spark
+            const sparkAge = (time * 0.15 + s * 25) % 30; 
+            const sparkY = Math.sin(s * 45) * 20; // Kumakalat sa taas at baba ng blade
+            const startX = 20 - (sparkY * sparkY * 0.05); // Curve along the blade shape
+            
+            const sparkX = startX - sparkAge * 1.5; // Lumilipad patalikod
+            
+            // Fade out habang lumalayo
+            const sparkAlpha = Math.max(0, 1 - (sparkAge / 30));
+            
+            if (sparkAge > 0 && sparkX < 25) {
+              ctx.beginPath();
+              ctx.moveTo(sparkX, sparkY);
+              // Line ng spark (streaking backward)
+              ctx.lineTo(sparkX - 6 - (s % 3)*2, sparkY); 
+              ctx.lineWidth = 1.5 - (sparkAge / 30);
+              ctx.strokeStyle = `rgba(255, 255, 255, ${sparkAlpha})`;
+              ctx.stroke();
+            }
+          }
+
           ctx.restore();
         }
       }
 
-      if (eng.stars) {
-        for (const s of eng.stars) {
+if (eng.stars && eng.stars.length > 0) {
+        const time = performance.now();
+        const TWO_PI = Math.PI * 2;
+        const STAR_RUNES = ['ᛗ','ᛖ','ᛏ','ᛖ','ᛟ','ᚱ','ᚨ','ᛊ']; 
+        
+        for (let i = 0; i < eng.stars.length; i++) {
+          const s = eng.stars[i];
+          
           ctx.save();
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
-          ctx.lineWidth = 1;
+          // 🔥 REALISTIC LIGHTING SECRET: Additive Blending
+          // Nagiging mas maliwanag at nag-g-glow ang mga kulay kapag nagpapatong, zero lag!
+          ctx.globalCompositeOperation = 'lighter'; 
+
+          // ==========================================
+          // 1. ELEGANT RUNIC IMPACT ZONE
+          // ==========================================
+          ctx.save();
+          ctx.translate(s.x, s.targetY);
+          
+          // Smooth Radial Glow sa lapag
           ctx.beginPath();
-          ctx.arc(s.x, s.targetY, s.radius, 0, Math.PI * 2);
-          ctx.stroke();
+          ctx.arc(0, 0, s.radius * 0.8, 0, TWO_PI);
+          const groundGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, s.radius * 0.8);
+          groundGrad.addColorStop(0, 'rgba(167, 139, 250, 0.2)'); // Mystic purple center
+          groundGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');    // Fades perfectly to invisible
+          ctx.fillStyle = groundGrad;
+          ctx.fill();
+
+          // Elegant Expanding Shockwaves (Thinner & Sharper)
+          const speed = 0.04; 
+          const phase1 = (time * speed) % s.radius;
+          const phase2 = (time * speed + s.radius * 0.5) % s.radius;
+          const alpha1 = Math.max(0, 1 - (phase1 / s.radius));
+          const alpha2 = Math.max(0, 1 - (phase2 / s.radius));
+
+          ctx.lineWidth = 1.5; 
+          if (phase1 > 0) {
+            ctx.beginPath(); ctx.arc(0, 0, phase1, 0, TWO_PI);
+            ctx.strokeStyle = `rgba(219, 234, 254, ${alpha1})`; 
+            ctx.stroke();
+          }
+          if (phase2 > 0) {
+            ctx.beginPath(); ctx.arc(0, 0, phase2, 0, TWO_PI);
+            ctx.strokeStyle = `rgba(167, 139, 250, ${alpha2 * 0.8})`; 
+            ctx.stroke();
+          }
+
+          // Floating & Pulsing Ancient Runes
+          ctx.save();
+          ctx.rotate(time * -0.0015);
+          ctx.font = `${s.radius * 0.22}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          for(let r = 0; r < 8; r++) {
+            ctx.save();
+            ctx.rotate((r / 8) * TWO_PI);
+            // Ang mga runes ay may subtle "breathing" movement palabas at paloob
+            const runeOffset = s.radius * 0.65 + Math.sin(time * 0.002 + r) * 5;
+            ctx.translate(0, -runeOffset);
+            ctx.fillStyle = `rgba(147, 197, 253, ${0.4 + Math.sin(time * 0.005) * 0.2})`; 
+            ctx.fillText(STAR_RUNES[r], 0, 0);
+            ctx.restore();
+          }
+          ctx.restore();
+          
+          // 8-Point Majestic Radiant Beams (Using Linear Gradients)
+          ctx.save();
+          ctx.rotate(time * 0.003);
+          ctx.lineWidth = 1;
+          for(let b = 0; b < 8; b++) {
+              ctx.beginPath();
+              const rayLen = (b % 2 === 0) ? s.radius * 0.6 : s.radius * 0.3;
+              ctx.moveTo(0, 0);
+              ctx.lineTo(0, rayLen);
+              
+              const rayGrad = ctx.createLinearGradient(0, 0, 0, rayLen);
+              rayGrad.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
+              rayGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+              ctx.strokeStyle = rayGrad;
+              ctx.stroke();
+              ctx.rotate(Math.PI / 4);
+          }
+          ctx.restore();
           ctx.restore();
 
+          // ==========================================
+          // 2. REALISTIC STARDUST COMET
+          // ==========================================
           ctx.save();
           ctx.translate(s.x, s.currentY);
-          ctx.rotate(performance.now() * 0.006);
-          ctx.fillStyle = '#60a5fa';
-          ctx.shadowBlur = 12;
-          ctx.shadowColor = '#3b82f6';
-          ctx.fillRect(-8, -8, 16, 16);
-          ctx.restore();
+          
+          const tailLength = 160; 
+          ctx.lineCap = 'round';
+          
+          // 🔥 SILKY SMOOTH GRADIENT TAIL
+          const tailGrad = ctx.createLinearGradient(0, 0, 0, -tailLength);
+          tailGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');    // White hot impact core
+          tailGrad.addColorStop(0.1, 'rgba(147, 197, 253, 0.8)');  // Bright cyan
+          tailGrad.addColorStop(0.4, 'rgba(167, 139, 250, 0.4)');  // Mystic purple body
+          tailGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');       // Ghostly transparent tip
+          
+          ctx.beginPath();
+          ctx.moveTo(0, 5); 
+          ctx.lineTo(8, -tailLength * 0.2); 
+          ctx.lineTo(0, -tailLength); 
+          ctx.lineTo(-8, -tailLength * 0.2);
+          ctx.closePath();
+          ctx.fillStyle = tailGrad;
+          ctx.fill();
+
+          // Inner Searing Plasma Trail
+          const innerGrad = ctx.createLinearGradient(0, 0, 0, -tailLength * 0.5);
+          innerGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+          innerGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          ctx.beginPath();
+          ctx.moveTo(0, 2);
+          ctx.lineTo(3, -tailLength * 0.1);
+          ctx.lineTo(0, -tailLength * 0.5);
+          ctx.lineTo(-3, -tailLength * 0.1);
+          ctx.closePath();
+          ctx.fillStyle = innerGrad;
+          ctx.fill();
+
+          // 🔥 MOTION-BLURRED SPARKS (Imbes na bilog, streaking lines sila)
+          for (let p = 0; p < 8; p++) {
+            const dropY = -((time * 0.3 + p * 20) % tailLength); 
+            const dropX = Math.sin(time * 0.015 + p) * 12; 
+            const sparkLength = Math.max(2, 15 - (-dropY / 10)); 
+            
+            if (dropY < -10) { 
+              ctx.beginPath();
+              ctx.moveTo(dropX, dropY);
+              ctx.lineTo(dropX, dropY - sparkLength); // Streaking line effect
+              ctx.lineWidth = 1.5;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${1 - (-dropY / tailLength)})`;
+              ctx.stroke();
+            }
+          }
+
+          // 🔥 PERFECT TEARDROP HEAD (Using Bezier Curves)
+          ctx.beginPath();
+          ctx.moveTo(0, 8); // Bottom curve
+          ctx.bezierCurveTo(12, 8, 12, -8, 0, -22); // Right swooping curve up
+          ctx.bezierCurveTo(-12, -8, -12, 8, 0, 8); // Left swooping curve down
+          ctx.fillStyle = 'rgba(147, 197, 253, 0.7)';
+          ctx.fill();
+
+          // White Hot Core
+          ctx.beginPath();
+          ctx.arc(0, 0, 5, 0, TWO_PI);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+
+          // 🔥 CINEMATIC LENS FLARE (Layered for realistic bloom)
+          if (ctx.ellipse) { 
+            // Wide atmospheric flare
+            ctx.beginPath();
+            ctx.ellipse(0, 2, 45, 1.5, 0, 0, TWO_PI); 
+            ctx.fillStyle = 'rgba(167, 139, 250, 0.4)';
+            ctx.fill();
+            
+            // Core piercing flare
+            ctx.beginPath();
+            ctx.ellipse(0, 2, 20, 0.5, 0, 0, TWO_PI); 
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.fill();
+          }
+          
+          ctx.restore(); 
+          ctx.restore(); // Very important: Restores context back to normal (removes 'lighter' mode)
         }
       }
 
-      if (eng.cubeBashes) {
-        for (const cb of eng.cubeBashes) {
+      if (eng.cubeBashes && eng.cubeBashes.length > 0) {
+        const time = performance.now();
+        const slowSpin = time * 0.001;
+        const fastSpin = time * -0.002;
+
+        // Gumamit ng normal for-loop, mas mabilis ito kaysa for...of sa malalaking scale
+        for (let i = 0; i < eng.cubeBashes.length; i++) {
+          const cb = eng.cubeBashes[i];
+          
+          const maxRad = cb.maxRadius || 135;
+          if (cb.radius >= maxRad) continue; // Wag i-render kung lampas na sa size
+          
+          // Fade-out logic
+          const progress = cb.radius / maxRad;
+          const alpha = (1 - progress) * 0.85; 
+          
+          if (alpha <= 0.01) continue; // Optimization: Wag i-render kung sobrang labo na at di na kita
+          
           ctx.save();
-          ctx.strokeStyle = 'rgba(52, 211, 153, 0.6)';
+          ctx.translate(cb.x, cb.y);
+          
+          // 🔥 TINANGGAL ANG ctx.shadowBlur PARA IWAS LAG
+          // Gagamitin natin ang alpha at layered colors para mapanatili ang "glowing" effect nang hindi bumibigat
+          ctx.strokeStyle = `rgba(52, 211, 153, ${alpha})`;
+          ctx.fillStyle = `rgba(52, 211, 153, ${alpha * 0.9})`;
+          
+          // 1 & 2. Rings (Pinagsama sa iisang beginPath at stroke para 2x faster)
           ctx.lineWidth = 2;
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = '#34d399';
-          ctx.strokeRect(cb.x - cb.radius, cb.y - cb.radius, cb.radius * 2, cb.radius * 2);
+          ctx.beginPath();
+          ctx.arc(0, 0, cb.radius, 0, TWO_PI);
+          ctx.moveTo(cb.radius * 0.75, 0); // Talon sa inner ring na walang guhit
+          ctx.arc(0, 0, cb.radius * 0.75, 0, TWO_PI);
+          ctx.stroke();
+          
+          // 3. Rotating Ancient Runes
+          ctx.save();
+          ctx.rotate(slowSpin);
+          ctx.font = `${cb.radius * 0.18}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          const runeOffset = -cb.radius * 0.87;
+          for (let j = 0; j < 12; j++) {
+            const angle = (j / 12) * TWO_PI;
+            ctx.save();
+            ctx.rotate(angle);
+            ctx.translate(0, runeOffset);
+            ctx.fillText(MAGIC_RUNES[j], 0, 0);
+            ctx.restore();
+          }
+          ctx.restore();
+          
+          // 4. Central Geometric Core (Pinagsama ang drawing ng dalawang squares)
+          ctx.save();
+          ctx.rotate(fastSpin);
+          const innerSize = cb.radius * 0.53;
+          ctx.lineWidth = 1.5;
+          
+          ctx.beginPath();
+          ctx.rect(-innerSize, -innerSize, innerSize * 2, innerSize * 2);
+          ctx.rotate(QUARTER_PI); // Iikot para sa pangalawang square
+          ctx.rect(-innerSize, -innerSize, innerSize * 2, innerSize * 2);
+          ctx.stroke(); // Isang stroke nalang para sa dalawang square
+          ctx.restore();
+          
+          // 5. Central Magic Pulse
+          ctx.beginPath();
+          ctx.arc(0, 0, cb.radius * 0.2, 0, TWO_PI);
+          ctx.fillStyle = `rgba(52, 211, 153, ${alpha * 0.3})`;
+          ctx.fill();
+          
           ctx.restore();
         }
       }
-
       // 🔥 BUFF: HUGE VISUAL UPGRADE FOR ARCANE COLLAPSE
       if (eng.collapses) {
         for (const col of eng.collapses) {
@@ -18623,7 +18996,7 @@ const renderTooltipStats = (item) => {
                   <path d="M12 6 V18" stroke="#a78bfa" strokeWidth="1.1" opacity="0.55"/>
                   <circle cx="12" cy="11" r="2.2" fill="#7c3aed" opacity="0.7"/>
                 </svg>
-                DEFENSIVE SPELLS (LV 5+)
+                DEFENSIVE SKILLS (LV 5+)
               </span>
               <button 
                 className="skill-tree-close-x" 
@@ -18691,7 +19064,7 @@ const renderTooltipStats = (item) => {
                       <path d="M7 17 Q5.5 19 5 21 Q6.8 20.3 8 19" fill="#fb7185" opacity="0.85"/>
                       <path d="M9 13 L11 11" stroke="#fda4af" strokeWidth="1.2" strokeLinecap="round" opacity="0.6"/>
                     </svg>
-                    OFFENSIVE SPELLS (LV 10+)
+                    OFFENSIVE SKILLS (LV 10+)
                   </span>
                 </div>
 
