@@ -3346,42 +3346,88 @@ export default function TutorialCanvas({ screen, setScreen, hudRef, netRef, onLe
   const narrationAudioRef = useRef(null);
   const currentVoiceRef = useRef(null);
 
- // Ilagay ito sa labas ng playNarration (pwede sa itaas lang nito) para isang beses lang mag-create
+  // Single reusable audio element na ino-unlock sa gesture (iOS fix)
+  const narrationElementRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  const playNarration = (fileName) => {
+  // Tawagin ito sa loob ng user gesture (Start button) para i-unlock ang audio sa iOS
+  const unlockNarrationAudio = () => {
     if (typeof window === 'undefined') return;
-    
-    // 🛑 ANTI-SPAM FIX: Kung ito na yung huling pinatugtog, wag nang i-restart!
-    if (currentVoiceRef.current === fileName) return;
-    currentVoiceRef.current = fileName; // I-save ang bagong file na tutunog
 
-    // Kung may nagsasalita pa na IBANG voice line, patigilin muna
-    if (narrationAudioRef.current) {
-      narrationAudioRef.current.pause();
-      narrationAudioRef.current.currentTime = 0;
+    // Gumawa ng isang Audio element at i-unlock via gesture
+    if (!narrationElementRef.current) {
+      const el = new Audio();
+      el.crossOrigin = 'anonymous';
+      el._gainConnected = false;
+      narrationElementRef.current = el;
     }
-    
-    const audio = new Audio(fileName);
-    audio.crossOrigin = "anonymous"; // Importante ito para di ma-block ng browser ang Audio API
 
-    // 🔊 SETUP NG AMPLIFIER (Web Audio API)
+    // Gumawa/resume ng AudioContext sa loob ng gesture
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     }
-    
-    const source = audioCtxRef.current.createMediaElementSource(audio);
-    const gainNode = audioCtxRef.current.createGain();
-    
-    // 🔥 DITO MO KOKONTROLIN ANG LAKAS!
-    // 1.0 = Default (100%), 2.0 = Doble lakas (200%), 3.0 = Triple (300%)
-    gainNode.gain.value = 2.5; 
-    
-    source.connect(gainNode);
-    gainNode.connect(audioCtxRef.current.destination);
-    
-    audio.play().catch(e => console.warn("Narration blocked by browser:", e));
-    narrationAudioRef.current = audio;
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+
+    // I-unlock ang audio element via muted silent play (iOS requirement)
+    const el = narrationElementRef.current;
+    el.muted = true;
+    el.src = '/step1.mp3';
+    el.play().then(() => {
+      el.pause();
+      el.currentTime = 0;
+      el.muted = false;
+    }).catch(() => { el.muted = false; });
+  };
+
+  const playNarration = (fileName) => {
+    if (typeof window === 'undefined') return;
+
+    // 🛑 ANTI-SPAM FIX: Kung ito na yung huling pinatugtog, wag nang i-restart!
+    if (currentVoiceRef.current === fileName) return;
+    currentVoiceRef.current = fileName;
+
+    // Gamitin ang pre-unlocked element (iOS-safe); fallback kung hindi pa naka-unlock
+    const el = narrationElementRef.current;
+    if (!el) {
+      // Fallback para sa non-iOS browsers (walang unlockNarrationAudio na natawag)
+      const fallback = new Audio(fileName);
+      fallback.crossOrigin = 'anonymous';
+      fallback.volume = 1.0;
+      fallback.play().catch(e => console.warn("Narration blocked:", e));
+      narrationAudioRef.current = fallback;
+      return;
+    }
+
+    // Ihinto ang nakaraang tumutugtog
+    el.pause();
+    el.currentTime = 0;
+
+    // Resume AudioContext — iOS ay nagsu-suspend nito kapag walang activity
+    if (audioCtxRef.current && audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+
+    // I-setup ang GainNode isang beses lang (para sa volume amplification)
+    if (audioCtxRef.current && !el._gainConnected) {
+      try {
+        const source = audioCtxRef.current.createMediaElementSource(el);
+        const gainNode = audioCtxRef.current.createGain();
+        gainNode.gain.value = 2.5;
+        source.connect(gainNode);
+        gainNode.connect(audioCtxRef.current.destination);
+        el._gainConnected = true;
+      } catch (e) {
+        console.warn("GainNode setup error:", e);
+      }
+    }
+
+    // Palitan ang src at i-play — hindi na kailangang gumawa ng bagong Audio object
+    el.src = fileName;
+    el.load();
+    el.play().catch(e => console.warn("Narration blocked by browser:", e));
+    narrationAudioRef.current = el;
   };
 
   // ── Stop every audio that could be playing when exiting to menu ──────────
@@ -3391,6 +3437,11 @@ export default function TutorialCanvas({ screen, setScreen, hudRef, netRef, onLe
       narrationAudioRef.current.pause();
       narrationAudioRef.current.currentTime = 0;
       narrationAudioRef.current = null;
+    }
+    // Also stop the reusable element (iOS fix)
+    if (narrationElementRef.current) {
+      narrationElementRef.current.pause();
+      narrationElementRef.current.currentTime = 0;
     }
     currentVoiceRef.current = null; // reset anti-spam guard
 
@@ -18353,6 +18404,9 @@ const renderTooltipStats = (item) => {
                     e.stopPropagation();
                     if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll();
                     if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('equip');
+                    // iOS fix: i-unlock muna ang narration audio element sa loob ng gesture
+                    // bago tawagin ang playNarration para gumana sa Steps 2–5 (na nasa setTimeout)
+                    unlockNarrationAudio();
                     // Play Step 1 narration immediately on user gesture (required for iOS audio)
                     playNarration('/step1.mp3');
                     setShowTutorialIntro(false);
