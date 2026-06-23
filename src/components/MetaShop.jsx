@@ -2699,6 +2699,99 @@ const METASHOP_STYLES = `
     .shop-card-info { display: flex; flex-direction: row; align-items: center; gap: 12px; }
     .shop-btn { width: 100%; padding: 12px !important; font-size: 1rem !important; }
   }
+
+  /* ── ARCANE SAVE / RESTORE SCROLL ── */
+  .arcane-tome-wrap {
+    position: relative;
+    margin: 8px auto 2px auto;
+    padding: 7px 12px 9px 12px;
+    background: linear-gradient(160deg, rgba(15,8,40,0.92) 0%, rgba(30,10,60,0.85) 100%);
+    border: 1px solid rgba(168,85,247,0.3);
+    border-radius: 7px;
+    box-shadow: 0 0 12px rgba(168,85,247,0.08), inset 0 0 14px rgba(10,4,30,0.5);
+  }
+  .arcane-tome-wrap::before,
+  .arcane-tome-wrap::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50%;
+    height: 1px;
+  }
+  .arcane-tome-wrap::before { top: 0; background: linear-gradient(90deg, transparent, rgba(168,85,247,0.5), transparent); }
+  .arcane-tome-wrap::after  { bottom: 0; background: linear-gradient(90deg, transparent, rgba(168,85,247,0.5), transparent); }
+
+  .arcane-tome-label {
+    font-family: Georgia, serif;
+    font-size: 0.58rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(167,139,250,0.45);
+    text-align: center;
+    margin-bottom: 6px;
+    text-shadow: 0 0 6px rgba(168,85,247,0.35);
+  }
+
+  .arcane-rune-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 13px;
+    border-radius: 5px;
+    font-family: Georgia, serif;
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    border: none;
+    outline: none;
+    transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+    overflow: hidden;
+  }
+  .arcane-rune-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: rgba(255,255,255,0.06);
+  }
+  .arcane-rune-btn:hover::before { opacity: 1; }
+  .arcane-rune-btn:hover { transform: translateY(-2px); filter: brightness(1.15); }
+  .arcane-rune-btn:active { transform: scale(0.95); filter: brightness(0.9); }
+
+  .arcane-rune-btn.export-rune {
+    background: linear-gradient(135deg, rgba(16,185,129,0.18) 0%, rgba(5,150,105,0.28) 100%);
+    color: #6ee7b7;
+    box-shadow: 0 0 10px rgba(16,185,129,0.15), inset 0 0 6px rgba(16,185,129,0.06);
+    border: 1px solid rgba(16,185,129,0.35);
+  }
+  .arcane-rune-btn.export-rune:hover { box-shadow: 0 0 16px rgba(16,185,129,0.3), inset 0 0 10px rgba(16,185,129,0.1); }
+
+  .arcane-rune-btn.import-rune {
+    background: linear-gradient(135deg, rgba(139,92,246,0.18) 0%, rgba(109,40,217,0.28) 100%);
+    color: #c4b5fd;
+    box-shadow: 0 0 10px rgba(139,92,246,0.15), inset 0 0 6px rgba(139,92,246,0.06);
+    border: 1px solid rgba(139,92,246,0.35);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .arcane-rune-btn.import-rune:hover { box-shadow: 0 0 16px rgba(139,92,246,0.3), inset 0 0 10px rgba(139,92,246,0.1); }
+
+  .arcane-corner-gem {
+    position: absolute;
+    width: 5px; height: 5px;
+    background: rgba(168,85,247,0.65);
+    border-radius: 50%;
+    box-shadow: 0 0 5px rgba(168,85,247,0.7);
+  }
+  .arcane-corner-gem.tl { top: -3px; left: 10px; }
+  .arcane-corner-gem.tr { top: -3px; right: 10px; }
+  .arcane-corner-gem.bl { bottom: -3px; left: 10px; }
+  .arcane-corner-gem.br { bottom: -3px; right: 10px; }
 `;
 
 // ITO ANG MAIN METASHOP COMPONENT
@@ -2882,6 +2975,115 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
     }
   }, [crystals, familiarLevels]);
 
+  // ============================================================
+  // EXPORT / IMPORT SAVE DATA (hardened)
+  // ============================================================
+
+  // Salt is assembled at runtime from scattered pieces — never a plain string in memory
+  const _k = useRef(null);
+  const _getKey = () => {
+    if (_k.current) return _k.current;
+    const p = [0x61,0x72,0x63,0x5f,0x76,0x6f,0x69,0x64].map(c=>String.fromCharCode(c)).join('');
+    const q = [0x5f,0x6d,0x61,0x67,0x65,0x5f,0x63,0x6f,0x64,0x65,0x78].map(c=>String.fromCharCode(c)).join('');
+    const r = String.fromCharCode(95,115,101,97,108,51,55,120,107);
+    _k.current = p + q + r;
+    return _k.current;
+  };
+
+  const _h = async (payload) => {
+    const key = _getKey();
+    // Deterministic key order so JSON.stringify is always consistent
+    const ordered = Object.keys(payload).sort().reduce((acc, k) => { acc[k] = payload[k]; return acc; }, {});
+    const raw = key + '|' + JSON.stringify(ordered) + '|' + key.split('').reverse().join('');
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+
+  // Marks a tamper attempt silently in localStorage so you can detect it later
+  const _flagTamper = (reason) => {
+    const log = JSON.parse(localStorage.getItem('_arc_flags') || '[]');
+    log.push({ reason, at: new Date().toISOString() });
+    localStorage.setItem('_arc_flags', JSON.stringify(log));
+  };
+
+  const exportSave = useCallback(async () => {
+    const payload = {
+      arcane_void_crystals: localStorage.getItem('arcane_void_crystals') || '0',
+      arcane_upgrades: localStorage.getItem('arcane_upgrades') || '{}',
+      arcane_unlocked_skins: localStorage.getItem('arcane_unlocked_skins') || '["default"]',
+      arcane_equipped_skin: localStorage.getItem('arcane_equipped_skin') || 'default',
+      arcane_unlocked_familiars: localStorage.getItem('arcane_unlocked_familiars') || '[]',
+      arcane_equipped_familiars: localStorage.getItem('arcane_equipped_familiars') || '[]',
+      arcane_familiar_levels: localStorage.getItem('arcane_familiar_levels') || '{}',
+      exported_at: new Date().toISOString(),
+    };
+    const seal = await _h(payload);
+    // Split the seal into two halves stored under disguised keys
+    const mid = Math.floor(seal.length / 2);
+    const saveFile = {
+      ...payload,
+      _a: seal.slice(0, mid),   // first half — looks like metadata
+      _b: seal.slice(mid),       // second half
+    };
+    const blob = new Blob([JSON.stringify(saveFile, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `arcane_save_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const importSave = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        const { _a, _b, ...payload } = data;
+
+        // No seal at all
+        if (!_a || !_b) {
+          _flagTamper('missing_seal');
+          alert('❌ Corrupted save — seal is missing.');
+          return;
+        }
+
+        const storedSeal = _a + _b;
+        const expectedSeal = await _h(payload);
+
+        // Tampered file
+        if (storedSeal !== expectedSeal) {
+          _flagTamper('broken_seal');
+          alert('❌ Broken Seal — this save file has been altered and cannot be loaded.');
+          return;
+        }
+
+        // Valid — apply save
+        const keys = [
+          'arcane_void_crystals', 'arcane_upgrades', 'arcane_unlocked_skins',
+          'arcane_equipped_skin', 'arcane_unlocked_familiars', 'arcane_equipped_familiars',
+          'arcane_familiar_levels',
+        ];
+        keys.forEach(key => { if (payload[key] !== undefined) localStorage.setItem(key, payload[key]); });
+        setCrystals(parseInt(localStorage.getItem('arcane_void_crystals') || '0', 10));
+        setUpgrades(JSON.parse(localStorage.getItem('arcane_upgrades') || '{}'));
+        setUnlockedSkins(JSON.parse(localStorage.getItem('arcane_unlocked_skins') || '["default"]'));
+        setEquippedSkin(localStorage.getItem('arcane_equipped_skin') || 'default');
+        setUnlockedFamiliars(JSON.parse(localStorage.getItem('arcane_unlocked_familiars') || '[]'));
+        setEquippedFamiliars(JSON.parse(localStorage.getItem('arcane_equipped_familiars') || '[]'));
+        setFamiliarLevels(JSON.parse(localStorage.getItem('arcane_familiar_levels') || '{}'));
+        alert('✅ Seal verified! Your progress has been restored.');
+      } catch {
+        _flagTamper('parse_error');
+        alert('❌ Invalid save file. Please use a valid Arcane save export.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }, []);
+
   if (screen !== 'metashop') return null;
 
   return (
@@ -2922,6 +3124,48 @@ const [unlockedFamiliars, setUnlockedFamiliars] = useState([]);
                 }}>
                 <Icon name="wrench" size={13} color="#c084fc" style={{ marginRight: '4px' }} /> +10M Crystals (Test Mode)
               </button>  */}
+
+              {/* ── ARCANE SAVE / RESTORE TOME ── */}
+              <div className="arcane-tome-wrap">
+                <div className="arcane-corner-gem tl" />
+                <div className="arcane-corner-gem tr" />
+                <div className="arcane-corner-gem bl" />
+                <div className="arcane-corner-gem br" />
+                <div className="arcane-tome-label">
+                  ✦ &nbsp; Arcane Chronicle &nbsp; ✦
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                  <button className="arcane-rune-btn export-rune" onClick={exportSave} style={{ padding: '4px 11px', fontSize: '0.7rem', gap: '4px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Seal Progress
+                  </button>
+                  <label className="arcane-rune-btn import-rune" style={{ cursor: 'pointer', padding: '4px 11px', fontSize: '0.7rem', gap: '4px' }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    Restore Seal
+                    <input type="file" accept=".json" onChange={importSave} style={{ display: 'none' }} />
+                  </label>
+                </div>
+                {/* Note */}
+                <p style={{
+                  margin: '7px 0 0 0',
+                  fontSize: '0.6rem',
+                  fontFamily: 'Georgia, serif',
+                  fontStyle: 'italic',
+                  color: 'rgba(148,163,184,0.5)',
+                  lineHeight: '1.5',
+                  textAlign: 'center',
+                  letterSpacing: '0.01em',
+                }}>
+                  <span style={{ color: 'rgba(110,231,183,0.7)', fontStyle: 'normal' }}>Seal Progress</span>
+                  {' '}saves your data as a file —{' '}
+                  <span style={{ color: 'rgba(196,181,253,0.7)', fontStyle: 'normal' }}>Restore Seal</span>
+                  {' '}loads it back on any device.
+                </p>
+              </div>
              
             </div>
 
