@@ -36,27 +36,33 @@ const playClickSound = (volume = 0.6) => {
 const MAIN_OVERLAY_STYLES = `
         .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; position: relative; }
 
-        /* 🜂 Ambient Arcane Circle — one element, transform-only animation (GPU, zero reflow cost) */
+        /* 🜂 Ambient Arcane Circle — multi-ring, GPU transform-only animation */
         .lu-arcane-circle {
-          position: absolute; top: 50%; left: 50%; width: 640px; height: 640px;
-          max-width: 96vw; max-height: 96vw;
+          position: absolute; top: 50%; left: 50%; width: 720px; height: 720px;
+          max-width: 98vw; max-height: 98vw;
           transform: translate(-50%, -50%);
-          border: 1px solid rgba(197,160,89,0.16);
+          border: 1px solid rgba(197,160,89,0.22);
           border-radius: 50%;
           pointer-events: none; z-index: 0;
           will-change: transform;
           animation: arcaneCircleSpin 120s linear infinite;
+          box-shadow:
+            0 0 80px rgba(109,40,217,0.22),
+            0 0 160px rgba(80,20,160,0.12),
+            inset 0 0 80px rgba(109,40,217,0.10);
         }
         .lu-arcane-circle::before {
           content: '';
           position: absolute; inset: 26px;
-          border: 1px dashed rgba(197,160,89,0.13);
+          border: 1px dashed rgba(197,160,89,0.18);
           border-radius: 50%;
+          box-shadow: 0 0 40px rgba(197,160,89,0.10) inset;
         }
         .lu-arcane-circle::after {
           content: '✦';
           position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-          color: rgba(233,196,122,0.45); font-size: 0.8rem;
+          color: rgba(233,196,122,0.65); font-size: 0.9rem;
+          text-shadow: 0 0 12px rgba(233,196,122,0.9);
         }
         @keyframes arcaneCircleSpin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
 
@@ -68,9 +74,32 @@ const MAIN_OVERLAY_STYLES = `
         .lu-warning { position: relative; z-index: 1; font-size: 0.72rem; color: #eab308; opacity: 0.85; margin-bottom: 22px; font-family: monospace; letter-spacing: 0.05em; font-weight: bold; }
         .lu-cards-row { position: relative; z-index: 1; display: flex; justify-content: center; gap: 24px; width: 100%; flex-wrap: wrap; }
 
-        .lu-card { background: linear-gradient(135deg, #3b117b 0%, #1e0a45 100%); border: 1px solid #7c3aed; border-radius: 6px; width: 230px; padding: 30px 16px 22px; cursor: pointer; transition: transform 0.22s ease-in-out, box-shadow 0.22s ease-in-out, border-color 0.22s ease-in-out, background 0.22s ease-in-out; box-shadow: 0 0 20px rgba(124, 58, 237, 0.25), inset 0 0 24px rgba(124,58,237,0.08); display: flex; flex-direction: column; align-items: center; position: relative; overflow: hidden; }
-        .lu-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 28%, rgba(255,255,255,0.05) 0%, transparent 60%); pointer-events: none; }
-        .lu-card:hover { transform: translateY(-6px); border-color: #e9c47a; box-shadow: 0 0 30px rgba(233, 196, 122, 0.5), inset 0 0 28px rgba(233,196,122,0.12); background: linear-gradient(135deg, #4c1d95 0%, #2e1065 100%); }
+        .lu-card {
+          background:
+            radial-gradient(ellipse at 50% 0%,  rgba(100,40,200,0.25) 0%, transparent 55%),
+            linear-gradient(135deg, rgba(59,17,123,0.88) 0%, rgba(30,10,69,0.93) 100%);
+          backdrop-filter: blur(14px) saturate(140%);
+          -webkit-backdrop-filter: blur(14px) saturate(140%);
+          border: 1px solid rgba(124,58,237,0.55); border-radius: 6px; width: 230px; padding: 30px 16px 22px; cursor: pointer;
+          transition: transform 0.22s ease-in-out, box-shadow 0.22s ease-in-out, border-color 0.22s ease-in-out, background 0.22s ease-in-out;
+          box-shadow:
+            0 0 25px rgba(124,58,237,0.30),
+            0 0 60px rgba(80,20,160,0.15),
+            inset 0 0 24px rgba(124,58,237,0.10);
+          display: flex; flex-direction: column; align-items: center; position: relative; overflow: hidden;
+        }
+        .lu-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 28%, rgba(255,255,255,0.06) 0%, transparent 60%); pointer-events: none; }
+        .lu-card:hover {
+          transform: translateY(-8px) scale(1.02);
+          border-color: rgba(233,196,122,0.80);
+          box-shadow:
+            0 0 40px rgba(233,196,122,0.55),
+            0 0 80px rgba(168,85,247,0.30),
+            inset 0 0 30px rgba(233,196,122,0.14);
+          background:
+            radial-gradient(ellipse at 50% 0%,  rgba(120,60,220,0.30) 0%, transparent 55%),
+            linear-gradient(135deg, rgba(76,29,149,0.92) 0%, rgba(46,16,101,0.95) 100%);
+        }
 
         /* 🜁 Rune corner brackets — pure border, negligible paint cost */
         .lu-corner { position: absolute; width: 13px; height: 13px; border: 1.5px solid rgba(197,160,89,0.65); opacity: 0.85; transition: border-color 0.22s ease-in-out; pointer-events: none; }
@@ -207,7 +236,7 @@ const MAIN_OVERLAY_STYLES = `
           }
         }
 
-        .council-news-overlay { position: fixed; inset: 0; background: rgba(3, 1, 17, 0.85); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(6px); pointer-events: auto; }
+        .council-news-overlay { position: fixed; inset: 0; background: rgba(2, 0, 10, 0.88); display: flex; align-items: center; justify-content: center; z-index: 100000; backdrop-filter: blur(8px); pointer-events: auto; }
         
         /* ==========================================================================
            ADVANCED WITCHCRAFT & DARK SPELLBOOK GRIMOIRE GLOBAL DESIGN
@@ -379,9 +408,17 @@ const MAIN_OVERLAY_STYLES = `
            RE-FIXED & RE-STYLED COUNCIL SANCTUM ARCHIVES SCROLL (image_439347.png FIX)
            ========================================================================== */
         .council-news-box {
-          background: radial-gradient(circle at 50% 15%, #180833 0%, #05020c 100%) !important; 
+          background:
+            radial-gradient(ellipse 70% 35% at 50% 0%,   rgba(109, 40, 217, 0.22) 0%, transparent 60%),
+            radial-gradient(ellipse 50% 30% at 100% 100%, rgba(80,  20, 160, 0.14) 0%, transparent 55%),
+            radial-gradient(circle at 50% 30%, #1e0b3d 0%, #080312 85%, #030107 100%) !important;
           border: 2px solid #c5a059 !important;
-          box-shadow: 0 0 50px rgba(124, 58, 237, 0.4), inset 0 0 30px rgba(0,0,0,0.9) !important;
+          box-shadow:
+            0 0 50px rgba(109, 40, 217, 0.35),
+            0 0 100px rgba(60,  10, 140, 0.18),
+            0 30px 80px rgba(0, 0, 0, 0.90),
+            inset 0 0 30px rgba(0, 0, 0, 0.90),
+            inset 0 0 20px rgba(197, 160, 89, 0.15) !important;
           border-radius: 12px !important;
           
           /* 📐 PINALAKING BASE SIZE (Dating 580x495) */
@@ -401,6 +438,40 @@ const MAIN_OVERLAY_STYLES = `
           max-width: 95vw;       
           max-height: 95vh;
         }
+
+        /* ── Inner dashed ring (matches wizard-panel::before) ── */
+        .council-news-box::before {
+          content: '';
+          position: absolute;
+          top: 8px; left: 8px; right: 8px; bottom: 8px;
+          border: 1px dashed rgba(197, 160, 89, 0.25);
+          border-radius: 8px; pointer-events: none; z-index: 0;
+        }
+        /* ── Faint animated inner glow (matches wizard-panel::after / occultAmbient) ── */
+        .council-news-box::after {
+          content: '';
+          position: absolute; inset: 0; border-radius: 10px;
+          box-shadow: inset 0 0 40px rgba(124, 58, 237, 0.18);
+          opacity: 0;
+          animation: occultAmbient 8s infinite ease-in-out;
+          pointer-events: none; z-index: 0;
+        }
+        /* ── Breathing outer glow — matches wizard-panel rhythm ── */
+        @keyframes council-glow-pulse {
+          0%, 100% { box-shadow:
+            0 0 50px rgba(109, 40, 217, 0.30),
+            0 0 100px rgba(60, 10, 140, 0.15),
+            0 30px 80px rgba(0,0,0,0.90),
+            inset 0 0 30px rgba(0,0,0,0.90),
+            inset 0 0 20px rgba(197,160,89,0.12) !important; }
+          50% { box-shadow:
+            0 0 70px rgba(109, 40, 217, 0.50),
+            0 0 130px rgba(80, 20, 160, 0.25),
+            0 30px 80px rgba(0,0,0,0.90),
+            inset 0 0 35px rgba(0,0,0,0.90),
+            inset 0 0 25px rgba(197,160,89,0.22) !important; }
+        }
+        .council-news-box { animation: council-glow-pulse 8s ease-in-out infinite; }
 
         .council-tab-headers {
           display: flex; gap: 12px; margin-bottom: 16px; position: relative; z-index: 20; width: 100%;
@@ -761,30 +832,68 @@ const GRIMOIRE_MODAL_STYLES = `
               to   { transform: rotate(360deg); }
             }
             @keyframes grimoire-glow-pulse {
-              0%, 100% { box-shadow: 0 0 20px rgba(197,160,89,0.25), inset 0 0 20px rgba(0,0,0,0.9); }
-              50%       { box-shadow: 0 0 40px rgba(197,160,89,0.45), inset 0 0 25px rgba(124,58,237,0.1); }
+              0%, 100% { box-shadow:
+                0 0 50px rgba(109, 40, 217, 0.30),
+                0 0 100px rgba(60, 10, 140, 0.15),
+                inset 0 0 30px rgba(0,0,0,0.90),
+                inset 0 0 20px rgba(197,160,89,0.12); }
+              50% { box-shadow:
+                0 0 70px rgba(109, 40, 217, 0.50),
+                0 0 130px rgba(80, 20, 160, 0.25),
+                inset 0 0 35px rgba(0,0,0,0.90),
+                inset 0 0 25px rgba(197,160,89,0.22); }
             }
 
             .grimoire-book {
-              box-shadow: 0 0 40px rgba(124,58,237,0.35), 0 8px 32px rgba(0,0,0,0.9);
+              box-shadow:
+                0 0 50px rgba(109, 40, 217, 0.35),
+                0 0 100px rgba(60, 10, 140, 0.18),
+                0 12px 50px rgba(0, 0, 0, 0.95);
+            }
+
+            /* ── Golden shimmer on top of grimoire ── */
+            .grimoire-book::before {
+              content: '';
+              position: absolute; top: -1px; left: 8%; right: 8%; height: 1px;
+              background: linear-gradient(90deg, transparent 0%, rgba(197,160,89,0.5) 30%, rgba(255,230,163,0.9) 50%, rgba(197,160,89,0.5) 70%, transparent 100%);
+              pointer-events: none; z-index: 10; border-radius: 50%;
+            }
+
+            /* ── Inner dashed ring on grimoire pages (matches wizard-panel::before) ── */
+            .grimoire-page::before {
+              content: '';
+              position: absolute;
+              top: 8px; left: 8px; right: 8px; bottom: 8px;
+              border: 1px dashed rgba(197, 160, 89, 0.25);
+              border-radius: 6px; pointer-events: none; z-index: 0;
+            }
+
+            /* ── Breathing inner glow on grimoire pages (matches occultAmbient) ── */
+            .grimoire-page::after {
+              content: '';
+              position: absolute; inset: 0; border-radius: inherit;
+              box-shadow: inset 0 0 40px rgba(124, 58, 237, 0.18);
+              opacity: 0;
+              animation: occultAmbient 8s infinite ease-in-out;
+              pointer-events: none; z-index: 0;
             }
 
             .grimoire-page {
               flex: 1;
-              background: radial-gradient(circle at 50% 20%, #1e1005 0%, #120a03 60%, #0a0601 100%);
-              border: 1.5px solid #c5a059;
+              background:
+                radial-gradient(ellipse 70% 30% at 50% 0%,  rgba(109, 40, 217, 0.18) 0%, transparent 55%),
+                radial-gradient(ellipse 50% 35% at 0% 100%, rgba(80,  20, 160, 0.12) 0%, transparent 50%),
+                radial-gradient(circle at 50% 30%, #1e0b3d 0%, #080312 85%, #030107 100%);
+              border: 2px solid #c5a059;
               box-sizing: border-box;
               position: relative;
               overflow: visible;
-              animation: grimoire-glow-pulse 6s ease-in-out infinite;
+              box-shadow:
+                0 0 50px rgba(109, 40, 217, 0.35),
+                inset 0 0 30px rgba(0, 0, 0, 0.90),
+                inset 0 0 20px rgba(197, 160, 89, 0.15);
+              animation: grimoire-glow-pulse 8s ease-in-out infinite;
             }
-            .grimoire-page::before {
-              content: '';
-              position: absolute; inset: 5px;
-              border: 0.5px dashed rgba(197,160,89,0.18);
-              border-radius: 2px; pointer-events: none; z-index: 0;
-            }
-
             .grimoire-left  { border-radius: 8px 0 0 8px; border-right: none; overflow: hidden; }
             .grimoire-right {
               border-radius: 0 8px 8px 0; border-left: none;
@@ -1059,6 +1168,494 @@ const IDLE_TRANSITION_STYLES = `
             }
 `;
 
+
+// ============================================================================
+// 🌌 FRIEREN-STYLE FANTASY BACKGROUND — Pure CSS + SVG, GPU-only animations.
+// Zero reflow cost: all animations use transform/opacity only.
+// Inspired by: Frieren: Beyond Journey's End — misty ancient forests,
+// ethereal spell glyphs, aurora northern lights, floating crystal mana.
+// ============================================================================
+const FANTASY_BACKGROUND_STYLES = `
+  /* ── Root background: deep twilight sky gradient ── */
+  .frieren-bg {
+    position: fixed; inset: 0; z-index: -1;
+    overflow: hidden; pointer-events: none;
+    background:
+      radial-gradient(ellipse 140% 80% at 50% 0%,   rgba(18, 8, 52, 0.98) 0%,  transparent 65%),
+      radial-gradient(ellipse 100% 60% at 20% 100%,  rgba(4, 18, 36, 0.97) 0%,  transparent 70%),
+      radial-gradient(ellipse 80%  50% at 80% 90%,   rgba(8, 4, 28, 0.95)  0%,  transparent 60%),
+      linear-gradient(180deg,
+        #04010e 0%,
+        #070216 12%,
+        #0b0420 25%,
+        #0d061e 40%,
+        #070314 60%,
+        #040112 80%,
+        #02000a 100%
+      );
+  }
+
+  /* ── Aurora Borealis Layer — 3 soft light curtains ── */
+  .frieren-aurora {
+    position: absolute; inset: 0; pointer-events: none;
+  }
+  .frieren-aurora-band {
+    position: absolute;
+    width: 180%; left: -40%;
+    border-radius: 50%;
+    filter: blur(55px);
+    will-change: transform, opacity;
+    mix-blend-mode: screen;
+  }
+  .frieren-aurora-band.a1 {
+    top: -8%; height: 28%;
+    background: linear-gradient(180deg,
+      rgba(80, 20, 160, 0)    0%,
+      rgba(90, 30, 180, 0.22) 40%,
+      rgba(60, 180, 200, 0.14) 70%,
+      transparent              100%);
+    animation: aurora-drift1 18s ease-in-out infinite;
+  }
+  .frieren-aurora-band.a2 {
+    top: 2%; height: 22%;
+    background: linear-gradient(180deg,
+      rgba(40, 10, 120, 0)    0%,
+      rgba(120, 40, 220, 0.16) 35%,
+      rgba(40, 200, 180, 0.10) 75%,
+      transparent               100%);
+    animation: aurora-drift2 22s ease-in-out infinite;
+    animation-delay: -7s;
+  }
+  .frieren-aurora-band.a3 {
+    top: -3%; height: 18%;
+    background: linear-gradient(180deg,
+      rgba(20, 60, 150, 0)   0%,
+      rgba(60, 100, 255, 0.12) 50%,
+      transparent              100%);
+    animation: aurora-drift3 26s ease-in-out infinite;
+    animation-delay: -14s;
+  }
+  @keyframes aurora-drift1 {
+    0%,100% { transform: translateX(0%)   scaleY(1);   opacity: 0.7; }
+    33%      { transform: translateX(8%)   scaleY(1.1); opacity: 1;   }
+    66%      { transform: translateX(-5%)  scaleY(0.9); opacity: 0.8; }
+  }
+  @keyframes aurora-drift2 {
+    0%,100% { transform: translateX(0%)   scaleY(1);   opacity: 0.6; }
+    40%      { transform: translateX(-10%) scaleY(1.15);opacity: 0.9; }
+    70%      { transform: translateX(6%)   scaleY(0.85);opacity: 0.7; }
+  }
+  @keyframes aurora-drift3 {
+    0%,100% { transform: translateX(0%)  scaleY(1);   opacity: 0.5; }
+    50%      { transform: translateX(12%) scaleY(1.2); opacity: 0.85; }
+  }
+
+  /* ── Star Field — tiny fixed dots ── */
+  .frieren-stars {
+    position: absolute; inset: 0; pointer-events: none;
+  }
+  .star {
+    position: absolute; border-radius: 50%; background: #fff;
+    will-change: opacity;
+  }
+  /* Twinkle groups using CSS animation-delay variance */
+  .star.twinkle-a { animation: star-twinkle 3.2s ease-in-out infinite; }
+  .star.twinkle-b { animation: star-twinkle 4.8s ease-in-out infinite; animation-delay: -1.6s; }
+  .star.twinkle-c { animation: star-twinkle 6.1s ease-in-out infinite; animation-delay: -3.1s; }
+  .star.twinkle-d { animation: star-twinkle 5.4s ease-in-out infinite; animation-delay: -2.2s; }
+  @keyframes star-twinkle {
+    0%,100% { opacity: 0.15; }
+    50%      { opacity: 0.85; }
+  }
+
+  /* ── Giant Grand Arcane Glyph in background ── */
+  .frieren-grand-glyph {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(90vw, 800px);
+    height: min(90vw, 800px);
+    pointer-events: none;
+    will-change: transform, opacity;
+    opacity: 0.065;
+    animation: grand-glyph-breathe 20s ease-in-out infinite;
+  }
+  @keyframes grand-glyph-breathe {
+    0%,100% { opacity: 0.05; transform: translate(-50%,-50%) rotate(0deg)   scale(1);    }
+    50%      { opacity: 0.095; transform: translate(-50%,-50%) rotate(180deg) scale(1.04); }
+  }
+
+  /* ── Inner rotating magic ring ── */
+  .frieren-ring-inner {
+    position: absolute; top: 50%; left: 50%;
+    width: min(60vw, 520px); height: min(60vw, 520px);
+    transform: translate(-50%,-50%);
+    pointer-events: none; will-change: transform; opacity: 0.08;
+    animation: ring-spin-cw 60s linear infinite;
+  }
+  .frieren-ring-outer {
+    position: absolute; top: 50%; left: 50%;
+    width: min(80vw, 700px); height: min(80vw, 700px);
+    transform: translate(-50%,-50%);
+    pointer-events: none; will-change: transform; opacity: 0.055;
+    animation: ring-spin-ccw 90s linear infinite;
+  }
+  @keyframes ring-spin-cw  { to { transform: translate(-50%,-50%) rotate(360deg);  } }
+  @keyframes ring-spin-ccw { to { transform: translate(-50%,-50%) rotate(-360deg); } }
+
+  /* ── Floating Mana Orbs — 6 layered orbs ── */
+  .frieren-orbs { position: absolute; inset: 0; pointer-events: none; }
+  .mana-orb {
+    position: absolute;
+    border-radius: 50%;
+    will-change: transform, opacity;
+    filter: blur(22px);
+  }
+  .mana-orb.o1 {
+    width: 280px; height: 280px;
+    top: 8%; left: 12%;
+    background: radial-gradient(circle, rgba(120,40,220,0.18) 0%, rgba(80,20,160,0.06) 60%, transparent 100%);
+    animation: orb-float1 25s ease-in-out infinite;
+  }
+  .mana-orb.o2 {
+    width: 200px; height: 200px;
+    top: 60%; right: 8%;
+    background: radial-gradient(circle, rgba(40,180,200,0.14) 0%, rgba(20,120,160,0.05) 60%, transparent 100%);
+    animation: orb-float2 30s ease-in-out infinite;
+    animation-delay: -10s;
+  }
+  .mana-orb.o3 {
+    width: 160px; height: 160px;
+    bottom: 15%; left: 25%;
+    background: radial-gradient(circle, rgba(180,60,255,0.12) 0%, rgba(100,20,200,0.04) 60%, transparent 100%);
+    animation: orb-float3 20s ease-in-out infinite;
+    animation-delay: -5s;
+  }
+  .mana-orb.o4 {
+    width: 120px; height: 120px;
+    top: 30%; right: 20%;
+    background: radial-gradient(circle, rgba(200,160,60,0.10) 0%, rgba(150,100,20,0.04) 60%, transparent 100%);
+    animation: orb-float1 35s ease-in-out infinite;
+    animation-delay: -18s;
+  }
+  .mana-orb.o5 {
+    width: 320px; height: 320px;
+    bottom: -5%; right: -5%;
+    background: radial-gradient(circle, rgba(60,20,120,0.14) 0%, rgba(20,8,60,0.05) 60%, transparent 100%);
+    animation: orb-float2 40s ease-in-out infinite;
+    animation-delay: -22s;
+  }
+  .mana-orb.o6 {
+    width: 200px; height: 200px;
+    top: -5%; right: 40%;
+    background: radial-gradient(circle, rgba(80,160,255,0.08) 0%, rgba(40,80,200,0.03) 60%, transparent 100%);
+    animation: orb-float3 28s ease-in-out infinite;
+    animation-delay: -8s;
+  }
+  @keyframes orb-float1 {
+    0%,100% { transform: translate(0px, 0px);    opacity: 0.7; }
+    25%      { transform: translate(30px,-20px);  opacity: 1;   }
+    50%      { transform: translate(-15px, 35px); opacity: 0.8; }
+    75%      { transform: translate(20px, 10px);  opacity: 0.9; }
+  }
+  @keyframes orb-float2 {
+    0%,100% { transform: translate(0px, 0px);    opacity: 0.8; }
+    33%      { transform: translate(-25px, 15px); opacity: 1;   }
+    66%      { transform: translate(20px,-30px);  opacity: 0.75;}
+  }
+  @keyframes orb-float3 {
+    0%,100% { transform: translate(0px, 0px);   opacity: 0.65;}
+    40%      { transform: translate(18px,-22px); opacity: 0.9; }
+    80%      { transform: translate(-22px, 12px);opacity: 0.8; }
+  }
+
+  /* ── Misty Ground Fog (bottom 30%) ── */
+  .frieren-mist {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 35%; pointer-events: none;
+    background: linear-gradient(0deg,
+      rgba(8, 3, 22, 0.55)  0%,
+      rgba(12, 6, 30, 0.30) 25%,
+      rgba(10, 5, 28, 0.12) 55%,
+      transparent            100%);
+    filter: blur(8px);
+    will-change: opacity;
+    animation: mist-breathe 14s ease-in-out infinite;
+  }
+  .frieren-mist2 {
+    position: absolute; bottom: 0; left: -10%; right: -10%;
+    height: 20%; pointer-events: none;
+    background: linear-gradient(0deg,
+      rgba(20, 6, 55, 0.4)   0%,
+      rgba(15, 5, 40, 0.18)  40%,
+      transparent              100%);
+    filter: blur(18px);
+    will-change: transform, opacity;
+    animation: mist-drift 22s ease-in-out infinite;
+    animation-delay: -8s;
+  }
+  @keyframes mist-breathe {
+    0%,100% { opacity: 0.75; }
+    50%      { opacity: 1;    }
+  }
+  @keyframes mist-drift {
+    0%,100% { transform: translateX(0%);  opacity: 0.8; }
+    50%      { transform: translateX(4%); opacity: 0.6; }
+  }
+
+  /* ── Floating Ancient Rune Particles ── */
+  .frieren-runes { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .rune-particle {
+    position: absolute;
+    font-family: 'Georgia', serif;
+    color: rgba(197, 160, 89, 0.35);
+    text-shadow: 0 0 8px rgba(197, 160, 89, 0.5), 0 0 20px rgba(120, 40, 220, 0.3);
+    user-select: none;
+    will-change: transform, opacity;
+  }
+  .rune-particle.r1  { font-size:1.1rem; top:8%;  left:5%;  animation: rune-drift1 28s ease-in-out infinite; animation-delay: 0s;   }
+  .rune-particle.r2  { font-size:0.8rem; top:18%; left:88%; animation: rune-drift2 34s ease-in-out infinite; animation-delay: -6s;  }
+  .rune-particle.r3  { font-size:1.3rem; top:45%; left:3%;  animation: rune-drift1 22s ease-in-out infinite; animation-delay: -11s; }
+  .rune-particle.r4  { font-size:0.9rem; top:70%; left:92%; animation: rune-drift2 38s ease-in-out infinite; animation-delay: -4s;  }
+  .rune-particle.r5  { font-size:0.7rem; top:85%; left:15%; animation: rune-drift3 30s ease-in-out infinite; animation-delay: -8s;  }
+  .rune-particle.r6  { font-size:1.0rem; top:25%; left:50%; animation: rune-drift1 42s ease-in-out infinite; animation-delay: -20s; }
+  .rune-particle.r7  { font-size:0.75rem;top:55%; left:78%; animation: rune-drift2 26s ease-in-out infinite; animation-delay: -13s; }
+  .rune-particle.r8  { font-size:1.2rem; top:78%; left:60%; animation: rune-drift3 36s ease-in-out infinite; animation-delay: -2s;  }
+  .rune-particle.r9  { font-size:0.65rem;top:12%; left:35%; animation: rune-drift1 48s ease-in-out infinite; animation-delay: -16s; }
+  .rune-particle.r10 { font-size:0.9rem; top:40%; left:95%; animation: rune-drift2 32s ease-in-out infinite; animation-delay: -24s; }
+  @keyframes rune-drift1 {
+    0%,100% { transform: translate(0,  0px)   rotate(0deg);   opacity: 0.25; }
+    25%      { transform: translate(8px,-18px) rotate(12deg);  opacity: 0.55; }
+    50%      { transform: translate(-5px,8px)  rotate(-8deg);  opacity: 0.35; }
+    75%      { transform: translate(12px,5px)  rotate(20deg);  opacity: 0.45; }
+  }
+  @keyframes rune-drift2 {
+    0%,100% { transform: translate(0,  0px)    rotate(0deg);   opacity: 0.20; }
+    33%      { transform: translate(-10px,12px) rotate(-15deg); opacity: 0.50; }
+    66%      { transform: translate(6px,-10px)  rotate(10deg);  opacity: 0.30; }
+  }
+  @keyframes rune-drift3 {
+    0%,100% { transform: translate(0,  0px)   rotate(0deg);  opacity: 0.30; }
+    50%      { transform: translate(15px,-8px) rotate(25deg); opacity: 0.60; }
+  }
+
+  /* ── Distant Mountain Silhouette (SVG bottom layer) ── */
+  .frieren-mountains {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 45%; pointer-events: none;
+    opacity: 0.18;
+    will-change: opacity;
+    animation: mountains-breathe 18s ease-in-out infinite;
+  }
+  @keyframes mountains-breathe {
+    0%,100% { opacity: 0.15; }
+    50%      { opacity: 0.22; }
+  }
+
+  /* ── Vignette overlay for depth ── */
+  .frieren-vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 100% 100% at 50% 50%,
+        transparent            35%,
+        rgba(2, 0, 8, 0.25)    65%,
+        rgba(2, 0, 8, 0.75)    100%);
+  }
+
+  /* ── Make all overlay screens transparent so Frieren BG shows through ── */
+  .overlay.active, .overlay {
+    background: transparent !important;
+  }
+
+  /* ── LevelUp screen: FULLY transparent — game must be visible behind it ── */
+  #levelup-overlay,
+  #levelup-overlay.overlay,
+  #levelup-overlay.overlay.active {
+    background: none !important;
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* ── #overlays root — transparent, full screen, above Frieren BG ── */
+  #overlays {
+    position: fixed; inset: 0;
+    background: transparent !important;
+    z-index: 0;
+  }
+
+`;
+
+const FrierenBackground = memo(function FrierenBackground() {
+  const STAR_DATA = useMemo(() => {
+    // 80 stars, fixed positions (no random on each render)
+    const classes = ['twinkle-a','twinkle-b','twinkle-c','twinkle-d'];
+    const stars = [
+      [2,5,'a',1],[7,14,'b',1.5],[12,3,'c',1],[18,22,'a',1.2],[23,8,'d',1],[28,31,'b',1.3],
+      [33,2,'c',1],[38,19,'a',1.5],[43,11,'d',1],[48,27,'b',1],[53,6,'c',1.2],[58,38,'a',1],
+      [63,15,'d',1.5],[68,4,'b',1],[73,28,'c',1],[78,9,'a',1.2],[83,21,'d',1],[88,33,'b',1],
+      [93,7,'c',1.5],[5,42,'a',1],[10,55,'d',1],[15,67,'b',1.2],[20,48,'c',1],[25,75,'a',1],
+      [30,61,'d',1.5],[35,84,'b',1],[40,52,'c',1.2],[45,78,'a',1],[50,65,'d',1],[55,46,'b',1],
+      [60,88,'c',1],[65,57,'a',1.5],[70,72,'d',1],[75,43,'b',1],[80,81,'c',1.2],[85,68,'a',1],
+      [90,54,'d',1],[95,77,'b',1.5],[4,35,'c',1],[9,91,'a',1],[14,82,'d',1.2],[19,44,'b',1],
+      [24,96,'c',1],[29,87,'a',1.5],[34,73,'d',1],[39,59,'b',1.2],[44,94,'c',1],[49,85,'a',1],
+      [54,76,'d',1.5],[59,98,'b',1],[64,89,'c',1],[69,63,'a',1.2],[74,50,'d',1],[79,37,'b',1],
+      [84,24,'c',1.5],[89,16,'a',1],[94,47,'d',1.2],[3,69,'b',1],[8,76,'c',1],[13,58,'a',1.5],
+      [18,92,'d',1],[22,83,'b',1.2],[27,41,'c',1],[32,66,'a',1],[37,53,'d',1.5],[42,79,'b',1],
+      [47,95,'c',1.2],[52,38,'a',1],[57,70,'d',1],[62,86,'b',1.5],[67,47,'c',1],[72,93,'a',1.2],
+      [77,62,'d',1],[82,84,'b',1],[87,75,'c',1.5],[92,56,'a',1],[97,39,'d',1.2],[6,88,'b',1],
+    ];
+    return stars.map(([left, top, cls, size], i) => ({
+      id: i, left: `${left}%`, top: `${top}%`,
+      className: `star twinkle-${cls}`,
+      style: {
+        width: `${size}px`, height: `${size}px`,
+        opacity: 0.2 + (i % 4) * 0.12,
+        animationDelay: `${(i * 0.37) % 6}s`,
+      }
+    }));
+  }, []);
+
+  const RUNE_CHARS = ['ᛟ','ᛞ','ᛜ','ᛚ','ᛗ','ᛖ','ᛒ','ᛏ','ᛊ','ᛉ'];
+
+  return (
+    <>
+      <style>{FANTASY_BACKGROUND_STYLES}</style>
+      <div className="frieren-bg" aria-hidden="true">
+
+        {/* Aurora Borealis */}
+        <div className="frieren-aurora">
+          <div className="frieren-aurora-band a1" />
+          <div className="frieren-aurora-band a2" />
+          <div className="frieren-aurora-band a3" />
+        </div>
+
+        {/* Star Field */}
+        <div className="frieren-stars">
+          {STAR_DATA.map(s => (
+            <div key={s.id} className={s.className}
+              style={{ left: s.left, top: s.top, ...s.style }} />
+          ))}
+        </div>
+
+        {/* Floating Mana Orbs */}
+        <div className="frieren-orbs">
+          <div className="mana-orb o1" />
+          <div className="mana-orb o2" />
+          <div className="mana-orb o3" />
+          <div className="mana-orb o4" />
+          <div className="mana-orb o5" />
+          <div className="mana-orb o6" />
+        </div>
+
+        {/* Grand Arcane Glyph (background SVG) */}
+        <svg className="frieren-grand-glyph" viewBox="0 0 800 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Outer rings */}
+          <circle cx="400" cy="400" r="380" stroke="rgba(197,160,89,0.9)" strokeWidth="0.8" strokeDasharray="6 4" />
+          <circle cx="400" cy="400" r="355" stroke="rgba(120,40,220,0.7)" strokeWidth="0.5" />
+          <circle cx="400" cy="400" r="320" stroke="rgba(197,160,89,0.6)" strokeWidth="0.6" strokeDasharray="3 8" />
+          <circle cx="400" cy="400" r="280" stroke="rgba(80,160,255,0.5)" strokeWidth="0.5" />
+          <circle cx="400" cy="400" r="240" stroke="rgba(197,160,89,0.7)" strokeWidth="0.7" strokeDasharray="2 4" />
+          <circle cx="400" cy="400" r="200" stroke="rgba(180,80,255,0.6)" strokeWidth="0.6" />
+          <circle cx="400" cy="400" r="160" stroke="rgba(197,160,89,0.8)" strokeWidth="0.8" strokeDasharray="4 3" />
+          <circle cx="400" cy="400" r="120" stroke="rgba(100,200,255,0.5)" strokeWidth="0.5" />
+          <circle cx="400" cy="400" r="80"  stroke="rgba(197,160,89,0.9)" strokeWidth="0.7" />
+          {/* 12-pointed star */}
+          {Array.from({length:12},(_,i)=>{
+            const a=i*30, r=370, x=400+r*Math.cos(a*Math.PI/180), y=400+r*Math.sin(a*Math.PI/180);
+            return <line key={i} x1="400" y1="400" x2={x} y2={y} stroke="rgba(197,160,89,0.35)" strokeWidth="0.5"/>;
+          })}
+          {/* Hexagram */}
+          <polygon points="400,60 680,340 680,460 400,740 120,460 120,340" fill="none" stroke="rgba(120,40,220,0.4)" strokeWidth="0.7"/>
+          <polygon points="400,740 120,460 120,340 400,60 680,340 680,460" fill="none" stroke="rgba(197,160,89,0.3)" strokeWidth="0.5"
+            transform="rotate(30 400 400)"/>
+          {/* Inner cross */}
+          <line x1="400" y1="40"  x2="400" y2="760" stroke="rgba(197,160,89,0.2)" strokeWidth="0.5"/>
+          <line x1="40"  y1="400" x2="760" y2="400" stroke="rgba(197,160,89,0.2)" strokeWidth="0.5"/>
+          <line x1="130" y1="130" x2="670" y2="670" stroke="rgba(120,40,220,0.2)" strokeWidth="0.4"/>
+          <line x1="670" y1="130" x2="130" y2="670" stroke="rgba(120,40,220,0.2)" strokeWidth="0.4"/>
+          {/* Center gem */}
+          <circle cx="400" cy="400" r="12" fill="rgba(197,160,89,0.3)" stroke="rgba(255,230,163,0.6)" strokeWidth="1"/>
+          <circle cx="400" cy="400" r="5"  fill="rgba(255,230,163,0.5)"/>
+          {/* Small rune dots on outer ring */}
+          {Array.from({length:24},(_,i)=>{
+            const a=i*15, r=378;
+            const x=400+r*Math.cos(a*Math.PI/180), y=400+r*Math.sin(a*Math.PI/180);
+            return <circle key={i} cx={x} cy={y} r="2.5" fill={i%4===0?"rgba(255,230,163,0.7)":"rgba(197,160,89,0.4)"}/>;
+          })}
+        </svg>
+
+        {/* Inner rotating ring */}
+        <svg className="frieren-ring-inner" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="260" cy="260" r="250" stroke="rgba(197,160,89,0.8)" strokeWidth="1" strokeDasharray="8 5"/>
+          <circle cx="260" cy="260" r="235" stroke="rgba(120,40,220,0.6)" strokeWidth="0.7" strokeDasharray="3 6"/>
+          {Array.from({length:8},(_,i)=>{
+            const a=i*45, r=248;
+            const x=260+r*Math.cos(a*Math.PI/180), y=260+r*Math.sin(a*Math.PI/180);
+            return <polygon key={i} points={`${x},${y-5} ${x+4},${y+3} ${x-4},${y+3}`} fill="rgba(197,160,89,0.8)"/>;
+          })}
+        </svg>
+
+        {/* Outer counter-rotating ring */}
+        <svg className="frieren-ring-outer" viewBox="0 0 700 700" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="350" cy="350" r="340" stroke="rgba(80,160,255,0.5)" strokeWidth="0.8" strokeDasharray="4 8"/>
+          <circle cx="350" cy="350" r="325" stroke="rgba(197,160,89,0.4)" strokeWidth="0.6" strokeDasharray="2 10"/>
+          {Array.from({length:12},(_,i)=>{
+            const a=i*30, r=338;
+            const x=350+r*Math.cos(a*Math.PI/180), y=350+r*Math.sin(a*Math.PI/180);
+            return <circle key={i} cx={x} cy={y} r="3" fill="rgba(80,160,255,0.6)"/>;
+          })}
+        </svg>
+
+        {/* Distant Mountain Silhouette */}
+        <svg className="frieren-mountains" viewBox="0 0 1440 400" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="mtn-grad1" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(80,20,160,0.5)"/>
+              <stop offset="100%" stopColor="rgba(4,1,15,0.9)"/>
+            </linearGradient>
+            <linearGradient id="mtn-grad2" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(40,10,100,0.4)"/>
+              <stop offset="100%" stopColor="rgba(4,1,15,0.95)"/>
+            </linearGradient>
+          </defs>
+          {/* Far range */}
+          <path d="M0,400 L0,260 L80,200 L160,230 L260,140 L360,195 L440,160 L540,210 L620,120 L720,180 L800,90 L880,160 L960,130 L1060,200 L1140,150 L1220,190 L1320,240 L1440,200 L1440,400 Z"
+            fill="url(#mtn-grad2)" />
+          {/* Near range */}
+          <path d="M0,400 L0,310 L100,270 L200,290 L300,230 L400,270 L480,240 L560,280 L660,200 L760,260 L840,220 L940,270 L1020,240 L1120,280 L1200,250 L1300,285 L1400,265 L1440,275 L1440,400 Z"
+            fill="url(#mtn-grad1)" />
+          {/* Ancient ruins hint */}
+          <rect x="820" y="85" width="6" height="40" fill="rgba(197,160,89,0.25)"/>
+          <rect x="826" y="95" width="5" height="30" fill="rgba(197,160,89,0.15)"/>
+          <rect x="812" y="100" width="4" height="25" fill="rgba(197,160,89,0.20)"/>
+          <path d="M810,85 L823,75 L836,85" fill="none" stroke="rgba(197,160,89,0.2)" strokeWidth="1"/>
+        </svg>
+
+        {/* Ground Mist */}
+        <div className="frieren-mist" />
+        <div className="frieren-mist2" />
+
+        {/* Floating Rune Particles */}
+        <div className="frieren-runes">
+          <span className="rune-particle r1">ᛟ</span>
+          <span className="rune-particle r2">ᛞ</span>
+          <span className="rune-particle r3">✦</span>
+          <span className="rune-particle r4">ᛜ</span>
+          <span className="rune-particle r5">ᛚ</span>
+          <span className="rune-particle r6">◆</span>
+          <span className="rune-particle r7">ᛗ</span>
+          <span className="rune-particle r8">ᛖ</span>
+          <span className="rune-particle r9">☽</span>
+          <span className="rune-particle r10">ᛊ</span>
+        </div>
+
+        {/* Depth Vignette */}
+        <div className="frieren-vignette" />
+      </div>
+    </>
+  );
+});
 
 // ============================================================================
 // 🜂 MODULE-LEVEL ICONS, ICON WRAPPER & UPGRADE METADATA
@@ -2067,7 +2664,15 @@ const LevelUpScreen = memo(function LevelUpScreen({
   onSelectUpgrade,
 }) {
   return (
-        <div className="overlay active" style={{ background: 'rgba(3, 1, 17, 0.55)', backdropFilter: 'blur(3px)' }}>
+        <div id="levelup-overlay" style={{
+          position: 'fixed', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(2, 0, 10, 0.35)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+          zIndex: 9999,
+          pointerEvents: 'auto',
+        }}>
           <div className="lu-wrapper">
             <div className="lu-arcane-circle" />
             <div className="lu-title-row">
@@ -2861,6 +3466,8 @@ const handleSubmitScore = useCallback(async () => {
     <div id="overlays">
       <GlobalOverlayStyles />
 
+      {/* 🌌 FRIEREN FANTASY BACKGROUND — hidden during gameplay so game canvas shows through */}
+      {screen !== 'levelup' && <FrierenBackground />}
 
       {/* MAIN MENU SCREEN */}
       {screen === 'menu' && (
@@ -2984,10 +3591,10 @@ const handleSubmitScore = useCallback(async () => {
           }}
           style={{
             position: 'fixed', inset: 0, zIndex: 99999,
-            background: 'rgba(3,1,7,0.88)',
+            background: 'rgba(2, 0, 10, 0.88)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
             padding: '12px',
             pointerEvents: 'auto'
           }}

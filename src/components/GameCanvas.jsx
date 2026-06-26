@@ -5375,7 +5375,7 @@ useEffect(() => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { alpha: false }); // ⚡ PERF: skip alpha compositing on every draw call
     canvas.width = W; canvas.height = H;
     const eng = engineRef.current;
 
@@ -6296,7 +6296,9 @@ if (eng.gameStarted) {
     if (!isCoopActive || isHost) {
 
 // 🔥 MEMORY PROTECTION: Bawal mag-spawn ng normal minion kung lagpas 40 na ang kalaban sa screen
-          if (eng.spawnT >= eng.spawnRate && eng.enemies.length < 40) {
+          // ⚡ PERF: Mobile-aware spawn cap — prevents enemy count from overwhelming GPU on small devices
+          const _mobileSpawnCap = window.innerWidth <= 768 ? 22 : 40;
+          if (eng.spawnT >= eng.spawnRate && eng.enemies.length < _mobileSpawnCap) {
               eng.spawnT = 0;
               
               // 🔥 PACED SWARM SCALING: Dahan-dahang bibilis hanggang Wave 45 (0.20s extreme cap)
@@ -8573,10 +8575,15 @@ if (eng.tornados) {
           };
         }
 
-        if (scoreValueRef.current) scoreValueRef.current.textContent = formatLargeNumber(eng.score);
-        if (waveValueRef.current) {
-          const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
-          waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
+        // ⚡ PERF: Throttle DOM writes to ~10/sec (every 6th tick). Layout-dirtying writes
+        // at 60/sec waste browser style recalc time. Visually imperceptible at 100ms interval.
+        eng._hudTick = ((eng._hudTick || 0) + 1) % 6;
+        if (eng._hudTick === 0) {
+          if (scoreValueRef.current) scoreValueRef.current.textContent = formatLargeNumber(eng.score);
+          if (waveValueRef.current) {
+            const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
+            waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
+          }
         }
 
         if (dashCdRef.current && localTarget) {
@@ -8589,6 +8596,8 @@ if (eng.tornados) {
         }
 
 if (localTarget) {
+          // ⚡ PERF: HP/XP bars also throttled — same 6-tick gate
+          if (eng._hudTick === 0) {
           const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
           if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
           if (hpTextRef.current) hpTextRef.current.textContent = `HP ${formatLargeNumber(Math.max(0, localTarget.hp))}/${formatLargeNumber(localTarget.maxHp)}`;
@@ -8596,6 +8605,7 @@ if (localTarget) {
           const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
           if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
           if (xpTextRef.current) xpTextRef.current.textContent = `XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
+          }
 
           // 👇 IDAGDAG ANG BUONG BLOCK NA ITO PARA SA VIGNETTE GLOW
           if (vignetteRef.current) {
@@ -9086,6 +9096,12 @@ const QUARTER_PI = Math.PI / 4;
       let _lastFont = '';
       const _setFont = (f) => { if (f !== _lastFont) { ctx.font = f; _lastFont = f; } };
 
+      // ⚡ PERF: Composite op dedup — skip redundant globalCompositeOperation sets (each flush = GPU batch reset)
+      let _lastCompositeOp = 'source-over';
+      const _setComposite = (op) => {
+        if (op !== _lastCompositeOp) { ctx.globalCompositeOperation = op; _lastCompositeOp = op; }
+      };
+
       ctx.save();
       if (eng.screenShake > 0) {
         // ⚡ PERF: deterministic shake — visually identical at 60fps
@@ -9139,7 +9155,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
   const lScale = 1 + (lCount * 0.25);
 
   // 0. DEEP VOID BACKGROUND (Para mas lumitaw ang kulay)
-  ctx.globalCompositeOperation = 'source-over';
+  _setComposite('source-over');
   ctx.beginPath();
   ctx.arc(0, 0, radius + 5 + (mCount * 3) + (eCount * 1), 0, Math.PI * 2);
   ctx.fillStyle = `rgba(0, 0, 0, ${0.4 * breath})`;
@@ -9152,7 +9168,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
   // =========================================================
   if (eCount > 0) {
     ctx.save();
-    ctx.globalCompositeOperation = 'screen';
+    _setComposite('screen');
     
     // Intensity Multipliers (1x, 1.2x, 1.4x... depende sa dami)
     const intensity = 1 + (eCount * 0.2); 
@@ -9211,7 +9227,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
   // =========================================================
   if (lCount > 0) {
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
+    _setComposite('lighter');
     const layers = 2 + Math.min(lCount, 3); 
 
     for (let i = 0; i < layers; i++) {
@@ -9250,7 +9266,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
   // =========================================================
   if (mCount > 0) {
     ctx.save();
-    ctx.globalCompositeOperation = 'source-over'; 
+    _setComposite('source-over'); 
 
     const mAlpha = Math.min(0.4 + (mCount * 0.15), 0.95);
 
@@ -9371,7 +9387,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
   // =========================================================
   if (lCount > 0 || mCount > 0) {
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
+    _setComposite('lighter');
     const particleCount = (lCount * 4) + (mCount * 6); 
     
     for (let i = 0; i < particleCount; i++) {
@@ -9498,7 +9514,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           const breathe = (Math.sin(st * 1.3) + 1) * 0.5; // 0..1 slow breathing
 
           ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
+          _setComposite('lighter');
 
           // Breathing core glow bleeding up through the crack
           const coreGlowR = 50 + breathe * 18;
@@ -9547,7 +9563,7 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           if (!alive) return;
           const flick = 0.88 + 0.12 * Math.sin(_t * 5.2 + gx * 0.01);
           ctx.save();
-          ctx.globalCompositeOperation = 'lighter';
+          _setComposite('lighter');
           const gl = ctx.createRadialGradient(gx, gy, 0, gx, gy, radius * flick);
           gl.addColorStop(0,    `rgba(${tint},0.30)`);
           gl.addColorStop(0.35, `rgba(${tint},0.16)`);
@@ -9706,11 +9722,22 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
       vig.addColorStop(0.65,'rgba(5,3,2,0.42)');  // warm dark brown mid
       vig.addColorStop(1, 'rgba(2,1,1,0.90)');    // deep warm shadow edge
       ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
-      for (const g of eng.gems) {
+      // ⚡ PERF: Batch all gem draws — single path + single fill instead of per-gem save/restore/shadowBlur
+      if (eng.gems.length > 0) {
         ctx.save();
-        ctx.shadowColor = '#34d399'; ctx.shadowBlur = 12 * _shadowScale; ctx.fillStyle = '#34d399';
-        ctx.beginPath(); ctx.moveTo(g.x, g.y - g.r); ctx.lineTo(g.x + g.r * 0.6, g.y);
-        ctx.lineTo(g.x, g.y + g.r); ctx.lineTo(g.x - g.r * 0.6, g.y); ctx.closePath(); ctx.fill(); ctx.restore();
+        ctx.shadowColor = '#34d399';
+        ctx.shadowBlur = 10 * _shadowScale;
+        ctx.fillStyle = '#34d399';
+        ctx.beginPath();
+        for (const g of eng.gems) {
+          ctx.moveTo(g.x, g.y - g.r);
+          ctx.lineTo(g.x + g.r * 0.6, g.y);
+          ctx.lineTo(g.x, g.y + g.r);
+          ctx.lineTo(g.x - g.r * 0.6, g.y);
+          ctx.closePath();
+        }
+        ctx.fill();
+        ctx.restore();
       }
 
 if (eng.potions) {
@@ -9877,8 +9904,11 @@ if (eng.decals) {
             return x - Math.floor(x);
           };
 
-          while (eng.decals.length > 80) {
-            eng.decals.shift();
+          // ⚡ PERF: Mobile-aware decal cap + O(1) swap-pop eviction (was O(n) shift())
+          const _decalCap = _isMobile ? 40 : 80;
+          while (eng.decals.length > _decalCap) {
+            eng.decals[0] = eng.decals[eng.decals.length - 1];
+            eng.decals.pop();
           }
 
           for (const d of eng.decals) {
@@ -9912,7 +9942,7 @@ if (eng.decals) {
               // 💥 1. DOUBLE SONIC BOOM SHOCKWAVE (Super Saiyan style)
               if (lifePct > 0.8) {
                 const shockPct = (lifePct - 0.8) / 0.2; 
-                ctx.globalCompositeOperation = 'lighter';
+                _setComposite('lighter');
                 
                 // Inner Heavy Ring
                 ctx.beginPath();
@@ -9930,7 +9960,7 @@ if (eng.decals) {
               }
 
               // 🕳️ 2. BRUTAL SCORCHED GROUND (Mas dark, mas jagged)
-              ctx.globalCompositeOperation = 'multiply'; 
+              _setComposite('multiply'); 
               ctx.globalAlpha = Math.max(0, lifePct) * 0.9;
 
               const charGrad = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 1.2);
@@ -9952,7 +9982,7 @@ if (eng.decals) {
               ctx.closePath();
               ctx.fill();
 
-              ctx.globalCompositeOperation = 'source-over'; 
+              _setComposite('source-over'); 
 
               // 🪨 3. SHATTERED DEBRIS (Mga basag na bato na TUMA-TALSIC/GUMAGALAW)
               ctx.globalAlpha = lifePct * 0.8;
@@ -10029,7 +10059,7 @@ if (eng.decals) {
 
                 // Inner Glowing Magma (Pumipintig at nawawala)
                 if (emberAlpha > 0) {
-                  ctx.globalCompositeOperation = 'lighter';
+                  _setComposite('lighter');
                   ctx.globalAlpha = emberAlpha * (0.6 + flicker * 0.4);
                   ctx.strokeStyle = 'rgba(255, 100, 0, 0.9)';
                   ctx.lineWidth = 1.2;
@@ -10038,13 +10068,13 @@ if (eng.decals) {
                   ctx.lineTo(midX, midY);
                   ctx.lineTo(endX, endY);
                   ctx.stroke();
-                  ctx.globalCompositeOperation = 'source-over'; // Reset agad per line
+                  _setComposite('source-over'); // Reset agad per line
                 }
               }
 
               // 🔥 5. SUPERHEATED CORE & UPWARD PARTICLES
               if (emberAlpha > 0) {
-                ctx.globalCompositeOperation = 'lighter';
+                _setComposite('lighter');
                 ctx.globalAlpha = emberAlpha * (0.8 + flicker * 0.2); 
                 
                 const coreR = d.r * 0.5;
@@ -10098,7 +10128,7 @@ if (eng.decals) {
 
           // ✨ 1. LEGENDARY EFFECT: DIVINE RINGS & STAR FLARE
           if (rarity === 'legendary') {
-            ctx.globalCompositeOperation = 'lighter';
+            _setComposite('lighter');
             const slowPulse = Math.sin(time * 2) * 0.5 + 0.5;
 
             // -- Spinning Magical Rings (Runes on the ground) --
@@ -10133,12 +10163,12 @@ if (eng.decals) {
               ctx.shadowBlur = 10 * _shadowScale;
               ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI*2); ctx.fill();
             }
-            ctx.globalCompositeOperation = 'source-over';
+            _setComposite('source-over');
           }
 
           // 👹 2. MYTHIC EFFECT: UNSTABLE BLOOD AURA & LIGHTNING
           if (rarity === 'mythic') {
-            ctx.globalCompositeOperation = 'lighter';
+            _setComposite('lighter');
             const fastPulse = Math.sin(time * 8) * 0.5 + 0.5;
 
             // -- Jagged Energy Burst (Sumasabog na aura) --
@@ -10194,12 +10224,12 @@ if (eng.decals) {
               }
               ctx.stroke();
             }
-            ctx.globalCompositeOperation = 'source-over';
+            _setComposite('source-over');
           }
 
           // 🌌 3. EPIC EFFECT: ARCANE GEOMETRY & ORBITING WISPS
           if (rarity === 'epic') {
-            ctx.globalCompositeOperation = 'lighter';
+            _setComposite('lighter');
             const medPulse = Math.sin(time * 4) * 0.5 + 0.5;
 
             // -- Expanding Geometric Base (Rotating Squares) --
@@ -10236,7 +10266,7 @@ if (eng.decals) {
               ctx.shadowColor = '#c084fc';
               ctx.beginPath(); ctx.arc(px, py, 2.5 + medPulse, 0, Math.PI * 2); ctx.fill();
             }
-            ctx.globalCompositeOperation = 'source-over';
+            _setComposite('source-over');
           }
 
           // 💎 4. BASE ITEM SHAPE RENDERING (Diamond — faceted gem cut)
@@ -10583,56 +10613,56 @@ if (eng.fissures && eng.fissures.length > 0) {
         // 🦇 UMBRAL BAT: SHADOW BLADES RENDERER (CRASH & BUG FIX)
         // =========================================================================
         if (eng.shadowBlades) {
-          const dt = 0.016; 
-          
-          // 🔧 FIX: Safe Host Check para maiwasan ang "isHost before initialization" error!
+          // ⚡ PERF: Physics (movement + collision) gated to shouldUpdateVfx (~60Hz).
+          // Visual draw runs every frame for smooth motion. Prevents double-tick on 120Hz devices.
+          const dt = 0.016;
           let canDealDamage = true;
-          try { 
-              canDealDamage = (isHost || !isCoopActive); 
-          } catch (e) {
-              // Kung nag-error dahil nasa itaas ang code, babagsak siya rito nang ligtas
-              canDealDamage = true; 
-          }
+          try { canDealDamage = (isHost || !isCoopActive); } catch (e) { canDealDamage = true; }
 
           for (let i = eng.shadowBlades.length - 1; i >= 0; i--) {
             const sl = eng.shadowBlades[i];
-            sl.x += sl.vx * dt; sl.y += sl.vy * dt; sl.life -= dt;
-            if (sl.life <= 0) { eng.shadowBlades.splice(i, 1); continue; }
 
-            // Collision Physics
-            if (canDealDamage) {
+            // Physics: only on ~60Hz ticks
+            if (shouldUpdateVfx) {
+              sl.x += sl.vx * dt; sl.y += sl.vy * dt; sl.life -= dt;
+              if (sl.life <= 0) {
+                const _lastSb = eng.shadowBlades.length - 1;
+                if (i !== _lastSb) eng.shadowBlades[i] = eng.shadowBlades[_lastSb];
+                eng.shadowBlades.pop(); // ⚡ swap-pop instead of splice
+                continue;
+              }
+              if (canDealDamage) {
                 for (const enemy of eng.enemies) {
-                    if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 24 && !sl.hits.has(enemy)) {
-                        sl.hits.add(enemy); 
-                        const shooterObj = sl.p2 ? eng.p2 : eng.p;
-                        // let baseSkillDmg = (sl.dmg || 80) + ((eng?.wave || 1) * 20);
-                        let baseSkillDmg = sl.dmg ? sl.dmg : (80 + ((eng?.wave || 1) * 20));
-                        if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
-                        if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.0; 
-                        if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
-                        let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
-                        let isCrit = false;
-                        if (Math.random() < (totalCrit / 100)) { baseSkillDmg *= 2; enemy.flash = 0.5; } 
-                        else { enemy.flash = 0.2; }
-                        enemy.hp -= baseSkillDmg;
-                        window.recordArcaneDamage('Umbral Bat', baseSkillDmg);
-                        spawnFCT(eng, enemy.x, enemy.y, baseSkillDmg, 'damage', isCrit);
-                        if (enemy.hp <= 0) enemy.deadTrigger = true;
-                        
-                        // Hit sparks
-                        for (let k = 0; k < 6; k++) {
-                            const pa = Math.random() * Math.PI * 2; const ps = Math.random() * 90 + 30;
-                            spawnParticle(eng, { x: sl.x, y: sl.y, vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, color: Math.random() > 0.5 ? '#000000' : '#e11d48', life: 0.3, ml: 0.3, r: Math.random() * 2 + 1 });
-                        }
+                  if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 24 && !sl.hits.has(enemy)) {
+                    sl.hits.add(enemy);
+                    const shooterObj = sl.p2 ? eng.p2 : eng.p;
+                    let baseSkillDmg = sl.dmg ? sl.dmg : (80 + ((eng?.wave || 1) * 20));
+                    if (shooterObj?.potBuffs?.power > 0) baseSkillDmg *= 1.4;
+                    if (shooterObj?.skills?.arcaneInstinct?.duration > 0) baseSkillDmg *= 2.0;
+                    if (enemy.instabTime > 0) baseSkillDmg *= 1.5;
+                    let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
+                    let isCrit = false;
+                    if (Math.random() < (totalCrit / 100)) { baseSkillDmg *= 2; enemy.flash = 0.5; isCrit = true; }
+                    else { enemy.flash = 0.2; }
+                    enemy.hp -= baseSkillDmg;
+                    window.recordArcaneDamage('Umbral Bat', baseSkillDmg);
+                    spawnFCT(eng, enemy.x, enemy.y, baseSkillDmg, 'damage', isCrit);
+                    if (enemy.hp <= 0) enemy.deadTrigger = true;
+                    for (let k = 0; k < 6; k++) {
+                      const pa = Math.random() * Math.PI * 2; const ps = Math.random() * 90 + 30;
+                      spawnParticle(eng, { x: sl.x, y: sl.y, vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, color: Math.random() > 0.5 ? '#000000' : '#e11d48', life: 0.3, ml: 0.3, r: Math.random() * 2 + 1 });
                     }
+                  }
                 }
+              }
             }
 
-            // Visual Draw
+            // Visual Draw: every frame for smooth motion
+            if (!sl.life || sl.life <= 0) continue;
             ctx.save(); ctx.translate(sl.x, sl.y); ctx.rotate(sl.angle);
             ctx.fillStyle = 'rgba(0, 0, 0, 0.4)'; ctx.beginPath(); ctx.arc(-20, 0, 15 * sl.life, 0, Math.PI * 2); ctx.fill();
             ctx.fillStyle = '#9f1239'; ctx.shadowBlur = 20 * _shadowScale; ctx.shadowColor = '#e11d48'; ctx.beginPath();
-            ctx.arc(0, 0, 24, -Math.PI / 1.5, Math.PI / 1.5); ctx.arc(-15, 0, 24, Math.PI / 1.5, -Math.PI / 1.5, true); 
+            ctx.arc(0, 0, 24, -Math.PI / 1.5, Math.PI / 1.5); ctx.arc(-15, 0, 24, Math.PI / 1.5, -Math.PI / 1.5, true);
             ctx.closePath(); ctx.fill();
             ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.arc(5, 0, 8, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
@@ -10666,7 +10696,7 @@ if (eng.earthSmashes && eng.earthSmashes.length > 0) {
 
         // 2. 🔥 PULSING MOLTEN SHOCKWAVE BURST
         ctx.save(); 
-        ctx.globalCompositeOperation = 'lighter'; 
+        _setComposite('lighter'); 
         ctx.strokeStyle = `rgba(245, 158, 11, ${rock.life * 0.8})`; 
         ctx.lineWidth = 30 * rock.life; 
         ctx.shadowBlur = 40 * _shadowScale; 
@@ -11701,7 +11731,7 @@ if (eng.slashes && eng.slashes.length > 0) {
           // ==========================================
           // 1. THE VOID TEAR (Napupunit na space sa likod)
           // ==========================================
-          ctx.globalCompositeOperation = 'source-over'; // Normal blending for pure darkness
+          _setComposite('source-over'); // Normal blending for pure darkness
           ctx.beginPath();
           ctx.moveTo(10, -26);
           // Jagged edges sa likuran (Space distortion)
@@ -11723,7 +11753,7 @@ if (eng.slashes && eng.slashes.length > 0) {
           // ==========================================
           // 2. VOLUMETRIC PLASMA GLOW (Multi-layered motion blur)
           // ==========================================
-          ctx.globalCompositeOperation = 'lighter'; // The secret to realistic fire/energy
+          _setComposite('lighter'); // The secret to realistic fire/energy
           
           // Tatlong layers ng aura na palaki nang palaki pero palabo nang palabo
           for(let layer = 1; layer <= 3; layer++) {
@@ -11812,7 +11842,7 @@ if (eng.stars && eng.stars.length > 0) {
           ctx.save();
           // 🔥 REALISTIC LIGHTING SECRET: Additive Blending
           // Nagiging mas maliwanag at nag-g-glow ang mga kulay kapag nagpapatong, zero lag!
-          ctx.globalCompositeOperation = 'lighter'; 
+          _setComposite('lighter'); 
 
           // ==========================================
           // 1. ELEGANT RUNIC IMPACT ZONE
@@ -12607,7 +12637,7 @@ if (eng.stars && eng.stars.length > 0) {
             // ==================================================
             // 🔥 OVERWHELMING BOSS DOMAIN AURA (Massive background glow)
             // ==================================================
-            ctx.globalCompositeOperation = 'lighter'; // Makes energies blend and glow intensely
+            _setComposite('lighter'); // Makes energies blend and glow intensely
             let auraRadius = e.r * (6 + Math.sin(now / 200)); // Breathing domain
             
             // ⚡ PERF: cache domain aura gradient — only rebuild when type changes (once per boss lifetime)
@@ -12630,7 +12660,7 @@ if (eng.stars && eng.stars.length > 0) {
             
             ctx.fillStyle = e._domainGrad;
             ctx.beginPath(); ctx.arc(0, 0, auraRadius, 0, Math.PI * 2); ctx.fill();
-            ctx.globalCompositeOperation = 'source-over'; // Reset for solid bodies
+            _setComposite('source-over'); // Reset for solid bodies
 
 if (e.type === 'primordial') {
     // ==================================================
@@ -13644,37 +13674,46 @@ for (const p of eng.particles) {
           ctx.save();
           
           // --- HELPER 1: DYNAMIC LIGHTNING GENERATOR (🔥 OPTIMIZED GLOW) ---
+          // ⚡ PERF: Pre-allocated point buffer — avoids array allocation on every call
+          // Deterministic jitter via sin/cos seeds — identical jagged look at 60fps, zero Math.random
+          const _ltPts = [{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0},{x:0,y:0}];
+          let _ltSeed = 0; // incremented per drawLightning call for unique jitter per bolt
           const drawLightning = (startX, startY, endX, endY, color, glowColor, segments = 5, branches = false) => {
               ctx.lineCap = 'round';
-              const points = [{x: startX, y: startY}];
+              const _now = performance.now();
+              _ltSeed++;
+              _ltPts[0].x = startX; _ltPts[0].y = startY;
               let currX = startX, currY = startY;
-              
+
               for (let i = 1; i <= segments; i++) {
                   const progress = i / segments;
-                  currX = startX + (endX - startX) * progress + (Math.random() - 0.5) * 20;
-                  currY = startY + (endY - startY) * progress + (Math.random() - 0.5) * 20;
-                  points.push({x: currX, y: currY});
+                  // Deterministic jitter: unique per bolt (_ltSeed), segment (i), and time slice
+                  const jx = Math.sin(_now * 0.008 + _ltSeed * 3.7 + i * 2.3) * 10;
+                  const jy = Math.cos(_now * 0.009 + _ltSeed * 5.1 + i * 1.7) * 10;
+                  currX = startX + (endX - startX) * progress + jx;
+                  currY = startY + (endY - startY) * progress + jy;
+                  _ltPts[i].x = currX; _ltPts[i].y = currY;
               }
 
               // Fake Glow (Mas mabilis kaysa sa shadowBlur)
               ctx.strokeStyle = glowColor; ctx.lineWidth = 6; ctx.globalAlpha = 0.4;
-              ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
-              for(let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+              ctx.beginPath(); ctx.moveTo(_ltPts[0].x, _ltPts[0].y);
+              for(let i=1; i<=segments; i++) ctx.lineTo(_ltPts[i].x, _ltPts[i].y);
               ctx.stroke();
 
               // Inner Lightning Core
               ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.globalAlpha = 1.0;
-              ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
-              for(let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+              ctx.beginPath(); ctx.moveTo(_ltPts[0].x, _ltPts[0].y);
+              for(let i=1; i<=segments; i++) ctx.lineTo(_ltPts[i].x, _ltPts[i].y);
               ctx.stroke();
 
-              if (branches && Math.random() < 0.3) {
-                  const bx = currX + (Math.random() - 0.5) * 30;
-                  const by = currY + (Math.random() - 0.5) * 30;
-                  
+              if (Math.sin(_now * 0.031 + _ltSeed * 7.3) > 0.4) { // ~30% chance, deterministic
+                  const bx = currX + Math.sin(_now * 0.017 + _ltSeed * 2.9) * 15;
+                  const by = currY + Math.cos(_now * 0.019 + _ltSeed * 4.1) * 15;
+
                   ctx.strokeStyle = glowColor; ctx.lineWidth = 4; ctx.globalAlpha = 0.4;
                   ctx.beginPath(); ctx.moveTo(currX, currY); ctx.lineTo(bx, by); ctx.stroke();
-                  
+
                   ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 1.0;
                   ctx.beginPath(); ctx.moveTo(currX, currY); ctx.lineTo(bx, by); ctx.stroke();
               }
@@ -13701,7 +13740,7 @@ for (const p of eng.particles) {
 
           // 🩸 SHADOW MAGE (NIGHTMARE TIER)
           if (skinId === 'shadow') {
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               const twitch = Math.random() > 0.8 ? 5 : 0;
               const grad = ctx.createRadialGradient(x, y+3, 0, x, y+3, radius*3 + twitch);
               grad.addColorStop(0, '#000000'); grad.addColorStop(0.3, 'rgba(100, 0, 0, 0.9)');
@@ -13747,7 +13786,7 @@ for (const p of eng.particles) {
 
           // 🔥 PYROMANCER (DEMON OF THE ASHEN FLARE)
           else if (skinId === 'pyro') {
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               
               drawShatteredSeal(x, y, radius * 5, time * 0.001, '#ff0000');
               if (Math.random() < 0.2) {
@@ -13787,7 +13826,7 @@ for (const p of eng.particles) {
                   ctx.beginPath(); ctx.arc(x + s.ox, y + s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
               
-              ctx.globalCompositeOperation = 'lighter'; 
+              _setComposite('lighter'); 
               const heatGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 4);
               heatGrad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
               heatGrad.addColorStop(0.2, 'rgba(255, 50, 0, 0.6)');
@@ -13805,7 +13844,7 @@ for (const p of eng.particles) {
 
           // ⚡ ARCHMAGE (VOID STORM SOVEREIGN)
           else if (skinId === 'archmage') {
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               
               if (!eng.stormClouds) eng.stormClouds = [];
               // ⚡ PERF: spawn + physics gated to ~60Hz (was running at display
@@ -13841,7 +13880,7 @@ for (const p of eng.particles) {
                   ctx.beginPath(); ctx.arc(cx, cy, cloud.size, 0, Math.PI*2); ctx.fill();
               });
               
-              ctx.globalCompositeOperation = 'lighter'; 
+              _setComposite('lighter'); 
 
               drawShatteredSeal(x, y, radius * 5.5, time * -0.002, '#00ffff');
               drawShatteredSeal(x, y, radius * 3.5, time * 0.003, '#c084fc');
@@ -13881,7 +13920,7 @@ for (const p of eng.particles) {
 
           // 🌸 SAKURA SORCERESS
           else if (skinId === 'sakura') {
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const pulse = Math.sin(time * 0.003);
               
               ctx.save();
@@ -13896,7 +13935,7 @@ for (const p of eng.particles) {
               }
               ctx.stroke(); ctx.restore();
               
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               if (!eng.pinkSmoke) eng.pinkSmoke = [];
               // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
               // every render frame so smoke doesn't flicker on displays
@@ -13922,7 +13961,7 @@ for (const p of eng.particles) {
                   ctx.fillStyle = smokeGrad; ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
               
-              ctx.globalCompositeOperation = 'lighter'; 
+              _setComposite('lighter'); 
 
               if (!eng.sakuraParticles) eng.sakuraParticles = [];
               // ⚡ PERF: same flicker fix as above.
@@ -13937,7 +13976,12 @@ for (const p of eng.particles) {
               for (let i = eng.sakuraParticles.length - 1; i >= 0; i--) {
                   const p = eng.sakuraParticles[i];
                   p.y += p.vy; p.rot += p.rs; p.life -= 0.008;
-                  if (p.life <= 0 || p.y > 10) eng.sakuraParticles.splice(i, 1);
+                  if (p.life <= 0 || p.y > 10) {
+                    // ⚡ O(1) swap-pop instead of O(n) splice
+                    const _last = eng.sakuraParticles.length - 1;
+                    if (i !== _last) eng.sakuraParticles[i] = eng.sakuraParticles[_last];
+                    eng.sakuraParticles.pop();
+                  }
               }
               }
               eng.sakuraParticles.forEach((p) => {
@@ -13961,7 +14005,11 @@ for (const p of eng.particles) {
               for (let i = eng.sakuraHearts.length - 1; i >= 0; i--) {
                   const h = eng.sakuraHearts[i];
                   h.y -= h.vy; h.life -= 0.005; h.rot += h.rs;
-                  if (h.life <= 0) eng.sakuraHearts.splice(i, 1);
+                  if (h.life <= 0) {
+                    const _last = eng.sakuraHearts.length - 1;
+                    if (i !== _last) eng.sakuraHearts[i] = eng.sakuraHearts[_last];
+                    eng.sakuraHearts.pop(); // ⚡ O(1) swap-pop
+                  }
               }
               }
               eng.sakuraHearts.forEach((h, i) => {
@@ -13995,7 +14043,7 @@ for (const p of eng.particles) {
 
           // 🌸 SAKURA SORCERESS (PREMIUM MAGICAL GIRL TIER)
           else if (skinId === 'pink_wings') {
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const pulse = Math.sin(time * 0.003);
 
               ctx.save();
@@ -14068,7 +14116,11 @@ for (const p of eng.particles) {
               for (let i = eng.sakuraHearts.length - 1; i >= 0; i--) {
                   const h = eng.sakuraHearts[i];
                   h.oy -= h.vy; h.life -= 0.005;
-                  if (h.life <= 0) eng.sakuraHearts.splice(i, 1);
+                  if (h.life <= 0) {
+                    const _last = eng.sakuraHearts.length - 1;
+                    if (i !== _last) eng.sakuraHearts[i] = eng.sakuraHearts[_last];
+                    eng.sakuraHearts.pop(); // ⚡ O(1) swap-pop
+                  }
               }
               }
               eng.sakuraHearts.forEach((h) => {
@@ -14117,7 +14169,7 @@ for (const p of eng.particles) {
 
           // 🗡️ CRIMSON SHADOW KNIGHT (SOLO LEVELING IGRIS TIER)
           else if (skinId === 'igris') {
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               const pulse = Math.sin(time * 0.004);
 
               ctx.save();
@@ -14156,13 +14208,13 @@ for (const p of eng.particles) {
               ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0);
               ctx.fill();
               
-              ctx.globalCompositeOperation = 'destination-out';
+              _setComposite('destination-out');
               ctx.beginPath();
               ctx.moveTo(-radius + capeSway, radius*6.5);
               ctx.lineTo(-radius*0.5 + capeSway, radius*4.5);
               ctx.lineTo(capeSway, radius*6.8);
               ctx.fill();
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               ctx.restore();
               
               ctx.save();
@@ -14202,7 +14254,7 @@ for (const p of eng.particles) {
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
               
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               if (Math.random() < 0.25) {
                   const lx = x + (Math.random()-0.5)*radius*10;
                   const ly = y - radius*3 + (Math.random()-0.5)*radius*8;
@@ -14222,7 +14274,7 @@ for (const p of eng.particles) {
 
           // 🗡️ 5. EMPEROR (Mythic Translucent Shadow Sovereign)
           else if (skinId === 'emperor') {
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               const pulse = Math.sin(time * 0.004);
 
               ctx.save(); ctx.translate(x, y + 5); ctx.scale(1, 0.35);
@@ -14259,13 +14311,13 @@ for (const p of eng.particles) {
               ctx.quadraticCurveTo(radius*4, radius*3 - capeRipple, radius*1.5, 0);
               ctx.fill();
               
-              ctx.globalCompositeOperation = 'destination-out'; 
+              _setComposite('destination-out'); 
               ctx.beginPath();
               for(let i=-2; i<=2; i++) {
                   const cutX = (i*radius*0.6) + capeSway;
                   ctx.moveTo(cutX, radius*9); ctx.lineTo(cutX - 4, radius*6 + Math.random()*15); ctx.lineTo(cutX + 4, radius*9);
               }
-              ctx.fill(); ctx.globalCompositeOperation = 'source-over';
+              ctx.fill(); _setComposite('source-over');
               ctx.globalAlpha = 1.0; ctx.restore();
 
               for(let i=0; i<4; i++) {
@@ -14318,7 +14370,7 @@ for (const p of eng.particles) {
                   ctx.beginPath(); ctx.arc(x+s.ox, y+s.oy, s.size, 0, Math.PI*2); ctx.fill();
               });
               
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const coreGrad = ctx.createRadialGradient(x, y-2, 0, x, y-2, radius*3.5);
               coreGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
               coreGrad.addColorStop(0.3, 'rgba(220, 38, 38, 0.8)'); coreGrad.addColorStop(1, 'rgba(150, 0, 0, 0)');
@@ -14327,7 +14379,7 @@ for (const p of eng.particles) {
 
           // 🌸⚔️ EMPRESS OF THE BLUSHING PETALS
           else if (skinId === 'empress') {
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const pulse = Math.sin(time * 0.002);
               
               ctx.save();
@@ -14462,7 +14514,7 @@ for (const p of eng.particles) {
 
           // 👑 INFERNAL ECLIPSE SOVEREIGN
           else if (skinId === 'infernal') {
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               const pulse = Math.sin(time * 0.003);
               const floatY = Math.sin(time * 0.002) * 4;
 
@@ -14526,7 +14578,7 @@ for (const p of eng.particles) {
               
               ctx.save();
               ctx.scale(1, 1); ctx.rotate(flapAngle + 0.1);
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const celestGrad = ctx.createLinearGradient(0, 0, radius*7, -radius*5);
               celestGrad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
               celestGrad.addColorStop(0.4, 'rgba(139, 92, 246, 0.8)');
@@ -14543,7 +14595,7 @@ for (const p of eng.particles) {
               ctx.fill(); ctx.restore();
               ctx.restore();
 
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               ctx.save(); ctx.translate(x, y - radius + floatY);
               const cloakSway = Math.sin(time * 0.003) * 15;
               const cloakGrad = ctx.createLinearGradient(0, 0, 0, radius*8);
@@ -14592,7 +14644,7 @@ for (const p of eng.particles) {
               }
               ctx.restore();
               
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               if (Math.random() < 0.3) {
                   const lColor = Math.random() > 0.5 ?
                   {c: '#ffffff', g: '#8b5cf6'} : {c: '#ffffff', g: '#e11d48'};
@@ -14635,7 +14687,7 @@ for (const p of eng.particles) {
           }
 
           else if (skinId === 'leviathan') {
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const pulse = Math.sin(time * 0.003);
               const floatY = Math.sin(time * 0.002) * 5; 
 
@@ -14814,7 +14866,7 @@ for (const p of eng.particles) {
 
           // 🌌⏳ ETERNAL REMEMBRANCE
           else if (skinId === 'remembrance') {
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const pulse = Math.sin(time * 0.002);
               const floatY = Math.sin(time * 0.0015) * 6;
 
@@ -14889,7 +14941,7 @@ for (const p of eng.particles) {
                   ctx.restore();
               }
 
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               const orbCount = 3;
               for(let i=0; i<orbCount; i++) {
                   const bAng = time*0.0015 + (i*Math.PI*2/orbCount);
@@ -14916,7 +14968,7 @@ for (const p of eng.particles) {
                   ctx.beginPath(); ctx.moveTo(x, y - radius + floatY); ctx.lineTo(bX, bY); ctx.stroke();
               }
 
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               if (!eng.astralParticles) eng.astralParticles = [];
               // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
               // every render frame so particles don't flicker on fast displays.
@@ -14989,7 +15041,7 @@ for (const p of eng.particles) {
 
           // 🌌⏳ THE ABSOLUTE PINNACLE TIER: ETERNAL REMEMBRANCE
           else if (skinId === 'frieren') {
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               const pulse = Math.sin(time * 0.002);
               const floatY = Math.sin(time * 0.001) * 6;
 
@@ -15094,7 +15146,7 @@ for (const p of eng.particles) {
                   ctx.restore();
               }
 
-              ctx.globalCompositeOperation = 'source-over';
+              _setComposite('source-over');
               for(let i=0; i<2; i++) {
                   const bAng = time*0.001 + (i*Math.PI);
                   const bX = x + Math.cos(bAng)*radius*5.5;
@@ -15123,7 +15175,7 @@ for (const p of eng.particles) {
                   ctx.stroke();
               }
 
-              ctx.globalCompositeOperation = 'lighter';
+              _setComposite('lighter');
               if (!eng.eternityParticles) eng.eternityParticles = [];
               // ⚡ PERF: spawn + physics gated to ~60Hz. Drawing still runs
               // every render frame so particles don't flicker on fast displays.
@@ -15301,7 +15353,7 @@ if (eng.p.divineShield && eng.p.divineShield.active) {
 
               if (eng.p.divineShield && eng.p.divineShield.hitFlash > 0) {
                   eng.p.divineShield.hitFlash -= dt;
-                  ctx.globalCompositeOperation = 'lighter';
+                  _setComposite('lighter');
               }
               
               // 1. Golden Shield Aura
@@ -15445,7 +15497,7 @@ if (eng.p.divineShield && eng.p.divineShield.active) {
 
               if (eng.p2.divineShield.hitFlash > 0) {
                   eng.p2.divineShield.hitFlash -= dt;
-                  ctx.globalCompositeOperation = 'lighter';
+                  _setComposite('lighter');
               }
               
               // 1. Golden Shield Aura
@@ -16616,7 +16668,7 @@ if (eng.floatingTexts) {
       if (eng.bossIntro && eng.bossIntro.active) {
   const t = eng.bossIntro.timer;
   const maxT = eng.bossIntro.maxDuration;
-  const ctx = canvasRef.current.getContext('2d');
+  const ctx = canvasRef.current.getContext('2d', { alpha: false }); // ⚡ PERF: skip alpha compositing
   const W = canvasRef.current.width;
   const H = canvasRef.current.height;
   const prog = 1 - (t / maxT); // 0→1 as intro plays forward
