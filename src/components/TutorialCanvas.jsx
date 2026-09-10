@@ -3294,7 +3294,137 @@ const focusStyles = `
   .step-changing-anim p {
     animation: epicDescReveal 1.2s ease-out forwards !important;
   }
-`;
+
+  /* =========================================================================
+     🔮 TUTORIAL LEVEL UP SCREEN STYLES (Copied from Overlays.jsx)
+     ========================================================================= */
+  .lu-wrapper { text-align: center; max-width: 960px; width: 100%; padding: 20px; position: relative; }
+
+  /* 🜂 Ambient Arcane Circle */
+  .lu-arcane-circle {
+    position: absolute; top: 50%; left: 50%; width: 720px; height: 720px;
+    max-width: 98vw; max-height: 98vw;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(197,160,89,0.22);
+    border-radius: 50%;
+    pointer-events: none; z-index: 0;
+    will-change: transform;
+    animation: arcaneCircleSpin 120s linear infinite;
+    box-shadow:
+      0 0 80px rgba(109,40,217,0.22),
+      0 0 160px rgba(80,20,160,0.12),
+      inset 0 0 80px rgba(109,40,217,0.10);
+  }
+  .lu-arcane-circle::before {
+    content: '';
+    position: absolute; inset: 26px;
+    border: 1px dashed rgba(197,160,89,0.18);
+    border-radius: 50%;
+    box-shadow: 0 0 40px rgba(197,160,89,0.10) inset;
+  }
+  .lu-arcane-circle::after {
+    content: '✦';
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    color: rgba(233,196,122,0.65); font-size: 0.9rem;
+    text-shadow: 0 0 12px rgba(233,196,122,0.9);
+  }
+  @keyframes arcaneCircleSpin { from { transform: translate(-50%, -50%) rotate(0deg); } to { transform: translate(-50%, -50%) rotate(360deg); } }
+
+  .lu-title-row { position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; gap: 16px; }
+  .lu-rune-flank { font-family: 'Georgia', serif; font-size: 0.85rem; letter-spacing: 0.3em; color: rgba(197,160,89,0.55); text-shadow: 0 0 8px rgba(197,160,89,0.3); user-select: none; }
+  .lu-title { font-size: 2.35rem; font-weight: 800; background: linear-gradient(180deg, #fffbe8 0%, #fef08a 45%, #c5a059 100%); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: 0 0 22px rgba(251,240,138,0.35); margin-bottom: 8px; letter-spacing: 0.05em; font-family: Georgia, serif; text-transform: uppercase; }
+  .lu-subtitle { position: relative; z-index: 1; font-size: 0.85rem; color: #cbd5e1; letter-spacing: 0.08em; margin-bottom: 4px; opacity: 0.9; text-transform: uppercase; font-family: Georgia, serif; }
+  .lu-rune-strip { position: relative; z-index: 1; font-family: 'Georgia', serif; font-size: 0.6rem; letter-spacing: 0.3em; color: rgba(197,160,89,0.4); margin: 6px 0 8px; user-select: none; white-space: nowrap; overflow: hidden; opacity: 0.8; }
+  .lu-warning { position: relative; z-index: 1; font-size: 0.72rem; color: #eab308; opacity: 0.85; margin-bottom: 22px; font-family: monospace; letter-spacing: 0.05em; font-weight: bold; }
+  .lu-cards-row { position: relative; z-index: 1; display: flex; justify-content: center; gap: 24px; width: 100%; flex-wrap: wrap; }
+
+  .lu-card {
+    background:
+      radial-gradient(ellipse at 50% 0%,  rgba(100,40,200,0.25) 0%, transparent 55%),
+      linear-gradient(135deg, rgba(59,17,123,0.88) 0%, rgba(30,10,69,0.93) 100%);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border: 1px solid rgba(124,58,237,0.55); border-radius: 6px; width: 230px; padding: 30px 16px 22px; cursor: pointer;
+    transition: transform 0.22s ease-in-out, box-shadow 0.22s ease-in-out, border-color 0.22s ease-in-out, background 0.22s ease-in-out;
+    box-shadow:
+      0 0 25px rgba(124,58,237,0.30),
+      0 0 60px rgba(80,20,160,0.15),
+      inset 0 0 24px rgba(124,58,237,0.10);
+    display: flex; flex-direction: column; align-items: center; position: relative; overflow: hidden;
+  }
+  .lu-card::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 28%, rgba(255,255,255,0.06) 0%, transparent 60%); pointer-events: none; }
+  .lu-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    border-color: rgba(233,196,122,0.80);
+    box-shadow:
+      0 0 40px rgba(233,196,122,0.55),
+      0 0 80px rgba(168,85,247,0.30),
+      inset 0 0 30px rgba(233,196,122,0.14);
+    background:
+      radial-gradient(ellipse at 50% 0%,  rgba(120,60,220,0.30) 0%, transparent 55%),
+      linear-gradient(135deg, rgba(76,29,149,0.92) 0%, rgba(46,16,101,0.95) 100%);
+  }
+
+  /* 🜁 Rune corner brackets */
+  .lu-corner { position: absolute; width: 13px; height: 13px; border: 1.5px solid rgba(197,160,89,0.65); opacity: 0.85; transition: border-color 0.22s ease-in-out; pointer-events: none; }
+  .lu-corner.tl { top: 6px; left: 6px; border-right: none; border-bottom: none; }
+  .lu-corner.tr { top: 6px; right: 6px; border-left: none; border-bottom: none; }
+  .lu-corner.bl { bottom: 6px; left: 6px; border-right: none; border-top: none; }
+  .lu-corner.br { bottom: 6px; right: 6px; border-left: none; border-top: none; }
+  .lu-card:hover .lu-corner { border-color: #ffe6a3; }
+
+  .lu-card-runes { font-family: 'Georgia', serif; font-size: 0.5rem; letter-spacing: 0.18em; color: rgba(197,160,89,0.45); margin-bottom: 10px; user-select: none; }
+
+  /* 🜄 MMORPG-style item-slot icon frame */
+  .lu-icon-frame {
+    position: relative; width: 62px; height: 62px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 50% 35%, #33176b 0%, #150a2e 70%, #0a0414 100%);
+    border: 2px solid #c5a059; margin-bottom: 12px;
+    box-shadow: 0 0 14px rgba(197,160,89,0.35), inset 0 0 12px rgba(124,58,237,0.4), inset 0 2px 4px rgba(255,255,255,0.07);
+    transition: border-color 0.22s ease-in-out, box-shadow 0.22s ease-in-out, transform 0.22s ease-in-out;
+  }
+  .lu-icon-frame::before {
+    content: ''; position: absolute; inset: 5px; border: 1px dashed rgba(197,160,89,0.4); border-radius: 50%; pointer-events: none;
+  }
+  .lu-icon-frame::after {
+    content: '◆'; position: absolute; top: -7px; left: 50%; transform: translateX(-50%);
+    font-size: 0.5rem; color: #d946ef; text-shadow: 0 0 6px rgba(217,70,239,0.9); pointer-events: none;
+  }
+  .lu-card:hover .lu-icon-frame { border-color: #ffe6a3; box-shadow: 0 0 22px rgba(255,230,163,0.55), inset 0 0 16px rgba(168,85,247,0.5); transform: scale(1.06); }
+  .lu-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; color: #ffe6a3; filter: drop-shadow(0 0 6px rgba(255,230,163,0.4)); transition: color 0.22s ease-in-out, filter 0.22s ease-in-out; }
+  .lu-icon svg { width: 100%; height: 100%; overflow: visible; }
+  .lu-card:hover .lu-icon { color: #fff6dc; filter: drop-shadow(0 0 10px rgba(255,230,163,0.7)); }
+
+  .lu-card-title { font-size: 1.15rem; font-weight: 700; color: #ffffff; margin-bottom: 8px; letter-spacing: 0.03em; text-transform: uppercase; font-family: Georgia, serif; text-align: center; }
+  .lu-card-desc { font-size: 0.78rem; color: #94a3b8; font-family: monospace; margin-bottom: 18px; min-height: 2em; line-height: 1.3; text-align: center; }
+
+  /* 🜃 Hotkey re-styled as a wax-sigil stamp */
+  .lu-hotkey { font-size: 0.85rem; color: #1e0a45; font-weight: bold; font-family: Georgia, serif; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, #ffe6a3 0%, #c5a059 100%); box-shadow: 0 0 10px rgba(255,230,163,0.5); margin-top: auto; flex-shrink: 0; }
+
+  /* 📱 MOBILE VIEW ADJUSTMENTS */
+  @media (max-width: 840px), (max-height: 500px) and (orientation: landscape) {
+    .lu-wrapper { padding: 10px !important; }
+    .lu-arcane-circle { opacity: 0.5 !important; }
+    .lu-rune-flank { display: none !important; }
+    .lu-title { font-size: 1.2rem !important; margin-bottom: 2px !important; }
+    .lu-subtitle { font-size: 0.55rem !important; margin-bottom: 2px !important; }
+    .lu-rune-strip { font-size: 0.4rem !important; margin: 3px 0 !important; letter-spacing: 0.15em !important; }
+    .lu-warning { font-size: 0.5rem !important; margin-bottom: 8px !important; }
+    .lu-cards-row { gap: 6px !important; }
+    .lu-card { width: 31% !important; min-width: 100px !important; padding: 8px !important; border-radius: 6px !important; }
+    .lu-corner { width: 8px !important; height: 8px !important; }
+    .lu-card-runes { display: none !important; }
+    .lu-icon-frame { width: 34px !important; height: 34px !important; margin-bottom: 4px !important; }
+    .lu-icon-frame::after { font-size: 0.35rem !important; top: -4px !important; }
+    .lu-icon { width: 18px !important; height: 18px !important; margin-bottom: 4px !important; }
+    .lu-card-title { font-size: 0.6rem !important; margin-bottom: 4px !important; text-align: center; }
+    .lu-card-desc { font-size: 0.45rem !important; margin-bottom: 4px !important; text-align: center; line-height: 1.1 !important; }
+    .lu-hotkey { display: none !important; }
+  }
+
+
+  `;
 
 export default function TutorialCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
   const canvasRef = useRef(null);

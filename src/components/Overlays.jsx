@@ -3454,7 +3454,7 @@ const handleSubmitScore = useCallback(async () => {
     }
   }, [wizardName, hudData, isCoop]);
 
-  if (screen === 'playing') return null;
+  if (screen === 'playing' || screen === 'tutorial') return null;
 
   const displayedChoices = (levelUpOptions || []).slice(0, 3);
   const restartVotes = isCoop ? [hudData?.coopVotes?.p1, hudData?.coopVotes?.p2].filter(Boolean).length : 0;
