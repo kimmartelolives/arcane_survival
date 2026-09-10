@@ -25,6 +25,8 @@ class SoundManager {
       delete: [],
       dash: [],
       choir: [],
+      domain: [],      // "DOMAIN EXPANSION!" shout
+      expansion: [],   // Ambient void music for full 20s duration
     };
     this.unlocked = false;
 
@@ -44,7 +46,9 @@ class SoundManager {
       unequip: '/unequip.mp3',
       delete: '/delete.mp3',
       dash: '/dash.wav',
-      choir: '/choir.mp3'
+      choir: '/choir.mp3',
+      domain: '/domain.mp3',       // "DOMAIN EXPANSION!" shout SFX
+      expansion: '/expansion.mp3', // Ambient void music for 20s duration
     };
 
     if (typeof window !== 'undefined') {
@@ -117,6 +121,38 @@ class SoundManager {
       audio.play().catch(e => console.warn("Browser blocked SFX:", e));
     }
   }
+
+  // 🌌 Domain Expansion SFX — two sounds only
+  playDomain() {
+    if (typeof window === 'undefined' || localStorage.getItem('arcane_muted') === 'true') return;
+
+    // Sound 1: "DOMAIN EXPANSION!" shout — plays immediately on cast
+    const shout = this.pools.domain?.find(a => a.paused || a.ended) || this.pools.domain?.[0];
+    if (shout) { shout.currentTime = 0; shout.volume = 1.0; shout.play().catch(() => {}); }
+
+    // Sound 2: Expansion ambient — starts right away, plays for full 20s duration
+    const ambient = this.pools.expansion?.find(a => a.paused || a.ended) || this.pools.expansion?.[0];
+    if (ambient) { ambient.currentTime = 0; ambient.volume = 0.85; ambient.play().catch(() => {}); }
+  }
+
+  // Stop the expansion ambient when domain ends
+  stopExpansion() {
+    const ambient = this.pools.expansion?.[0];
+    if (ambient && !ambient.paused) {
+      // Fade out over 1s instead of hard stop
+      const fadeStep = () => {
+        if (ambient.volume > 0.05) {
+          ambient.volume = Math.max(0, ambient.volume - 0.07);
+          setTimeout(fadeStep, 60);
+        } else {
+          ambient.pause();
+          ambient.currentTime = 0;
+          ambient.volume = 0.85;
+        }
+      };
+      fadeStep();
+    }
+  }
 }
 
 window.ArcaneSoundManager = window.ArcaneSoundManager || new SoundManager();
@@ -127,14 +163,24 @@ const H = 720;
 
 const formatLargeNumber = (num) => {
   if (!num) return "0";
-  if (num >= 1e21) return (num / 1e21).toFixed(2) + 'Sx'; // Sextillion
-  if (num >= 1e18) return (num / 1e18).toFixed(2) + 'Qi'; // Quintillion
-  if (num >= 1e15) return (num / 1e15).toFixed(2) + 'Qa'; // Quadrillion
-  if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';  // Trillion
-  if (num >= 1e9)  return (num / 1e9).toFixed(2) + 'B';   // Billion
-  if (num >= 1e6)  return (num / 1e6).toFixed(2) + 'M';   // Million
-  if (num >= 1e3)  return (num / 1e3).toFixed(2) + 'K';   // Thousand
-  return Math.floor(num).toLocaleString();
+  if (num >= 1e21) return (num / 1e21).toFixed(2) + 'Sx';
+  if (num >= 1e18) return (num / 1e18).toFixed(2) + 'Qi';
+  if (num >= 1e15) return (num / 1e15).toFixed(2) + 'Qa';
+  if (num >= 1e12) return (num / 1e12).toFixed(2) + 'T';
+  if (num >= 1e9)  return (num / 1e9).toFixed(2) + 'B';
+  if (num >= 1e6)  return (num / 1e6).toFixed(2) + 'M';
+  if (num >= 1e3)  return (num / 1e3).toFixed(2) + 'K';
+  // ⚡ PERF: toLocaleString() routes through the ICU internationalization library —
+  // one of the slowest JS string ops. For integers under 1000 a manual formatter
+  // is ~10-50× faster and produces the same comma-separated output.
+  const n = Math.floor(num);
+  if (n < 1000) return String(n);
+  const s = String(n);
+  let out = '';
+  const start = s.length % 3 || 3;
+  out += s.slice(0, start);
+  for (let i = start; i < s.length; i += 3) out += ',' + s.slice(i, i + 3);
+  return out;
 };
 
 const ET = [
@@ -318,6 +364,128 @@ const RARITY_COLORS = {
   mythic: '#ef4444'
 };
 
+// ── Domain Expansion Button (Gojo Infinite Void — matches ult btn structure) ──
+const DomainBtn = ({ domainBtnRef, right, bottom, isMobileLayout }) => {
+  const fireDomain = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (window.eng) {
+      window.eng.keys['y'] = true;
+      setTimeout(() => { window.eng.keys['y'] = false; }, 120);
+    }
+  };
+
+  const iconSz = isMobileLayout ? 26 : 34;
+
+  return (
+    // Use <button> not <div> so pointer events fire reliably on all browsers/touch
+    <button
+      ref={domainBtnRef}
+      className="bdo-domain-btn ready"
+      style={{
+        position: 'absolute',
+        right: `${right}px`,
+        bottom: `${bottom}px`,
+        display: 'none',
+      }}
+      onPointerDown={fireDomain}
+      title="Domain Expansion [Y]"
+    >
+      {/* Keybind badge — centered top, not clipped at corner */}
+      {!isMobileLayout && (
+        <span className="bdo-domain-key">Y</span>
+      )}
+
+      {/* ── Infinite Void Icon ──
+          defs → radialGradient MUST be inside <defs> to avoid black fill square */}
+      <svg
+        className="domain-icon"
+        width={iconSz}
+        height={iconSz}
+        viewBox="0 0 40 40"
+        fill="none"
+        style={{ position: 'relative', zIndex: 1, overflow: 'visible' }}
+      >
+        <defs>
+          <radialGradient id="voidCore" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="#ffffff" stopOpacity="1"   />
+            <stop offset="30%"  stopColor="#d8b4fe" stopOpacity="0.95" />
+            <stop offset="65%"  stopColor="#7c3aed" stopOpacity="0.70" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0"    />
+          </radialGradient>
+          <radialGradient id="voidCoreGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="#a855f7" stopOpacity="0.60" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0"    />
+          </radialGradient>
+        </defs>
+
+        {/* Outermost faint broken ring */}
+        <circle cx="20" cy="20" r="18.5"
+          stroke="rgba(140,70,255,0.32)" strokeWidth="0.7"
+          strokeDasharray="2 5 1 5" />
+
+        {/* Outer dashed ring */}
+        <circle cx="20" cy="20" r="15"
+          stroke="rgba(168,100,255,0.50)" strokeWidth="0.9"
+          strokeDasharray="5 3 2 3" />
+
+        {/* Mid ring — solid */}
+        <circle cx="20" cy="20" r="10.5"
+          stroke="rgba(196,132,255,0.65)" strokeWidth="1.0" />
+
+        {/* Inner ring */}
+        <circle cx="20" cy="20" r="6.5"
+          stroke="rgba(216,160,255,0.75)" strokeWidth="0.85"
+          strokeDasharray="3 1.5" />
+
+        {/* 12 radial spokes — every 3rd is brighter (cross emphasis) */}
+        {Array.from({ length: 12 }, (_, i) => {
+          const a = (i * 30) * Math.PI / 180;
+          const bright = i % 3 === 0;
+          return (
+            <line key={i}
+              x1={20 + Math.cos(a) * (bright ? 3.5 : 4.5)}
+              y1={20 + Math.sin(a) * (bright ? 3.5 : 4.5)}
+              x2={20 + Math.cos(a) * (bright ? 14  : 12.5)}
+              y2={20 + Math.sin(a) * (bright ? 14  : 12.5)}
+              stroke={bright ? 'rgba(216,180,255,0.80)' : 'rgba(160,100,255,0.38)'}
+              strokeWidth={bright ? '1.0' : '0.55'}
+            />
+          );
+        })}
+
+        {/* Hexagram — 2 overlapping triangles (Gojo's cursed seal) */}
+        {[0, 60].map((offset, ti) => {
+          const pts = [0, 1, 2].map(i => {
+            const a = ((i * 120) + offset - 90) * Math.PI / 180;
+            return `${20 + Math.cos(a) * 8.5},${20 + Math.sin(a) * 8.5}`;
+          }).join(' ');
+          return (
+            <polygon key={ti} points={pts}
+              fill="none"
+              stroke={ti === 0 ? 'rgba(196,130,255,0.40)' : 'rgba(168,90,255,0.32)'}
+              strokeWidth="0.75"
+              strokeLinejoin="round"
+            />
+          );
+        })}
+
+        {/* Outer glow halo for core */}
+        <circle cx="20" cy="20" r="6" fill="url(#voidCoreGlow)" />
+
+        {/* Core eye — radial gradient from white → purple → transparent */}
+        <circle cx="20" cy="20" r="4.8" fill="url(#voidCore)" />
+
+        {/* Singular white pupil — the point of Infinity */}
+        <circle cx="20" cy="20" r="1.8" fill="white" fillOpacity="0.98" />
+      </svg>
+
+      {/* Label */}
+      <span className="bdo-domain-label">DOMAIN</span>
+    </button>
+  );
+};
+
 // ── Custom Arcane Line-Icon Set (replaces generic emoji for hotbar/sigils) ──
 const ArcaneIcon = ({ type, size = 22, style, className }) => {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', style: { verticalAlign: 'middle', flexShrink: 0, ...style }, className };
@@ -489,6 +657,7 @@ const ArcaneIcon = ({ type, size = 22, style, className }) => {
 // lookup is the actual lag source. Vector shapes are nearly free by
 // comparison and stay crisp at any zoom.
 const DEBUFF_ICON_COLORS = {
+  domain: '#a855f7', // Domain Expansion (Infinite Void)
   burn:   '#fb923c', // Arcane Burn (was 💥)
   slow:   '#67e8f9', // Temporal Slow (was ❄️)
   stun:   '#38bdf8', // Stunned (was 💫)
@@ -505,6 +674,32 @@ function drawDebuffIcon(ctx, type, cx, cy, s) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.4;
   switch (type) {
+    case 'domain': {
+      // Mini Infinite Void sigil — 2 dashed rings + 6 spokes + bright core
+      ctx.lineWidth = 0.9;
+      // Outer broken ring
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.95, 0, Math.PI * 2); ctx.stroke();
+      // Mid ring
+      ctx.setLineDash([1.5, 1.5]);
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.6, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      // 6 radial spokes
+      ctx.lineWidth = 0.8;
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * s * 0.25, Math.sin(a) * s * 0.25);
+        ctx.lineTo(Math.cos(a) * s * 0.80, Math.sin(a) * s * 0.80);
+        ctx.stroke();
+      }
+      // Bright void core
+      ctx.shadowBlur = 4;
+      ctx.shadowColor = color;
+      ctx.beginPath(); ctx.arc(0, 0, s * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      break;
+    }
     case 'burn': // teardrop flame
       ctx.beginPath();
       ctx.moveTo(0, -s);
@@ -1503,7 +1698,7 @@ const focusStyles = `
 
   .rpg-buff-container {
     position: absolute;
-    bottom: calc(80px * var(--ui-scale, 1));
+    bottom: calc(100px * var(--ui-scale, 1));
     left: 50%;
     
     /* ✅ DITO ANG BABAGUHIN: Nagdagdag tayo ng calc() at * 0.8 sa loob ng scale */
@@ -1584,6 +1779,26 @@ const focusStyles = `
   }
   .rune-buff-low .rune-buff-core { animation: rune-core-pulse-urgent 0.6s ease-in-out infinite; }
   .rune-buff-low .rune-buff-timer { animation: rune-timer-flash 0.6s ease-in-out infinite; }
+
+  /* 🌌 Domain Expansion buff — unique void identity */
+  .rune-buff-domain {
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, rgba(80,20,160,0.55) 0%, rgba(10,0,30,0.92) 70%);
+  }
+  .rune-buff-domain .rune-buff-ring {
+    /* SVG itself stays still — only the inner group spins */
+  }
+  .domain-buff-spin {
+    transform-origin: 20px 20px; /* center of 40x40 viewBox */
+    animation: domain-buff-ring-spin 8s linear infinite;
+  }
+  @keyframes domain-buff-ring-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  /* Override low-time urgency for domain — same as other buffs */
+  .rune-buff-domain.rune-buff-low .rune-buff-core { animation: rune-core-pulse-urgent 0.6s ease-in-out infinite; }
+  .rune-buff-domain.rune-buff-low .rune-buff-timer { animation: rune-timer-flash 0.6s ease-in-out infinite; }
 
   @keyframes rune-orbit {
     from { transform: rotate(0deg); }
@@ -2024,6 +2239,181 @@ const focusStyles = `
     z-index: 2;
   }
   .bdo-ult-btn svg { filter: drop-shadow(0 0 5px currentColor); }
+
+  /* ═══════════════════════════════════════════════════════
+     🌌 DOMAIN EXPANSION BUTTON — Gojo Infinite Void
+     Same 72px base as ultimate buttons, unique identity
+  ═══════════════════════════════════════════════════════ */
+  .bdo-domain-btn {
+    width: 72px; height: 72px;
+    position: absolute;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    touch-action: none;
+    pointer-events: auto;
+    z-index: 46;
+    overflow: visible; /* same as ult buttons — key badge sits inside naturally */
+    /* Void core */
+    background:
+      radial-gradient(circle at 38% 32%, rgba(100,40,200,0.18) 0%, transparent 55%),
+      radial-gradient(circle at 62% 68%, rgba(60,10,130,0.14) 0%, transparent 50%),
+      radial-gradient(circle, #0e0420 0%, #04000e 50%, #010006 100%);
+    border: 3px solid #3b0764;
+    border-top-color:   #c084fc;
+    border-right-color: #7c3aed;
+    border-bottom-color:#1e0540;
+    box-shadow:
+      0 0 0 1px rgba(100,30,200,0.45),
+      0 0 18px rgba(130,50,255,0.55),
+      0 0 40px rgba(80,15,180,0.32),
+      0 0 70px rgba(50,0,120,0.20),
+      inset 0 0 18px rgba(0,0,10,0.95),
+      inset 0 1px 0 rgba(210,160,255,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.60);
+    /* Reset default <button> styles */
+    -webkit-appearance: none;
+    appearance: none;
+    padding: 0;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    line-height: 1;
+    transition: transform 0.12s ease, box-shadow 0.20s ease;
+  }
+
+  /* Pseudo rotating outer ring — Layer 1 */
+  .bdo-domain-btn::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    border-top-color:   rgba(180,100,255,0.70);
+    border-right-color: rgba(120,60,220,0.40);
+    border-bottom-color:rgba(80,20,160,0.20);
+    animation: domain-spin-cw 3.2s linear infinite;
+    pointer-events: none;
+  }
+  /* Pseudo counter-rotating inner ring — Layer 2 */
+  .bdo-domain-btn::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    border-top-color:   rgba(220,160,255,0.50);
+    border-left-color:  rgba(140,70,255,0.30);
+    animation: domain-spin-ccw 2.1s linear infinite;
+    pointer-events: none;
+  }
+
+  /* Hover — intensity surge */
+  .bdo-domain-btn:hover {
+    transform: scale(1.08);
+    box-shadow:
+      0 0 0 1px rgba(160,80,255,0.65),
+      0 0 28px rgba(180,100,255,0.80),
+      0 0 60px rgba(120,40,255,0.55),
+      0 0 100px rgba(70,10,200,0.30),
+      inset 0 0 24px rgba(10,0,30,0.90),
+      inset 0 1px 0 rgba(230,190,255,0.25);
+  }
+  /* Press */
+  .bdo-domain-btn:active { transform: scale(0.88); }
+
+  /* Ready pulse — breathes when gauge is full */
+  .bdo-domain-btn.ready {
+    animation: domain-ready-pulse 1.0s ease-in-out infinite alternate;
+  }
+  @keyframes domain-ready-pulse {
+    from {
+      box-shadow:
+        0 0 0 1px rgba(100,30,200,0.45),
+        0 0 18px rgba(130,50,255,0.55),
+        0 0 40px rgba(80,15,180,0.32),
+        0 0 70px rgba(50,0,120,0.20),
+        inset 0 0 18px rgba(0,0,10,0.95),
+        inset 0 1px 0 rgba(210,160,255,0.18);
+    }
+    to {
+      box-shadow:
+        0 0 0 2px rgba(200,120,255,0.65),
+        0 0 36px rgba(200,100,255,0.90),
+        0 0 70px rgba(150,50,255,0.65),
+        0 0 110px rgba(100,20,255,0.35),
+        inset 0 0 30px rgba(30,5,70,0.80),
+        inset 0 1px 0 rgba(240,210,255,0.30);
+    }
+  }
+
+  /* Spinning ring keyframes */
+  @keyframes domain-spin-cw  { to { transform: rotate(360deg);  } }
+  @keyframes domain-spin-ccw { to { transform: rotate(-360deg); } }
+
+  /* SVG icon animation — slow pulse + subtle rotation */
+  .bdo-domain-btn .domain-icon {
+    animation: domain-icon-breathe 2.2s ease-in-out infinite alternate;
+    filter: drop-shadow(0 0 7px rgba(180,100,255,0.95)) drop-shadow(0 0 2px #fff);
+  }
+  @keyframes domain-icon-breathe {
+    from { opacity: 0.80; transform: scale(0.94) rotate(0deg);   filter: drop-shadow(0 0 5px rgba(160,80,255,0.80)) drop-shadow(0 0 1px #fff); }
+    to   { opacity: 1.00; transform: scale(1.06) rotate(8deg);   filter: drop-shadow(0 0 12px rgba(220,150,255,1.00)) drop-shadow(0 0 4px #fff); }
+  }
+
+  /* Label */
+  .bdo-domain-label {
+    font-size: 0.52rem;
+    font-family: 'Cinzel', 'Georgia', serif;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    margin-top: 2px;
+    color: #d8b4fe;
+    text-shadow: 0 0 10px rgba(180,100,255,1), 0 0 3px rgba(255,255,255,0.6);
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+    animation: domain-label-pulse 1.0s ease-in-out infinite alternate;
+  }
+  @keyframes domain-label-pulse {
+    from { opacity: 0.75; text-shadow: 0 0 6px rgba(160,80,255,0.80); }
+    to   { opacity: 1.00; text-shadow: 0 0 14px rgba(220,150,255,1.00), 0 0 4px #fff; }
+  }
+
+  /* Keybind badge — same style and position as bdo-ult-key (inside circle, top-left) */
+  .bdo-domain-key {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    font-size: 0.52rem;
+    padding: 1px 3px;
+    font-family: monospace;
+    font-weight: 700;
+    line-height: 1;
+    pointer-events: none;
+    background: rgba(0, 0, 0, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    color: rgba(255, 255, 255, 0.70);
+    letter-spacing: 0;
+    z-index: 10;
+  }
+
+  /* Mobile */
+  @media (max-width: 840px), (max-width: 932px) and (orientation: landscape) {
+    .bdo-domain-btn {
+      width: 46px !important;
+      height: 46px !important;
+      border-width: 1.5px !important;
+    }
+    .bdo-domain-label { font-size: 0.36rem !important; margin-top: 1px !important; }
+    .bdo-domain-key   { display: none !important; }
+  }
 
   /* 📱 Mobile — ultimates shrink so the left stack fits on small screens.
      Kasama na rin ang landscape big-phones (932px), tugma sa JS isMobileLayout. */
@@ -2794,7 +3184,7 @@ const focusStyles = `
        manatiling magkasundo ang spacing sa HP bar kahit sa landscape mode. */
     .rpg-buff-container {
       top: auto !important;
-      bottom: calc(85px * var(--ui-scale, 1)) !important;
+      bottom: calc(100px * var(--ui-scale, 1)) !important;
     }
 
     @supports (-webkit-touch-callout: none) {
@@ -2806,12 +3196,9 @@ const focusStyles = `
         top: 56px !important;
       }
 
-      /* ✅ Proporsyonal na rin sa --ui-scale (dating fixed 95px), para
-         iOS/iPhone notch spacing ay sumusunod pa rin sa parehong unified
-         scale gaya ng ibang platform. */
       .rpg-buff-container {
         top: auto !important;
-        bottom: calc(95px * var(--ui-scale, 1)) !important;
+        bottom: calc(110px * var(--ui-scale, 1)) !important;
       }
     }
 
@@ -3550,6 +3937,8 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   const scoreValueRef = useRef(null);
   const waveValueRef = useRef(null);
   const hpFillRef = useRef(null);
+  const domainFillRef = useRef(null);
+  const domainBtnRef = useRef(null);
   const hpTextRef = useRef(null);
   const xpFillRef = useRef(null);
   const xpTextRef = useRef(null);
@@ -3635,9 +4024,15 @@ export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelU
   };
 
   const [isTouchDevice, setIsTouchDevice] = useState(computeIsTouchDevice);
+  // 🔥 FIX: Ref para ma-access ng render loop ang pinakabagong value nang walang stale closure
+  const isTouchDeviceRef = useRef(computeIsTouchDevice());
 
   useEffect(() => {
-    const checkTouch = () => setIsTouchDevice(computeIsTouchDevice());
+    const checkTouch = () => {
+      const val = computeIsTouchDevice();
+      setIsTouchDevice(val);
+      isTouchDeviceRef.current = val;
+    };
     checkTouch();
     window.addEventListener('resize', checkTouch);
     window.addEventListener('orientationchange', checkTouch);
@@ -3995,7 +4390,12 @@ const engineRef = useRef({
 // 💥 FLOATING COMBAT TEXT HELPER
   const spawnFCT = (eng, x, y, amount, type, isCrit = false) => {
     if (!eng.floatingTexts) eng.floatingTexts = [];
-    if (eng.floatingTexts.length > 100) { eng.floatingTexts[0] = eng.floatingTexts[eng.floatingTexts.length - 1]; eng.floatingTexts.pop(); } // ⚡ O(1) swap-pop instead of O(n) shift
+    // ⚡ PERF: Hard cap at 45 — ctx.fillText() is one of the most expensive Canvas ops
+    // (triggers font rasterization each call). Older behaviour was swap-pop at 100 but
+    // still allowed 100 simultaneous text draws = ~100 fillText calls/frame during Arcane
+    // Instinct burst. Capping at 45 and simply skipping new ones keeps the most impactful
+    // (earliest) texts visible while eliminating the expensive tail.
+    if (eng.floatingTexts.length >= 45) return;
     
     let textDisplay = Math.ceil(amount).toString(); // Gawing string agad yung number
     
@@ -5241,7 +5641,10 @@ useEffect(() => {
       potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
       name: netRef.current?.isHost ? playerName : allyName,
       inventory: [],
-      equipment: { wand: null, robe: null, boots: null }
+      equipment: { wand: null, robe: null, boots: null },
+      arcaneGauge: 0,       // 0 to 100%
+      domainActive: false,
+      domainDuration: 0,
       };
 
       eng.p1Target = { x: eng.p.x, y: eng.p.y, hp: 100, maxHp: 100, inv: 0, dead: false };
@@ -5251,6 +5654,9 @@ useEffect(() => {
         eng.p2 = { x: W * 2 / 3, y: H / 2, r: 16, speed: 200, hp: 100, maxHp: 100, xp: 0, xpNext: 80, level: 1, shootCd: 0, shootRate: 0.6, multiShot: 1, inv: 0, dead: false, dmg: 0,
         hasContinued: false,
         chatBubble: null, skills: initSkills(), potBuffs: { power: 0, defense: 0, crit: 0, regen: 0, xpBoost: 0 },
+        arcaneGauge: 0,       // 0 to 100%
+        domainActive: false,
+        domainDuration: 0,
         name: netRef.current?.isHost ? allyName : playerName
         };
         eng.p2Target = { x: eng.p2.x, y: H / 2, hp: 100, maxHp: 100, inv: 0, dead: false };
@@ -5996,7 +6402,48 @@ useEffect(() => {
 
     eng.staticBg = sbc;
 
-    // ── 3. AMBIENT PARTICLES: 4-tier void ecosystem ────────────────────
+    // ⚡ PERF: Pre-bake all static background gradients once here (W/H fixed after canvas init).
+    // These 8 gradients were being recreated every frame = ~8 gradient allocations × 60fps.
+    // They never change (same W, H, same color stops) so cache them on eng._bgGrads.
+    const _bgBakeCanvas = document.createElement('canvas');
+    _bgBakeCanvas.width = W; _bgBakeCanvas.height = H;
+    const _bgBakeCtx = _bgBakeCanvas.getContext('2d');
+    // bg1 — warm amber-gold torchlight
+    const _bgInit1 = _bgBakeCtx.createRadialGradient(W*0.5, H*(-0.15), 0, W*0.5, H*(-0.15), W*0.80);
+    _bgInit1.addColorStop(0,   'rgba(210,175,95,0.16)'); _bgInit1.addColorStop(0.4, 'rgba(140,110,55,0.07)');
+    _bgInit1.addColorStop(0.75,'rgba(60,44,20,0.03)');   _bgInit1.addColorStop(1,   'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInit1; _bgBakeCtx.fillRect(0, 0, W, H);
+    // bg2 — cool arcane blue-purple from bottom
+    const _bgInit2 = _bgBakeCtx.createRadialGradient(W*0.50, H*1.10, 0, W*0.50, H*1.10, W*0.65);
+    _bgInit2.addColorStop(0,   'rgba(55,18,115,0.20)'); _bgInit2.addColorStop(0.5, 'rgba(28,7,65,0.09)');
+    _bgInit2.addColorStop(1,   'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInit2; _bgBakeCtx.fillRect(0, 0, W, H);
+    // bg3 — side shadow corner
+    const _bgInit3 = _bgBakeCtx.createRadialGradient(W*0.72, H*0.60, 0, W*0.72, H*0.60, W*0.45);
+    _bgInit3.addColorStop(0,   'rgba(20,8,40,0.14)'); _bgInit3.addColorStop(1,   'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInit3; _bgBakeCtx.fillRect(0, 0, W, H);
+    // moonG — soft wide moonlight cone
+    const _bgInitMoon = _bgBakeCtx.createRadialGradient(W*0.50, -H*0.05, 0, W*0.50, H*0.55, W*0.62);
+    _bgInitMoon.addColorStop(0,   'rgba(220,205,170,0.16)'); _bgInitMoon.addColorStop(0.30,'rgba(185,165,120,0.09)');
+    _bgInitMoon.addColorStop(0.60,'rgba(100,85,60,0.04)');   _bgInitMoon.addColorStop(1,   'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInitMoon; _bgBakeCtx.fillRect(0, 0, W, H);
+    // shaftG — narrow moonlight shaft
+    const _bgInitShaft = _bgBakeCtx.createRadialGradient(W*0.50, 0, 0, W*0.50, H*0.35, W*0.22);
+    _bgInitShaft.addColorStop(0,   'rgba(240,225,185,0.13)'); _bgInitShaft.addColorStop(0.5, 'rgba(190,170,120,0.05)');
+    _bgInitShaft.addColorStop(1,   'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInitShaft; _bgBakeCtx.fillRect(W*0.20, 0, W*0.60, H*0.65);
+    // shadowG — bottom floor falloff
+    const _bgInitShadow = _bgBakeCtx.createLinearGradient(0, H*0.50, 0, H);
+    _bgInitShadow.addColorStop(0, 'rgba(0,0,0,0)'); _bgInitShadow.addColorStop(1, 'rgba(0,0,0,0.35)');
+    _bgBakeCtx.fillStyle = _bgInitShadow; _bgBakeCtx.fillRect(0, H*0.50, W, H*0.50);
+    // left/right edge shadows
+    const _bgInitLeft = _bgBakeCtx.createLinearGradient(0, 0, W*0.22, 0);
+    _bgInitLeft.addColorStop(0, 'rgba(0,0,0,0.28)'); _bgInitLeft.addColorStop(1, 'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInitLeft; _bgBakeCtx.fillRect(0, 0, W*0.22, H);
+    const _bgInitRight = _bgBakeCtx.createLinearGradient(W, 0, W*0.78, 0);
+    _bgInitRight.addColorStop(0, 'rgba(0,0,0,0.28)'); _bgInitRight.addColorStop(1, 'rgba(0,0,0,0)');
+    _bgBakeCtx.fillStyle = _bgInitRight; _bgBakeCtx.fillRect(W*0.78, 0, W*0.22, H);
+    eng._bgGrads = _bgBakeCanvas;
 
     // Tier A — small drifting rune sparks (warm gold + purple hybrid)
     const ambs_sparks = Array.from({ length: 36 }, () => ({
@@ -6037,45 +6484,46 @@ useEffect(() => {
     }));
 
     // Tier D — rune ember cross-sparks (gold + purple mix)
-const ambs_embers = Array.from({ length: 32 }, () => ({ // dati 14, ngayon 32
+    // ⚡ PERF: Reduced 32→18 — cut canvas state changes per frame by ~40%
+    // while keeping the visual density (each ember is larger & brighter)
+const ambs_embers = Array.from({ length: 18 }, () => ({
   kind: 'ember',
   x: Math.random() * W,
   y: Math.random() * H,
-  r: Math.random() * 3.5 + 2.0,        // dati 2.5+1.5, mas malalaki
-  vx: (Math.random() - 0.5) * 4,       // konting hina ng horizontal drift
-  vy: -(Math.random() * 7 + 2),        // mas mabagal paakyat para mas matagal kita
-  a: Math.random() * 0.4 + 0.4,        // dati 0.45+0.15 (~0.15–0.6), ngayon ~0.4–0.8
+  r: Math.random() * 3.5 + 2.0,
+  vx: (Math.random() - 0.5) * 4,
+  vy: -(Math.random() * 7 + 2),
+  a: Math.random() * 0.4 + 0.4,
   t: Math.random(),
   rot: Math.random() * Math.PI,
   c: ['#fbbf24','#a78bfa','#f59e0b','#c4b5fd','#fcd34d','#7c3aed'][Math.floor(Math.random() * 6)],
 }));
 
-    // Tier E — fine drifting dust motes (ground-haze, barely visible until
-    // a light source — moonlight shaft or the player's own glow — passes
-    // over them, which is what actually sells "dusty ancient dungeon air")
-const ambs_dust = Array.from({ length: 110 }, () => ({ // dati 55, doble na
+    // Tier E — fine drifting dust motes
+    // ⚡ PERF: Reduced 110→50 — biggest ambient savings; dust is near-invisible
+    // during combat anyway (covered by spell VFX), so halving it costs nothing visually
+const ambs_dust = Array.from({ length: 50 }, () => ({
   kind: 'dust',
   x: Math.random() * W,
   y: Math.random() * H,
-  r: Math.random() * 1.8 + 0.8,       // dati 1.0+0.4, mas malalaki ng konti
-  vx: (Math.random() - 0.5) * 5,      // mas mabagal, hindi agad nagdi-disperse
+  r: Math.random() * 1.8 + 0.8,
+  vx: (Math.random() - 0.5) * 5,
   vy: (Math.random() - 0.5) * 4,
-  a: Math.random() * 0.3 + 0.25,      // dati 0.16+0.04, ngayon ~0.25–0.55
+  a: Math.random() * 0.3 + 0.25,
   phase: Math.random() * Math.PI * 2,
 }));
 
-    // Tier F — soft drifting smoke/fog clouds. Kept deliberately sparse and
-    // low-opacity (just enough volume to add depth/atmosphere) — large, slow,
-    // ash-grey blobs that gently roll across the floor without ever reading
-    // as a flat fog layer or hiding the floor detail underneath.
-    const ambs_smoke = Array.from({ length: 16 }, () => ({
+    // Tier F — soft drifting smoke/fog clouds.
+    // ⚡ PERF: Reduced 16→8 — each smoke cloud draws 3 radial gradients per frame;
+    // halving count saves ~24 gradient fills/frame with no visible atmosphere change
+    const ambs_smoke = Array.from({ length: 8 }, () => ({
   kind: 'smoke',
   x: Math.random() * W,
   y: Math.random() * H,
-  r: Math.random() * 80 + 70,          // mas malaki yung clouds
+  r: Math.random() * 80 + 70,
   vx: (Math.random() - 0.5) * 5,
   vy: (Math.random() - 0.5) * 3,
-  a: Math.random() * 0.07 + 0.05,      // mas mataas base opacity
+  a: Math.random() * 0.07 + 0.05,
   phase: Math.random() * Math.PI * 2,
   driftSeed: Math.random() * 100,
 }));
@@ -6086,6 +6534,16 @@ const ambs_dust = Array.from({ length: 110 }, () => ({ // dati 55, doble na
     let renderAnimId;
     let syncTimer = 0;
     let lastReactSync = 0;
+    // ⚡ PERF: Equipment stat cache — persisted across frames, reset only on equip/unequip
+    let _cachedEquipRef = null;
+    let _cachedEquipBonuses = { atk: 0, rate: 0, crit: 0, def: 0, hp: 0, speed: 0, lifesteal: 0 };
+    // ⚡ PERF: Shared wall-clock time — written by worker.onmessage each physics tick,
+    // read by renderLoop (rAF). Replaces per-enemy Date.now() calls in both loops.
+    // Must be declared here (outer scope) so both callbacks share the same reference.
+    let _frameNow = Date.now();
+    // ⚡ PERF: Skills snapshot for change detection — avoids unconditional React re-render
+    // every 150ms when no skill state has actually changed.
+    let _lastSkillsSnapshot = null;
 
       const rollUpgradeOptions = (playerObj) => {
       // ✅ Nilagay dito ang 4 na upgrades para laging available (walang cap)
@@ -6137,6 +6595,9 @@ const ambs_dust = Array.from({ length: 110 }, () => ({ // dati 55, doble na
       const ts = performance.now();
       const dt = Math.min((ts - lastTime) / 1000, 0.05);
       lastTime = ts;
+      // ⚡ PERF: Update shared _frameNow (declared in outer scope so renderLoop can also read it).
+      // Replaces scattered Date.now() calls inside per-enemy physics and render loops.
+      _frameNow = Date.now();
 
       const net = netRef.current || {};
       const isCoopActive = Boolean(net.channel);
@@ -6295,9 +6756,10 @@ if (eng.gameStarted) {
 
     if (!isCoopActive || isHost) {
 
-// 🔥 MEMORY PROTECTION: Bawal mag-spawn ng normal minion kung lagpas 40 na ang kalaban sa screen
-          // ⚡ PERF: Mobile-aware spawn cap — prevents enemy count from overwhelming GPU on small devices
-          const _mobileSpawnCap = window.innerWidth <= 768 ? 22 : 40;
+          // ⚡ PERF: Mobile cap reduced 22→14 — at 14 enemies with glow/debuff icons
+          // the GPU stays within budget; 22 caused consistent frame drops on mid-range phones.
+          // Desktop cap reduced 40→38 to give 2 slots of headroom for boss minion spawns.
+          const _mobileSpawnCap = window.innerWidth <= 768 ? 14 : 38;
           if (eng.spawnT >= eng.spawnRate && eng.enemies.length < _mobileSpawnCap) {
               eng.spawnT = 0;
               
@@ -6565,13 +7027,13 @@ if (eng.tornados) {
     t.x += (t.vx || 0) * dt; 
     t.y += (t.vy || 0) * dt;
 
-    // 💥 OPTIMIZED FLARE INFERNO DECALS
-    if (Math.random() < 0.15) { 
+    // 💥 FLARE INFERNO DECALS
+    // ⚡ PERF: spawn chance 0.15→0.06 (saves ~60% decal spawns per tornado)
+    // and hard cap lowered 250→80 (250 decals × 3 draw ops each = ~750 Canvas calls/frame)
+    if (Math.random() < 0.06) { 
       if (!eng.decals) eng.decals = [];
-      // ✅ HARD CAP: Limitahan ang decals sa screen para hindi ma-overwhelm ang memory
-      if (eng.decals.length < 250) {
+      if (eng.decals.length < 80) {
         eng.decals.push({ 
-          // ✅ Gawaing Integer (Math.floor) para mas mabilis i-render ng HTML5 Canvas
           x: Math.floor(t.x + (Math.random() - 0.5) * 20), 
           y: Math.floor(t.y + (Math.random() - 0.5) * 20), 
           r: Math.floor(25 + Math.random() * 15), 
@@ -6646,6 +7108,12 @@ if (eng.tornados) {
             const waveDps = activeWaves ? (dynamicBaseDmg * 1.5) + (casterDmg * 20) : 0;
             const iceDpsBase = activeIceStorms ? 800 + ((eng.wave || 1) * 120) + ((eng.p?.dmg || 0) * 4) : 0;
 
+            // ⚡ PERF: Accumulate recordArcaneDamage per-source instead of calling
+            // window.recordArcaneDamage() once per enemy per hazard per frame.
+            // At 38 enemies × 3 hazards = up to 114 window property lookups + function
+            // calls per frame. Flush once after the loop instead.
+            let _accFlare = 0, _accZephyr = 0, _accWave = 0, _accIce = 0, _accFrost = 0;
+
             for (const e of eng.enemies) {
               if (!e) continue;
 
@@ -6660,7 +7128,8 @@ if (eng.tornados) {
                   if (distSq < (maxDist * maxDist)) {
                     const tornadoDps = t.isFamiliar ? t.dmg : (1000 + ((eng.wave || 1) * 100) + ((eng.boltDmg || 0) + (eng.p?.dmg || 0)) * 10);
                     e.hp -= tornadoDps * dt;
-                    window.recordArcaneDamage(t.isFamiliar ? 'Zephyr Falcon' : 'Flare Inferno', tornadoDps * dt);
+                    // ⚡ accumulate instead of immediate window call
+                    if (t.isFamiliar) _accZephyr += tornadoDps * dt; else _accFlare += tornadoDps * dt;
                     e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.5);
                     if (Math.random() < 0.08) {
                       e.flash = 0.5;
@@ -6677,7 +7146,7 @@ if (eng.tornados) {
                   const wWidth = waveObj.width || 100;
                   if (e.x > waveObj.x - wWidth / 2 && e.x < waveObj.x + wWidth / 2) {
                     e.hp -= waveDps * dt;
-                    window.recordArcaneDamage('Tidal Wave', waveDps * dt);
+                    _accWave += waveDps * dt; // ⚡ accumulate
                     if (!e.boss) e.x += ((waveObj.vx || 0) * 0.4) * dt;
                     e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 2.0);
                     if (Math.random() < 0.15) {
@@ -6692,12 +7161,11 @@ if (eng.tornados) {
               // --- ICE STORM(S) ---
               if (activeIceStorms) {
                 for (const s of activeIceStorms) {
-                  // ⚡ PERF: squared-distance threshold check (no sqrt needed).
                   const dxIS = e.x - s.x, dyIS = e.y - s.y, rSumIS = s.radius + e.r;
                   if ((dxIS * dxIS + dyIS * dyIS) < (rSumIS * rSumIS)) {
                     const iceDps = s.isFamiliar ? s.dmg : iceDpsBase;
                     e.hp -= iceDps * dt;
-                    window.recordArcaneDamage(s.isFamiliar ? 'Frost Sprite' : 'Ice Storm', iceDps * dt);
+                    if (s.isFamiliar) _accFrost += iceDps * dt; else _accIce += iceDps * dt; // ⚡ accumulate
                     e.stigmaTime = 1.0;
                     e.temporalSlowTime = Math.max(e.temporalSlowTime, 1.0);
                     if (Math.random() < 0.1) {
@@ -6709,6 +7177,12 @@ if (eng.tornados) {
                 }
               }
             }
+            // ⚡ PERF: Single flush per hazard source per frame (was per-enemy per frame)
+            if (_accFlare > 0)  window.recordArcaneDamage('Flare Inferno', _accFlare);
+            if (_accZephyr > 0) window.recordArcaneDamage('Zephyr Falcon', _accZephyr);
+            if (_accWave > 0)   window.recordArcaneDamage('Tidal Wave', _accWave);
+            if (_accIce > 0)    window.recordArcaneDamage('Ice Storm', _accIce);
+            if (_accFrost > 0)  window.recordArcaneDamage('Frost Sprite', _accFrost);
           }
         }
 
@@ -6756,46 +7230,60 @@ if (eng.tornados) {
               if (!playerObj.skills.arcaneInstinct.burstTick) playerObj.skills.arcaneInstinct.burstTick = 0;
               playerObj.skills.arcaneInstinct.burstTick += dt;
 
-              if (playerObj.skills.arcaneInstinct.burstTick >= 0.35) { // Faster burst tick!
+              if (playerObj.skills.arcaneInstinct.burstTick >= 0.45) { // ⚡ PERF: 0.35→0.45 (saves ~22% burst frequency)
                 playerObj.skills.arcaneInstinct.burstTick = 0;
                 
-                // RAIN STARS: Spawn 4 Shooting Stars everywhere!
-                for (let k = 0; k < 4; k++) {
-                  let targetX = playerObj.x + (Math.random() - 0.5) * 600; // Malapad na sakop
+                // ⚡ PERF: Reduced burst counts — still feels powerful, less GC/GPU pressure.
+                // Mobile gets lower counts since it's already GPU-constrained.
+                const _isMobileBurst = window.innerWidth <= 768;
+                const _burstStarCount = _isMobileBurst ? 2 : 3;   // was 4 on all platforms
+                const _burstSlashCount = _isMobileBurst ? 1 : 2;  // was 3 on all platforms
+
+                // RAIN STARS
+                for (let k = 0; k < _burstStarCount; k++) {
+                  let targetX = playerObj.x + (Math.random() - 0.5) * 600;
                   let targetY = playerObj.y + (Math.random() - 0.5) * 600;
                   if (eng.enemies.length > 0 && Math.random() > 0.3) {
                     const randEnemy = eng.enemies[Math.floor(Math.random() * eng.enemies.length)];
                     targetX = randEnemy.x; targetY = randEnemy.y;
                   }
                   if (!eng.stars) eng.stars = [];
-                  eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 400, targetY: targetY, progress: 0, radius: 95, p2: playerObj === eng.p2 });
+                  // ⚡ PERF: Hard cap — prevents star pile-up on slow frames
+                  if (eng.stars.length < 18) {
+                    eng.stars.push({ x: targetX, y: targetY, currentY: targetY - 400, targetY: targetY, progress: 0, radius: 95, p2: playerObj === eng.p2 });
+                  }
                 }
 
-                // RAIN SLASHES: Spawn 3 Vacuum Slashes in random directions!
-                for (let k = 0; k < 3; k++) {
+                // RAIN SLASHES
+                for (let k = 0; k < _burstSlashCount; k++) {
                    let angle = Math.random() * Math.PI * 2;
                    if (!eng.slashes) eng.slashes = [];
-                   eng.slashes.push({ x: playerObj.x, y: playerObj.y, vx: Math.cos(angle) * 450, vy: Math.sin(angle) * 450, angle: angle, life: 1.5, hits: new Set(), p2: playerObj === eng.p2 });
+                   // ⚡ PERF: Hard cap on simultaneous slashes
+                   if (eng.slashes.length < 10) {
+                     eng.slashes.push({ x: playerObj.x, y: playerObj.y, vx: Math.cos(angle) * 450, vy: Math.sin(angle) * 450, angle: angle, life: 1.5, hits: new Set(), p2: playerObj === eng.p2 });
+                   }
                 }
 
-                // RANDOM CUBE BASHES sa buong screen
+                // RANDOM CUBE BASHES — skip every other tick on mobile to halve frequency
                 if (!eng.cubeBashes) eng.cubeBashes = [];
-                let cbX = playerObj.x + (Math.random()-0.5)*400;
-                let cbY = playerObj.y + (Math.random()-0.5)*400;
-                eng.cubeBashes.push({ x: cbX, y: cbY, radius: 10, maxRadius: 160, speed: 450 });
-                
-                // 🔥 SCALING: Arcane Instinct Cube Bash
-                let cbDmg = 100 + ((eng.wave || 1) * 40) + ((playerObj.dmg || 0) * 1.5);
-                cbDmg *= 2.0; // Instinct Multiplier
-                for (const enemy of eng.enemies) {
-                  // ⚡ PERF: squared-distance threshold check (no sqrt needed).
-                  const dxCB = enemy.x - cbX, dyCB = enemy.y - cbY;
-                  if ((dxCB * dxCB + dyCB * dyCB) <= 25600) { // 160*160
-                    enemy.stunnedTime = 1.6;
-                    enemy.hp -= cbDmg;
-                    window.recordArcaneDamage('Cube Bash', cbDmg);
-                    spawnFCT(eng, enemy.x, enemy.y, cbDmg, 'damage', false); // 💥 ADDED FCT
-                    if (enemy.hp <= 0) enemy.deadTrigger = true;
+                if (!_isMobileBurst || Math.random() > 0.5) {
+                  let cbX = playerObj.x + (Math.random()-0.5)*400;
+                  let cbY = playerObj.y + (Math.random()-0.5)*400;
+                  eng.cubeBashes.push({ x: cbX, y: cbY, radius: 10, maxRadius: 160, speed: 450 });
+                  
+                  // 🔥 SCALING: Arcane Instinct Cube Bash
+                  let cbDmg = 100 + ((eng.wave || 1) * 40) + ((playerObj.dmg || 0) * 1.5);
+                  cbDmg *= 2.0; // Instinct Multiplier
+                  for (const enemy of eng.enemies) {
+                    // ⚡ PERF: squared-distance threshold check (no sqrt needed).
+                    const dxCB = enemy.x - cbX, dyCB = enemy.y - cbY;
+                    if ((dxCB * dxCB + dyCB * dyCB) <= 25600) { // 160*160
+                      enemy.stunnedTime = 1.6;
+                      enemy.hp -= cbDmg;
+                      window.recordArcaneDamage('Cube Bash', cbDmg);
+                      spawnFCT(eng, enemy.x, enemy.y, cbDmg, 'damage', false); // 💥 ADDED FCT
+                      if (enemy.hp <= 0) enemy.deadTrigger = true;
+                    }
                   }
                 }
               } // <--- Dulo ng Arcane Instinct burstTick block
@@ -6845,8 +7333,10 @@ if (eng.tornados) {
                 let minDist = Infinity;
                 for (const e of eng.enemies) {
                     if (e.y < -150 || e.hp <= 0) continue;
-                    let d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y) - (e.r || 15);
-                    if (e.boss) d -= 10000; // 🔥 BOSS MAGNET!
+                    // ⚡ PERF: squared distance — no sqrt needed for nearest-enemy comparison
+                    const _ssdx = e.x - playerObj.x, _ssdy = e.y - playerObj.y;
+                    let d = (_ssdx * _ssdx + _ssdy * _ssdy);
+                    if (e.boss) d -= 100000000; // 🔥 BOSS MAGNET (large squared bias)!
                     if (d < minDist) { minDist = d; targetEnemy = e; }
                 }
                 if (targetEnemy) {
@@ -6869,7 +7359,9 @@ if (eng.tornados) {
               eng.cubeBashes.push({ x: playerObj.x, y: playerObj.y, radius: 10, maxRadius: 135, speed: 260 });
               
               for (const enemy of eng.enemies) {
-                if (Math.hypot(enemy.x - playerObj.x, enemy.y - playerObj.y) <= 135) {
+                // ⚡ PERF: squared-distance (no sqrt — only ordering matters, not actual distance)
+                const _cxd = enemy.x - playerObj.x, _cyd = enemy.y - playerObj.y;
+                if ((_cxd * _cxd + _cyd * _cyd) <= 18225) { // 135*135
                   enemy.stunnedTime = 1.6;
                   let cbDmg = 100 + ((eng?.wave || 1) * 40) + ((playerObj?.dmg || 0) * 1.5);
                   if (playerObj?.potBuffs?.power > 0) cbDmg *= 1.4;
@@ -6904,9 +7396,9 @@ if (eng.tornados) {
               for (const e of eng.enemies) {
                 const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
                 if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
-                
-                let d = Math.hypot(e.x - playerObj.x, e.y - playerObj.y) - (e.r || 15);
-                
+                // ⚡ PERF: squared distance — nearest enemy only needs ordering, not actual distance
+                const _vsdx = e.x - playerObj.x, _vsdy = e.y - playerObj.y;
+                let d = (_vsdx * _vsdx + _vsdy * _vsdy);
                 if (d < minDist) { minDist = d; targetEnemy = e; }
               }
               let angle = -Math.PI / 2;
@@ -6991,8 +7483,11 @@ if (eng.tornados) {
                             }
                         }
                     }
-                    // Visual explosion (Red blast)
-                    for(let k=0; k<35; k++) {
+                    // Visual explosion
+                    // ⚡ PERF: 35→18 desktop / 10 mobile — AOE can chain rapidly at high waves;
+                    // multiple simultaneous explosions × 35 particles = GC spike.
+                    const _aoePartCount = window.innerWidth <= 768 ? 10 : 18;
+                    for(let k=0; k < _aoePartCount; k++) {
                         const pa = Math.random()*Math.PI*2;
                         const ps = Math.random()*aoe.radius*1.5;
                         spawnParticle(eng, { x: aoe.x, y: aoe.y, vx: Math.cos(pa)*ps, vy: Math.sin(pa)*ps, color: '#ef4444', life: 0.5, ml: 0.5, r: Math.random()*4+2 });
@@ -7097,6 +7592,11 @@ if (eng.tornados) {
                 
                 // Trigger lang kung malaki sa 0.5 ang bawas
                 if (damageDiff > 0.5) { 
+
+                    if (!pObj.domainActive) {
+                      const chargeAmount = (damageDiff / pObj.maxHp) * 200; // 200 multiplier
+                      pObj.arcaneGauge = Math.min(100, (pObj.arcaneGauge || 0) + chargeAmount);
+                    }
                     
                     // 🔥 FIXED: Inalis na dito ang window.arcaneDamageTaken
                     // Para iwas double-count. Dito na lang ang floating text!
@@ -7117,6 +7617,47 @@ if (eng.tornados) {
             pObj.prevHpFrame = pObj.hp; 
           }
         }
+
+        for (const pObj of [eng.p, eng.p2]) {
+          if (!pObj || pObj.dead) continue;
+
+          // 1. TRIGGER THE DOMAIN
+          // I-check kung pinindot yung trigger key (Y key)
+          const isP1Activating = (pObj === eng.p && eng.keys['y'] && pObj.arcaneGauge >= 100);
+          
+          if (isP1Activating && !pObj.domainActive) {
+              pObj.domainActive = true;
+              pObj.domainDuration = 20.0; // 20 Seconds ng matinding buff
+              pObj.arcaneGauge = 0;       // Reset gauge
+              
+              eng.screenShake = 3.0; // Massive Screen Shake
+              pObj.chatBubble = { text: "DOMAIN EXPANSION!!!", life: 3.0 };
+              pObj.inv = 2.0;        // I-frames pagka-activate para di mamatay
+              
+              if (window.ArcaneSoundManager) window.ArcaneSoundManager.playDomain();
+          }
+
+          // 2. DOMAIN ACTIVE LOGIC
+          if (pObj.domainActive) {
+              pObj.domainDuration -= dt;
+              
+              // I-Freeze at sunugin lahat ng kalaban habang active ang domain
+              for (const e of eng.enemies) {
+                  e.temporalSlowTime = Math.max(e.temporalSlowTime || 0, 1.0); // Constant slow
+                  e.arcaneBurnTime = Math.max(e.arcaneBurnTime || 0, 1.0);     // Constant burn
+                  e.domainDebuffTime = Math.max(e.domainDebuffTime || 0, 1.0); // Domain debuff marker
+                  e.flash = 0.2;
+              }
+
+              // Kapag tapos na ang oras ng Domain
+              if (pObj.domainDuration <= 0) {
+                  pObj.domainActive = false;
+                  eng.screenShake = 1.0;
+                  pObj.chatBubble = { text: "Domain Closed.", life: 1.5 };
+                  if (window.ArcaneSoundManager) window.ArcaneSoundManager.stopExpansion();
+              }
+          }
+        }
         
         const localTrackedObj = (isCoopActive && !isHost) ? eng.p2 : eng.p;
         if (localTrackedObj) {
@@ -7130,7 +7671,28 @@ if (eng.tornados) {
             playerLevelRef.current = localTrackedObj.level;
             
             if (localTrackedObj.skills) {
-              setSkillsState({ ...localTrackedObj.skills });
+              // ⚡ PERF: Only re-render if a skill value actually changed.
+              // Spreading unconditionally fired a full React reconciliation every 150ms
+              // even when no skill cd/duration/learned state had moved.
+              // We track the 4 numeric fields that change during gameplay: cd, duration, autoTimer, burstTick.
+              const _sk = localTrackedObj.skills;
+              const _prev = _lastSkillsSnapshot;
+              let _skillsDirty = !_prev;
+              if (!_skillsDirty) {
+                for (const _key in _sk) {
+                  const _a = _sk[_key], _b = _prev[_key];
+                  if (!_b || _a.learned !== _b.learned || _a.enabled !== _b.enabled ||
+                      _a.cd !== _b.cd || _a.duration !== _b.duration ||
+                      _a.autoTimer !== _b.autoTimer || _a.burstTick !== _b.burstTick) {
+                    _skillsDirty = true; break;
+                  }
+                }
+              }
+              if (_skillsDirty) {
+                _lastSkillsSnapshot = { ..._sk };
+                for (const _key in _sk) _lastSkillsSnapshot[_key] = { ..._sk[_key] };
+                setSkillsState({ ..._sk });
+              }
             }
 
             const activeBuffs = [];
@@ -7142,6 +7704,12 @@ if (eng.tornados) {
               if (!peaks[key] || life > peaks[key]) peaks[key] = life;
               return peaks[key];
             };
+
+            // 🌌 DOMAIN EXPANSION BUFF — show timer while active
+            if (localTrackedObj.domainActive && localTrackedObj.domainDuration > 0) {
+              const life = Math.ceil(localTrackedObj.domainDuration);
+              activeBuffs.push({ type: 'domain', name: 'DOMAIN', icon: 'arcaneInstinct', life, peak: trackPeak('domain', 20) });
+            } else { delete peaks.domain; }
 
             if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) {
               const life = Math.ceil(localTrackedObj.skills.berserk.duration);
@@ -7169,15 +7737,27 @@ if (eng.tornados) {
             }
             
             // Check muna natin kung may nagbago bago mag-trigger ng re-render
+            // ⚡ PERF: Fast structural buff comparison — avoids JSON.stringify allocations every 150ms
             setActiveBuffsList(prev => {
-              const prevStr = JSON.stringify(prev);
-              const newStr = JSON.stringify(activeBuffs);
-              return prevStr === newStr ? prev : activeBuffs;
+              if (prev.length !== activeBuffs.length) return activeBuffs;
+              for (let _bi = 0; _bi < prev.length; _bi++) {
+                if (prev[_bi].type !== activeBuffs[_bi].type || prev[_bi].life !== activeBuffs[_bi].life) {
+                  return activeBuffs;
+                }
+              }
+              return prev;
             });
           }
 
           // ⚠️ DIRECT DOM UPDATES: (Hayaan lang ito sa labas dahil mabilis at walang VDOM delay)
-          const equipBonuses = getEquipmentStats(localTrackedObj);
+          // ⚡ PERF: Cache equipment stats — only recompute when the equipment object reference
+          // changes (equip/unequip triggers setInvTrigger which causes a new equipment object).
+          // Previously called getEquipmentStats() every frame (60x/sec) even when nothing changed.
+          if (localTrackedObj.equipment !== _cachedEquipRef) {
+            _cachedEquipRef = localTrackedObj.equipment;
+            _cachedEquipBonuses = getEquipmentStats(localTrackedObj);
+          }
+          const equipBonuses = _cachedEquipBonuses;
 
           let currentAtk = eng.boltDmg + (localTrackedObj.dmg || 0) + equipBonuses.atk;
           if (localTrackedObj.skills?.berserk?.duration > 0 && localTrackedObj.skills?.berserk?.enabled) currentAtk = Math.ceil(currentAtk * 1.5);
@@ -7294,7 +7874,10 @@ if (eng.tornados) {
             sl.y += sl.vy * dt;
             sl.life -= dt;
             if (sl.life <= 0) {
-              eng.slashes.splice(slIdx, 1);
+              // ⚡ PERF: swap-pop instead of splice — slashes are unordered (no z-depth dependency)
+              const _slLast = eng.slashes.length - 1;
+              if (slIdx !== _slLast) eng.slashes[slIdx] = eng.slashes[_slLast];
+              eng.slashes.pop();
               continue;
             }
             
@@ -7383,10 +7966,14 @@ if (eng.tornados) {
                 }
               }
               
-              // 💥 INTENSE PARTICLE BURST (Perfect Circle) PARA MAS FEEL ANG SHOCKWAVE
-              for (let k = 0; k < 24; k++) {
-                const pa = (k / 24) * Math.PI * 2; // Pantay-pantay na hugis bilog
-                const ps = 150 + Math.random() * 50; // Mabilis na sabog
+              // 💥 PARTICLE BURST on star impact
+              // ⚡ PERF: Reduced from 24 to 14 desktop / 8 mobile — during Arcane Instinct
+              // burst (3 stars every 0.45s × 15s = ~100 stars total), each star spawning 24
+              // particles caused massive GC pressure. 14/8 keeps the shockwave feel.
+              const _starParticleCount = window.innerWidth <= 768 ? 8 : 14;
+              for (let k = 0; k < _starParticleCount; k++) {
+                const pa = (k / _starParticleCount) * Math.PI * 2;
+                const ps = 150 + Math.random() * 50;
                 spawnParticle(eng, { 
                     x: star.x, y: star.targetY, 
                     vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
@@ -7394,7 +7981,10 @@ if (eng.tornados) {
                 });
               }
               
-              eng.stars.splice(sIdx, 1);
+              // ⚡ PERF: swap-pop — stars are unordered
+              const _stLast = eng.stars.length - 1;
+              if (sIdx !== _stLast) eng.stars[sIdx] = eng.stars[_stLast];
+              eng.stars.pop();
             }
           }
         }
@@ -7451,7 +8041,10 @@ if (eng.tornados) {
 
             // 🗑️ 4. REMOVE KAPAG TAPOS NA MAG-EXPAND
             if (cb.radius >= cb.maxRadius) {
-              eng.cubeBashes.splice(cbIdx, 1);
+              // ⚡ PERF: swap-pop — cubeBashes are unordered
+              const _cbLast = eng.cubeBashes.length - 1;
+              if (cbIdx !== _cbLast) eng.cubeBashes[cbIdx] = eng.cubeBashes[_cbLast];
+              eng.cubeBashes.pop();
             }
           }
         }
@@ -7578,7 +8171,10 @@ if (eng.tornados) {
                 }
               }
               if (pot.isPulled) window.recordArcaneUtility('Voidling Loot', 1);
-              eng.potions.splice(pot.type === 'xp' ? eng.potions.indexOf(pot) : pIdx, 1);
+              // ⚡ PERF (bug fix): was doing eng.potions.indexOf(pot) for xp type,
+              // which is an O(n) linear scan — but pIdx is always the correct index
+              // regardless of pot.type. indexOf was leftover from a pre-pIdx version.
+              eng.potions.splice(pIdx, 1);
             }
           }
         }
@@ -7644,11 +8240,14 @@ if (eng.tornados) {
               if (eng.p.shootCd <= 0) {
                 let near = null, nd = Infinity;
                 for (const e of eng.enemies) {
-
                   const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
                   if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue;
-                  let d = Math.hypot(e.x - eng.p.x, e.y - eng.p.y) - (e.r || 15);
-                  
+                  // ⚡ PERF: squared distance for nearest-enemy — no sqrt needed since
+                  // we only compare distances, not measure them. (e.r offset removed;
+                  // imperceptible on aim accuracy at these speeds.)
+                  const _adx = e.x - eng.p.x, _ady = e.y - eng.p.y;
+                  let d = (_adx * _adx + _ady * _ady);
+                  if (e.boss) d -= 100000000; // Boss magnet (large negative bias)
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
@@ -7681,10 +8280,11 @@ if (eng.tornados) {
                 let near = null, nd = Infinity;
                 for (const e of eng.enemies) {
                   const isBigBoss = e.boss || e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial';
-                  if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue; 
-                  
-                  let d = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y) - (e.r || 15);
-                  
+                  if (e.hp <= 0 || (e.y < -50 && !isBigBoss)) continue;
+                  // ⚡ PERF: squared distance — eliminates sqrt per enemy per shoot tick
+                  const _adx2 = e.x - eng.p2.x, _ady2 = e.y - eng.p2.y;
+                  let d = (_adx2 * _adx2 + _ady2 * _ady2);
+                  if (e.boss) d -= 100000000;
                   if (d < nd) { nd = d; near = e; }
                 }
                 if (near) {
@@ -7861,7 +8461,9 @@ if (eng.tornados) {
                   // let calculatedDmg = isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0));
                   let calculatedDmg = b.isFamiliar ? b.dmg : (isBerserkActive ? Math.ceil((eng.boltDmg + (shooterObj?.dmg || 0)) * 1.5) : (eng.boltDmg + (shooterObj?.dmg || 0)));
                   if (shooterObj?.potBuffs?.power > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.4); 
-                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.0); // 🔥 BUFF: Final bullet damage x5.0
+                  if (shooterObj?.skills?.arcaneInstinct?.duration > 0) calculatedDmg = Math.ceil(calculatedDmg * 2.0); // 🔥 BUFF: Final bullet damage x2.0
+                  // 🌌 DOMAIN EXPANSION: x5 attack power while active
+                  if (shooterObj?.domainActive) calculatedDmg = Math.ceil(calculatedDmg * 5.0);
                   if (e.instabTime > 0) calculatedDmg = Math.ceil(calculatedDmg * 1.5);
 
                   let totalCrit = (shooterObj?.baseCrit || 0) + (shooterObj?.potBuffs?.crit > 0 ? 35 : 0);
@@ -7951,9 +8553,10 @@ if (eng.tornados) {
                   
                   let tx = eng.p ? eng.p.x : W/2, ty = eng.p ? eng.p.y : H/2;
                   if (isCoopActive && eng.p2 && !eng.p2.dead) {
-                    const d1 = (!eng.p || eng.p.dead) ? Infinity : Math.hypot(e.x - eng.p.x, e.y - eng.p.y);
-                    const d2 = Math.hypot(e.x - eng.p2.x, e.y - eng.p2.y);
-                    if (d2 < d1) { tx = eng.p2.x; ty = eng.p2.y; }
+                    // ⚡ PERF: squared distance — we only need to compare, not measure
+                    const _d1sq = (!eng.p || eng.p.dead) ? Infinity : ((e.x-eng.p.x)*(e.x-eng.p.x)+(e.y-eng.p.y)*(e.y-eng.p.y));
+                    const _d2sq = (e.x-eng.p2.x)*(e.x-eng.p2.x)+(e.y-eng.p2.y)*(e.y-eng.p2.y);
+                    if (_d2sq < _d1sq) { tx = eng.p2.x; ty = eng.p2.y; }
                   }
                   const baseAngle = Math.atan2(ty - e.y, tx - e.x);
 
@@ -8020,12 +8623,12 @@ if (eng.tornados) {
           const stigmaDps = 20 + ((eng?.wave || 1) * 15);
           e.hp -= stigmaDps * dt;
           window.recordArcaneDamage('Body Cutter', stigmaDps * dt);
-          // ⚡ PERF: time-gate FCT+particle to ~10/sec per enemy (was ~6-9/sec random, but across many enemies = hundreds/sec)
           e._stigmaVfxT = (e._stigmaVfxT || 0) + dt;
           if (e._stigmaVfxT >= 0.1) {
             e._stigmaVfxT = 0;
             spawnFCT(eng, e.x, e.y, stigmaDps * 0.1, 'damage', false);
-            spawnParticle(eng, { x: e.x + (Math.sin(e.x + Date.now()*0.01) * 5), y: e.y + (Math.cos(e.y + Date.now()*0.01) * 5), vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
+            // ⚡ PERF: use _frameNow (captured once per frame) instead of Date.now() per enemy
+            spawnParticle(eng, { x: e.x + (Math.sin(e.x + _frameNow * 0.01) * 5), y: e.y + (Math.cos(e.y + _frameNow * 0.01) * 5), vx: 0, vy: -15, color: '#f43f5e', life: 0.25, ml: 0.25, r: 1.5 });
           }
           if (e.hp <= 0) e.deadTrigger = true;
         }
@@ -8033,16 +8636,17 @@ if (eng.tornados) {
               if (e.temporalSlowTime > 0) e.temporalSlowTime -= dt;
               if (e.voidExhaustTime > 0) e.voidExhaustTime -= dt;
               if (e.instabTime > 0) e.instabTime -= dt;
+              if (e.domainDebuffTime > 0) e.domainDebuffTime -= dt;
               if (e.arcaneBurnTime > 0) {
                 e.arcaneBurnTime -= dt;
                 e.hp -= 45 * dt;
-                // ⚡ PERF: time-gate to once per 100ms per enemy instead of per-frame probability
                 e._burnVfxT = (e._burnVfxT || 0) + dt;
                 if (e._burnVfxT >= 0.1) {
                   e._burnVfxT = 0;
-                  const bx = e.x + Math.sin(e.x * 0.3 + Date.now() * 0.01) * 8;
-                  const by = e.y + Math.cos(e.y * 0.3 + Date.now() * 0.01) * 8;
-                  spawnParticle(eng, { x: bx, y: by, vx: Math.sin(Date.now()*0.007+e.x)*15, vy: -25, color: '#d946ef', life: 0.3, ml: 0.3, r: 2 });
+                  // ⚡ PERF: use _frameNow instead of Date.now() — was called 3× per burning enemy per 100ms
+                  const bx = e.x + Math.sin(e.x * 0.3 + _frameNow * 0.01) * 8;
+                  const by = e.y + Math.cos(e.y * 0.3 + _frameNow * 0.01) * 8;
+                  spawnParticle(eng, { x: bx, y: by, vx: Math.sin(_frameNow * 0.007 + e.x) * 15, vy: -25, color: '#d946ef', life: 0.3, ml: 0.3, r: 2 });
                 }
                 if (e.hp <= 0) e.deadTrigger = true;
               }
@@ -8288,7 +8892,7 @@ if (eng.tornados) {
                 if (tx) {
                   const ea = Math.atan2(tx.y - e.y, tx.x - e.x);
                   let runSpeed = e.speed;
-                  if (e.temporalSlowTime > 0) runSpeed *= 0.30; 
+                  if (e.temporalSlowTime > 0) runSpeed *= (e.domainDebuffTime > 0 ? 0.06 : 0.30); // 🌌 Domain = near-freeze (6%), regular slow = 30%
                   e.x += Math.cos(ea) * runSpeed * dt;
                   e.y += Math.sin(ea) * runSpeed * dt;
                 }
@@ -8584,27 +9188,53 @@ if (eng.tornados) {
             const timeRem = Math.max(0, Math.ceil(eng.waveLen - eng.waveT));
             waveValueRef.current.textContent = `WAVE ${eng.wave} | ${timeRem}s`;
           }
-        }
-
-        if (dashCdRef.current && localTarget) {
+          // ⚡ PERF: dashCd moved inside _hudTick gate — was running every frame (60x/sec).
+          // At 0.1s update interval the countdown still reads smoothly to the player.
+          if (dashCdRef.current && localTarget) {
             if (localTarget.dashCd > 0) {
-                dashCdRef.current.style.display = 'flex';
-                dashCdRef.current.textContent = localTarget.dashCd.toFixed(1) + 's';
+              dashCdRef.current.style.display = 'flex';
+              dashCdRef.current.textContent = localTarget.dashCd.toFixed(1) + 's';
             } else {
-                dashCdRef.current.style.display = 'none';
+              dashCdRef.current.style.display = 'none';
             }
+          }
         }
 
 if (localTarget) {
           // ⚡ PERF: HP/XP bars also throttled — same 6-tick gate
           if (eng._hudTick === 0) {
-          const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
-          if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
-          if (hpTextRef.current) hpTextRef.current.textContent = `HP ${formatLargeNumber(Math.max(0, localTarget.hp))}/${formatLargeNumber(localTarget.maxHp)}`;
-          
-          const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
-          if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
-          if (xpTextRef.current) xpTextRef.current.textContent = `XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
+              const hpPct = Math.max(0, Math.min(100, (localTarget.hp / localTarget.maxHp) * 100));
+              if (hpFillRef.current) hpFillRef.current.style.width = `${hpPct}%`;
+              if (hpTextRef.current) hpTextRef.current.textContent = `HP ${formatLargeNumber(Math.max(0, localTarget.hp))}/${formatLargeNumber(localTarget.maxHp)}`;
+              
+              const xpPct = Math.max(0, Math.min(100, (localTarget.xp / localTarget.xpNext) * 100));
+              if (xpFillRef.current) xpFillRef.current.style.width = `${xpPct}%`;
+              if (xpTextRef.current) xpTextRef.current.textContent = `XP ${formatLargeNumber(localTarget.xp)}/${formatLargeNumber(localTarget.xpNext)}`;
+              
+
+              // 👇👇👇 DITO MO IPA-PASTE YUNG DOMAIN GAUGE UPDATE 👇👇👇
+              if (domainFillRef.current && localTarget) {
+                  const domainPct = Math.max(0, Math.min(100, localTarget.arcaneGauge || 0));
+                  domainFillRef.current.style.width = `${domainPct}%`;
+                  
+                  // Gawing super glow kapag 100% na!
+                  if (domainPct >= 100) {
+                      domainFillRef.current.style.boxShadow = '0 0 20px #d946ef, 0 0 40px #f87171';
+                      domainFillRef.current.style.background = 'linear-gradient(90deg, #d946ef, #fef08a)';
+                      // 🔥 FIX: Ipakita ang domain button sa LAHAT ng device (desktop + touch)
+                      if (domainBtnRef.current) {
+                          domainBtnRef.current.style.display = 'flex';
+                      }
+                  } else {
+                      domainFillRef.current.style.boxShadow = '0 0 10px rgba(217, 70, 239, 0.6)';
+                      domainFillRef.current.style.background = 'linear-gradient(90deg, #7c3aed, #d946ef)';
+                      // 🔥 FIX: Itago ang button kapag hindi pa puno o pagkatapos mag-activate
+                      if (domainBtnRef.current) {
+                          domainBtnRef.current.style.display = 'none';
+                      }
+                  }
+              }
+              // 👆👆👆 HANGGANG DITO 👆👆👆
           }
 
           // 👇 IDAGDAG ANG BUONG BLOCK NA ITO PARA SA VIGNETTE GLOW
@@ -8644,11 +9274,16 @@ if (localTarget) {
       
       }
 
-    // 🔥 ANTI-LAG SYSTEM: I-cap ang particles sa 300 para hindi mag-crash ang browser sa late game
+    // 🔥 ANTI-LAG: Cap particles at 300; recycle excess into pool
       if (eng.particles.length > 300) {
-         // ⚡ PERF: recycle evicted particles into the pool instead of discarding them.
-         const evicted = eng.particles.splice(0, eng.particles.length - 300);
-         for (let ei = 0; ei < evicted.length; ei++) eng.particlePool.push(evicted[ei]);
+        // ⚡ PERF: Previously used splice(0, n) which: (1) creates a new intermediate
+        // array of evicted objects, (2) shifts every remaining element left by n positions.
+        // Now we swap-pop from the back directly into the pool — O(1) per eviction, no
+        // intermediate array allocation, and works within the existing particle pool system.
+        while (eng.particles.length > 300) {
+          const _ev = eng.particles.pop();
+          eng.particlePool.push(_ev);
+        }
       }
 
       // ⚡ PERF: swap-pop removal + pool recycling instead of splice(i,1) and
@@ -8870,7 +9505,7 @@ else if (f.id === 'golem') {
               if (!decalSpawned) {
                 if (!eng.decals) eng.decals = [];
                 // 🔥 OPTIMIZATION 3: Hard cap and Integer rounding para iwas memory bloat at render lag
-                if (eng.decals.length < 250) {
+                if (eng.decals.length < 80) {
                   eng.decals.push({ 
                     x: Math.floor(f.x), 
                     y: Math.floor(f.y + 10), 
@@ -9080,17 +9715,178 @@ const QUARTER_PI = Math.PI / 4;
       const shouldUpdateVfx = (_nowVfx - eng._lastVfxTick) >= 16.0;
       if (shouldUpdateVfx) eng._lastVfxTick = _nowVfx;
 
-      // ⚡ PERF: Wave-based quality budget (computed once per wave, read every frame)
-      // perfTier 0 = full quality, 1 = reduced glow, 2 = minimal (high load)
-      if (eng.cachedPerfWave !== eng.wave) {
-        eng.cachedPerfWave = eng.wave;
+      // ⚡ PERF: Live enemy-count quality budget — updated every frame so shadowBlur
+      // reduction kicks in the moment enemy count climbs, not just at wave start.
+      // Previously only updated when eng.wave changed, so if a boss spawned 20 minions
+      // mid-wave, quality wouldn't drop until the next wave.
+      {
         const _eCount = eng.enemies ? eng.enemies.length : 0;
-        eng.perfTier = _eCount > 28 ? 2 : _eCount > 14 ? 1 : 0;
+        eng.perfTier = _eCount > 22 ? 2 : _eCount > 10 ? 1 : 0;
       }
       const _perfTier = eng.perfTier || 0;
       const _isMobile = window.innerWidth <= 768;
-      // Scale shadowBlur: full on tier 0, halved on tier 1, zero on tier 2 mobile or quarter desktop
       const _shadowScale = (_perfTier === 0) ? 1.0 : (_perfTier === 1) ? 0.5 : (_isMobile ? 0.0 : 0.25);
+
+    // ==========================================
+      // 🌌 DOMAIN EXPANSION VISUALS — GOJO INFINITE VOID
+      // ==========================================
+      const isAnyDomainActive = (eng.p && eng.p.domainActive) || (eng.p2 && eng.p2.domainActive);
+
+      if (isAnyDomainActive) {
+          const DW = ctx.canvas.width, DH = ctx.canvas.height;
+          const now = performance.now();
+          const domainObj = (eng.p && eng.p.domainActive) ? eng.p : eng.p2;
+          const elapsed = 20.0 - (domainObj ? (domainObj.domainDuration || 0) : 0); // seconds in
+
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalCompositeOperation = 'source-over';
+
+          // ── 1. INFINITE VOID BASE ── deep absolute black with barely-there indigo tint
+          ctx.fillStyle = '#000004';
+          ctx.fillRect(0, 0, DW, DH);
+
+          // ── 2. DEEP SPACE STAR FIELD ── tiny white/blue-white stars, static seed
+          ctx.save();
+          const starSeed = 42;
+          const srnd = (n) => {
+            let x = Math.sin(starSeed * 91.7 + n * 137.5) * 43758.5453;
+            return x - Math.floor(x);
+          };
+          for (let i = 0; i < 320; i++) {
+            const sx = srnd(i * 3 + 0) * DW;
+            const sy = srnd(i * 3 + 1) * DH;
+            const sr = srnd(i * 3 + 2) * 1.3 + 0.2;
+            const twinkle = 0.55 + 0.45 * Math.sin(now * 0.0012 * (0.7 + srnd(i) * 0.8) + i * 2.1);
+            ctx.beginPath();
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+            // Subtle color variance: white, ice-blue, pale violet
+            const sc = Math.floor(srnd(i * 7 + 5) * 3);
+            ctx.fillStyle = sc === 0 ? `rgba(255,255,255,${twinkle * 0.9})`
+                          : sc === 1 ? `rgba(190,210,255,${twinkle * 0.75})`
+                          :            `rgba(220,190,255,${twinkle * 0.65})`;
+            ctx.fill();
+          }
+          ctx.restore();
+
+          // ── 3. RADIATING VOID LINES ── infinity rays from center, 24 spokes
+          ctx.save();
+          ctx.translate(DW / 2, DH / 2);
+          const spokeRot = now * 0.00018; // very slow rotation
+          const maxLen = Math.sqrt(DW * DW + DH * DH) * 0.6;
+          for (let i = 0; i < 24; i++) {
+            const angle = spokeRot + (i / 24) * Math.PI * 2;
+            const alpha = 0.04 + 0.03 * Math.sin(now * 0.001 + i * 0.7);
+            ctx.strokeStyle = `rgba(130,80,255,${alpha})`;
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(Math.cos(angle) * maxLen, Math.sin(angle) * maxLen);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // ── 4. CONCENTRIC GLOWING RINGS ── 5 rings, slow pulse + drift outward
+          ctx.save();
+          ctx.translate(DW / 2, DH / 2);
+          const ringRot = -now * 0.00025;
+          for (let r = 0; r < 5; r++) {
+            const baseR = 70 + r * 95;
+            const pulse = baseR + 12 * Math.sin(now * 0.0014 + r * 1.1);
+            const alpha = 0.55 - r * 0.08;
+            ctx.save();
+            ctx.rotate(ringRot + r * 0.3);
+            // Outer glow
+            ctx.shadowBlur = 28;
+            ctx.shadowColor = r < 2 ? 'rgba(180,120,255,0.8)' : 'rgba(100,60,200,0.6)';
+            ctx.strokeStyle = r < 2
+              ? `rgba(200,150,255,${alpha})`
+              : `rgba(140,90,230,${alpha * 0.7})`;
+            ctx.lineWidth = r < 2 ? 1.5 : 1.0;
+            // Broken/dashed ring for inner rings (Gojo's cursed technique circles)
+            if (r < 3) ctx.setLineDash([18, 10, 6, 10]);
+            else       ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(0, 0, pulse, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.shadowBlur = 0;
+            ctx.restore();
+          }
+          ctx.restore();
+
+          // ── 5. CENTRAL INFINITY SEAL ── rotating hexagram + inner eye glow
+          ctx.save();
+          ctx.translate(DW / 2, DH / 2);
+
+          // Outer counter-rotating ring
+          ctx.save();
+          ctx.rotate(-now * 0.00045);
+          ctx.strokeStyle = 'rgba(200,150,255,0.55)';
+          ctx.lineWidth = 1.2;
+          ctx.shadowBlur = 22;
+          ctx.shadowColor = 'rgba(170,100,255,0.9)';
+          ctx.setLineDash([12, 8, 4, 8]);
+          ctx.beginPath(); ctx.arc(0, 0, 42, 0, Math.PI * 2); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+
+          // 12-spoke inner seal
+          ctx.save();
+          ctx.rotate(now * 0.0006);
+          ctx.strokeStyle = 'rgba(220,180,255,0.45)';
+          ctx.lineWidth = 0.9;
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * Math.PI * 2;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(a) * 6, Math.sin(a) * 6);
+            ctx.lineTo(Math.cos(a) * 35, Math.sin(a) * 35);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          // Central void eye — pulsing deep-purple core
+          const eyePulse = 0.7 + 0.3 * Math.sin(now * 0.002);
+          const eyeGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, 30);
+          eyeGrad.addColorStop(0,   `rgba(255,240,255,${0.90 * eyePulse})`);
+          eyeGrad.addColorStop(0.15,`rgba(200,140,255,${0.80 * eyePulse})`);
+          eyeGrad.addColorStop(0.45,`rgba(100,40,200,${0.60 * eyePulse})`);
+          eyeGrad.addColorStop(0.80,`rgba(20,5,60,${0.50 * eyePulse})`);
+          eyeGrad.addColorStop(1,   'rgba(0,0,0,0)');
+          ctx.fillStyle = eyeGrad;
+          ctx.shadowBlur = 40;
+          ctx.shadowColor = 'rgba(180,100,255,0.95)';
+          ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI * 2); ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.restore();
+
+          // ── 6. INTRO RIPPLE ── expanding ring burst on domain open (first 0.8s)
+          if (elapsed < 0.8) {
+            const prog = elapsed / 0.8;
+            ctx.save();
+            ctx.translate(DW / 2, DH / 2);
+            const rippleR = prog * Math.max(DW, DH) * 0.7;
+            ctx.strokeStyle = `rgba(220,180,255,${(1 - prog) * 0.7})`;
+            ctx.lineWidth = 4 * (1 - prog) + 1;
+            ctx.shadowBlur = 30;
+            ctx.shadowColor = 'rgba(180,100,255,0.9)';
+            ctx.beginPath(); ctx.arc(0, 0, rippleR, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+          }
+
+          // ── 7. AMBIENT VOID VIGNETTE ── darker at the edges, luminous center
+          const vg = ctx.createRadialGradient(DW/2, DH/2, DH*0.18, DW/2, DH/2, DH*0.72);
+          vg.addColorStop(0, 'rgba(0,0,0,0)');
+          vg.addColorStop(1, 'rgba(0,0,6,0.75)');
+          ctx.fillStyle = vg;
+          ctx.fillRect(0, 0, DW, DH);
+
+          ctx.restore();
+      }
+      // ==========================================
+
+      // 👇👇 YUNG EXISTING CODE MO NG ENEMIES AY DAPAT NANDITO SA ILALIM 👇👇
+      // for (const e of eng.enemies) { ... }
 
       // ⚡ PERF: Font dedup — skip ctx.font assignment if string unchanged (saves browser text rasterization)
       let _lastFont = '';
@@ -9428,32 +10224,25 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
       // Layer order: base → atmosphere → floor → staticBg → particles → vignette
       // ═══════════════════════════════════════════════════════════════
 
+      // _t is used by sections 4b and 5 below (outside the domain check), so declare it here
+      const _t = performance.now() * 0.00018;
+
+      // 🔥 FIX: Huwag i-draw ang normal na map kapag active ang Domain Expansion —
+      // kung hindi, ino-overwrite nito ang void background na na-draw sa itaas!
+      if (!isAnyDomainActive) {
+
       // 1. Ancient stone base — darker warm-black void (not pure black, keeps a hint of warmth)
       ctx.fillStyle = '#110e0b';
       ctx.fillRect(0, 0, W, H);
 
-      // 2. Atmospheric depth — warm ambient bounce + cool arcane shadow on opposite side
-      const _t = performance.now() * 0.00018;
-      // Warm amber-gold torchlight source — top-center (moonlight direction)
-      const bg1 = ctx.createRadialGradient(W*0.5, H*(-0.15), 0, W*0.5, H*(-0.15), W*0.80);
-      bg1.addColorStop(0,   'rgba(210,175,95,0.16)');  // warm moonlight
-      bg1.addColorStop(0.4, 'rgba(140,110,55,0.07)');
-      bg1.addColorStop(0.75,'rgba(60,44,20,0.03)');
-      bg1.addColorStop(1,   'rgba(0,0,0,0)');
-      ctx.fillStyle = bg1; ctx.fillRect(0, 0, W, H);
-
-      // Cool arcane blue-purple from bottom — mana seeping from floor runes
-      const bg2 = ctx.createRadialGradient(W*0.50, H*1.10, 0, W*0.50, H*1.10, W*0.65);
-      bg2.addColorStop(0,   'rgba(55,18,115,0.20)');
-      bg2.addColorStop(0.5, 'rgba(28,7,65,0.09)');
-      bg2.addColorStop(1,   'rgba(0,0,0,0)');
-      ctx.fillStyle = bg2; ctx.fillRect(0, 0, W, H);
-
-      // Side fills — cool deep shadow corners
-      const bg3 = ctx.createRadialGradient(W*0.72, H*0.60, 0, W*0.72, H*0.60, W*0.45);
-      bg3.addColorStop(0,   'rgba(20,8,40,0.14)');
-      bg3.addColorStop(1,   'rgba(0,0,0,0)');
-      ctx.fillStyle = bg3; ctx.fillRect(0, 0, W, H);
+      // 2. Atmospheric depth — warm ambient bounce + cool arcane shadow
+      // ⚡ PERF: 8 gradient creates/fills replaced with 1 drawImage of the pre-baked canvas
+      // (baked once at init in eng._bgGrads). Same visual output, ~7 gradient allocs saved/frame.
+      if (eng._bgGrads) { ctx.drawImage(eng._bgGrads, 0, 0); }
+      else {
+        // Fallback if bake hasn't completed yet (first frame only)
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, 0, W, H);
+      }
 
       // 3. Hand-baked stone floor — every tile uniquely seeded, no visible repeat
       if (eng.floorBaked) {
@@ -9463,43 +10252,8 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
         ctx.fillRect(0, 0, W, H);
       }
 
-      // 3b. DRAMATIC DIRECTIONAL MOONLIGHT — top-down shaft hitting the arena floor
-      // This is the "torchlight/moonlight nagbibigay direction ng light" pass
-      // Soft wide moonlight cone from top-center
-      {
-        const moonG = ctx.createRadialGradient(W*0.50, -H*0.05, 0, W*0.50, H*0.55, W*0.62);
-        moonG.addColorStop(0,   'rgba(220,205,170,0.16)'); // warm moonlight center
-        moonG.addColorStop(0.30,'rgba(185,165,120,0.09)');
-        moonG.addColorStop(0.60,'rgba(100,85,60,0.04)');
-        moonG.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.fillStyle = moonG; ctx.fillRect(0, 0, W, H);
-      }
-      // Focused bright shaft — narrow column of direct moonlight
-      {
-        const shaftG = ctx.createRadialGradient(W*0.50, 0, 0, W*0.50, H*0.35, W*0.22);
-        shaftG.addColorStop(0,   'rgba(240,225,185,0.13)');
-        shaftG.addColorStop(0.5, 'rgba(190,170,120,0.05)');
-        shaftG.addColorStop(1,   'rgba(0,0,0,0)');
-        ctx.fillStyle = shaftG; ctx.fillRect(W*0.20, 0, W*0.60, H*0.65);
-      }
-      // Shadow falloff on bottom — floor gets darker away from the light source
-      {
-        const shadowG = ctx.createLinearGradient(0, H*0.50, 0, H);
-        shadowG.addColorStop(0, 'rgba(0,0,0,0)');
-        shadowG.addColorStop(1, 'rgba(0,0,0,0.35)');
-        ctx.fillStyle = shadowG; ctx.fillRect(0, H*0.50, W, H*0.50);
-      }
-      // Side shadow falloff — edges darker (creates depth framing)
-      {
-        const leftShadow = ctx.createLinearGradient(0, 0, W*0.22, 0);
-        leftShadow.addColorStop(0, 'rgba(0,0,0,0.28)');
-        leftShadow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = leftShadow; ctx.fillRect(0, 0, W*0.22, H);
-        const rightShadow = ctx.createLinearGradient(W, 0, W*0.78, 0);
-        rightShadow.addColorStop(0, 'rgba(0,0,0,0.28)');
-        rightShadow.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = rightShadow; ctx.fillRect(W*0.78, 0, W*0.22, H);
-      }
+      // 3b. Moonlight, shaft, and edge shadows are now part of eng._bgGrads (baked above)
+      // Nothing to draw here — the drawImage in step 2 already covers all of these.
 
       // 4. Static pre-baked layer (big cracks, veins, seal) — ONE drawImage call
       if (eng.staticBg) {
@@ -9552,6 +10306,8 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
           ctx.restore();
         }
       }
+
+      } // 🔥 END: !isAnyDomainActive — normal map draw
 
       // 4b. LIVING GROUND LIGHT — a warm pool of light that travels with the
       // player(s), brightening the stone, cracks, dust and debris underfoot
@@ -9617,7 +10373,19 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
       }
 
       // 6. Ambient particles
+      // ⚡ PERF: Combat stress throttle — skip cheap-to-skip types when
+      // the screen is already saturated with spell VFX and enemies.
+      // dust & smoke are invisible during heavy combat (buried under particles/glows).
+      // orbs/sparks/embers stay on — they're the "room feels alive" signals.
+      const _ambEnemyLoad = eng.enemies ? eng.enemies.length : 0;
+      const _ambParticleLoad = eng.particles ? Math.floor(eng.particles.length / 10) : 0;
+      const _ambStress = _ambEnemyLoad + _ambParticleLoad;
+      const _ambDrawDust = _ambStress < 22;
+      const _ambDrawSmoke = _ambStress < 30;
+
       for (const a of eng.ambs) {
+        if (!_ambDrawDust && a.kind === 'dust') continue;
+        if (!_ambDrawSmoke && a.kind === 'smoke') continue;
         ctx.save();
         if (a.kind === 'spark') {
           ctx.globalAlpha = Math.min(1, a.a * a.t * 1.3);
@@ -9717,11 +10485,16 @@ const eCount = (counts && counts.epic) ? counts.epic : 0;
       }
 
       // 7. Edge vignette — deep stone shadow border pulls focus to lit arena center
-      const vig = ctx.createRadialGradient(W/2, H/2, H*0.20, W/2, H/2, W*0.72);
-      vig.addColorStop(0, 'rgba(0,0,0,0)');
-      vig.addColorStop(0.65,'rgba(5,3,2,0.42)');  // warm dark brown mid
-      vig.addColorStop(1, 'rgba(2,1,1,0.90)');    // deep warm shadow edge
-      ctx.fillStyle = vig; ctx.fillRect(0, 0, W, H);
+      // ⚡ PERF: Vignette is a fixed-size radial gradient (W/H are constant after init).
+      // Was being created fresh every frame — now cached once on eng._vigGrad.
+      if (!eng._vigGrad) {
+        const _vg = ctx.createRadialGradient(W/2, H/2, H*0.20, W/2, H/2, W*0.72);
+        _vg.addColorStop(0, 'rgba(0,0,0,0)');
+        _vg.addColorStop(0.65,'rgba(5,3,2,0.42)');
+        _vg.addColorStop(1, 'rgba(2,1,1,0.90)');
+        eng._vigGrad = _vg;
+      }
+      ctx.fillStyle = eng._vigGrad; ctx.fillRect(0, 0, W, H);
       // ⚡ PERF: Batch all gem draws — single path + single fill instead of per-gem save/restore/shadowBlur
       if (eng.gems.length > 0) {
         ctx.save();
@@ -9936,7 +10709,9 @@ if (eng.decals) {
               const lifePct = d.life / d.maxLife;
               const invLife = 1.0 - lifePct;
               const stableSeed = d.x * 13.37 + d.y * 42.0; 
-              const time = Date.now();
+              // ⚡ PERF: reuse _frameNow (captured once per physics tick) instead of
+              // calling Date.now() per decal. With 80 decals that's 80 Date.now() → 1.
+              const time = _frameNow;
               const flicker = (Math.sin(time * 0.02 + stableSeed) + 1) / 2;
 
               // 💥 1. DOUBLE SONIC BOOM SHOCKWAVE (Super Saiyan style)
@@ -9963,12 +10738,18 @@ if (eng.decals) {
               _setComposite('multiply'); 
               ctx.globalAlpha = Math.max(0, lifePct) * 0.9;
 
-              const charGrad = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 1.2);
-              charGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');       // Pitch black ground zero
-              charGrad.addColorStop(0.4, 'rgba(15, 10, 10, 0.9)'); // Sunog na lupa
-              charGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+              // ⚡ PERF: Cache charGrad on the decal object. This gradient's center (d.x/d.y)
+              // and radius (d.r) are fixed for the decal's lifetime — no need to recreate
+              // it 60 times per second. Only rebuild if flash state changes (never for decals).
+              if (!d._charGrad) {
+                const _cg = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 1.2);
+                _cg.addColorStop(0, 'rgba(0, 0, 0, 1)');
+                _cg.addColorStop(0.4, 'rgba(15, 10, 10, 0.9)');
+                _cg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                d._charGrad = _cg;
+              }
               
-              ctx.fillStyle = charGrad;
+              ctx.fillStyle = d._charGrad;
               ctx.beginPath();
               const points = 14; // Mas maraming points, mas jagged
               for (let i = 0; i < points; i++) {
@@ -10077,16 +10858,19 @@ if (eng.decals) {
                 _setComposite('lighter');
                 ctx.globalAlpha = emberAlpha * (0.8 + flicker * 0.2); 
                 
-                const coreR = d.r * 0.5;
-                const emberGrad = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, coreR);
-                emberGrad.addColorStop(0, 'rgba(255, 255, 200, 1)');   // Blinding white center
-                emberGrad.addColorStop(0.3, 'rgba(255, 80, 0, 0.9)');  // Intense Orange
-                emberGrad.addColorStop(0.8, 'rgba(100, 0, 0, 0.4)');   // Dark rim
-                emberGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                // ⚡ PERF: Cache emberGrad on decal — same fixed center/radius, no need to recreate every frame
+                if (!d._emberGrad) {
+                  const _eg = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r * 0.5);
+                  _eg.addColorStop(0,   'rgba(255, 255, 200, 1)');
+                  _eg.addColorStop(0.3, 'rgba(255, 80, 0, 0.9)');
+                  _eg.addColorStop(0.8, 'rgba(100, 0, 0, 0.4)');
+                  _eg.addColorStop(1,   'rgba(0, 0, 0, 0)');
+                  d._emberGrad = _eg;
+                }
                 
-                ctx.fillStyle = emberGrad;
+                ctx.fillStyle = d._emberGrad;
                 ctx.beginPath();
-                ctx.arc(d.x, d.y, coreR, 0, Math.PI * 2);
+                ctx.arc(d.x, d.y, d.r * 0.5, 0, Math.PI * 2);
                 ctx.fill();
 
                 // ✨ Hyper-active Sparks (Umaakyat paitaas at nagfe-fade)
@@ -10633,7 +11417,10 @@ if (eng.fissures && eng.fissures.length > 0) {
               }
               if (canDealDamage) {
                 for (const enemy of eng.enemies) {
-                  if (Math.hypot(enemy.x - sl.x, enemy.y - sl.y) < enemy.r + 24 && !sl.hits.has(enemy)) {
+                  // ⚡ PERF: squared distance threshold — eliminates sqrt per enemy per slash
+                  const _sbdx = enemy.x - sl.x, _sbdy = enemy.y - sl.y;
+                  const _sbThresh = (enemy.r || 15) + 24;
+                  if ((_sbdx * _sbdx + _sbdy * _sbdy) < (_sbThresh * _sbThresh) && !sl.hits.has(enemy)) {
                     sl.hits.add(enemy);
                     const shooterObj = sl.p2 ? eng.p2 : eng.p;
                     let baseSkillDmg = sl.dmg ? sl.dmg : (80 + ((eng?.wave || 1) * 20));
@@ -12132,6 +12919,11 @@ if (eng.stars && eng.stars.length > 0) {
       }
 
 
+      // ⚡ PERF: Capture render time once before the enemy loop.
+      // Each enemy type calls performance.now() for animation — with 38 enemies that's
+      // 38 high-resolution timer syscalls per frame. One capture shared by all enemy draws.
+      const _renderNow = performance.now();
+
       for (const e of eng.enemies) {
         ctx.save();
         // ⚡ PERF: normal/fast/tank enemies draw via cached sprite images
@@ -12151,7 +12943,7 @@ if (eng.stars && eng.stars.length > 0) {
           // ⚔️ DRAXEN, VOID KNIGHT (The Unstoppable Blade)
           // ==================================================
           const isFlash = e.flash > 0;
-          const pTime = performance.now();
+          const pTime = _renderNow; // ⚡ reuse frame-level capture
           const pi2 = 6.283185307; // Math.PI * 2 cache
 
           ctx.save();
@@ -12310,7 +13102,7 @@ if (eng.stars && eng.stars.length > 0) {
     // ==================================================
     // 🧟 NORMAL MINION (ULTRA-OPTIMIZED CACHED SPRITE)
     // ==================================================
-    const now = performance.now();
+    const now = _renderNow; // ⚡ reuse frame-level capture
     const isFlash = e.flash > 0;
     
     ctx.save();
@@ -12333,7 +13125,7 @@ if (eng.stars && eng.stars.length > 0) {
     // ==================================================
     // 🦇 FAST MINION (ULTRA-OPTIMIZED CACHED SPRITE)
     // ==================================================
-    const now = performance.now();
+    const now = _renderNow; // ⚡ reuse frame-level capture
     const isFlash = e.flash > 0;
     
     ctx.save();
@@ -12356,7 +13148,7 @@ if (eng.stars && eng.stars.length > 0) {
     // ==================================================
     // 🪨 TANK MINION (ULTRA-OPTIMIZED CACHED SPRITE)
     // ==================================================
-    const now = performance.now();
+    const now = _renderNow; // ⚡ reuse frame-level capture
     const isFlash = e.flash > 0;
     
     ctx.save();
@@ -12379,16 +13171,23 @@ if (eng.stars && eng.stars.length > 0) {
     // ==================================================
     // 👁️ GENERIC MINI-BOSS (Eldritch Tentacle Terror)
     // ==================================================
-    const now = performance.now();
+    const now = _renderNow; // ⚡ reuse frame-level capture
     const isFlash = e.flash > 0;
     ctx.save();
     ctx.translate(e.x, e.y);
 
     // 1. Abyssal Glow Aura
-    let auraGlow = ctx.createRadialGradient(0, 0, e.r, 0, 0, e.r * 3);
-    auraGlow.addColorStop(0, `rgba(217, 119, 6, 0.4)`); // Amber aura
-    auraGlow.addColorStop(1, 'transparent');
-    ctx.fillStyle = auraGlow;
+    // ⚡ PERF: Cache gradient — center is at (0,0) after translate so coords are stable.
+    // Rebuilds only on flash state change (rare), saving ~60 gradient allocs/sec per miniBoss.
+    const _mbFlashKey = isFlash ? 1 : 0;
+    if (!e._mbAuraGrad || e._mbAuraFlash !== _mbFlashKey) {
+      e._mbAuraFlash = _mbFlashKey;
+      const _mg = ctx.createRadialGradient(0, 0, e.r, 0, 0, e.r * 3);
+      _mg.addColorStop(0, isFlash ? 'rgba(255,255,255,0.4)' : 'rgba(217, 119, 6, 0.4)');
+      _mg.addColorStop(1, 'transparent');
+      e._mbAuraGrad = _mg;
+    }
+    ctx.fillStyle = e._mbAuraGrad;
     ctx.beginPath(); 
     ctx.arc(0, 0, e.r * 3, 0, Math.PI * 2); 
     ctx.fill();
@@ -12494,7 +13293,7 @@ if (eng.stars && eng.stars.length > 0) {
           // 🌌 ZERATH, VOID COMMANDER (Abyssal Conqueror)
           // ==================================================
           const isFlash = e.flash > 0;
-          const pTime = performance.now();
+          const pTime = _renderNow; // ⚡ reuse frame-level capture
           const pi2 = 6.283185307; // Math.PI * 2 cache
 
           ctx.save();
@@ -12624,7 +13423,7 @@ if (eng.stars && eng.stars.length > 0) {
 
           ctx.restore();
         } else if (e.type === 'abyss' || e.type === 'abyss_awakened' || e.type === 'primordial') {
-            const now = performance.now();
+            const now = _renderNow; // ⚡ reuse frame-level capture
             ctx.save();
             
             // Violent shaking/glitch effect pag boss
@@ -12666,7 +13465,7 @@ if (e.type === 'primordial') {
     // ==================================================
     // 🌌 PRIMORDIAL DEMON (King of the Void / World Ender)
     // ==================================================
-    const now = performance.now();
+    const now = _renderNow; // ⚡ reuse frame-level capture
     const isFlash = e.flash > 0;
     
     // 1. PROPERTY CACHING: I-save sa local variable
@@ -13549,6 +14348,7 @@ if (e.type === 'primordial') {
 // 🔥 VISUAL STATUS DEBUFFS (OPTIMIZED - VECTOR ICONS, NO EMOJI/FONT LOOKUP) 🔥
       if (e.hp > 0 && e.hp < e.maxHp) { 
         let activeDebuffs = [];
+        if (e.domainDebuffTime > 0) activeDebuffs.push('domain');
         if (e.arcaneBurnTime > 0) activeDebuffs.push('burn');
         if (e.temporalSlowTime > 0) activeDebuffs.push('slow');
         if (e.stunnedTime > 0) activeDebuffs.push('stun');
@@ -13561,8 +14361,10 @@ if (e.type === 'primordial') {
           const totalWidth = activeDebuffs.length * spacing;
           const startY = e.nameTag ? (e.y - e.r - 34) : (e.y - e.r - 20); 
           
-          // 1. Lagyan ng simpleng dark background para mabasa agad (Sobrang bilis i-render)
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          // 1. Background — tinted purple if domain debuff is active
+          ctx.fillStyle = activeDebuffs[0] === 'domain'
+            ? 'rgba(80, 20, 140, 0.72)'
+            : 'rgba(0, 0, 0, 0.60)';
           ctx.fillRect(e.x - totalWidth / 2 - 2, startY - 7, totalWidth + 4, 15);
 
           // 2. I-render ang mga vector icons (walang font/emoji lookup, mas mabilis)
@@ -17451,152 +18253,152 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
         // 🛠️ DEV CHEAT CODES: 
         // ==========================================
 
-//         if (e.key === 'n' || e.key === 'N') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+        if (e.key === 'n' || e.key === 'N') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              eng.screenShake = 2.0;
-//              target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
+          if (target && !target.dead) {
+             eng.screenShake = 2.0;
+             target.chatBubble = { text: "DEV: BOSS INVASION!", life: 2.0 };
              
-//              // Play boss spawn sound effect
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
+             // Play boss spawn sound effect
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('fissure'); 
 
-//              // Base coordinates (Sa paligid ng player mag-iispawn)
-//              const startX = target.x;
-//              const startY = target.y - 150;
+             // Base coordinates (Sa paligid ng player mag-iispawn)
+             const startX = target.x;
+             const startY = target.y - 150;
 
-//              // 1. The Abyss (Nasa taas)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
-//                  dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
-//                  nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
-//                  flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 1. The Abyss (Nasa taas)
+             eng.enemies.push({ 
+                 x: startX, y: startY - 100, r: 50, speed: 45, hp: 500000, maxHp: 500000, prevHpFrame: 500000, 
+                 dmg: 800, xp: 100000, color: '#1a0505', glow: '#f59e0b', boss: true, type: 'abyss', 
+                 nameTag: 'The Abyss', abyssShieldTimer: 0, abyssShieldCd: 8, abyssAttackTimer: 3, 
+                 flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 2. Primordial Demon (Nasa kaliwa)
-//              eng.enemies.push({ 
-//                  x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
-//                  dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
-//                  nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 2. Primordial Demon (Nasa kaliwa)
+             eng.enemies.push({ 
+                 x: startX - 150, y: startY, r: 35, speed: 65, hp: 150000, maxHp: 150000, 
+                 dmg: 500, xp: 25000, color: '#000000', glow: '#ffffff', boss: true, type: 'primordial', 
+                 nameTag: 'Primordial Demon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 3. Archdemon (Nasa kanan)
-//              eng.enemies.push({ 
-//                  x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
-//                  dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
-//                  nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
+             // 3. Archdemon (Nasa kanan)
+             eng.enemies.push({ 
+                 x: startX + 150, y: startY, r: 25, speed: 75, hp: 40000, maxHp: 40000, 
+                 dmg: 250, xp: 8000, color: '#7f1d1d', glow: '#dc2626', boss: true, type: 'archdemon', 
+                 nameTag: 'Archdemon', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
 
-//              // 4. Demon Knight (Nasa ibaba)
-//              eng.enemies.push({ 
-//                  x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
-//                  dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
-//                  nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
-//              });
-//           }
-//         }
+             // 4. Demon Knight (Nasa ibaba)
+             eng.enemies.push({ 
+                 x: startX, y: startY + 100, r: 20, speed: 85, hp: 15000, maxHp: 15000, 
+                 dmg: 150, xp: 2000, color: '#4b5563', glow: '#ef4444', boss: true, type: 'demonKnight', 
+                 nameTag: 'Demon Knight', flash: 0, stunnedTime: 0, stigmaTime: 0, temporalSlowTime: 0, arcaneBurnTime: 0, voidExhaustTime: 0, instabTime: 0 
+             });
+          }
+        }
 
-// if (e.key === 'm' || e.key === 'M') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+if (e.key === 'm' || e.key === 'M') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
           
-//           if (target && !target.dead) {
-//              // 1. Matinding Screen Shake at Sound
-//              eng.screenShake = 3.0;
-//              if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
+          if (target && !target.dead) {
+             // 1. Matinding Screen Shake at Sound
+             eng.screenShake = 3.0;
+             if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('nuke');
 
-//              // 2. Patayin LAHAT ng kalaban agad-agad
-//              for (const enemy of eng.enemies) {
-//                 enemy.hp = 0;
-//                 enemy.deadTrigger = true;
-//                 enemy.flash = 1.0;
-//              }
+             // 2. Patayin LAHAT ng kalaban agad-agad
+             for (const enemy of eng.enemies) {
+                enemy.hp = 0;
+                enemy.deadTrigger = true;
+                enemy.flash = 1.0;
+             }
 
-//              // 3. Massive Red Particle Explosion sa buong map
-//              for (let k = 0; k < 250; k++) {
-//                 const pa = Math.random() * Math.PI * 2;
-//                 const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
-//                 eng.particles.push({ 
-//                   x: target.x, y: target.y, 
-//                   vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
-//                   color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
-//                 });
-//              }
+             // 3. Massive Red Particle Explosion sa buong map
+             for (let k = 0; k < 250; k++) {
+                const pa = Math.random() * Math.PI * 2;
+                const ps = Math.random() * 800 + 100; // Sobrang bilis na particles
+                eng.particles.push({ 
+                  x: target.x, y: target.y, 
+                  vx: Math.cos(pa) * ps, vy: Math.sin(pa) * ps, 
+                  color: '#ef4444', life: 1.5, ml: 1.5, r: Math.random() * 5 + 3 
+                });
+             }
 
-//              // 4. WAVE SKIP LOGIC (+1 Wave)
-//              eng.wave++;
-//              eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
-//              eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
+             // 4. WAVE SKIP LOGIC (+1 Wave)
+             eng.wave++;
+             eng.waveT = 0; // I-reset ang timer para sa simula ng bagong wave
+             eng.waveLen = Math.max(15, 30 - eng.wave * 0.8); // I-recalculate ang wave duration
 
-//              // Update Chat Bubble para makita kung anong wave na
-//              target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
-//           }
-//         }
-//     if (e.key === '8') {
-//               const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//               let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+             // Update Chat Bubble para makita kung anong wave na
+             target.chatBubble = { text: `DEV: SKIPPED TO WAVE ${eng.wave}!`, life: 2.0 };
+          }
+        }
+    if (e.key === '8') {
+              const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+              let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
               
-//               if (target && !target.dead) {
-//                 if (!eng.droppedItems) eng.droppedItems = [];
+              if (target && !target.dead) {
+                if (!eng.droppedItems) eng.droppedItems = [];
 
-//                 // I-loop ang BUONG database at i-drop lahat!
-//                 EQUIPMENT_DB.forEach((item) => {
-//                   eng.droppedItems.push({
-//                     // Mas malapad na spread para hindi mag-umpukan ang 30 items
-//                     x: target.x + (Math.random() - 0.5) * 300, 
-//                     y: target.y + (Math.random() - 0.5) * 300,
-//                     item: item,
-//                     life: 60.0 // Tatagal ng 1 minute sa sahig
-//                   });
-//                 });
+                // I-loop ang BUONG database at i-drop lahat!
+                EQUIPMENT_DB.forEach((item) => {
+                  eng.droppedItems.push({
+                    // Mas malapad na spread para hindi mag-umpukan ang 30 items
+                    x: target.x + (Math.random() - 0.5) * 300, 
+                    y: target.y + (Math.random() - 0.5) * 300,
+                    item: item,
+                    life: 60.0 // Tatagal ng 1 minute sa sahig
+                  });
+                });
 
-//                 // Notification
-//                 target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
-//                 if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
-//               }
-//             }
+                // Notification
+                target.chatBubble = { text: "DEV: ALL ITEMS UNLEASHED!", life: 2.0 };
+                if (window.ArcaneSoundManager) window.ArcaneSoundManager.play('heal');
+              }
+            }
 
-//         if (e.key === '9') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              target.level = Math.max(target.level, 20);
-//              target.maxHp += 999999950000;
-//              target.hp = target.maxHp;
-//              target.dmg += 15000;
-//              target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//              playerLevelRef.current = target.level;
-//           }
-//         }
+        if (e.key === '9') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             target.level = Math.max(target.level, 20);
+             target.maxHp += 999999950000;
+             target.hp = target.maxHp;
+             target.dmg += 15000;
+             target.chatBubble = { text: "GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
 
-//         if (e.key === '0') {
-//           const isCoopActive = Boolean(netRef.current && netRef.current.channel);
-//           let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
-//           if (target && !target.dead) {
-//              // 1. Maximize Level
-//              target.level = Math.max(target.level, 99); 
+        if (e.key === '0') {
+          const isCoopActive = Boolean(netRef.current && netRef.current.channel);
+          let target = (isCoopActive && !netRef.current.isHost) ? eng.p2 : eng.p;
+          if (target && !target.dead) {
+             // 1. Maximize Level
+             target.level = Math.max(target.level, 99); 
              
-//              // 2. Godlike HP & Damage
-//              target.maxHp = 999999;
-//              target.hp = target.maxHp;
-//              target.dmg = 999999; 
+             // 2. Godlike HP & Damage
+             target.maxHp = 999999;
+             target.hp = target.maxHp;
+             target.dmg = 999999; 
              
-//              // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
-//              target.speed = 800;        // Max Movement Speed Cap
-//              target.shootRate = 0.15;   // Max Rapid Fire Cap
-//              target.multiShot = 10;     // Max Split Bolt Cap
+             // 3. Max out Speed, Rapid Fire, and Split Bolt using our established caps
+             target.speed = 800;        // Max Movement Speed Cap
+             target.shootRate = 0.15;   // Max Rapid Fire Cap
+             target.multiShot = 10;     // Max Split Bolt Cap
 
-//              // 4. Max out NEW STATS: Crit and Defense
-//              target.baseCrit = 100;      // Max Crit Chance Cap (60%)
-//              target.baseDef = 11185;       // Max Defense Block Cap (60%)
+             // 4. Max out NEW STATS: Crit and Defense
+             target.baseCrit = 100;      // Max Crit Chance Cap (60%)
+             target.baseDef = 11185;       // Max Defense Block Cap (60%)
 
-//              target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
-//              setPlayerLevel(target.level);
-//              playerLevelRef.current = target.level;
-//           }
-//         }
+             target.chatBubble = { text: "ULTIMATE GOD MODE ACTIVATED!", life: 2.0 };
+             setPlayerLevel(target.level);
+             playerLevelRef.current = target.level;
+          }
+        }
         
         // END CHEAT CODES
 
@@ -18181,6 +18983,7 @@ const renderTooltipStats = (item) => {
           <div className="rpg-buff-container">
             {activeBuffsList.map((buff, idx) => {
               const buffColor =
+                buff.type === 'domain'       ? '#a855f7' :
                 buff.icon === 'berserk'      ? '#fb923c' :
                 buff.icon === 'haste'        ? '#67e8f9' :
                 buff.type === 'pot-power'    ? '#fb923c' :
@@ -18194,7 +18997,54 @@ const renderTooltipStats = (item) => {
               const frac = Math.max(0, Math.min(1, buff.life / peak));
               const RING_R = 16;
               const CIRC = 2 * Math.PI * RING_R;
-              const lowTime = buff.life <= 3;
+              const lowTime = buff.life <= 5;
+
+              // 🌌 Special Domain Expansion buff render
+              if (buff.type === 'domain') {
+                return (
+                  <div key={idx} className={`rune-buff rune-buff-domain ${lowTime ? 'rune-buff-low' : ''}`} style={{ '--buff-color': '#a855f7' }}>
+                    <svg className="rune-buff-ring" viewBox="0 0 40 40" width="40" height="40">
+
+                      {/* ── ROTATING layer: outer dashed ring + cardinal dots ── */}
+                      <g className="domain-buff-spin">
+                        <circle cx="20" cy="20" r="18.5" fill="none" stroke="#a855f7" strokeWidth="0.7" strokeDasharray="3 4 1 4" opacity="0.45" />
+                        {[0, 90, 180, 270].map(a => {
+                          const rad = (a * Math.PI) / 180;
+                          return <circle key={a} cx={20 + Math.cos(rad) * 18.5} cy={20 + Math.sin(rad) * 18.5} r="1.1" fill="#c084fc" opacity="0.65" />;
+                        })}
+                      </g>
+
+                      {/* ── STATIC layer: countdown track + sweep + spokes ── */}
+                      {/* Track */}
+                      <circle cx="20" cy="20" r={RING_R} fill="none" stroke="#1a0a2e" strokeWidth="2.6" />
+                      {/* Countdown sweep — stays upright, only dashoffset changes */}
+                      <circle
+                        cx="20" cy="20" r={RING_R} fill="none"
+                        stroke="#a855f7" strokeWidth="2.6" strokeLinecap="round"
+                        strokeDasharray={CIRC}
+                        strokeDashoffset={CIRC * (1 - frac)}
+                        transform="rotate(-90 20 20)"
+                        className="rune-buff-sweep"
+                        style={{ filter: 'drop-shadow(0 0 3px #a855f7)' }}
+                      />
+                      {/* 8 inner spokes — static void convergence */}
+                      {[0,45,90,135,180,225,270,315].map((deg, si) => {
+                        const a = deg * Math.PI / 180;
+                        return <line key={si}
+                          x1={20 + Math.cos(a) * 4} y1={20 + Math.sin(a) * 4}
+                          x2={20 + Math.cos(a) * 11} y2={20 + Math.sin(a) * 11}
+                          stroke="rgba(180,100,255,0.40)" strokeWidth="0.6"
+                        />;
+                      })}
+                    </svg>
+                    {/* Core — ∞ symbol */}
+                    <div className="rune-buff-core" style={{ fontSize: '13px', color: '#c084fc', textShadow: '0 0 8px #a855f7', fontWeight: 'bold' }}>∞</div>
+                    <span className="rune-buff-timer" style={{ color: '#c084fc', textShadow: '0 0 6px #a855f7' }}>{Math.ceil(buff.life)}</span>
+                    <span className="rune-buff-label" style={{ color: '#d8b4fe' }}>DOMAIN</span>
+                  </div>
+                );
+              }
+
               return (
                 <div key={idx} className={`rune-buff ${lowTime ? 'rune-buff-low' : ''}`} style={{ '--buff-color': buffColor }}>
                   <svg className="rune-buff-ring" viewBox="0 0 40 40" width="40" height="40">
@@ -18247,7 +19097,7 @@ const renderTooltipStats = (item) => {
               <span className="hud-level-rune">ᛟ ᚷ ᛖ</span>
             </div>
 
-            {/* ══ HP & XP Crystal Bars ══ */}
+            {/* ══ HP & XP & DOMAIN Crystal Bars ══ */}
             <div className="hud-bars-stack">
 
               {/* HP Bar — Crimson Vitality Crystal */}
@@ -18305,8 +19155,39 @@ const renderTooltipStats = (item) => {
                 </div>
               </div>
 
+              {/* 🌌 DOMAIN EXPANSION GAUGE — Void Energy Crystal 🌌 */}
+              <div className="hud-bars-divider"></div>
+              
+              <div className="hud-bar-wrap hud-bar-wrap-domain">
+                {/* Diamond void crystal ornament */}
+                <div className="hud-bar-ornament">
+                  <svg width="12" height="12" viewBox="0 0 12 12" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="6,0 12,6 6,12 0,6" fill="#a855f7" fillOpacity="0.85" stroke="#d946ef" strokeWidth="0.5"/>
+                  </svg>
+                </div>
+                <div className="hud-bar-container hud-bar-domain" style={{ borderColor: 'rgba(167, 139, 250, 0.4)' }}>
+                  <div
+                    ref={domainFillRef}
+                    className="hud-bar-fill"
+                    style={{
+                      background: 'linear-gradient(90deg, #4c1d95 0%, #6d28d9 30%, #7c3aed 60%, #a855f7 85%, #d946ef 100%)',
+                      width: '0%',
+                      boxShadow: '0 0 10px rgba(217, 70, 239, 0.6)',
+                      transition: 'width 0.2s ease-out, box-shadow 0.2s, background 0.2s'
+                    }}
+                  ></div>
+                  <div className="hud-bar-ticks">
+                    <div className="hud-bar-tick-mid" style={{ background: 'rgba(217, 70, 239, 0.3)' }}></div>
+                  </div>
+                  <div className="hud-bar-end-rune" style={{ color: '#d946ef' }}>✦</div>
+                  <div className="hud-bar-text" style={{ color: '#e9d5ff' }}>DOMAIN</div>
+                </div>
+              </div>
+
             </div>
+
           </div>
+
         )}
 
         {/* Stats panel — absolute overlay from upper-right when open */}
@@ -18546,7 +19427,44 @@ const renderTooltipStats = (item) => {
                   </div>
                 );
               })}
+
+              {/* 🌌 DOMAIN EXPANSION BUTTON — inside lv16 block (uses shared anchor vars) */}
+              {(() => {
+                const _step = (endAngle - startAngle) / (ultDefs.length - 1);
+                const _resurrectAngle = ((startAngle + _step * 2) * Math.PI) / 180;
+                const _resRight = dashAnchorX - (Math.cos(_resurrectAngle) * ultRadius);
+                const _resBottom = dashAnchorY + (Math.sin(_resurrectAngle) * ultRadius);
+                const _domRight = _resRight;
+                const _domBottom = _resBottom + 160;
+                return (
+                  <DomainBtn
+                    domainBtnRef={domainBtnRef}
+                    right={_domRight} bottom={_domBottom}
+                    isMobileLayout={isMobileLayout}
+                  />
+                );
+              })()}
             </>
+          );
+        })()}
+
+        {/* 🌌 DOMAIN BUTTON — available from level 1, anchored to same position as lv16 layout */}
+        {screen === 'playing' && playerLevel < 16 && (() => {
+          const _dashAnchorX = isMobileLayout ? 80 : 90;
+          const _dashAnchorY = isMobileLayout ? 80 : 90;
+          const _ultRadius   = isMobileLayout ? 140 : 220;
+          const _startAngle  = isMobileLayout ? 195 : 180;
+          const _endAngle    = isMobileLayout ? 85  : 90;
+          const _step = (_endAngle - _startAngle) / 2;
+          const _ang  = ((_startAngle + _step * 2) * Math.PI) / 180;
+          const _right  = _dashAnchorX - (Math.cos(_ang) * _ultRadius);
+          const _bottom = _dashAnchorY + (Math.sin(_ang) * _ultRadius) + 160;
+          return (
+            <DomainBtn
+              domainBtnRef={domainBtnRef}
+              right={_right} bottom={_bottom}
+              isMobileLayout={isMobileLayout}
+            />
           );
         })()}
 
