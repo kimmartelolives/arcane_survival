@@ -234,9 +234,15 @@ export default function App() {
   }, [wizardName]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (screen === 'playing' || screen === 'gameover') {
+    // ⚡ PERF: Dati tumatakbo ito kada 600ms HABANG NAGLALARO. Dahil laging nagbabago ang
+    // waveT/score, laging nagse-setHud → re-render ng App → re-render ng BUONG GameCanvas
+    // (20k lines, lahat ng skill/ult SVG) kada 600ms = regular na stutter sa lahat ng device.
+    // Ang `hud` ay ginagamit lang ng Level Up / Game Over overlays, kaya: isang snapshot sa
+    // bawat palit ng screen (hindi 'playing'), at polling lang habang nasa 'gameover'.
+    if (screen === 'playing') return undefined;
+    const sync = () => {
         const next = hudRef.current;
+        if (!next) return;
         setHud(prev => {
           // Only update state kung may nagbago para maiwasan ang unnecessary re-renders
           if (
@@ -251,8 +257,10 @@ export default function App() {
           }
           return prev;
         });
-      }
-    }, 600);
+    };
+    sync();
+    if (screen !== 'gameover') return undefined;
+    const timer = setInterval(sync, 600);
     return () => clearInterval(timer);
   }, [screen]);
 

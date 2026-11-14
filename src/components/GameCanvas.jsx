@@ -47,8 +47,8 @@ class SoundManager {
       delete: '/delete.mp3',
       dash: '/dash.wav',
       choir: '/choir.mp3',
-      domain: '/domain.mp3',       // "DOMAIN EXPANSION!" shout SFX
-      expansion: '/expansion.mp3', // Ambient void music for 20s duration
+      domain: '/domain.wav',       // "DOMAIN EXPANSION!" shout SFX
+      expansion: '/expansion.wav', // Ambient void music for 20s duration
     };
 
     if (typeof window !== 'undefined') {
@@ -160,6 +160,43 @@ const playSfx = (type) => window.ArcaneSoundManager.play(type);
 
 const W = 1280;
 const H = 720;
+// ⚡ PERF: Render FPS cap. Ang simulation ay fixed 60Hz (worker tick), kaya ang pag-render ng
+// 90/120/144fps ay nagdodoble lang ng draw cost nang WALANG bagong frame data (ang in-render
+// VFX aging ay naka-gate na rin sa ~60Hz). Malaking tipid sa 120Hz phones at high-refresh
+// monitors. I-set sa 0 para i-disable (render sa native refresh rate).
+const RENDER_FPS_CAP = 60;
+
+// 💥 FLOATING COMBAT TEXT styles (pareho sa dating per-type colors/fonts). Ang 'miss' at iba
+// pang walang sariling style ay gumagamit ng 'dmg' (dati minamana lang ang style ng naunang text).
+const FCT_STYLES = {
+  dmg:         { fill: '#ffffff', font: 'bold 11px monospace',   stroke: '#000000', lw: 2.5 },
+  damageTaken: { fill: '#ef4444', font: 'bold 13px monospace',   stroke: '#450a0a', lw: 2.5 },
+  shield:      { fill: '#38bdf8', font: 'bold 11px monospace',   stroke: '#082f49', lw: 2.5 },
+  heal:        { fill: '#4ade80', font: 'bold 13px monospace',   stroke: '#064e3b', lw: 2.5, glow: 8 },
+  crit:        { fill: '#fde047', font: '900 16px monospace',    stroke: '#000000', lw: 2.5 },
+  critLabel:   { fill: '#f87171', font: 'italic 10px sans-serif', stroke: '#000000', lw: 2 },
+};
+const FCT_PASS_ORDER = ['dmg', 'damageTaken', 'shield', 'heal', 'crit', 'critLabel'];
+const fctStyleKey = (ft) => ft.type === 'damage' ? (ft.isCrit ? 'crit' : 'dmg') : (FCT_STYLES[ft.type] ? ft.type : 'dmg');
+
+// ⚡ PERF: LOW-POWER DEVICE DETECTION (phones + tablets, kahit anong orientation).
+// Dati `window.innerWidth <= 768` ang ginagamit na "mobile" check, pero ang phone na naka-
+// LANDSCAPE (844–932px) at LAHAT ng tablet (768–1366px) ay lumalampas doon — kaya nakukuha
+// nila ang DESKTOP settings (38 enemies, shadowBlur, 300 particles). Ito ang pangunahing
+// dahilan ng lag sa wave 20+ sa mobile/tablet. Ngayon: touch-primary (pointer: coarse) O
+// maliit ang mas maikling side ng screen = low-power. Naka-cache, nire-reset sa resize.
+let _lowPowerCache = null;
+const isLowPowerDevice = () => {
+  if (_lowPowerCache !== null) return _lowPowerCache;
+  if (typeof window === 'undefined') return false;
+  const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const narrow = Math.min(window.innerWidth, window.innerHeight) <= 600;
+  _lowPowerCache = coarse || narrow;
+  return _lowPowerCache;
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('resize', () => { _lowPowerCache = null; }, { passive: true });
+}
 
 const formatLargeNumber = (num) => {
   if (!num) return "0";
@@ -369,10 +406,11 @@ const DomainBtn = ({ domainBtnRef, right, bottom, isMobileLayout }) => {
   const fireDomain = (e) => {
     e.stopPropagation();
     e.preventDefault();
-    if (window.eng) {
-      window.eng.keys['y'] = true;
-      setTimeout(() => { window.eng.keys['y'] = false; }, 120);
-    }
+    // 🔥 FIX: Dati `window.eng.keys['y']` ang sinusulatan, pero WALANG code na nag-a-assign
+    // ng `window.eng` — kaya walang nangyayari sa tap sa mobile/tablet (gumagana lang sa
+    // desktop dahil direktang pumapasok ang Y key sa eng.keys). Ngayon may latched request
+    // na kinokonsumo ng game loop, kaya hindi rin mawawala ang tap kahit mabagal ang frame.
+    if (window.requestDomainExpansion) window.requestDomainExpansion();
   };
 
   const iconSz = isMobileLayout ? 26 : 34;
@@ -487,6 +525,77 @@ const DomainBtn = ({ domainBtnRef, right, bottom, isMobileLayout }) => {
 };
 
 // ── Custom Arcane Line-Icon Set (replaces generic emoji for hotbar/sigils) ──
+// ⚡ PERF: Ultimate "READY" magic-circle FX — ~40 SVG elements + 8 smoke wisps BAWAT button.
+// Dati inline sa GameCanvas JSX kaya binubuo ulit ng React sa BAWAT GameCanvas render (kada
+// skill cooldown tick). Static ang laman nito (color/key lang), kaya memo = zero re-render cost.
+const UltReadyFx = React.memo(function UltReadyFx({ fxKey, color, rgb, readyFx, particleCount }) {
+  return (
+    <div className={`ult-ready-fx ult-ready-${readyFx}`} style={{ '--fx-color': color, '--fx-rgb': rgb }}>
+      <span className="ult-ready-glow"></span>
+      <svg className="ult-ready-circle-svg" viewBox="0 0 100 100">
+        <defs>
+          <radialGradient id={`urc-core-${fxKey}`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+            <stop offset="60%" stopColor={color} stopOpacity="0.08" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="44" fill={`url(#urc-core-${fxKey})`} />
+        <g className="urc-outer-ring">
+          <circle cx="50" cy="50" r="47" fill="none" stroke={color} strokeWidth="0.7" strokeDasharray="0.8 3.6" opacity="0.55" />
+          <circle cx="50" cy="50" r="43.5" fill="none" stroke={color} strokeWidth="0.35" opacity="0.3" />
+          {Array.from({ length: 16 }).map((_, ti) => (
+            <line key={`t${ti}`} x1="50" y1="3.2" x2="50" y2="8.2" stroke={color} strokeWidth="1" strokeLinecap="round" opacity={ti % 4 === 0 ? 0.9 : 0.5} transform={`rotate(${(360 / 16) * ti} 50 50)`} />
+          ))}
+          {Array.from({ length: 4 }).map((_, si) => (
+            <line key={`s${si}`} x1="50" y1="6.5" x2="50" y2="20" stroke={color} strokeWidth="0.4" opacity="0.25" transform={`rotate(${90 * si} 50 50)`} />
+          ))}
+        </g>
+        <g className="urc-mid-ring">
+          <circle cx="50" cy="50" r="38" fill="none" stroke={color} strokeWidth="0.5" strokeDasharray="5 2.5" opacity="0.4" />
+          {['✦', '◇', '✧', '◇', '✦', '◇', '✧', '◇'].map((g, gi) => {
+            const rad = (gi * 45 * Math.PI) / 180;
+            return (
+              <text key={gi} x={50 + Math.cos(rad) * 38} y={50 + Math.sin(rad) * 38} fontSize="4.2" fill={color} textAnchor="middle" dominantBaseline="central" opacity="0.8">{g}</text>
+            );
+          })}
+        </g>
+        <g className="urc-inner-ring">
+          <polygon points="50,20 76.9,65.5 23.1,65.5" fill="none" stroke={color} strokeWidth="0.55" opacity="0.5" />
+          <polygon points="50,80 23.1,34.5 76.9,34.5" fill="none" stroke={color} strokeWidth="0.35" opacity="0.3" />
+          <circle cx="50" cy="50" r="13" fill="none" stroke={color} strokeWidth="0.5" strokeDasharray="2 2" opacity="0.5" />
+        </g>
+        <circle className="urc-core-dot" cx="50" cy="50" r="2.2" fill={color} />
+      </svg>
+      <div className="ult-smoke-container">
+        {Array.from({ length: particleCount }).map((_, pi) => {
+          const ang = (360 / particleCount) * pi;
+          const rad = (ang * Math.PI) / 180;
+          const wr = 30;
+          const px = Math.cos(rad) * wr;
+          const py = Math.sin(rad) * wr;
+          const sway = 6 + (pi % 3) * 3;
+          return (
+            <span
+              key={pi}
+              className="ult-smoke-wisp"
+              style={{
+                '--p-x': `${px.toFixed(1)}px`,
+                '--p-y': `${py.toFixed(1)}px`,
+                '--p-sway': `${sway}px`,
+                '--p-delay': `${(pi * (2.2 / particleCount)).toFixed(2)}s`,
+              }}
+            ></span>
+          );
+        })}
+      </div>
+    </div>
+  );
+});
+
+// ⚡ PERF: memoized — hindi na nire-render ang SVG ng Domain button sa bawat GameCanvas render.
+const DomainBtnMemo = React.memo(DomainBtn);
+
 const ArcaneIcon = ({ type, size = 22, style, className }) => {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', style: { verticalAlign: 'middle', flexShrink: 0, ...style }, className };
   switch (type) {
@@ -694,10 +803,9 @@ function drawDebuffIcon(ctx, type, cx, cy, s) {
         ctx.stroke();
       }
       // Bright void core
-      ctx.shadowBlur = 4;
-      ctx.shadowColor = color;
+      // ⚡ PERF: walang shadowBlur — habang naka-domain, LAHAT ng kalaban ay may ganitong icon,
+      // kaya 20–38 blur draws kada frame para sa 5px na icon na halos hindi kita ang glow.
       ctx.beginPath(); ctx.arc(0, 0, s * 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 0;
       break;
     }
     case 'burn': // teardrop flame
@@ -2620,7 +2728,7 @@ const focusStyles = `
   }
   .skill-cd-ring-track { opacity: 0.9; }
   .skill-cd-ring-sweep {
-    transition: stroke-dashoffset 0.3s linear;
+    transition: stroke-dashoffset 0.5s linear;
   }
 
   /* ── Ultimate "READY" Magic Circle — Frieren-style layered arcane sigil ── */
@@ -3924,7 +4032,7 @@ const focusStyles = `
   } 
 `;
 
-export default function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
+function GameCanvas({ screen, setScreen, hudRef, netRef, onLevelUpOffer, playerName, allyName, isCoop }) {
   const canvasRef = useRef(null);
   const workerRef = useRef(null);
   const vignetteRef = useRef(null);
@@ -4786,7 +4894,7 @@ const castArcaneCollapseUltimate = (forcedTarget = null) => {
 
     // --- OPTIMIZATION 2: DYNAMIC PARTICLES & MATH CACHING ---
     // Reduce particle count on smaller screens (mobile) to save rendering & GC overhead
-    const isMobile = window.innerWidth <= 768; 
+    const isMobile = isLowPowerDevice();
     const particleCount = isMobile ? 40 : 150; 
     const PI2 = Math.PI * 2; // Cache expensive math
 
@@ -5040,6 +5148,7 @@ const runUpgrade = (choice, forcedTarget = null) => {
 
   useEffect(() => {
     window.triggerDash = triggerDash;
+    window.requestDomainExpansion = () => { engineRef.current.domainRequested = true; };
     window.learnSkillTreeTech = learnSkillTreeTech;
     window.castArcaneCollapseUltimate = castArcaneCollapseUltimate;
     window.castArcaneInstinctUltimate = castArcaneInstinctUltimate;
@@ -5319,11 +5428,27 @@ useEffect(() => {
         eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
         eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life, speed: c.speed }));
         
-        eng.tornados = payload.tornados || [];
-        eng.waves = payload.waves || [];
-        eng.fissures = payload.fissures || [];
-        eng.lightnings = payload.lightnings || [];
-        eng.iceStorms = payload.iceStorms || [];
+        // ⚡ NET PERF: dalhin ang render-only caches (mga `_`-prefixed props, hal. iceStorm
+        // _particles/_glaciers/seeds = 52 objects bawat storm) mula sa dating objects papunta
+        // sa bagong objects ng packet. Dati, bagong plain objects kada packet → nire-regenerate
+        // ng renderer ang lahat ng caches kada frame sa guest (GC churn + CPU spike habang may
+        // active na sigil VFX). Host gumagamit ng splice (ordered), kaya aligned ang index;
+        // kung hindi tumama, re-seed lang ang visual — walang gameplay effect.
+        const _carryVfxCache = (prev, next) => {
+          if (!prev || !next) return next;
+          const _n = Math.min(prev.length, next.length);
+          for (let _k = 0; _k < _n; _k++) {
+            const _o = prev[_k], _nw = next[_k];
+            if (!_o || !_nw) continue;
+            for (const _key in _o) { if (_key[0] === '_') _nw[_key] = _o[_key]; }
+          }
+          return next;
+        };
+        eng.tornados = _carryVfxCache(eng.tornados, payload.tornados || []);
+        eng.waves = _carryVfxCache(eng.waves, payload.waves || []);
+        eng.fissures = _carryVfxCache(eng.fissures, payload.fissures || []);
+        eng.lightnings = _carryVfxCache(eng.lightnings, payload.lightnings || []);
+        eng.iceStorms = _carryVfxCache(eng.iceStorms, payload.iceStorms || []);
         
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
@@ -5332,7 +5457,13 @@ useEffect(() => {
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
         eng.screenShake = payload.screenShake ?? eng.screenShake;
 
-        if (payload.bossIntro !== undefined) eng.bossIntro = payload.bossIntro;
+        if (payload.bossIntro !== undefined) {
+          // ⚡ NET PERF: i-merge sa existing object para hindi mawala ang local render caches
+          // (_runes/_particles) ng guest — dati pinapalitan ang buong object kada packet, kaya
+          // nire-regenerate ng renderer ang lahat ng intro decorations 60x/sec.
+          if (eng.bossIntro && payload.bossIntro && typeof payload.bossIntro === 'object') Object.assign(eng.bossIntro, payload.bossIntro);
+          else eng.bossIntro = payload.bossIntro;
+        }
         if (payload.showVictoryCinematic !== undefined && payload.showVictoryCinematic > 0) {
             window.showVictoryCinematic = payload.showVictoryCinematic;
         }
@@ -6759,7 +6890,9 @@ if (eng.gameStarted) {
           // ⚡ PERF: Mobile cap reduced 22→14 — at 14 enemies with glow/debuff icons
           // the GPU stays within budget; 22 caused consistent frame drops on mid-range phones.
           // Desktop cap reduced 40→38 to give 2 slots of headroom for boss minion spawns.
-          const _mobileSpawnCap = window.innerWidth <= 768 ? 14 : 38;
+          // ⚡ PERF: 3 tiers — phone portrait 14 (dati), landscape phones/tablets 24 (dati
+          // nakakakuha ng desktop 38 dahil sa innerWidth check), desktop 38.
+          const _mobileSpawnCap = window.innerWidth <= 768 ? 14 : (isLowPowerDevice() ? 24 : 38);
           if (eng.spawnT >= eng.spawnRate && eng.enemies.length < _mobileSpawnCap) {
               eng.spawnT = 0;
               
@@ -7235,7 +7368,7 @@ if (eng.tornados) {
                 
                 // ⚡ PERF: Reduced burst counts — still feels powerful, less GC/GPU pressure.
                 // Mobile gets lower counts since it's already GPU-constrained.
-                const _isMobileBurst = window.innerWidth <= 768;
+                const _isMobileBurst = isLowPowerDevice();
                 const _burstStarCount = _isMobileBurst ? 2 : 3;   // was 4 on all platforms
                 const _burstSlashCount = _isMobileBurst ? 1 : 2;  // was 3 on all platforms
 
@@ -7486,7 +7619,7 @@ if (eng.tornados) {
                     // Visual explosion
                     // ⚡ PERF: 35→18 desktop / 10 mobile — AOE can chain rapidly at high waves;
                     // multiple simultaneous explosions × 35 particles = GC spike.
-                    const _aoePartCount = window.innerWidth <= 768 ? 10 : 18;
+                    const _aoePartCount = isLowPowerDevice() ? 10 : 18;
                     for(let k=0; k < _aoePartCount; k++) {
                         const pa = Math.random()*Math.PI*2;
                         const ps = Math.random()*aoe.radius*1.5;
@@ -7623,7 +7756,8 @@ if (eng.tornados) {
 
           // 1. TRIGGER THE DOMAIN
           // I-check kung pinindot yung trigger key (Y key)
-          const isP1Activating = (pObj === eng.p && eng.keys['y'] && pObj.arcaneGauge >= 100);
+          const isP1Activating = (pObj === eng.p && (eng.keys['y'] || eng.domainRequested) && pObj.arcaneGauge >= 100);
+          if (pObj === eng.p) eng.domainRequested = false; // konsumuhin ang tap request (one-shot)
           
           if (isP1Activating && !pObj.domainActive) {
               pObj.domainActive = true;
@@ -7681,9 +7815,14 @@ if (eng.tornados) {
               if (!_skillsDirty) {
                 for (const _key in _sk) {
                   const _a = _sk[_key], _b = _prev[_key];
+                  // ⚡ PERF: ikumpara lang sa granularity na NAKIKITA ng UI. Ang autoTimer/burstTick
+                  // ay hindi nire-render kahit saan pero tumitibok kada frame sa passives — kaya dati
+                  // nagre-re-render ang BUONG 20k-line component kada 150ms habang may passive na
+                  // buhay. Ang duration ay Math.ceil sa UI; ang cd ay ring fraction + Math.ceil,
+                  // kaya 0.5s steps ang sapat — ang ring ay may 0.5s CSS transition kaya smooth pa rin.
                   if (!_b || _a.learned !== _b.learned || _a.enabled !== _b.enabled ||
-                      _a.cd !== _b.cd || _a.duration !== _b.duration ||
-                      _a.autoTimer !== _b.autoTimer || _a.burstTick !== _b.burstTick) {
+                      Math.ceil((_a.cd || 0) * 2) !== Math.ceil((_b.cd || 0) * 2) ||
+                      Math.ceil(_a.duration || 0) !== Math.ceil(_b.duration || 0)) {
                     _skillsDirty = true; break;
                   }
                 }
@@ -7800,9 +7939,20 @@ if (eng.tornados) {
         if (isCoopActive && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.016;
+            // ⚡ NET PERF: 30Hz snapshot (dati 60Hz). Ang BUONG world state (enemies, bullets,
+            // gems, lahat ng VFX arrays) ay nise-serialize (JSON.stringify) at ipinapadala kada
+            // tick, at sa guest side nipa-parse at nire-rebuild lahat ng objects. Sa late game
+            // (38 enemies + daan-daang bullets/gems) ito ang pinakamabigat na per-frame cost
+            // ng host AT guest — lumalaki kasabay ng dami ng nangyayari sa screen.
+            syncTimer = 0.033;
             if (!isHost) {
-              netRef.current.channel.send('guest_input', { x: mx, y: my });
+              // Guest input: ipadala lang kung NAGBAGO ang direction, o kada ~250ms bilang
+              // keepalive. Dati 60 packets/sec kahit hindi gumagalaw ang guest.
+              eng._inputKeepAliveT = (eng._inputKeepAliveT || 0) + 0.033;
+              if (eng._lastSentMx !== mx || eng._lastSentMy !== my || eng._inputKeepAliveT >= 0.25) {
+                eng._lastSentMx = mx; eng._lastSentMy = my; eng._inputKeepAliveT = 0;
+                netRef.current.channel.send('guest_input', { x: mx, y: my });
+              }
             } else {
               netRef.current.channel.send('state_sync', {
                 gameStarted: eng.gameStarted, 
@@ -7820,7 +7970,9 @@ if (eng.tornados) {
 
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 screenShake: eng.screenShake,
-                bossIntro: eng.bossIntro,
+                // ⚡ NET PERF: huwag isama ang render-only caches ng boss intro (_runes, _particles,
+                // _circleRunes, _circleSigils — 50+ objects) sa bawat packet; plain fields lang.
+                bossIntro: (() => { const _bi = eng.bossIntro; if (!_bi) return _bi; const _o = {}; for (const _k in _bi) { if (_k[0] !== '_') _o[_k] = _bi[_k]; } return _o; })(),
                 showVictoryCinematic: window.showVictoryCinematic || 0,
                 p1: eng.p ? { 
                 x: eng.p.x, 
@@ -7970,7 +8122,7 @@ if (eng.tornados) {
               // ⚡ PERF: Reduced from 24 to 14 desktop / 8 mobile — during Arcane Instinct
               // burst (3 stars every 0.45s × 15s = ~100 stars total), each star spawning 24
               // particles caused massive GC pressure. 14/8 keeps the shockwave feel.
-              const _starParticleCount = window.innerWidth <= 768 ? 8 : 14;
+              const _starParticleCount = isLowPowerDevice() ? 8 : 14;
               for (let k = 0; k < _starParticleCount; k++) {
                 const pa = (k / _starParticleCount) * Math.PI * 2;
                 const ps = 150 + Math.random() * 50;
@@ -9275,12 +9427,13 @@ if (localTarget) {
       }
 
     // 🔥 ANTI-LAG: Cap particles at 300; recycle excess into pool
-      if (eng.particles.length > 300) {
+      const _particleCap = isLowPowerDevice() ? 150 : 300; // ⚡ PERF: mas mababang cap sa mobile/tablet
+      if (eng.particles.length > _particleCap) {
         // ⚡ PERF: Previously used splice(0, n) which: (1) creates a new intermediate
         // array of evicted objects, (2) shifts every remaining element left by n positions.
         // Now we swap-pop from the back directly into the pool — O(1) per eviction, no
         // intermediate array allocation, and works within the existing particle pool system.
-        while (eng.particles.length > 300) {
+        while (eng.particles.length > _particleCap) {
           const _ev = eng.particles.pop();
           eng.particlePool.push(_ev);
         }
@@ -9700,6 +9853,18 @@ const QUARTER_PI = Math.PI / 4;
 
 
     const renderLoop = () => {
+      // ⚡ PERF: RENDER FPS CAP — laktawan ang rAF frames na mas mabilis sa target interval.
+      // May 2.5ms tolerance para hindi mag-drop ng frame sa normal 60Hz jitter (15.9–17.5ms),
+      // at modulo-carry para hindi mag-drift pababa ng 48fps sa 144Hz.
+      if (RENDER_FPS_CAP > 0) {
+        const _rNow = performance.now();
+        const _rInterval = 1000 / RENDER_FPS_CAP;
+        if (eng._lastRenderTs === undefined) eng._lastRenderTs = _rNow - _rInterval;
+        const _rElapsed = _rNow - eng._lastRenderTs;
+        if (_rElapsed < _rInterval - 2.5) { renderAnimId = requestAnimationFrame(renderLoop); return; }
+        eng._lastRenderTs = _rNow - (_rElapsed % _rInterval);
+      }
+
       // ⚡ PERF: VFX FRAME-BUDGET GATE
       // renderLoop runs at the display's native refresh rate (60/90/120Hz),
       // separate from the fixed-60Hz simulation tick in worker.onmessage.
@@ -9724,8 +9889,16 @@ const QUARTER_PI = Math.PI / 4;
         eng.perfTier = _eCount > 22 ? 2 : _eCount > 10 ? 1 : 0;
       }
       const _perfTier = eng.perfTier || 0;
-      const _isMobile = window.innerWidth <= 768;
-      const _shadowScale = (_perfTier === 0) ? 1.0 : (_perfTier === 1) ? 0.5 : (_isMobile ? 0.0 : 0.25);
+      const _isMobile = isLowPowerDevice();
+      // ⚡ PERF: shadowBlur ang PINAKAMABIGAT na canvas op sa mobile GPUs (Gaussian blur kada
+      // fill/stroke). Sa low-power devices, PATAY na ito sa lahat ng tier — dati 1.0 pa rin sa
+      // tier 0 at 0.25 sa landscape phones/tablets. Desktop: walang binago.
+      // ⚡ PERF (desktop): Na-profile sa wave 25 — kapag naka-off ang shadowBlur, bumaba ang
+      // frames na >33ms mula ~22 papuntang 2 bawat 10s, at p99 frame mula ~60ms → 8ms. Kahit
+      // maliit na blur (0.25/0.5 scale) ay dumadaan pa rin sa mabigat na Gaussian blur path,
+      // kaya ang dating "bawasan lang" ay halos walang tipid. Ngayon: buong glow kapag ≤10
+      // enemies (tier 0), OFF kapag mas marami — doon nagla-lag at hindi rin halata ang glow.
+      const _shadowScale = (_isMobile || _perfTier > 0) ? 0.0 : 1.0;
 
     // ==========================================
       // 🌌 DOMAIN EXPANSION VISUALS — GOJO INFINITE VOID
@@ -9797,7 +9970,7 @@ const QUARTER_PI = Math.PI / 4;
             ctx.save();
             ctx.rotate(ringRot + r * 0.3);
             // Outer glow
-            ctx.shadowBlur = 28;
+            ctx.shadowBlur = 28 * _shadowScale; // ⚡ PERF: dati unscaled (20s na domain)
             ctx.shadowColor = r < 2 ? 'rgba(180,120,255,0.8)' : 'rgba(100,60,200,0.6)';
             ctx.strokeStyle = r < 2
               ? `rgba(200,150,255,${alpha})`
@@ -9824,7 +9997,7 @@ const QUARTER_PI = Math.PI / 4;
           ctx.rotate(-now * 0.00045);
           ctx.strokeStyle = 'rgba(200,150,255,0.55)';
           ctx.lineWidth = 1.2;
-          ctx.shadowBlur = 22;
+          ctx.shadowBlur = 22 * _shadowScale; // ⚡ PERF: dati unscaled
           ctx.shadowColor = 'rgba(170,100,255,0.9)';
           ctx.setLineDash([12, 8, 4, 8]);
           ctx.beginPath(); ctx.arc(0, 0, 42, 0, Math.PI * 2); ctx.stroke();
@@ -9854,7 +10027,7 @@ const QUARTER_PI = Math.PI / 4;
           eyeGrad.addColorStop(0.80,`rgba(20,5,60,${0.50 * eyePulse})`);
           eyeGrad.addColorStop(1,   'rgba(0,0,0,0)');
           ctx.fillStyle = eyeGrad;
-          ctx.shadowBlur = 40;
+          ctx.shadowBlur = 40 * _shadowScale; // ⚡ PERF: dati unscaled
           ctx.shadowColor = 'rgba(180,100,255,0.95)';
           ctx.beginPath(); ctx.arc(0, 0, 30, 0, Math.PI * 2); ctx.fill();
           ctx.shadowBlur = 0;
@@ -9868,7 +10041,7 @@ const QUARTER_PI = Math.PI / 4;
             const rippleR = prog * Math.max(DW, DH) * 0.7;
             ctx.strokeStyle = `rgba(220,180,255,${(1 - prog) * 0.7})`;
             ctx.lineWidth = 4 * (1 - prog) + 1;
-            ctx.shadowBlur = 30;
+            ctx.shadowBlur = 30 * _shadowScale; // ⚡ PERF: dati unscaled
             ctx.shadowColor = 'rgba(180,100,255,0.9)';
             ctx.beginPath(); ctx.arc(0, 0, rippleR, 0, Math.PI * 2); ctx.stroke();
             ctx.restore();
@@ -9889,8 +10062,18 @@ const QUARTER_PI = Math.PI / 4;
       // for (const e of eng.enemies) { ... }
 
       // ⚡ PERF: Font dedup — skip ctx.font assignment if string unchanged (saves browser text rasterization)
-      let _lastFont = '';
-      const _setFont = (f) => { if (f !== _lastFont) { ctx.font = f; _lastFont = f; } };
+      // 🔥 FIX: Dati, `_lastFont` lang ang tinitingnan — pero ibinabalik ng ctx.restore() ang
+      // lumang font habang akala ng cache ay naka-set pa rin. Resulta: maling font sa mga
+      // sumunod na text (hal. damage numbers sa loob ng save/restore). Hindi pwedeng basahin
+      // ang ctx.font para i-verify (mabagal — sine-serialize ng browser kada basa), kaya
+      // ini-invalidate na lang ang cache tuwing may ctx.restore() sa context na ito.
+      if (!ctx.__fontCachePatched) {
+        ctx.__fontCachePatched = true;
+        ctx.__fontIn = '';
+        const _protoRestore = CanvasRenderingContext2D.prototype.restore;
+        ctx.restore = function () { this.__fontIn = ''; return _protoRestore.call(this); };
+      }
+      const _setFont = (f) => { if (f !== ctx.__fontIn) { ctx.font = f; ctx.__fontIn = f; } };
 
       // ⚡ PERF: Composite op dedup — skip redundant globalCompositeOperation sets (each flush = GPU batch reset)
       let _lastCompositeOp = 'source-over';
@@ -12202,6 +12385,7 @@ if (eng.iceStorms && eng.iceStorms.length > 0) {
   // =========================================================================
   const pTime = performance.now(); // 🚀 Kukunin lang ang oras nang isang beses para iwas CPU lag
 
+  const _lowFxBullets = _isMobile && eng.bullets.length > 60;
   for (const b of eng.bullets) {
     if (b.type === 'fire_orb') {
       ctx.save();
@@ -12218,8 +12402,19 @@ if (eng.iceStorms && eng.iceStorms.length > 0) {
       continue;
     }
 
+    // ⚡ PERF: Sa wave 20+ (multiShot hanggang 10 + mabilis na fire rate) umaabot ng 150–200
+    // player bullets nang sabay, bawat isa may save/translate/rotate + multi-path skin. Sa
+    // low-power devices, kapag marami na, simpleng 2-circle draw na lang (walang state save).
+    if (_lowFxBullets && !b.isEnemy && !b.isFamiliar) {
+      ctx.fillStyle = 'rgba(167, 139, 250, 0.45)';
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 1.8, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ede9fe';
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+
     ctx.save();
-    
+
     if (b.isEnemy) {
       ctx.fillStyle = 'rgba(239, 68, 68, 0.4)'; // Red fake glow
       ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 1.8, 0, Math.PI * 2); ctx.fill();
@@ -14379,17 +14574,21 @@ if (e.type === 'primordial') {
         ctx.restore();
       }
 
-for (const p of eng.particles) {
-        ctx.save();
-        ctx.globalAlpha = p.life / p.ml; 
-        ctx.fillStyle = p.color;
-        if (p.isGhost) {
-           // 💨 Ghost Player Trail
-           ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
-        } else {
-           ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); 
+// ⚡ PERF: walang per-particle save()/restore() (hanggang 300 pares kada frame) —
+      // globalAlpha at fillStyle lang ang binabago, kaya isang alpha restore sa dulo sapat na.
+      {
+        const _prevAlpha = ctx.globalAlpha;
+        for (const p of eng.particles) {
+          ctx.globalAlpha = p.life / p.ml;
+          ctx.fillStyle = p.color;
+          if (p.isGhost) {
+             // 💨 Ghost Player Trail
+             ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+          } else {
+             ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2);
+          }
         }
-        ctx.restore();
+        ctx.globalAlpha = _prevAlpha;
       }
 
 // 🟢 SKIN AESTHETICS HELPER (Nagpapalit ng kulay ng damit, sumbrero at glow)
@@ -17399,67 +17598,45 @@ if (isCoopActive && eng.p2) renderFamiliars(eng.p2);
 // ==============================================================================
 // 💥 FLOATING COMBAT TEXT RENDERER (RO STYLE)
 // ==============================================================================
-if (eng.floatingTexts) {
+if (eng.floatingTexts && eng.floatingTexts.length > 0) {
+  // ⚡ PERF: Naka-grupo ayon sa style (FCT_STYLES / FCT_PASS_ORDER sa taas ng file). Dati,
+  // salit-salitan ang font kada text (normal → crit → "Critical!" → normal...), at bawat
+  // palit ng ctx.font ay font re-parse ng browser — ~6% ng main thread sa wave 20+.
+  // Ngayon: isang font/style set lang bawat grupo. Crits ang huling dino-drawing (nasa ibabaw).
   ctx.save();
-  for (const ft of eng.floatingTexts) {
-    // Fade out nang makinis sa huling 0.5 seconds
-    const alpha = Math.max(0, Math.min(1, ft.life / 0.5)); 
-    ctx.globalAlpha = alpha;
-    
-    // Bounce / Pop Scale Effect sa unang litaw
-    const popScale = ft.life > 0.8 ? 1 + (ft.life - 0.8) * 2.5 : 1; 
-
-    ctx.save();
-    ctx.translate(ft.x, ft.y);
-    ctx.scale(popScale, popScale);
-
-    if (ft.type === 'damage') {
-      ctx.fillStyle = ft.isCrit ? '#fde047' : '#ffffff'; // Gold pag crit, White pag normal
-      _setFont(ft.isCrit ? '900 16px monospace' : 'bold 11px monospace');
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 2.5;
-    } else if (ft.type === 'damageTaken') {
-      ctx.fillStyle = '#ef4444'; // Red
-      _setFont('bold 13px monospace');
-      ctx.strokeStyle = '#450a0a';
-      ctx.lineWidth = 2.5;
-    } else if (ft.type === 'heal') {
-      ctx.fillStyle = '#4ade80'; // Green
-      _setFont('bold 13px monospace');
-      ctx.strokeStyle = '#064e3b';
-      ctx.lineWidth = 2.5;
-      ctx.shadowBlur = 8 * _shadowScale;
-      ctx.shadowColor = '#4ade80';
-    } else if (ft.type === 'shield') {
-      ctx.fillStyle = '#38bdf8'; // Cyan
-      _setFont('bold 11px monospace');
-      ctx.strokeStyle = '#082f49';
-      ctx.lineWidth = 2.5;
+  const _ftBase = ctx.getTransform();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let _pi = 0; _pi < FCT_PASS_ORDER.length; _pi++) {
+    const _key = FCT_PASS_ORDER[_pi];
+    const _st = FCT_STYLES[_key];
+    const _isLabel = _key === 'critLabel';
+    let _styled = false;
+    for (const ft of eng.floatingTexts) {
+      if (_isLabel) { if (!ft.isCrit) continue; }
+      else if (fctStyleKey(ft) !== _key) continue;
+      if (!_styled) {
+        _styled = true;
+        ctx.fillStyle = _st.fill;
+        _setFont(_st.font);
+        ctx.strokeStyle = _st.stroke;
+        ctx.lineWidth = _st.lw;
+        ctx.shadowBlur = _st.glow ? _st.glow * _shadowScale : 0;
+        if (_st.glow) ctx.shadowColor = _st.fill;
+      }
+      // Fade out nang makinis sa huling 0.5 seconds
+      ctx.globalAlpha = Math.max(0, Math.min(1, ft.life / 0.5));
+      // Bounce / Pop Scale Effect sa unang litaw
+      const popScale = ft.life > 0.8 ? 1 + (ft.life - 0.8) * 2.5 : 1;
+      ctx.setTransform(
+        _ftBase.a * popScale, _ftBase.b * popScale, _ftBase.c * popScale, _ftBase.d * popScale,
+        _ftBase.a * ft.x + _ftBase.c * ft.y + _ftBase.e, _ftBase.b * ft.x + _ftBase.d * ft.y + _ftBase.f
+      );
+      const _txt = _isLabel ? 'Critical!' : ft.text;
+      const _ty = _isLabel ? -14 : 0; // "Critical!" nasa ibabaw ng number
+      ctx.strokeText(_txt, 0, _ty);
+      ctx.fillText(_txt, 0, _ty);
     }
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // Balangkas at mismong sulat ng number
-    ctx.strokeText(ft.text, 0, 0);
-    ctx.fillText(ft.text, 0, 0);
-
-    // 🔥 DITO IPAPASOK ANG "Critical!" TEXT
-    if (ft.isCrit) {
-      // Tanggalin pansamantala ang shadow effect para malinis tingnan ang font
-      ctx.shadowBlur = 0 * _shadowScale; 
-      
-      _setFont('italic 10px sans-serif'); // Maliit at italic
-      ctx.fillStyle = '#f87171'; // Red/Orange color
-      ctx.lineWidth = 2; // Manipis na outline
-      ctx.strokeStyle = '#000000';
-      
-      // I-offset nang paakyat (-14) para nasa ibabaw ng number
-      ctx.strokeText("Critical!", 0, -14);
-      ctx.fillText("Critical!", 0, -14);
-    }
-
-    ctx.restore(); // Tapos na i-render itong isang text
   }
   ctx.restore(); // Ibabalik sa normal ang buong context
 }
@@ -18201,7 +18378,12 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
 
       if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll();
       activateAudioKeepAlive();
-      eng.keys[e.key] = true;
+      // 🔥 FIX: Case-insensitive na letter keys. Dati `e.key` ang diretsong ginagamit, kaya
+      // kapag naka-CapsLock o may hawak na Shift ('Q' imbes na 'q'), hindi gumagana ang
+      // ultimates (Q/E/R) at Domain (Y). Naiipit din ang movement kapag binitawan ang Shift
+      // habang naglalakad (keydown 'a' pero keyup 'A'). Lowercase na ang lahat ng letters.
+      const _k = (typeof e.key === 'string' && e.key.length === 1) ? e.key.toLowerCase() : e.key;
+      eng.keys[_k] = true;
 
       if (e.key === ' ' && screenRef.current === 'playing') {
         e.preventDefault(); // Iwas scroll sa browser
@@ -18416,16 +18598,16 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
        }
 
         if (playerLevelRef.current >= 16) {
-            if (e.key === 'q') castArcaneCollapseUltimate();
-            if (e.key === 'e') castArcaneInstinctUltimate(); 
-            if (e.key === 'r') castArcaneResurrectionUltimate();
+            if (_k === 'q') castArcaneCollapseUltimate();
+            if (_k === 'e') castArcaneInstinctUltimate();
+            if (_k === 'r') castArcaneResurrectionUltimate();
         }
       }
     };
 
     
 
-    const up = (e) => { eng.keys[e.key] = false; };
+    const up = (e) => { eng.keys[(typeof e.key === 'string' && e.key.length === 1) ? e.key.toLowerCase() : e.key] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
 
@@ -19362,68 +19544,7 @@ const renderTooltipStats = (item) => {
                         </div>
                       </>
                     )}
-                    {isReady && (
-                      <div className={`ult-ready-fx ult-ready-${u.readyFx}`} style={{ '--fx-color': u.color, '--fx-rgb': u.rgb }}>
-                        <span className="ult-ready-glow"></span>
-                        <svg className="ult-ready-circle-svg" viewBox="0 0 100 100">
-                          <defs>
-                            <radialGradient id={`urc-core-${u.key}`} cx="50%" cy="50%" r="50%">
-                              <stop offset="0%" stopColor={u.color} stopOpacity="0.28" />
-                              <stop offset="60%" stopColor={u.color} stopOpacity="0.08" />
-                              <stop offset="100%" stopColor={u.color} stopOpacity="0" />
-                            </radialGradient>
-                          </defs>
-                          <circle cx="50" cy="50" r="44" fill={`url(#urc-core-${u.key})`} />
-                          <g className="urc-outer-ring">
-                            <circle cx="50" cy="50" r="47" fill="none" stroke={u.color} strokeWidth="0.7" strokeDasharray="0.8 3.6" opacity="0.55" />
-                            <circle cx="50" cy="50" r="43.5" fill="none" stroke={u.color} strokeWidth="0.35" opacity="0.3" />
-                            {Array.from({ length: 16 }).map((_, ti) => (
-                              <line key={`t${ti}`} x1="50" y1="3.2" x2="50" y2="8.2" stroke={u.color} strokeWidth="1" strokeLinecap="round" opacity={ti % 4 === 0 ? 0.9 : 0.5} transform={`rotate(${(360 / 16) * ti} 50 50)`} />
-                            ))}
-                            {Array.from({ length: 4 }).map((_, si) => (
-                              <line key={`s${si}`} x1="50" y1="6.5" x2="50" y2="20" stroke={u.color} strokeWidth="0.4" opacity="0.25" transform={`rotate(${90 * si} 50 50)`} />
-                            ))}
-                          </g>
-                          <g className="urc-mid-ring">
-                            <circle cx="50" cy="50" r="38" fill="none" stroke={u.color} strokeWidth="0.5" strokeDasharray="5 2.5" opacity="0.4" />
-                            {['✦', '◇', '✧', '◇', '✦', '◇', '✧', '◇'].map((g, gi) => {
-                              const rad = (gi * 45 * Math.PI) / 180;
-                              return (
-                                <text key={gi} x={50 + Math.cos(rad) * 38} y={50 + Math.sin(rad) * 38} fontSize="4.2" fill={u.color} textAnchor="middle" dominantBaseline="central" opacity="0.8">{g}</text>
-                              );
-                            })}
-                          </g>
-                          <g className="urc-inner-ring">
-                            <polygon points="50,20 76.9,65.5 23.1,65.5" fill="none" stroke={u.color} strokeWidth="0.55" opacity="0.5" />
-                            <polygon points="50,80 23.1,34.5 76.9,34.5" fill="none" stroke={u.color} strokeWidth="0.35" opacity="0.3" />
-                            <circle cx="50" cy="50" r="13" fill="none" stroke={u.color} strokeWidth="0.5" strokeDasharray="2 2" opacity="0.5" />
-                          </g>
-                          <circle className="urc-core-dot" cx="50" cy="50" r="2.2" fill={u.color} />
-                        </svg>
-                        <div className="ult-smoke-container">
-                          {Array.from({ length: PARTICLE_COUNT }).map((_, pi) => {
-                            const ang = (360 / PARTICLE_COUNT) * pi;
-                            const rad = (ang * Math.PI) / 180;
-                            const wr = 30;
-                            const px = Math.cos(rad) * wr;
-                            const py = Math.sin(rad) * wr;
-                            const sway = 6 + (pi % 3) * 3;
-                            return (
-                              <span
-                                key={pi}
-                                className="ult-smoke-wisp"
-                                style={{
-                                  '--p-x': `${px.toFixed(1)}px`,
-                                  '--p-y': `${py.toFixed(1)}px`,
-                                  '--p-sway': `${sway}px`,
-                                  '--p-delay': `${(pi * (2.2 / PARTICLE_COUNT)).toFixed(2)}s`,
-                                }}
-                              ></span>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
+                    {isReady && <UltReadyFx fxKey={u.key} color={u.color} rgb={u.rgb} readyFx={u.readyFx} particleCount={PARTICLE_COUNT} />}
                   </div>
                 );
               })}
@@ -19437,7 +19558,7 @@ const renderTooltipStats = (item) => {
                 const _domRight = _resRight;
                 const _domBottom = _resBottom + 160;
                 return (
-                  <DomainBtn
+                  <DomainBtnMemo
                     domainBtnRef={domainBtnRef}
                     right={_domRight} bottom={_domBottom}
                     isMobileLayout={isMobileLayout}
@@ -19460,7 +19581,7 @@ const renderTooltipStats = (item) => {
           const _right  = _dashAnchorX - (Math.cos(_ang) * _ultRadius);
           const _bottom = _dashAnchorY + (Math.sin(_ang) * _ultRadius) + 160;
           return (
-            <DomainBtn
+            <DomainBtnMemo
               domainBtnRef={domainBtnRef}
               right={_right} bottom={_bottom}
               isMobileLayout={isMobileLayout}
@@ -20419,3 +20540,7 @@ const renderTooltipStats = (item) => {
     </div>
   );
 }
+
+// ⚡ PERF: React.memo — dati nire-render ang buong GameCanvas tuwing nagre-render ang App
+// (kahit walang nagbagong props). Lahat ng props ay stable (refs, useCallback, primitives).
+export default React.memo(GameCanvas);

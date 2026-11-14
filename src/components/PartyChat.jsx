@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// ⚡ PERF: cap para hindi lumaki nang walang hangganan ang DOM list sa mahabang coop session
+const MAX_CHAT_MESSAGES = 100;
+
 export default function PartyChat({ enabled, channel, localName }) {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -11,7 +14,7 @@ export default function PartyChat({ enabled, channel, localName }) {
 
     channel.onChatMsg = (event, payload) => {
       if (event === 'chat') {
-        setMessages(prev => [...prev, { sender: payload.name, msg: payload.msg, type: 'theirs' }]);
+        setMessages(prev => [...prev.slice(-(MAX_CHAT_MESSAGES - 1)), { sender: payload.name, msg: payload.msg, type: 'theirs' }]);
       }
     };
     return () => { channel.onChatMsg = null; };
@@ -24,7 +27,7 @@ export default function PartyChat({ enabled, channel, localName }) {
   const handleSend = () => {
     if (!input.trim() || !channel) return;
     channel.send('chat', { name: localName, msg: input });
-    setMessages(prev => [...prev, { sender: localName, msg: input, type: 'mine' }]);
+    setMessages(prev => [...prev.slice(-(MAX_CHAT_MESSAGES - 1)), { sender: localName, msg: input, type: 'mine' }]);
     setInput('');
   };
 

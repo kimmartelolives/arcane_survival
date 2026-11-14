@@ -126,6 +126,11 @@ const playSfx = (type) => window.ArcaneSoundManager.play(type);
 
 const W = 1280;
 const H = 720;
+// ⚡ PERF: Render FPS cap. Ang simulation ay fixed 60Hz (worker tick), kaya ang pag-render ng
+// 90/120/144fps ay nagdodoble lang ng draw cost nang WALANG bagong frame data (ang in-render
+// VFX aging ay naka-gate na rin sa ~60Hz). Malaking tipid sa 120Hz phones at high-refresh
+// monitors. I-set sa 0 para i-disable (render sa native refresh rate).
+const RENDER_FPS_CAP = 60;
 
 const formatLargeNumber = (num) => {
   if (!num) return "0";
@@ -5053,11 +5058,27 @@ useEffect(() => {
         eng.potions = (payload.potions || []).map(p => ({ x: p.x, y: p.y, r: p.r, type: p.type, life: p.life }));
         eng.collapses = (payload.collapses || []).map(c => ({ x: c.x, y: c.y, radius: c.radius, maxRadius: c.maxRadius, life: c.life, speed: c.speed }));
         
-        eng.tornados = payload.tornados || [];
-        eng.waves = payload.waves || [];
-        eng.fissures = payload.fissures || [];
-        eng.lightnings = payload.lightnings || [];
-        eng.iceStorms = payload.iceStorms || [];
+        // ⚡ NET PERF: dalhin ang render-only caches (mga `_`-prefixed props, hal. iceStorm
+        // _particles/_glaciers/seeds = 52 objects bawat storm) mula sa dating objects papunta
+        // sa bagong objects ng packet. Dati, bagong plain objects kada packet → nire-regenerate
+        // ng renderer ang lahat ng caches kada frame sa guest (GC churn + CPU spike habang may
+        // active na sigil VFX). Host gumagamit ng splice (ordered), kaya aligned ang index;
+        // kung hindi tumama, re-seed lang ang visual — walang gameplay effect.
+        const _carryVfxCache = (prev, next) => {
+          if (!prev || !next) return next;
+          const _n = Math.min(prev.length, next.length);
+          for (let _k = 0; _k < _n; _k++) {
+            const _o = prev[_k], _nw = next[_k];
+            if (!_o || !_nw) continue;
+            for (const _key in _o) { if (_key[0] === '_') _nw[_key] = _o[_key]; }
+          }
+          return next;
+        };
+        eng.tornados = _carryVfxCache(eng.tornados, payload.tornados || []);
+        eng.waves = _carryVfxCache(eng.waves, payload.waves || []);
+        eng.fissures = _carryVfxCache(eng.fissures, payload.fissures || []);
+        eng.lightnings = _carryVfxCache(eng.lightnings, payload.lightnings || []);
+        eng.iceStorms = _carryVfxCache(eng.iceStorms, payload.iceStorms || []);
         
         eng.score = payload.score ?? eng.score;
         eng.wave = payload.wave ?? eng.wave;
@@ -5066,7 +5087,13 @@ useEffect(() => {
         eng.boltDmg = payload.boltDmg ?? eng.boltDmg;
         eng.screenShake = payload.screenShake ?? eng.screenShake;
 
-        if (payload.bossIntro !== undefined) eng.bossIntro = payload.bossIntro;
+        if (payload.bossIntro !== undefined) {
+          // ⚡ NET PERF: i-merge sa existing object para hindi mawala ang local render caches
+          // (_runes/_particles) ng guest — dati pinapalitan ang buong object kada packet, kaya
+          // nire-regenerate ng renderer ang lahat ng intro decorations 60x/sec.
+          if (eng.bossIntro && payload.bossIntro && typeof payload.bossIntro === 'object') Object.assign(eng.bossIntro, payload.bossIntro);
+          else eng.bossIntro = payload.bossIntro;
+        }
         if (payload.showVictoryCinematic !== undefined && payload.showVictoryCinematic > 0) {
             window.showVictoryCinematic = payload.showVictoryCinematic;
         }
@@ -6499,6 +6526,7 @@ useEffect(() => {
     let renderAnimId;
     let syncTimer = 0;
     let lastReactSync = 0;
+    let _lastSkillsSnapshot = null; // ⚡ PERF: snapshot para sa skills dirty-check (tingnan sa baba)
 
       const rollUpgradeOptions = (playerObj) => {
       // ✅ Nilagay dito ang 4 na upgrades para laging available (walang cap)
@@ -7541,7 +7569,28 @@ if (eng.tornados) {
             playerLevelRef.current = localTrackedObj.level;
             
             if (localTrackedObj.skills) {
-              setSkillsState({ ...localTrackedObj.skills });
+              // ⚡ PERF: Dati UNCONDITIONAL ang setSkillsState kada 150ms → full React re-render ng
+              // buong 20k-line component ~7x/sec sa buong laro. Ngayon, ikumpara lang sa granularity
+              // na NAKIKITA ng UI: learned/enabled, duration (Math.ceil sa UI), cd (ring fraction +
+              // Math.ceil → 0.1s steps). Hindi kasama ang autoTimer/burstTick (hindi nire-render).
+              const _sk = localTrackedObj.skills;
+              const _prev = _lastSkillsSnapshot;
+              let _skillsDirty = !_prev;
+              if (!_skillsDirty) {
+                for (const _key in _sk) {
+                  const _a = _sk[_key], _b = _prev[_key];
+                  if (!_b || _a.learned !== _b.learned || _a.enabled !== _b.enabled ||
+                      Math.ceil((_a.cd || 0) * 2) !== Math.ceil((_b.cd || 0) * 2) ||
+                      Math.ceil(_a.duration || 0) !== Math.ceil(_b.duration || 0)) {
+                    _skillsDirty = true; break;
+                  }
+                }
+              }
+              if (_skillsDirty) {
+                _lastSkillsSnapshot = { ..._sk };
+                for (const _key in _sk) _lastSkillsSnapshot[_key] = { ..._sk[_key] };
+                setSkillsState({ ..._sk });
+              }
             }
 
             const activeBuffs = [];
@@ -7631,9 +7680,20 @@ if (eng.tornados) {
         if (isCoopActive && netRef.current.channel) {
           syncTimer -= dt;
           if (syncTimer <= 0) {
-            syncTimer = 0.016;
+            // ⚡ NET PERF: 30Hz snapshot (dati 60Hz). Ang BUONG world state (enemies, bullets,
+            // gems, lahat ng VFX arrays) ay nise-serialize (JSON.stringify) at ipinapadala kada
+            // tick, at sa guest side nipa-parse at nire-rebuild lahat ng objects. Sa late game
+            // (38 enemies + daan-daang bullets/gems) ito ang pinakamabigat na per-frame cost
+            // ng host AT guest — lumalaki kasabay ng dami ng nangyayari sa screen.
+            syncTimer = 0.033;
             if (!isHost) {
-              netRef.current.channel.send('guest_input', { x: mx, y: my });
+              // Guest input: ipadala lang kung NAGBAGO ang direction, o kada ~250ms bilang
+              // keepalive. Dati 60 packets/sec kahit hindi gumagalaw ang guest.
+              eng._inputKeepAliveT = (eng._inputKeepAliveT || 0) + 0.033;
+              if (eng._lastSentMx !== mx || eng._lastSentMy !== my || eng._inputKeepAliveT >= 0.25) {
+                eng._lastSentMx = mx; eng._lastSentMy = my; eng._inputKeepAliveT = 0;
+                netRef.current.channel.send('guest_input', { x: mx, y: my });
+              }
             } else {
               netRef.current.channel.send('state_sync', {
                 gameStarted: eng.gameStarted, 
@@ -7651,7 +7711,9 @@ if (eng.tornados) {
 
                 score: eng.score, wave: eng.wave, waveT: eng.waveT, waveLen: eng.waveLen, boltDmg: eng.boltDmg,
                 screenShake: eng.screenShake,
-                bossIntro: eng.bossIntro,
+                // ⚡ NET PERF: huwag isama ang render-only caches ng boss intro (_runes, _particles,
+                // _circleRunes, _circleSigils — 50+ objects) sa bawat packet; plain fields lang.
+                bossIntro: (() => { const _bi = eng.bossIntro; if (!_bi) return _bi; const _o = {}; for (const _k in _bi) { if (_k[0] !== '_') _o[_k] = _bi[_k]; } return _o; })(),
                 showVictoryCinematic: window.showVictoryCinematic || 0,
                 p1: eng.p ? { 
                 x: eng.p.x, 
@@ -9408,6 +9470,18 @@ if (isHost || !isCoopActive) {
 
 
     const renderLoop = () => {
+      // ⚡ PERF: RENDER FPS CAP — laktawan ang rAF frames na mas mabilis sa target interval.
+      // May 2.5ms tolerance para hindi mag-drop ng frame sa normal 60Hz jitter (15.9–17.5ms),
+      // at modulo-carry para hindi mag-drift pababa ng 48fps sa 144Hz.
+      if (RENDER_FPS_CAP > 0) {
+        const _rNow = performance.now();
+        const _rInterval = 1000 / RENDER_FPS_CAP;
+        if (eng._lastRenderTs === undefined) eng._lastRenderTs = _rNow - _rInterval;
+        const _rElapsed = _rNow - eng._lastRenderTs;
+        if (_rElapsed < _rInterval - 2.5) { renderAnimId = requestAnimationFrame(renderLoop); return; }
+        eng._lastRenderTs = _rNow - (_rElapsed % _rInterval);
+      }
+
       // ⚡ PERF: VFX FRAME-BUDGET GATE
       // renderLoop runs at the display's native refresh rate (60/90/120Hz),
       // separate from the fixed-60Hz simulation tick in worker.onmessage.
@@ -13548,17 +13622,21 @@ if (e.type === 'primordial') {
         ctx.restore();
       }
 
-for (const p of eng.particles) {
-        ctx.save();
-        ctx.globalAlpha = p.life / p.ml; 
-        ctx.fillStyle = p.color;
-        if (p.isGhost) {
-           // 💨 Ghost Player Trail
-           ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
-        } else {
-           ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2); 
+// ⚡ PERF: walang per-particle save()/restore() (hanggang 300 pares kada frame) —
+      // globalAlpha at fillStyle lang ang binabago, kaya isang alpha restore sa dulo sapat na.
+      {
+        const _prevAlpha = ctx.globalAlpha;
+        for (const p of eng.particles) {
+          ctx.globalAlpha = p.life / p.ml;
+          ctx.fillStyle = p.color;
+          if (p.isGhost) {
+             // 💨 Ghost Player Trail
+             ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+          } else {
+             ctx.fillRect(p.x - p.r, p.y - p.r, p.r*2, p.r*2);
+          }
         }
-        ctx.restore();
+        ctx.globalAlpha = _prevAlpha;
       }
 
 // 🟢 SKIN AESTHETICS HELPER (Nagpapalit ng kulay ng damit, sumbrero at glow)
@@ -17348,7 +17426,12 @@ if (window.showVictoryCinematic && window.showVictoryCinematic > 0) {
 
       if (window.ArcaneSoundManager) window.ArcaneSoundManager.unlockAll();
       activateAudioKeepAlive();
-      eng.keys[e.key] = true;
+      // 🔥 FIX: Case-insensitive na letter keys. Dati `e.key` ang diretsong ginagamit, kaya
+      // kapag naka-CapsLock o may hawak na Shift ('Q' imbes na 'q'), hindi gumagana ang
+      // ultimates (Q/E/R) at Domain (Y). Naiipit din ang movement kapag binitawan ang Shift
+      // habang naglalakad (keydown 'a' pero keyup 'A'). Lowercase na ang lahat ng letters.
+      const _k = (typeof e.key === 'string' && e.key.length === 1) ? e.key.toLowerCase() : e.key;
+      eng.keys[_k] = true;
 
       if (e.key === ' ' && screenRef.current === 'playing') {
         e.preventDefault(); // Iwas scroll sa browser
@@ -17572,16 +17655,16 @@ if (e.key === 'm' || e.key === 'M') {
        }
 
         if (playerLevelRef.current >= 16) {
-            if (e.key === 'q') castArcaneCollapseUltimate();
-            if (e.key === 'e') castArcaneInstinctUltimate(); 
-            if (e.key === 'r') castArcaneResurrectionUltimate();
+            if (_k === 'q') castArcaneCollapseUltimate();
+            if (_k === 'e') castArcaneInstinctUltimate();
+            if (_k === 'r') castArcaneResurrectionUltimate();
         }
       }
     };
 
     
 
-    const up = (e) => { eng.keys[e.key] = false; };
+    const up = (e) => { eng.keys[(typeof e.key === 'string' && e.key.length === 1) ? e.key.toLowerCase() : e.key] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
 
